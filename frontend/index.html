@@ -2,6 +2,25 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches
+        ? 'dark'
+        : 'light';
+
+      let theme = systemTheme;
+
+      try {
+        const storageTheme = window.localStorage.getItem('yanemedia-theme');
+
+        if (storageTheme === 'light' || storageTheme === 'dark') {
+          theme = storageTheme;
+        }
+      } catch {
+        // Используем системную тему.
+      }
+
+      document.documentElement.dataset.theme = theme;
+    </script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>frontend</title>
