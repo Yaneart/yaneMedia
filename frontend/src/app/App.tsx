@@ -1,7 +1,12 @@
+import { ThemeToggle } from '@/features/theme';
+
 function App() {
   return (
-    <div>yaneMedia</div>
-  )
+    <div>
+      <div>yaneMedia</div>
+      <ThemeToggle />
+    </div>
+  );
 }
 
 export default App;
