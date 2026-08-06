@@ -7,6 +7,7 @@ export type ButtonSize = 'small' | 'medium' | 'large';
 export type ButtonProps = ComponentPropsWithRef<'button'> & {
   variant?: ButtonVariant;
   size?: ButtonSize;
+  iconOnly?: boolean;
 };
 
 const variantClasses: Record<ButtonVariant, string> = {
@@ -21,10 +22,17 @@ const sizeClasses: Record<ButtonSize, string> = {
   large: 'min-h-12 px-5 text-base',
 };
 
+const iconOnlySizeClasses: Record<ButtonSize, string> = {
+  small: 'size-9',
+  medium: 'size-11',
+  large: 'size-12',
+};
+
 export function Button({
   variant = 'primary',
   size = 'medium',
   type = 'button',
+  iconOnly = false,
   className = '',
   disabled,
   ...props
@@ -38,7 +46,7 @@ export function Button({
         'transition-colors duration-150',
         'disabled:pointer-events-none disabled:opacity-50',
         variantClasses[variant],
-        sizeClasses[size],
+        iconOnly ? iconOnlySizeClasses[size] : sizeClasses[size],
         className,
       ].join(' ')}
       {...props}

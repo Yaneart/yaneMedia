@@ -1,5 +1,5 @@
 import { ThemeToggle } from '@/features/theme';
-import { Button, Logo } from '@/shared';
+import { Button, IconButton, Logo } from '@/shared';
 
 function App() {
   return (
@@ -20,6 +20,24 @@ function App() {
         <Button size="medium">Medium</Button>
         <Button size="large">Large</Button>
         <Button disabled>Disabled</Button>
+      </div>
+
+      <div>
+        <IconButton aria-label="Открыть меню" variant="ghost">
+          <span aria-hidden="true">☰</span>
+        </IconButton>
+
+        <IconButton aria-label="Маленькая кнопка" size="small">
+          <span aria-hidden="true">×</span>
+        </IconButton>
+
+        <IconButton aria-label="Средняя кнопка" size="medium">
+          <span aria-hidden="true">×</span>
+        </IconButton>
+
+        <IconButton aria-label="Большая кнопка" size="large">
+          <span aria-hidden="true">×</span>
+        </IconButton>
       </div>
     </div>
   );
