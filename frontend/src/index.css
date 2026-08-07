@@ -40,6 +40,42 @@
   --border-width-focus: 2px;
 }
 
+@keyframes yane-loader-shimmer {
+  0% {
+    background-position: 125% 0;
+  }
+
+  100% {
+    background-position: -125% 0;
+  }
+}
+
+.yane-loader-shimmer {
+  color: var(--theme-text-disabled);
+  background-image: linear-gradient(
+    105deg,
+    var(--theme-text-disabled) 25%,
+    var(--theme-text-primary) 44%,
+    var(--theme-text-primary) 56%,
+    var(--theme-text-disabled) 75%
+  );
+  background-position: 125% 0;
+  background-size: 250% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: yane-loader-shimmer 1.6s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .yane-loader-shimmer {
+    color: var(--theme-text-primary);
+    background: none;
+    animation: none;
+    -webkit-text-fill-color: currentColor;
+  }
+}
+
 @theme inline {
   --color-background: var(--theme-background);
   --color-surface: var(--theme-surface);

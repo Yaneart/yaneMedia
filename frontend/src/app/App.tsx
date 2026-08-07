@@ -1,5 +1,5 @@
 import { ThemeToggle } from '@/features/theme';
-import { Button, IconButton, Input, Logo, SearchInput } from '@/shared';
+import { Button, IconButton, Input, Logo, SearchInput, Spinner } from '@/shared';
 
 function App() {
   return (
@@ -46,6 +46,12 @@ function App() {
 
       <div>
         <SearchInput aria-label="Поиск фильмов" placeholder="Введите название фильма" />
+      </div>
+
+      <div className="flex items-center gap-5">
+        <Spinner size="small" />
+        <Spinner size="medium" />
+        <Spinner size="large" />
       </div>
     </div>
   );
