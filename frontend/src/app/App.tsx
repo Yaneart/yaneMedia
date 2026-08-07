@@ -1,9 +1,9 @@
 import { ThemeToggle } from '@/features/theme';
-import { Button, IconButton, Input, Logo } from '@/shared';
+import { Button, IconButton, Input, Logo, SearchInput } from '@/shared';
 
 function App() {
   return (
-    <div>
+    <div className="flex flex-col gap-5">
       <Logo />
       <ThemeToggle />
       <div className="flex items-center gap-5">
@@ -42,6 +42,10 @@ function App() {
 
       <div>
         <Input label="Имя пользователя" placeholder="Введите имя пользователя" />
+      </div>
+
+      <div>
+        <SearchInput aria-label="Поиск фильмов" placeholder="Введите название фильма" />
       </div>
     </div>
   );
