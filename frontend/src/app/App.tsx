@@ -1,5 +1,5 @@
 import { ThemeToggle } from '@/features/theme';
-import { Button, IconButton, Logo } from '@/shared';
+import { Button, IconButton, Input, Logo } from '@/shared';
 
 function App() {
   return (
@@ -38,6 +38,10 @@ function App() {
         <IconButton aria-label="Большая кнопка" size="large">
           <span aria-hidden="true">×</span>
         </IconButton>
+      </div>
+
+      <div>
+        <Input label="Имя пользователя" placeholder="Введите имя пользователя" />
       </div>
     </div>
   );
