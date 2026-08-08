@@ -1,5 +1,14 @@
 import { ThemeToggle } from '@/features/theme';
-import { Button, IconButton, Input, Logo, SearchInput, Skeleton, Spinner } from '@/shared';
+import {
+  Button,
+  EmptyState,
+  IconButton,
+  Input,
+  Logo,
+  SearchInput,
+  Skeleton,
+  Spinner,
+} from '@/shared';
 
 function App() {
   return (
@@ -22,7 +31,7 @@ function App() {
         <Button disabled>Disabled</Button>
       </div>
 
-      <div>
+      <div className="flex items-center gap-5">
         <IconButton aria-label="Открыть меню" variant="ghost">
           <span aria-hidden="true">☰</span>
         </IconButton>
@@ -58,6 +67,14 @@ function App() {
         <Skeleton className="h-6 w-48" />
         <Skeleton className="aspect-2/3 w-48 rounded-card" />
         <Skeleton className="h-40 w-full" />
+      </div>
+
+      <div>
+        <EmptyState
+          title="Ничего не найдено"
+          description="Попробуйте изменить запрос или сбросить выбранные фильтры."
+          action={<Button variant="secondary">Сбросить фильтры</Button>}
+        />
       </div>
     </div>
   );

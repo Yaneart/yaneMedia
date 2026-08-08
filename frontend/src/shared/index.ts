@@ -20,3 +20,6 @@ export type { SpinnerProps, SpinnerSize } from './ui/Spinner';
 
 export { Skeleton } from './ui/Skeleton';
 export type { SkeletonProps } from './ui/Skeleton';
+
+export { EmptyState } from './ui/EmptyState';
+export type { EmptyStateProps } from './ui/EmptyState';
