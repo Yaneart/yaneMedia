@@ -17,3 +17,6 @@ export type { SearchInputProps } from './ui/SearchInput';
 
 export { Spinner } from './ui/Spinner';
 export type { SpinnerProps, SpinnerSize } from './ui/Spinner';
+
+export { Skeleton } from './ui/Skeleton';
+export type { SkeletonProps } from './ui/Skeleton';

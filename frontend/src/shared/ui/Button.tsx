@@ -12,7 +12,8 @@ export type ButtonProps = ComponentPropsWithRef<'button'> & {
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary: 'bg-action text-action-text hover:opacity-90',
-  secondary: 'border border-border bg-surface text-text-primary hover:bg-interactive-hover',
+  secondary:
+    'border border-border bg-control-secondary text-text-primary hover:bg-interactive-hover',
   ghost: 'bg-transparent text-text-secondary hover:bg-interactive-hover hover:text-text-primary',
 };
 

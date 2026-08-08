@@ -88,7 +88,9 @@
 
   --color-action: var(--theme-action);
   --color-action-text: var(--theme-action-text);
+  --color-control-secondary: var(--theme-control-secondary);
   --color-interactive-hover: var(--theme-interactive-hover);
+  --color-skeleton: var(--theme-skeleton);
 
   --color-error: var(--theme-error);
   --color-success: var(--theme-success);
@@ -108,7 +110,9 @@
 
   --theme-action: #f1f0ec;
   --theme-action-text: #101112;
+  --theme-control-secondary: #191a1b;
   --theme-interactive-hover: #292b2d;
+  --theme-skeleton: #222325;
 
   --theme-error: #ef5a67;
   --theme-success: #42c88a;
@@ -128,7 +132,9 @@
 
   --theme-action: #18191a;
   --theme-action-text: #f4f3ef;
+  --theme-control-secondary: #cdd0d1;
   --theme-interactive-hover: #bfc2c4;
+  --theme-skeleton: #b8bbbd;
 
   --theme-error: #c93f4c;
   --theme-success: #26875b;

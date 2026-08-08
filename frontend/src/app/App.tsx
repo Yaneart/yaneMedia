@@ -1,5 +1,5 @@
 import { ThemeToggle } from '@/features/theme';
-import { Button, IconButton, Input, Logo, SearchInput, Spinner } from '@/shared';
+import { Button, IconButton, Input, Logo, SearchInput, Skeleton, Spinner } from '@/shared';
 
 function App() {
   return (
@@ -52,6 +52,12 @@ function App() {
         <Spinner size="small" />
         <Spinner size="medium" />
         <Spinner size="large" />
+      </div>
+
+      <div className="flex items-center gap-5">
+        <Skeleton className="h-6 w-48" />
+        <Skeleton className="aspect-2/3 w-48 rounded-card" />
+        <Skeleton className="h-40 w-full" />
       </div>
     </div>
   );
