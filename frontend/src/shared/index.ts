@@ -23,3 +23,6 @@ export type { SkeletonProps } from './ui/Skeleton';
 
 export { EmptyState } from './ui/EmptyState';
 export type { EmptyStateProps } from './ui/EmptyState';
+
+export { ErrorState } from './ui/ErrorState';
+export type { ErrorStateProps } from './ui/ErrorState';

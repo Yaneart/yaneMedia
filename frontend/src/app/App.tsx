@@ -2,6 +2,7 @@ import { ThemeToggle } from '@/features/theme';
 import {
   Button,
   EmptyState,
+  ErrorState,
   IconButton,
   Input,
   Logo,
@@ -74,6 +75,14 @@ function App() {
           title="Ничего не найдено"
           description="Попробуйте изменить запрос или сбросить выбранные фильтры."
           action={<Button variant="secondary">Сбросить фильтры</Button>}
+        />
+      </div>
+
+      <div>
+        <ErrorState
+          title="Не удалось загрузить данные"
+          description="Проверьте подключение к интернету и попробуйте ещё раз."
+          onRetry={() => undefined}
         />
       </div>
     </div>
