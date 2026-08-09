@@ -6,12 +6,16 @@ import {
   IconButton,
   Input,
   Logo,
+  Modal,
   SearchInput,
   Skeleton,
   Spinner,
 } from '@/shared';
+import { useState } from 'react';
 
 function App() {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
   return (
     <div className="flex flex-col gap-5">
       <Logo />
@@ -84,6 +88,21 @@ function App() {
           description="Проверьте подключение к интернету и попробуйте ещё раз."
           onRetry={() => undefined}
         />
+      </div>
+
+      <div className="flex flex-col items-center">
+        <Button onClick={() => setIsModalOpen(true)}>Открыть модальное окно</Button>
+        <Modal
+          open={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          title="Проверка модального окна"
+        >
+          <p className="text-body text-text-secondary">Содержимое модального окна</p>
+
+          <Button className="mt-5" onClick={() => setIsModalOpen(false)}>
+            Продолжить
+          </Button>
+        </Modal>
       </div>
     </div>
   );

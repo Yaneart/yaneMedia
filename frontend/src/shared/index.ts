@@ -1,6 +1,6 @@
 export { Logo } from './ui/Logo';
 
-export { SearchIcon } from './ui/Icons';
+export { CloseIcon, SearchIcon } from './ui/Icons';
 export type { IconProps } from './ui/Icons';
 
 export { Button } from './ui/Button';
@@ -26,3 +26,6 @@ export type { EmptyStateProps } from './ui/EmptyState';
 
 export { ErrorState } from './ui/ErrorState';
 export type { ErrorStateProps } from './ui/ErrorState';
+
+export { Modal } from './ui/Modal';
+export type { ModalProps } from './ui/Modal';
