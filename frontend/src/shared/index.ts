@@ -1,6 +1,6 @@
 export { Logo } from './ui/Logo';
 
-export { CloseIcon, SearchIcon } from './ui/Icons';
+export { CloseIcon, MoreIcon, SearchIcon } from './ui/Icons';
 export type { IconProps } from './ui/Icons';
 
 export { Button } from './ui/Button';
@@ -29,3 +29,6 @@ export type { ErrorStateProps } from './ui/ErrorState';
 
 export { Modal } from './ui/Modal';
 export type { ModalProps } from './ui/Modal';
+
+export { Popover } from './ui/Popover';
+export type { PopoverAlign, PopoverProps } from './ui/Popover';

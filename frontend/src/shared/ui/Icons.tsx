@@ -36,3 +36,20 @@ export function CloseIcon({ className = '', ...props }: IconProps) {
     </svg>
   );
 }
+
+export function MoreIcon({ className = '', ...props }: IconProps) {
+  return (
+    <svg
+      {...props}
+      aria-hidden="true"
+      focusable="false"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      className={className}
+    >
+      <circle cx="5" cy="12" r="2" />
+      <circle cx="12" cy="12" r="2" />
+      <circle cx="19" cy="12" r="2" />
+    </svg>
+  );
+}

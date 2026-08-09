@@ -7,6 +7,8 @@ import {
   Input,
   Logo,
   Modal,
+  MoreIcon,
+  Popover,
   SearchInput,
   Skeleton,
   Spinner,
@@ -103,6 +105,19 @@ function App() {
             Продолжить
           </Button>
         </Modal>
+      </div>
+
+      <div>
+        <Popover
+          trigger={<MoreIcon className="size-5" />}
+          triggerLabel="Дополнительные действия"
+          align="start"
+        >
+          <div className="flex flex-col">
+            <Button variant="ghost">Добавить в избранное</Button>
+            <Button variant="ghost">Поделиться</Button>
+          </div>
+        </Popover>
       </div>
     </div>
   );
