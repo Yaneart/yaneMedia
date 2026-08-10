@@ -1,6 +1,16 @@
 export { Logo } from './ui/Logo';
 
-export { CloseIcon, MoreIcon, SearchIcon } from './ui/Icons';
+export {
+  AnimeIcon,
+  CloseIcon,
+  FavoriteIcon,
+  HistoryIcon,
+  HomeIcon,
+  MoreIcon,
+  MoviesIcon,
+  SearchIcon,
+  SeriesIcon,
+} from './ui/Icons';
 export type { IconProps } from './ui/Icons';
 
 export { Button } from './ui/Button';

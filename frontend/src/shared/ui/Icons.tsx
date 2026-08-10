@@ -53,3 +53,133 @@ export function MoreIcon({ className = '', ...props }: IconProps) {
     </svg>
   );
 }
+
+export function HomeIcon({ className = '', ...props }: IconProps) {
+  return (
+    <svg
+      {...props}
+      aria-hidden="true"
+      focusable="false"
+      viewBox="0 0 24 24"
+      fill="none"
+      className={className}
+    >
+      <path
+        d="m3.5 10.5 8.5-7 8.5 7v9a1 1 0 0 1-1 1h-5v-6h-5v6h-5a1 1 0 0 1-1-1v-9Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+export function MoviesIcon({ className = '', ...props }: IconProps) {
+  return (
+    <svg
+      {...props}
+      aria-hidden="true"
+      focusable="false"
+      viewBox="0 0 24 24"
+      fill="none"
+      className={className}
+    >
+      <rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" strokeWidth="2" />
+      <path d="M7 5v3m0 8v3m10-14v3m0 8v3M3 10h18M3 14h18" stroke="currentColor" strokeWidth="2" />
+    </svg>
+  );
+}
+
+export function SeriesIcon({ className = '', ...props }: IconProps) {
+  return (
+    <svg
+      {...props}
+      aria-hidden="true"
+      focusable="false"
+      viewBox="0 0 24 24"
+      fill="none"
+      className={className}
+    >
+      <rect x="5" y="3" width="14" height="18" rx="2" stroke="currentColor" strokeWidth="2" />
+      <path d="M9 3v18m6-18v18M5 8h4m6 0h4M5 16h4m6 0h4" stroke="currentColor" strokeWidth="2" />
+    </svg>
+  );
+}
+
+export function AnimeIcon({ className = '', ...props }: IconProps) {
+  return (
+    <svg
+      {...props}
+      aria-hidden="true"
+      focusable="false"
+      viewBox="0 0 24 24"
+      fill="none"
+      className={className}
+    >
+      <path
+        d="M12 3c.7 4.5 2.5 6.3 7 7-4.5.7-6.3 2.5-7 7-.7-4.5-2.5-6.3-7-7 4.5-.7 6.3-2.5 7-7Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M19 16.5c.25 1.5 1 2.25 2.5 2.5-1.5.25-2.25 1-2.5 2.5-.25-1.5-1-2.25-2.5-2.5 1.5-.25 2.25-1 2.5-2.5Z"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+export function FavoriteIcon({ className = '', ...props }: IconProps) {
+  return (
+    <svg
+      {...props}
+      aria-hidden="true"
+      focusable="false"
+      viewBox="0 0 24 24"
+      fill="none"
+      className={className}
+    >
+      <path
+        d="M20.8 5.8a5.2 5.2 0 0 0-7.35 0L12 7.25 10.55 5.8a5.2 5.2 0 1 0-7.35 7.35L12 21l8.8-7.85a5.2 5.2 0 0 0 0-7.35Z"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+export function HistoryIcon({ className = '', ...props }: IconProps) {
+  return (
+    <svg
+      {...props}
+      aria-hidden="true"
+      focusable="false"
+      viewBox="0 0 24 24"
+      fill="none"
+      className={className}
+    >
+      <path
+        d="M3.5 5v4.5H8M4.2 9.5A8.5 8.5 0 1 1 5.4 17"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M12 7.5V12l3 2"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
