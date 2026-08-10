@@ -17,7 +17,7 @@ type DesktopNavigationProps = {
 
 function getLinkClassName({ isActive }: { isActive: boolean }) {
   return [
-    'flex min-h-11 gap-3 items-center rounded-control px-3 text-sm font-semibold',
+    'flex min-h-12 items-center gap-3 rounded-control px-3 text-body font-semibold',
     'transition-colors duration-150',
     isActive
       ? 'bg-surface-elevated text-text-primary'
@@ -31,7 +31,7 @@ export function DesktopNavigation({
   secondaryItems,
 }: DesktopNavigationProps) {
   return (
-    <aside className="flex h-dvh w-60 shrink-0 flex-col px-4 py-5">
+    <aside className="flex h-dvh w-64 shrink-0 flex-col px-5 py-6">
       <NavLink
         to={homePath}
         aria-label="Перейти на главную"
@@ -41,7 +41,7 @@ export function DesktopNavigation({
       </NavLink>
 
       <nav aria-label="Основная навигация">
-        <ul className="flex flex-col gap-1">
+        <ul className="flex flex-col gap-2">
           {primaryItems.map((item) => {
             const Icon = item.icon;
             return (
@@ -56,8 +56,8 @@ export function DesktopNavigation({
         </ul>
       </nav>
 
-      <nav aria-label="Личная навигация" className="mt-6">
-        <ul className="flex flex-col gap-1">
+      <nav aria-label="Личная навигация" className="mt-8">
+        <ul className="flex flex-col gap-2">
           {secondaryItems.map((item) => {
             const Icon = item.icon;
             return (
