@@ -183,3 +183,77 @@ export function HistoryIcon({ className = '', ...props }: IconProps) {
     </svg>
   );
 }
+
+export function ProfileIcon({ className = '', ...props }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={className}
+      {...props}
+    >
+      <circle cx="12" cy="8" r="3.25" />
+      <path d="M5.75 19c.65-3.15 3-5 6.25-5s5.6 1.85 6.25 5" />
+    </svg>
+  );
+}
+
+export function SystemThemeIcon({ className = '', ...props }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={className}
+      {...props}
+    >
+      <rect x="3.5" y="4.5" width="17" height="12" rx="2" />
+      <path d="M9 20h6M12 16.5V20" />
+    </svg>
+  );
+}
+
+export function MoonIcon({ className = '', ...props }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={className}
+      {...props}
+    >
+      <path d="M19.25 15.25A8 8 0 0 1 8.75 4.75a8 8 0 1 0 10.5 10.5Z" />
+    </svg>
+  );
+}
+
+export function SunIcon({ className = '', ...props }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      aria-hidden="true"
+      className={className}
+      {...props}
+    >
+      <circle cx="12" cy="12" r="3.5" />
+      <path d="M12 2.5V5M12 19v2.5M2.5 12H5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M18.7 5.3l-1.8 1.8M7.1 16.9l-1.8 1.8" />
+    </svg>
+  );
+}

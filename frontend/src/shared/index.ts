@@ -8,8 +8,12 @@ export {
   HomeIcon,
   MoreIcon,
   MoviesIcon,
+  ProfileIcon,
   SearchIcon,
   SeriesIcon,
+  SunIcon,
+  MoonIcon,
+  SystemThemeIcon,
 } from './ui/Icons';
 export type { IconProps } from './ui/Icons';
 

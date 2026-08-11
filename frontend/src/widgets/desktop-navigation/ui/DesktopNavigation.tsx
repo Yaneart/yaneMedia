@@ -1,5 +1,5 @@
 import { ThemeToggle } from '@/features/theme';
-import { Logo, type IconProps } from '@/shared';
+import { Logo, ProfileIcon, type IconProps } from '@/shared';
 import type { ComponentType } from 'react';
 import { NavLink } from 'react-router';
 
@@ -11,6 +11,7 @@ type DesktopNavigationItem = {
 
 type DesktopNavigationProps = {
   homePath: string;
+  profilePath: string;
   primaryItems: readonly DesktopNavigationItem[];
   secondaryItems: readonly DesktopNavigationItem[];
 };
@@ -29,6 +30,7 @@ export function DesktopNavigation({
   homePath,
   primaryItems,
   secondaryItems,
+  profilePath,
 }: DesktopNavigationProps) {
   return (
     <aside className="flex h-dvh w-64 shrink-0 flex-col px-5 py-6">
@@ -72,8 +74,16 @@ export function DesktopNavigation({
         </ul>
       </nav>
 
-      <div className="mt-auto pt-6">
+      <div className="mt-auto flex items-center gap-2 px-2 pt-6">
         <ThemeToggle />
+
+        <NavLink
+          to={profilePath}
+          aria-label="Войти"
+          className="flex size-10 shrink-0 items-center justify-center rounded-control border border-border bg-surface text-text-primary transition-colors duration-150 hover:bg-interactive-hover"
+        >
+          <ProfileIcon className="size-5" />
+        </NavLink>
       </div>
     </aside>
   );
