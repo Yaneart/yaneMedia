@@ -124,7 +124,7 @@
   color-scheme: light;
 
   --theme-background: #ebeae5;
-  --theme-surface: #f7f6f2;
+  --theme-surface: #b8bbbd;
   --theme-surface-elevated: #ffffff;
   --theme-border: #bdbbb4;
 
@@ -135,7 +135,7 @@
   --theme-action: #18191a;
   --theme-action-text: #f4f3ef;
   --theme-control-secondary: #b8bbbd;
-  --theme-interactive-hover: #bfc2c4;
+  --theme-interactive-hover: #b8bbbd;
   --theme-skeleton: #b8bbbd;
   --theme-popover: #b8bbbd;
 
