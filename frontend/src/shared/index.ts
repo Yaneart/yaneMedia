@@ -14,6 +14,7 @@ export {
   SunIcon,
   MoonIcon,
   SystemThemeIcon,
+  PlayIcon,
 } from './ui/Icons';
 export type { IconProps } from './ui/Icons';
 

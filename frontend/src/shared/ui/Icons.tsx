@@ -257,3 +257,24 @@ export function SunIcon({ className = '', ...props }: IconProps) {
     </svg>
   );
 }
+
+export function PlayIcon({ className = '', ...props }: IconProps) {
+  return (
+    <svg
+      {...props}
+      aria-hidden="true"
+      focusable="false"
+      viewBox="0 0 24 24"
+      fill="none"
+      className={className}
+    >
+      <path
+        d="m9 7 8 5-8 5V7Z"
+        fill="currentColor"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
