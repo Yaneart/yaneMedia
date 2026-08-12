@@ -4,7 +4,7 @@ import { demoHomeFeed } from '../model/homeFeed.mock';
 import { FeaturedMedia } from '@/widgets/featured-media';
 import { ContinueWatchingCard } from '@/widgets/continue-watching-card';
 import { ContentRow } from '@/shared';
-import type { MediaRef } from '@/entities/media';
+import { LandscapeMediaCard, type MediaRef } from '@/entities/media';
 
 export function HomePage() {
   const navigate = useNavigate();
@@ -33,6 +33,21 @@ export function HomePage() {
           ))}
         </ContentRow>
       </section>
+      {demoHomeFeed.collections.slice(0, 1).map((collection) => (
+        <section key={collection.id}>
+          <h2 className="mb-3 text-heading font-semibold">{collection.title}</h2>
+
+          <ContentRow>
+            {collection.items.map((media) => (
+              <LandscapeMediaCard
+                key={media.mediaRef}
+                media={media}
+                onOpen={() => openMedia(media.mediaRef)}
+              />
+            ))}
+          </ContentRow>
+        </section>
+      ))}
     </div>
   );
 }
