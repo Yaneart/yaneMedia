@@ -162,6 +162,14 @@ export const demoHomeFeed = {
         updatedAt: '2026-08-10T20:15:00.000Z',
       },
     },
+    {
+      media: demoMedia.oppenheimer,
+      progress: {
+        positionSeconds: 3913,
+        durationSeconds: 8880,
+        updatedAt: '2026-08-09T19:40:00.000Z',
+      },
+    },
   ],
   collections: [
     {
