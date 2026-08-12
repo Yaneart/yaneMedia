@@ -95,6 +95,7 @@
 
   --color-error: var(--theme-error);
   --color-success: var(--theme-success);
+  --color-favorite: var(--theme-favorite);
 }
 
 :root {
@@ -118,6 +119,7 @@
 
   --theme-error: #ef5a67;
   --theme-success: #42c88a;
+  --theme-favorite: #ff5c7a;
 }
 
 [data-theme='light'] {
@@ -141,6 +143,7 @@
 
   --theme-error: #c93f4c;
   --theme-success: #26875b;
+  --theme-favorite: #d92d52;
 }
 
 @layer base {
