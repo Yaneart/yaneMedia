@@ -44,7 +44,7 @@ export function ThemeToggle() {
     >
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute inset-y-1 left-1 rounded-lg bg-surface-elevated shadow-sm transition-transform duration-200"
+        className="pointer-events-none absolute inset-y-1 left-1 rounded-lg bg-surface-elevated shadow-sm transition-transform duration-250 ease-out motion-reduce:transition-none"
         style={{
           width: 'calc((100% - 0.5rem) / 3)',
           transform: `translateX(${indicatorPositions[themeMode]})`,
@@ -64,7 +64,9 @@ export function ThemeToggle() {
             title={option.label}
             className={[
               'relative z-10 flex items-center justify-center rounded-lg',
-              'transition-colors duration-150',
+              'transition-[color,transform] duration-200 ease-out',
+              'active:scale-[0.94] active:duration-75',
+              'motion-reduce:transform-none motion-reduce:transition-none',
               isActive ? 'text-text-primary' : 'text-text-secondary hover:text-text-primary',
             ].join(' ')}
             onClick={() => setThemeMode(option.value)}

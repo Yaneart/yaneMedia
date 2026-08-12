@@ -53,8 +53,10 @@ export function NotFoundPage() {
                   className={[
                     'flex size-16 shrink-0 items-center justify-center rounded-full border',
                     'bg-surface text-text-primary shadow-overlay',
-                    'transition duration-200',
-                    'hover:scale-105 hover:bg-interactive-hover',
+                    'transition-[background-color,border-color,transform] duration-200 ease-out',
+                    'hover:scale-[1.025] hover:bg-interactive-hover',
+                    'active:scale-[0.975] active:duration-75',
+                    'motion-reduce:transform-none motion-reduce:transition-none',
                     'focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-action',
                     'disabled:pointer-events-none',
                     'sm:size-24',

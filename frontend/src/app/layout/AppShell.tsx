@@ -20,7 +20,7 @@ export function AppShell() {
         <div className="shrink-0 md:hidden">
           <MobileHeader homePath={routePaths.home} profilePath={routePaths.login} />
         </div>
-        <main className="min-h-0 flex-1 overflow-y-auto bg-surface p-page md:m-4 md:ml-0 md:rounded-card md:shadow-surface">
+        <main className="min-h-0 flex-1 overflow-y-auto bg-surface p-page [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:m-4 md:ml-0 md:rounded-card md:shadow-surface">
           <Outlet />
         </main>
         <div className="shrink-0 bg-surface md:hidden pl-1 pr-1">

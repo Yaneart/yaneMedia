@@ -44,7 +44,9 @@ export function Button({
       disabled={disabled}
       className={[
         'inline-flex items-center justify-center gap-2 rounded-control font-semibold',
-        'transition-colors duration-150',
+        'transition-[background-color,border-color,color,opacity,transform,box-shadow]',
+        'duration-200 ease-out active:scale-[0.985] active:duration-75',
+        'motion-reduce:transform-none motion-reduce:transition-none',
         'disabled:pointer-events-none disabled:opacity-50',
         variantClasses[variant],
         iconOnly ? iconOnlySizeClasses[size] : sizeClasses[size],

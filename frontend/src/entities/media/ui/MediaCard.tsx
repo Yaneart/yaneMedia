@@ -12,8 +12,17 @@ export function MediaCard({ media, onOpen, isFavorite, onFavoriteChange }: Media
   const metadata = [media.year, media.rating?.value].filter((value) => value !== undefined);
 
   return (
-    <article className="group relative min-w-0">
-      <button type="button" className="block w-full min-w-0 text-left" onClick={onOpen}>
+    <article className="relative min-w-0">
+      <button
+        type="button"
+        className={[
+          'group/card block w-full min-w-0 text-left',
+          'transition-transform duration-200 ease-out',
+          'active:scale-[0.99] active:duration-75',
+          'motion-reduce:transform-none motion-reduce:transition-none',
+        ].join(' ')}
+        onClick={onOpen}
+      >
         <div className="aspect-2/3 overflow-hidden rounded-card bg-elevated">
           {media.poster && (
             <img
@@ -21,7 +30,11 @@ export function MediaCard({ media, onOpen, isFavorite, onFavoriteChange }: Media
               alt=""
               width={media.poster.width}
               height={media.poster.height}
-              className="size-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+              className={[
+                'size-full object-cover transition-transform duration-300 ease-out',
+                'group-hover/card:scale-[1.015] group-active/card:scale-[1.005]',
+                'motion-reduce:transform-none motion-reduce:transition-none',
+              ].join(' ')}
             />
           )}
         </div>
@@ -48,13 +61,14 @@ export function MediaCard({ media, onOpen, isFavorite, onFavoriteChange }: Media
           'hover:bg-black/55! hover:text-white!',
           'focus-visible:bg-black/55! focus-visible:outline-none',
           'focus-visible:ring-2 focus-visible:ring-white',
-          'transition-transform duration-200 hover:scale-110 active:scale-95',
+          'transition-transform duration-200 ease-out hover:scale-105 active:scale-95 active:duration-75',
+          'motion-reduce:transform-none motion-reduce:transition-none',
         ].join(' ')}
         onClick={onFavoriteChange}
       >
         <FavoriteIcon
           className={[
-            'size-5 transition-[transform,color,fill] duration-200 ease-out',
+            'size-5 transition-[transform,color,fill] duration-200 ease-out motion-reduce:transform-none motion-reduce:transition-none',
             isFavorite
               ? 'scale-110 fill-favorite text-favorite'
               : 'scale-100 fill-transparent text-white',

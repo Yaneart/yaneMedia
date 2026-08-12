@@ -7,7 +7,8 @@ export function ContentRow({ className = '', ...props }: ContentRowProps) {
     <div
       className={[
         'grid grid-flow-col auto-cols-[85%] gap-4 overflow-x-auto',
-        'xl:grid-flow-row xl:grid-cols-3 xl:overflow-visible',
+        'xl:auto-cols-[48%]',
+        'min-[1400px]:grid-flow-row min-[1400px]:grid-cols-3 min-[1400px]:overflow-visible',
         className,
       ].join(' ')}
       {...props}

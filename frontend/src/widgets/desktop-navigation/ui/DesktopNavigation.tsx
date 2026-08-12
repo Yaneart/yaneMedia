@@ -19,7 +19,9 @@ type DesktopNavigationProps = {
 function getLinkClassName({ isActive }: { isActive: boolean }) {
   return [
     'flex min-h-12 items-center gap-3 rounded-control px-3 text-body font-semibold',
-    'transition-colors duration-150',
+    'transition-[background-color,color,transform] duration-200 ease-out',
+    'active:scale-[0.985] active:duration-75',
+    'motion-reduce:transform-none motion-reduce:transition-none',
     isActive
       ? 'bg-surface-elevated text-text-primary'
       : 'text-text-secondary hover:bg-interactive-hover hover:text-text-primary',
@@ -37,7 +39,11 @@ export function DesktopNavigation({
       <NavLink
         to={homePath}
         aria-label="Перейти на главную"
-        className="mb-8 w-fit rounded-control p-2"
+        className={[
+          'mb-8 w-fit rounded-control p-2',
+          'transition-transform duration-200 ease-out active:scale-[0.98] active:duration-75',
+          'motion-reduce:transform-none motion-reduce:transition-none',
+        ].join(' ')}
       >
         <Logo />
       </NavLink>
@@ -80,7 +86,13 @@ export function DesktopNavigation({
         <NavLink
           to={profilePath}
           aria-label="Войти"
-          className="flex size-10 shrink-0 items-center justify-center rounded-control border border-border bg-surface text-text-primary transition-colors duration-150 hover:bg-interactive-hover"
+          className={[
+            'flex size-10 shrink-0 items-center justify-center rounded-control',
+            'border border-border bg-surface text-text-primary hover:bg-interactive-hover',
+            'transition-[background-color,color,transform] duration-200 ease-out',
+            'active:scale-[0.96] active:duration-75',
+            'motion-reduce:transform-none motion-reduce:transition-none',
+          ].join(' ')}
         >
           <ProfileIcon className="size-5" />
         </NavLink>

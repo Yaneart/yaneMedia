@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router';
 import { demoHomeFeed } from '../model/homeFeed.mock';
 import { FeaturedMedia } from '@/widgets/featured-media';
 import { ContinueWatchingCard } from '@/widgets/continue-watching-card';
-import { ContentRow } from '@/shared';
+import { ContentRow, SearchInput } from '@/shared';
 import { LandscapeMediaCard, type MediaRef } from '@/entities/media';
 
 export function HomePage() {
@@ -13,41 +13,84 @@ export function HomePage() {
     navigate(`/media/${encodeURIComponent(mediaRef)}`);
   };
   return (
-    <div className="space-y-6">
-      <FeaturedMedia
-        media={demoHomeFeed.featured}
-        onOpen={() => openMedia(demoHomeFeed.featured.mediaRef)}
-      />
+    <div className="md:-m-page">
+      <section className="relative isolate overflow-hidden rounded-card bg-elevated md:rounded-none">
+        {demoHomeFeed.featured.backdrop && (
+          <img
+            src={demoHomeFeed.featured.backdrop.url}
+            alt=""
+            width={demoHomeFeed.featured.backdrop.width}
+            height={demoHomeFeed.featured.backdrop.height}
+            className={[
+              'absolute inset-x-0 top-0 -z-20 h-[420px] w-full object-cover',
+              'object-[58%_center] md:inset-0 md:h-full md:object-center',
+            ].join(' ')}
+          />
+        )}
 
-      <section>
-        <h2 className="mb-3 text-heading font-semibold">Продолжить просмотр</h2>
+        <div className="absolute inset-x-0 top-0 -z-10 h-[420px] bg-gradient-to-r from-black/85 via-black/40 to-transparent md:inset-0 md:h-full" />
+        <div className="absolute inset-x-0 top-0 -z-10 h-[420px] bg-gradient-to-t from-black/85 via-black/15 to-transparent md:inset-0 md:h-full" />
+        <div className="absolute inset-x-0 bottom-0 -z-10 h-[32%] bg-linear-to-b from-transparent via-surface/35 to-surface" />
 
-        <ContentRow>
-          {demoHomeFeed.continueWatching.map((item) => (
-            <ContinueWatchingCard
-              key={item.media.mediaRef}
-              media={item.media}
-              progress={item.progress}
-              onOpen={() => openMedia(item.media.mediaRef)}
+        <header className="absolute left-10 top-8 z-10 hidden md:block">
+          <h1 className="text-title font-semibold text-white">Добрый вечер</h1>
+
+          <div className="mt-4 w-md">
+            <SearchInput
+              aria-label="Поиск фильмов, сериалов и аниме"
+              placeholder="Что будем смотреть?"
+              className={[
+                'border-white/25! bg-black/35!',
+                'text-white placeholder:text-white/60',
+                'hover:border-white/40! hover:bg-black/45!',
+                'focus:border-white/45! focus:bg-black/45!',
+                'focus-visible:outline-none',
+                'focus-visible:ring-2 focus-visible:ring-white/25',
+              ].join(' ')}
             />
-          ))}
-        </ContentRow>
-      </section>
-      {demoHomeFeed.collections.slice(0, 1).map((collection) => (
-        <section key={collection.id}>
-          <h2 className="mb-3 text-heading font-semibold">{collection.title}</h2>
+          </div>
+        </header>
+
+        <div className="relative md:px-page md:pt-56">
+          <FeaturedMedia
+            media={demoHomeFeed.featured}
+            onOpen={() => openMedia(demoHomeFeed.featured.mediaRef)}
+          />
+        </div>
+
+        <section className="relative px-5 pb-8 md:mt-10 md:px-page md:pb-page">
+          <h2 className="mb-3 text-heading font-semibold text-white">Продолжить просмотр</h2>
 
           <ContentRow>
-            {collection.items.map((media) => (
-              <LandscapeMediaCard
-                key={media.mediaRef}
-                media={media}
-                onOpen={() => openMedia(media.mediaRef)}
+            {demoHomeFeed.continueWatching.map((item) => (
+              <ContinueWatchingCard
+                key={item.media.mediaRef}
+                media={item.media}
+                progress={item.progress}
+                onOpen={() => openMedia(item.media.mediaRef)}
               />
             ))}
           </ContentRow>
         </section>
-      ))}
+      </section>
+
+      <div className="space-y-6 pt-6 md:px-page md:pb-page">
+        {demoHomeFeed.collections.slice(0, 1).map((collection) => (
+          <section key={collection.id}>
+            <h2 className="mb-3 text-heading font-semibold">{collection.title}</h2>
+
+            <ContentRow>
+              {collection.items.map((media) => (
+                <LandscapeMediaCard
+                  key={media.mediaRef}
+                  media={media}
+                  onOpen={() => openMedia(media.mediaRef)}
+                />
+              ))}
+            </ContentRow>
+          </section>
+        ))}
+      </div>
     </div>
   );
 }

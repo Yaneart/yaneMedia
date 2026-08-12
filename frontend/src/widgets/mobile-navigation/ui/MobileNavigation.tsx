@@ -16,7 +16,10 @@ type MobileNavigationProps = {
 function getLinkClassName({ isActive }: { isActive: boolean }) {
   return [
     'flex min-w-0 flex-1 flex-col items-center justify-center gap-1',
-    'px-1 py-2 text-caption transition-colors duration-150',
+    'px-1 py-2 text-caption',
+    'transition-[color,transform] duration-200 ease-out',
+    'active:scale-[0.97] active:duration-75',
+    'motion-reduce:transform-none motion-reduce:transition-none',
     isActive ? 'text-text-primary' : 'text-text-secondary hover:text-text-primary',
   ].join(' ');
 }
