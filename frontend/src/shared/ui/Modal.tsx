@@ -66,7 +66,7 @@ export function Modal({ open, onClose, title, children, className = '', ...props
           <CloseIcon className="size-5" />
         </IconButton>
       </div>
-      <div className="items-center mt-5">{children}</div>
+      <div className="mt-5">{children}</div>
     </dialog>
   );
 }

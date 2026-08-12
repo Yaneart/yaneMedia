@@ -2,18 +2,28 @@ export { Logo } from './ui/Logo';
 
 export {
   AnimeIcon,
+  AnimeFilledIcon,
   CloseIcon,
   FavoriteIcon,
+  FavoriteFilledIcon,
   HistoryIcon,
+  HistoryFilledIcon,
   HomeIcon,
+  HomeFilledIcon,
   MoreIcon,
   MoviesIcon,
+  MoviesFilledIcon,
   ProfileIcon,
   SearchIcon,
+  SearchFilledIcon,
   SeriesIcon,
+  SeriesFilledIcon,
   SunIcon,
+  SunFilledIcon,
   MoonIcon,
+  MoonFilledIcon,
   SystemThemeIcon,
+  SystemThemeFilledIcon,
   PlayIcon,
 } from './ui/Icons';
 export type { IconProps } from './ui/Icons';

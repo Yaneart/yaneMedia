@@ -96,7 +96,8 @@ export function NotFoundPage() {
                 <div className="relative">
                   <div
                     className={[
-                      'size-2 rounded-full transition duration-200',
+                      'size-2 rounded-full transition-[background-color,transform] duration-200 ease-out',
+                      'motion-reduce:transform-none motion-reduce:transition-none',
                       playbackState === 'error'
                         ? 'scale-125 bg-error'
                         : 'bg-text-secondary group-hover/timeline:scale-125 group-hover/timeline:bg-action',
@@ -108,7 +109,8 @@ export function NotFoundPage() {
                       'absolute bottom-5 left-1/2 hidden -translate-x-1/2 rounded-pill sm:block',
                       'border border-border bg-surface-elevated px-2 py-1',
                       'text-caption whitespace-nowrap text-text-primary',
-                      'transition duration-200',
+                      'transition-[opacity,transform] duration-200 ease-out',
+                      'motion-reduce:transform-none motion-reduce:transition-none',
                       playbackState === 'error'
                         ? 'translate-y-0 opacity-100'
                         : 'translate-y-1 opacity-0 group-hover/timeline:translate-y-0 group-hover/timeline:opacity-100',

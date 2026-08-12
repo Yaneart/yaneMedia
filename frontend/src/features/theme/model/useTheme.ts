@@ -1,39 +1,12 @@
-import { loadThemeMode, saveThemeMode } from './themeStorage';
-import { resolveTheme, type ThemeMode } from './theme';
-import { useEffect, useState } from 'react';
+import { useContext } from 'react';
+import { ThemeContext } from './themeContext';
 
 export function useTheme() {
-  const [themeMode, setThemeModeState] = useState<ThemeMode>(loadThemeMode);
+  const theme = useContext(ThemeContext);
 
-  useEffect(() => {
-    const systemThemeQuery = window.matchMedia('(prefers-color-scheme: dark)');
+  if (!theme) {
+    throw new Error('useTheme must be used within ThemeProvider');
+  }
 
-    const applyTheme = () => {
-      const resolvedTheme = resolveTheme(themeMode, systemThemeQuery.matches);
-
-      document.documentElement.dataset.theme = resolvedTheme;
-    };
-
-    applyTheme();
-
-    if (themeMode !== 'system') {
-      return;
-    }
-
-    systemThemeQuery.addEventListener('change', applyTheme);
-
-    return () => {
-      systemThemeQuery.removeEventListener('change', applyTheme);
-    };
-  }, [themeMode]);
-
-  const setThemeMode = (nextThemeMode: ThemeMode) => {
-    saveThemeMode(nextThemeMode);
-    setThemeModeState(nextThemeMode);
-  };
-
-  return {
-    themeMode,
-    setThemeMode,
-  };
+  return theme;
 }

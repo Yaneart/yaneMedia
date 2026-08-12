@@ -6,6 +6,7 @@ type MobileNavigationItem = {
   label: string;
   path: string;
   icon: ComponentType<IconProps>;
+  activeIcon: ComponentType<IconProps>;
 };
 
 type MobileNavigationProps = {
@@ -32,12 +33,19 @@ export function MobileNavigation({ homePath, items }: MobileNavigationProps) {
     >
       <ul className="flex min-h-16">
         {items.map((item) => {
-          const Icon = item.icon;
           return (
             <li key={item.path} className="flex min-w-0 flex-1">
               <NavLink to={item.path} end={item.path === homePath} className={getLinkClassName}>
-                <Icon className="size-5 shrink-0" />
-                <span className="truncate">{item.label}</span>
+                {({ isActive }) => {
+                  const Icon = isActive ? item.activeIcon : item.icon;
+
+                  return (
+                    <>
+                      <Icon className="size-5 shrink-0" />
+                      <span className="truncate">{item.label}</span>
+                    </>
+                  );
+                }}
               </NavLink>
             </li>
           );

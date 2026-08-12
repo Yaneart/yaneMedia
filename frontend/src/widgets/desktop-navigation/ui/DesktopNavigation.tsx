@@ -7,6 +7,7 @@ type DesktopNavigationItem = {
   label: string;
   path: string;
   icon: ComponentType<IconProps>;
+  activeIcon: ComponentType<IconProps>;
 };
 
 type DesktopNavigationProps = {
@@ -51,12 +52,19 @@ export function DesktopNavigation({
       <nav aria-label="Основная навигация">
         <ul className="flex flex-col gap-2">
           {primaryItems.map((item) => {
-            const Icon = item.icon;
             return (
               <li key={item.path}>
                 <NavLink to={item.path} end={item.path === homePath} className={getLinkClassName}>
-                  <Icon className="size-5 shrink-0" />
-                  {item.label}
+                  {({ isActive }) => {
+                    const Icon = isActive ? item.activeIcon : item.icon;
+
+                    return (
+                      <>
+                        <Icon className="size-5 shrink-0" />
+                        {item.label}
+                      </>
+                    );
+                  }}
                 </NavLink>
               </li>
             );
@@ -67,12 +75,19 @@ export function DesktopNavigation({
       <nav aria-label="Личная навигация" className="mt-8">
         <ul className="flex flex-col gap-2">
           {secondaryItems.map((item) => {
-            const Icon = item.icon;
             return (
               <li key={item.path}>
                 <NavLink to={item.path} className={getLinkClassName}>
-                  <Icon className="size-5 shrink-0" />
-                  {item.label}
+                  {({ isActive }) => {
+                    const Icon = isActive ? item.activeIcon : item.icon;
+
+                    return (
+                      <>
+                        <Icon className="size-5 shrink-0" />
+                        {item.label}
+                      </>
+                    );
+                  }}
                 </NavLink>
               </li>
             );

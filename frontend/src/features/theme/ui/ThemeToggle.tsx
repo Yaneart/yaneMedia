@@ -1,4 +1,12 @@
-import { MoonIcon, SunIcon, SystemThemeIcon, type IconProps } from '@/shared';
+import {
+  MoonFilledIcon,
+  MoonIcon,
+  SunFilledIcon,
+  SunIcon,
+  SystemThemeFilledIcon,
+  SystemThemeIcon,
+  type IconProps,
+} from '@/shared';
 import type { ComponentType } from 'react';
 import type { ThemeMode } from '../model/theme';
 import { useTheme } from '../model/useTheme';
@@ -7,6 +15,7 @@ type ThemeOption = {
   value: ThemeMode;
   label: string;
   icon: ComponentType<IconProps>;
+  activeIcon: ComponentType<IconProps>;
 };
 
 const themeOptions = [
@@ -14,23 +23,26 @@ const themeOptions = [
     value: 'dark',
     label: 'Тёмная тема',
     icon: MoonIcon,
+    activeIcon: MoonFilledIcon,
   },
   {
     value: 'system',
     label: 'Системная тема',
     icon: SystemThemeIcon,
+    activeIcon: SystemThemeFilledIcon,
   },
   {
     value: 'light',
     label: 'Светлая тема',
     icon: SunIcon,
+    activeIcon: SunFilledIcon,
   },
 ] satisfies ThemeOption[];
 
-const indicatorPositions: Record<ThemeMode, string> = {
-  dark: '0%',
-  system: '100%',
-  light: '200%',
+const indicatorPositionClasses: Record<ThemeMode, string> = {
+  dark: 'translate-x-0',
+  system: 'translate-x-full',
+  light: 'translate-x-[200%]',
 };
 
 export function ThemeToggle() {
@@ -44,16 +56,17 @@ export function ThemeToggle() {
     >
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute inset-y-1 left-1 rounded-lg bg-surface-elevated shadow-sm transition-transform duration-250 ease-out motion-reduce:transition-none"
-        style={{
-          width: 'calc((100% - 0.5rem) / 3)',
-          transform: `translateX(${indicatorPositions[themeMode]})`,
-        }}
+        className={[
+          'pointer-events-none absolute inset-y-1 left-1 w-[calc((100%-0.5rem)/3)]',
+          'rounded-lg bg-surface-elevated shadow-sm',
+          'transition-transform duration-250 ease-out motion-reduce:transition-none',
+          indicatorPositionClasses[themeMode],
+        ].join(' ')}
       />
 
       {themeOptions.map((option) => {
-        const Icon = option.icon;
         const isActive = option.value === themeMode;
+        const Icon = isActive ? option.activeIcon : option.icon;
 
         return (
           <button

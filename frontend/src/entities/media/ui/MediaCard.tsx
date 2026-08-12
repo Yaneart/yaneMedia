@@ -1,4 +1,4 @@
-import { FavoriteIcon, IconButton } from '@/shared';
+import { FavoriteFilledIcon, FavoriteIcon, IconButton } from '@/shared';
 import type { MediaSummary } from '../model/media';
 
 export type MediaCardProps = {
@@ -10,6 +10,7 @@ export type MediaCardProps = {
 
 export function MediaCard({ media, onOpen, isFavorite, onFavoriteChange }: MediaCardProps) {
   const metadata = [media.year, media.rating?.value].filter((value) => value !== undefined);
+  const FavoriteStateIcon = isFavorite ? FavoriteFilledIcon : FavoriteIcon;
 
   return (
     <article className="relative min-w-0">
@@ -66,12 +67,10 @@ export function MediaCard({ media, onOpen, isFavorite, onFavoriteChange }: Media
         ].join(' ')}
         onClick={onFavoriteChange}
       >
-        <FavoriteIcon
+        <FavoriteStateIcon
           className={[
-            'size-5 transition-[transform,color,fill] duration-200 ease-out motion-reduce:transform-none motion-reduce:transition-none',
-            isFavorite
-              ? 'scale-110 fill-favorite text-favorite'
-              : 'scale-100 fill-transparent text-white',
+            'size-5 transition-[transform,color] duration-200 ease-out motion-reduce:transform-none motion-reduce:transition-none',
+            isFavorite ? 'scale-110 text-favorite' : 'scale-100 text-white',
           ].join(' ')}
         />
       </IconButton>
