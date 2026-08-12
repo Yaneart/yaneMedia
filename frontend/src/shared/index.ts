@@ -47,3 +47,6 @@ export type { ModalProps } from './ui/Modal';
 
 export { Popover } from './ui/Popover';
 export type { PopoverAlign, PopoverProps } from './ui/Popover';
+
+export { ContentRow } from './ui/ContentRow';
+export type { ContentRowProps } from './ui/ContentRow';

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { demoHomeFeed } from '../model/homeFeed.mock';
 import { FeaturedMedia } from '@/widgets/featured-media';
 import { ContinueWatchingCard } from '@/widgets/continue-watching-card';
+import { ContentRow } from '@/shared';
 import type { MediaRef } from '@/entities/media';
 
 export function HomePage() {
@@ -21,7 +22,7 @@ export function HomePage() {
       <section>
         <h2 className="mb-3 text-heading font-semibold">Продолжить просмотр</h2>
 
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <ContentRow>
           {demoHomeFeed.continueWatching.map((item) => (
             <ContinueWatchingCard
               key={item.media.mediaRef}
@@ -30,7 +31,7 @@ export function HomePage() {
               onOpen={() => openMedia(item.media.mediaRef)}
             />
           ))}
-        </div>
+        </ContentRow>
       </section>
     </div>
   );
