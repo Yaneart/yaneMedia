@@ -4,7 +4,7 @@ export const routePaths = {
   movies: '/movies',
   series: '/series',
   anime: '/anime',
-  media: '/media/:mediaId',
+  media: '/media/:mediaRef',
   favorites: '/favorites',
   history: '/history',
   login: '/login',

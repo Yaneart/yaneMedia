@@ -16,9 +16,9 @@ const demoMedia = {
       height: 900,
     },
     backdrop: {
-      url: 'https://placehold.co/1600x900/29251f/f1f0ec?text=Dune',
-      width: 1600,
-      height: 900,
+      url: '/images/demo/featured-desert-v1.png',
+      width: 1664,
+      height: 935,
     },
     genres: ['Фантастика', 'Драма', 'Приключения'],
     rating: {
