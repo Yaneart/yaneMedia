@@ -5,11 +5,17 @@ import { NavLink } from 'react-router';
 type MobileHeaderProps = {
   homePath: string;
   profilePath: string;
+  overlay?: boolean;
 };
 
-export function MobileHeader({ homePath, profilePath }: MobileHeaderProps) {
+export function MobileHeader({ homePath, profilePath, overlay = false }: MobileHeaderProps) {
   return (
-    <header className="bg-surface pt-[env(safe-area-inset-top)]">
+    <header
+      className={[
+        'pt-[env(safe-area-inset-top)]',
+        overlay ? 'bg-linear-to-b from-black/70 via-black/35 to-transparent' : 'bg-surface',
+      ].join(' ')}
+    >
       <div className="flex min-h-16 items-center justify-between gap-4 px-page">
         <NavLink
           to={homePath}
@@ -20,7 +26,7 @@ export function MobileHeader({ homePath, profilePath }: MobileHeaderProps) {
             'motion-reduce:transform-none motion-reduce:transition-none',
           ].join(' ')}
         >
-          <Logo compact />
+          <Logo compact className={overlay ? '[&>span:first-child]:text-white' : ''} />
         </NavLink>
 
         <div className="flex items-center gap-2">

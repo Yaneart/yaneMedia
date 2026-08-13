@@ -37,7 +37,7 @@ export function NotFoundPage() {
           >
             <div
               className={[
-                'absolute inset-0 flex flex-col items-center justify-center px-4 pb-8 text-center sm:pb-20',
+                'absolute inset-0 flex flex-col items-center justify-center px-4 pb-8 text-center sm:translate-y-8 sm:pb-20',
                 playbackState !== 'error' ? 'max-[374px]:pb-14' : '',
               ].join(' ')}
             >
