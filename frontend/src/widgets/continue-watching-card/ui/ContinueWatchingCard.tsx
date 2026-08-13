@@ -88,19 +88,19 @@ export function ContinueWatchingCard({ media, onOpen, progress }: ContinueWatchi
         <PlayIcon className="size-5 translate-x-px" />
       </span>
 
-      <div className="relative flex size-full flex-col justify-end p-4 text-white">
+      <div className="relative flex size-full flex-col justify-end p-3 text-white sm:p-4">
         <h3 className="truncate font-semibold leading-tight">{media.title}</h3>
 
         <div className="mt-1.5 flex items-center justify-between gap-3 text-caption text-white/65">
-          <span className="min-w-0 truncate">{resumeLabel}</span>
-          <span className="shrink-0">{remainingLabel}</span>
+          <span className="hidden min-w-0 truncate sm:block">{resumeLabel}</span>
+          <span className="truncate sm:shrink-0">{remainingLabel}</span>
         </div>
 
         <progress
           value={positionSeconds}
           max={progressMax}
           aria-label={`Просмотрено ${progressLabel}`}
-          className="mt-3 h-1.5 w-full appearance-none overflow-hidden rounded-pill bg-white/20 [&::-moz-progress-bar]:bg-white [&::-webkit-progress-bar]:bg-white/20 [&::-webkit-progress-value]:bg-white"
+          className="mt-2 h-1.5 w-full appearance-none overflow-hidden rounded-pill bg-white/20 sm:mt-3 [&::-moz-progress-bar]:bg-white [&::-webkit-progress-bar]:bg-white/20 [&::-webkit-progress-value]:bg-white"
         />
       </div>
     </button>

@@ -13,8 +13,8 @@ export function HomePage() {
     navigate(`/media/${encodeURIComponent(mediaRef)}`);
   };
   return (
-    <div className="md:-m-page">
-      <section className="relative isolate overflow-hidden rounded-card bg-elevated md:rounded-none">
+    <div className="-m-page">
+      <section className="relative isolate overflow-hidden bg-elevated">
         {demoHomeFeed.featured.backdrop && (
           <img
             src={demoHomeFeed.featured.backdrop.url}
@@ -30,7 +30,13 @@ export function HomePage() {
 
         <div className="absolute inset-x-0 top-0 -z-10 h-[420px] bg-gradient-to-r from-black/85 via-black/40 to-transparent md:inset-0 md:h-full" />
         <div className="absolute inset-x-0 top-0 -z-10 h-[420px] bg-gradient-to-t from-black/85 via-black/15 to-transparent md:inset-0 md:h-full" />
-        <div className="absolute inset-x-0 bottom-0 -z-10 h-[32%] bg-linear-to-b from-transparent via-surface/35 to-surface" />
+        <div
+          className={[
+            'absolute inset-x-0 top-[300px] -z-10 h-[120px]',
+            'bg-linear-to-b from-transparent via-surface/35 to-surface',
+            'md:top-auto md:bottom-0 md:h-[32%]',
+          ].join(' ')}
+        />
 
         <header className="absolute left-10 top-8 z-10 hidden md:block">
           <h1 className="text-title font-semibold text-white">Добрый вечер</h1>
@@ -59,7 +65,9 @@ export function HomePage() {
         </div>
 
         <section className="relative px-5 pb-8 md:mt-10 md:px-page md:pb-page">
-          <h2 className="mb-3 text-heading font-semibold text-white">Продолжить просмотр</h2>
+          <h2 className="mb-3 text-heading font-semibold text-text-primary md:text-white">
+            Продолжить просмотр
+          </h2>
 
           <ContentRow>
             {demoHomeFeed.continueWatching.map((item) => (
@@ -74,7 +82,7 @@ export function HomePage() {
         </section>
       </section>
 
-      <div className="space-y-6 pt-6 md:px-page md:pb-page">
+      <div className="space-y-6 px-page pt-6 pb-page">
         {demoHomeFeed.collections.slice(0, 1).map((collection) => (
           <section key={collection.id}>
             <h2 className="mb-3 text-heading font-semibold">{collection.title}</h2>
