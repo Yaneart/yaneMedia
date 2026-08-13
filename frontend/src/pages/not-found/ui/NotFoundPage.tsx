@@ -35,9 +35,14 @@ export function NotFoundPage() {
             aria-busy={playbackState === 'loading'}
             className="relative aspect-video overflow-hidden rounded-card border border-border bg-background shadow-overlay"
           >
-            <div className="absolute inset-0 flex flex-col items-center justify-center px-4 pb-16 text-center sm:pb-20">
-              <div className="flex items-center justify-center gap-3 sm:gap-6">
-                <span className="font-mono text-[clamp(3.5rem,10vw,8rem)] leading-none font-semibold tracking-[-0.08em] text-text-primary">
+            <div
+              className={[
+                'absolute inset-0 flex flex-col items-center justify-center px-4 pb-8 text-center sm:pb-20',
+                playbackState !== 'error' ? 'max-[374px]:pb-14' : '',
+              ].join(' ')}
+            >
+              <div className="flex items-center justify-center gap-2 max-[374px]:translate-y-1 sm:gap-6">
+                <span className="font-mono text-5xl leading-none font-semibold tracking-[-0.08em] text-text-primary sm:text-[clamp(3.5rem,10vw,8rem)]">
                   04
                 </span>
 
@@ -51,7 +56,7 @@ export function NotFoundPage() {
                   disabled={playbackState === 'loading'}
                   onClick={() => setPlaybackState('loading')}
                   className={[
-                    'flex size-16 shrink-0 items-center justify-center rounded-full border',
+                    'flex size-14 shrink-0 items-center justify-center rounded-full border',
                     'bg-surface text-text-primary shadow-overlay',
                     'transition-[background-color,border-color,transform] duration-200 ease-out',
                     'hover:scale-[1.025] hover:bg-interactive-hover',
@@ -69,11 +74,11 @@ export function NotFoundPage() {
                       className="size-6 animate-spin rounded-full border-2 border-text-secondary border-t-text-primary motion-reduce:animate-none sm:size-8"
                     />
                   ) : (
-                    <PlayIcon className="size-7 translate-x-0.5 sm:size-10" />
+                    <PlayIcon className="size-6 translate-x-0.5 sm:size-10" />
                   )}
                 </button>
 
-                <span className="font-mono text-[clamp(3.5rem,10vw,8rem)] leading-none font-semibold tracking-[-0.08em] text-text-primary">
+                <span className="font-mono text-5xl leading-none font-semibold tracking-[-0.08em] text-text-primary sm:text-[clamp(3.5rem,10vw,8rem)]">
                   04
                 </span>
               </div>
@@ -81,12 +86,31 @@ export function NotFoundPage() {
               <p
                 role="status"
                 className={[
-                  'mt-5 text-caption tracking-[0.18em] uppercase',
+                  'mt-3 text-caption tracking-[0.18em] uppercase sm:mt-5',
                   playbackState === 'error' ? 'text-error' : 'text-text-secondary',
                 ].join(' ')}
               >
                 {statusText}
               </p>
+
+              <div aria-hidden="true" className="mt-3 hidden min-h-10 place-items-center sm:grid">
+                <div
+                  className={[
+                    'rounded-overlay border border-border/70 bg-surface/80 px-3 py-1.5 sm:px-4 sm:py-2',
+                    'shadow-overlay backdrop-blur-md',
+                    'transition-[opacity,transform] duration-200 ease-out',
+                    'motion-reduce:transform-none motion-reduce:transition-none',
+                    playbackState === 'error'
+                      ? 'translate-y-0 opacity-100'
+                      : 'translate-y-1 opacity-0',
+                  ].join(' ')}
+                >
+                  <p className="hidden font-mono text-[0.625rem] tracking-[0.18em] text-text-disabled uppercase sm:block">
+                    Скрытый субтитр · 04:04
+                  </p>
+                  <p className="text-sm font-medium text-text-primary sm:mt-0.5">— я не Артём.</p>
+                </div>
+              </div>
             </div>
 
             <div className="absolute right-4 bottom-4 left-4 sm:right-6 sm:bottom-6 sm:left-6">
@@ -131,7 +155,23 @@ export function NotFoundPage() {
           </div>
         </div>
 
-        <div className="mt-7 flex flex-col items-center gap-6 text-center sm:flex-row sm:justify-between sm:text-left">
+        <div aria-hidden="true" className="mt-3 flex min-h-8 justify-center sm:hidden">
+          <div
+            className={[
+              'flex items-center gap-2 rounded-pill border border-border/70 bg-surface-elevated px-3 py-1.5',
+              'shadow-overlay transition-[opacity,transform] duration-200 ease-out',
+              'motion-reduce:transform-none motion-reduce:transition-none',
+              playbackState === 'error' ? 'translate-y-0 opacity-100' : 'translate-y-1 opacity-0',
+            ].join(' ')}
+          >
+            <span className="font-mono text-[0.625rem] tracking-[0.16em] text-text-disabled">
+              04:04
+            </span>
+            <span className="text-xs font-medium text-text-primary">— я не Артём.</span>
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-col items-center gap-6 text-center sm:mt-7 sm:flex-row sm:justify-between sm:text-left">
           <div className="max-w-xl">
             <p className="mb-2 text-caption tracking-[0.16em] text-text-secondary uppercase">
               Ошибка 404
