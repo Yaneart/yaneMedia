@@ -1,4 +1,5 @@
 import { FavoriteFilledIcon, FavoriteIcon, IconButton } from '@/shared';
+import { MediaPosterFallback } from './MediaPosterFallback';
 import type { MediaSummary } from '../model/media';
 
 export type MediaCardProps = {
@@ -25,7 +26,7 @@ export function MediaCard({ media, onOpen, isFavorite, onFavoriteChange }: Media
         onClick={onOpen}
       >
         <div className="aspect-2/3 overflow-hidden rounded-card bg-elevated">
-          {media.poster && (
+          {media.poster ? (
             <img
               src={media.poster.url}
               alt=""
@@ -37,6 +38,8 @@ export function MediaCard({ media, onOpen, isFavorite, onFavoriteChange }: Media
                 'motion-reduce:transform-none motion-reduce:transition-none',
               ].join(' ')}
             />
+          ) : (
+            <MediaPosterFallback mediaRef={media.mediaRef} title={media.title} type={media.type} />
           )}
         </div>
 

@@ -76,11 +76,6 @@ export const demoMedia = {
     originalTitle: 'Oppenheimer',
     year: 2023,
     shortDescription: 'История физика Роберта Оппенгеймера и создания первой атомной бомбы.',
-    poster: {
-      url: 'https://placehold.co/600x900/302822/f1f0ec?text=Oppenheimer',
-      width: 600,
-      height: 900,
-    },
     backdrop: {
       url: 'https://placehold.co/1600x900/302822/f1f0ec?text=Oppenheimer',
       width: 1600,

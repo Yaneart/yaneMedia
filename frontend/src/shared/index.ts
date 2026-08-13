@@ -1,5 +1,8 @@
 export { Logo } from './ui/Logo';
 
+export { YaneMark } from './ui/YaneMark';
+export type { YaneMarkProps } from './ui/YaneMark';
+
 export {
   AnimeIcon,
   AnimeFilledIcon,
