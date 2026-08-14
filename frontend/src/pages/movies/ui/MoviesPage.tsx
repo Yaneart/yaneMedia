@@ -1,8 +1,8 @@
 import { useNavigate } from 'react-router';
+import { useState } from 'react';
 
 import { demoMediaCatalog, MediaCard, type MediaRef } from '@/entities/media';
-import { useState } from 'react';
-import { MediaGrid } from '@/shared';
+import { MediaCatalog } from '@/widgets/media-catalog';
 
 const demoMovies = demoMediaCatalog.filter((media) => media.type === 'movie');
 
@@ -10,6 +10,7 @@ export function MoviesPage() {
   const navigate = useNavigate();
 
   const [favoriteMediaRefs, setFavoriteMediaRefs] = useState<Set<MediaRef>>(() => new Set());
+  const [searchValue, setSearchValue] = useState('');
 
   const toggleFavorite = (mediaRef: MediaRef) => {
     setFavoriteMediaRefs((current) => {
@@ -30,20 +31,16 @@ export function MoviesPage() {
   };
 
   return (
-    <section>
-      <h1 className="mb-6 text-title font-semibold">Фильмы</h1>
-
-      <MediaGrid>
-        {demoMovies.map((media) => (
-          <MediaCard
-            key={media.mediaRef}
-            media={media}
-            onOpen={() => openMedia(media.mediaRef)}
-            isFavorite={favoriteMediaRefs.has(media.mediaRef)}
-            onFavoriteChange={() => toggleFavorite(media.mediaRef)}
-          />
-        ))}
-      </MediaGrid>
-    </section>
+    <MediaCatalog title="Фильмы" searchValue={searchValue} onSearchChange={setSearchValue}>
+      {demoMovies.map((media) => (
+        <MediaCard
+          key={media.mediaRef}
+          media={media}
+          onOpen={() => openMedia(media.mediaRef)}
+          isFavorite={favoriteMediaRefs.has(media.mediaRef)}
+          onFavoriteChange={() => toggleFavorite(media.mediaRef)}
+        />
+      ))}
+    </MediaCatalog>
   );
 }

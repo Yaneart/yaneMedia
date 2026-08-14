@@ -35,9 +35,14 @@ export function Input({
         className={[
           'min-h-11 w-full rounded-control border bg-surface px-3',
           'text-sm text-text-primary placeholder:text-text-secondary',
-          'transition-colors duration-150',
-          'disabled:cursor-not-allowed disabled:opacity-50',
-          error ? 'border-error' : 'border-border',
+          'transition-[background-color,border-color,box-shadow] duration-200 ease-out',
+          'hover:bg-surface-elevated focus:bg-surface-elevated',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/20',
+          'motion-reduce:transition-none',
+          'disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50',
+          error
+            ? 'border-error hover:border-error focus:border-error'
+            : 'border-border hover:border-text-secondary focus:border-text-secondary',
           className,
         ].join(' ')}
         aria-invalid={error ? true : undefined}
