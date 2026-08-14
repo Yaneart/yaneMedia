@@ -124,6 +124,8 @@
   --theme-error: #ef5a67;
   --theme-success: #42c88a;
   --theme-favorite: #ff5c7a;
+  --theme-watermark: #315fbd;
+  --theme-watermark-opacity: 0.085;
 }
 
 [data-theme='light'] {
@@ -150,6 +152,8 @@
   --theme-error: #c93f4c;
   --theme-success: #26875b;
   --theme-favorite: #d92d52;
+  --theme-watermark: #174f96;
+  --theme-watermark-opacity: 0.38;
 }
 
 @layer base {
