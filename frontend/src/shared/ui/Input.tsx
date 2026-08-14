@@ -33,10 +33,10 @@ export function Input({
         {...props}
         id={inputId}
         className={[
-          'min-h-11 w-full rounded-control border bg-surface px-3',
+          'min-h-11 w-full rounded-control border bg-control px-3',
           'text-sm text-text-primary placeholder:text-text-secondary',
           'transition-[background-color,border-color,box-shadow] duration-200 ease-out',
-          'hover:bg-surface-elevated focus:bg-surface-elevated',
+          'hover:bg-control-hover focus:bg-control-hover',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/20',
           'motion-reduce:transition-none',
           'disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50',

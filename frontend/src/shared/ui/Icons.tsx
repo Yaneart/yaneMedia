@@ -23,5 +23,7 @@ export { default as SearchIcon } from '@mingcute/react/core-regular/search-3';
 export { default as SeriesIcon } from '@mingcute/react/core-regular/tv-2';
 export { default as SunIcon } from '@mingcute/react/core-regular/sun';
 export { default as SystemThemeIcon } from '@mingcute/react/core-regular/computer';
+export { default as CheckIcon } from '@mingcute/react/core-regular/check';
+export { default as DownIcon } from '@mingcute/react/core-regular/down-small';
 
 export type { IconProps } from '@mingcute/react';

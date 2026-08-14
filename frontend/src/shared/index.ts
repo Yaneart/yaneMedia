@@ -28,6 +28,8 @@ export {
   SystemThemeIcon,
   SystemThemeFilledIcon,
   PlayIcon,
+  CheckIcon,
+  DownIcon,
 } from './ui/Icons';
 export type { IconProps } from './ui/Icons';
 
@@ -66,3 +68,6 @@ export type { ContentRowProps } from './ui/ContentRow';
 
 export { MediaGrid } from './ui/MediaGrid';
 export type { MediaGridProps } from './ui/MediaGrid';
+
+export { Select } from './ui/Select';
+export type { SelectOption, SelectProps } from './ui/Select';
