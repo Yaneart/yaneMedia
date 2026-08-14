@@ -175,7 +175,9 @@ export function Select({
           aria-label={ariaLabel}
           onKeyDown={handleListboxKeyDown}
           className={[
-            'absolute top-full left-0 z-30 mt-2 w-max min-w-full overflow-hidden',
+            'absolute top-full left-0 z-30 mt-2 max-h-[20.5rem] w-max min-w-full',
+            'overflow-x-hidden overflow-y-auto',
+            '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
             'rounded-overlay border border-border bg-popover p-1 shadow-overlay',
           ].join(' ')}
         >
