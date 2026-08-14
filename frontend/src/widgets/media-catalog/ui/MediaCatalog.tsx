@@ -1,23 +1,32 @@
+import { MediaCard, type MediaRef, type MediaSummary } from '@/entities/media';
 import { MediaGrid, SearchInput } from '@/shared';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 
 export type MediaCatalogProps = {
   title: string;
-  searchValue: string;
-  onSearchChange: (value: string) => void;
-  searchPlaceholder?: string;
+  media: readonly MediaSummary[];
+  onOpen: (mediaRef: MediaRef) => void;
   filters?: ReactNode;
-  children: ReactNode;
 };
 
-export function MediaCatalog({
-  title,
-  searchValue,
-  onSearchChange,
-  searchPlaceholder = 'Поиск по каталогу',
-  filters,
-  children,
-}: MediaCatalogProps) {
+export function MediaCatalog({ title, filters, media, onOpen }: MediaCatalogProps) {
+  const [searchValue, setSearchValue] = useState('');
+  const [favoriteMediaRefs, setFavoriteMediaRefs] = useState<Set<MediaRef>>(() => new Set());
+
+  const toggleFavorite = (mediaRef: MediaRef) => {
+    setFavoriteMediaRefs((current) => {
+      const next = new Set(current);
+
+      if (next.has(mediaRef)) {
+        next.delete(mediaRef);
+      } else {
+        next.add(mediaRef);
+      }
+
+      return next;
+    });
+  };
+
   return (
     <section>
       <div className="mb-6 flex flex-col gap-4">
@@ -25,12 +34,22 @@ export function MediaCatalog({
         <SearchInput
           aria-label={`Поиск: ${title}`}
           value={searchValue}
-          placeholder={searchPlaceholder}
-          onChange={(event) => onSearchChange(event.currentTarget.value)}
+          placeholder="Поиск по каталогу"
+          onChange={(event) => setSearchValue(event.currentTarget.value)}
         />
         {filters}
       </div>
-      <MediaGrid>{children}</MediaGrid>
+      <MediaGrid>
+        {media.map((item) => (
+          <MediaCard
+            key={item.mediaRef}
+            media={item}
+            onOpen={() => onOpen(item.mediaRef)}
+            isFavorite={favoriteMediaRefs.has(item.mediaRef)}
+            onFavoriteChange={() => toggleFavorite(item.mediaRef)}
+          />
+        ))}
+      </MediaGrid>
     </section>
   );
 }
