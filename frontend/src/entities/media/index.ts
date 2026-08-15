@@ -1,4 +1,20 @@
-export type { MediaArtwork, MediaRating, MediaRef, MediaSummary, MediaType } from './model/media';
+export type {
+  AnimeDetails,
+  AnimeKind,
+  MediaArtwork,
+  MediaDetails,
+  MediaEpisode,
+  MediaPerson,
+  MediaPersonRole,
+  MediaRating,
+  MediaRef,
+  MediaSeason,
+  MediaStatus,
+  MediaSummary,
+  MediaType,
+  MovieDetails,
+  SeriesDetails,
+} from './model/media';
 
 export { demoMedia, demoMediaCatalog } from './model/media.mock';
 
