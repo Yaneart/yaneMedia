@@ -45,7 +45,11 @@ export function FeaturedMedia({ media, onOpen }: FeaturedMediaProps) {
       )}
 
       <div className="mt-6">
-        <Button size="large" className="bg-white text-black hover:bg-white/90" onClick={onOpen}>
+        <Button
+          size="large"
+          className="border border-watermark/60 bg-white text-black hover:border-watermark/80 hover:bg-white/90 focus-visible:ring-watermark/40"
+          onClick={onOpen}
+        >
           <PlayIcon className="size-5" />
           Смотреть
         </Button>

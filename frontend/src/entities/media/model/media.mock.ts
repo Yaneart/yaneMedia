@@ -37,9 +37,9 @@ export const demoMedia = {
       height: 900,
     },
     backdrop: {
-      url: 'https://placehold.co/1600x900/26282b/f1f0ec?text=Severance',
-      width: 1600,
-      height: 900,
+      url: '/images/demo/featured-office-v1.png',
+      width: 1536,
+      height: 1024,
     },
     genres: ['Триллер', 'Драма'],
     rating: {
@@ -59,9 +59,9 @@ export const demoMedia = {
       height: 900,
     },
     backdrop: {
-      url: 'https://placehold.co/1600x900/26302d/f1f0ec?text=Frieren',
-      width: 1600,
-      height: 900,
+      url: '/images/demo/featured-fantasy-v1.png',
+      width: 1536,
+      height: 1024,
     },
     genres: ['Фэнтези', 'Драма', 'Приключения'],
     rating: {
@@ -101,9 +101,9 @@ export const demoMedia = {
       height: 900,
     },
     backdrop: {
-      url: 'https://placehold.co/1600x900/2c2925/f1f0ec?text=Shogun',
-      width: 1600,
-      height: 900,
+      url: '/images/demo/featured-samurai-v1.png',
+      width: 1536,
+      height: 1024,
     },
     genres: ['Драма', 'История', 'Приключения'],
     rating: {
@@ -382,9 +382,54 @@ export const demoSeriesDetails = {
   ],
 } satisfies MediaDetails;
 
+export const demoAnimeDetails = {
+  ...demoMedia.frieren,
+  description:
+    'После завершения великого путешествия бессмертная эльфийка пытается лучше понять людей, с которыми делила дорогу, и отправляется в новый путь по следам оставленных воспоминаний.',
+  releaseDate: '2023-09-29',
+  status: 'ongoing',
+  countries: ['Япония'],
+  languages: ['Японский'],
+  persons: [],
+  animeKind: 'tv',
+  episodesCount: 28,
+  episodes: [
+    { episodeNumber: 1, absoluteEpisodeNumber: 1, title: 'Конец путешествия' },
+    { episodeNumber: 2, absoluteEpisodeNumber: 2, title: 'Это не обязательно была магия' },
+    { episodeNumber: 3, absoluteEpisodeNumber: 3, title: 'Магия убийства' },
+  ],
+  airedOn: '2023-09-29',
+} satisfies MediaDetails;
+
+export const demoShogunDetails = {
+  ...demoMedia.shogun,
+  description:
+    'Английский моряк оказывается в Японии на пороге гражданской войны и становится свидетелем борьбы за власть, в которой сталкиваются чужие традиции, вера и личная преданность.',
+  releaseDate: '2024-02-27',
+  status: 'released',
+  countries: ['США', 'Япония'],
+  languages: ['Японский', 'Английский'],
+  persons: [],
+  seasonsCount: 1,
+  episodesCount: 10,
+  seasons: [
+    {
+      number: 1,
+      episodesCount: 10,
+      episodes: [
+        { seasonNumber: 1, episodeNumber: 1, title: 'Андзин' },
+        { seasonNumber: 1, episodeNumber: 2, title: 'Слуги двух господ' },
+        { seasonNumber: 1, episodeNumber: 3, title: 'Завтра есть завтра' },
+      ],
+    },
+  ],
+} satisfies MediaDetails;
+
 export const demoMediaDetailsCatalog = [
   demoMediaDetails,
   demoSeriesDetails,
+  demoAnimeDetails,
+  demoShogunDetails,
 ] satisfies readonly MediaDetails[];
 
 export const demoMediaCatalog = Object.values(demoMedia);

@@ -48,7 +48,7 @@ export function ContinueWatchingCard({ media, onOpen, progress }: ContinueWatchi
     <button
       type="button"
       className={[
-        'group relative block aspect-[2.35/1] w-full overflow-hidden rounded-card bg-elevated text-left',
+        'group relative block aspect-[2.35/1] w-full overflow-hidden rounded-card border border-context-border bg-elevated text-left',
         'transition-[transform,box-shadow] duration-200 ease-out',
         'active:scale-[0.992] active:duration-75',
         'motion-reduce:transform-none motion-reduce:transition-none',

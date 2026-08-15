@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router';
 
-import { demoHomeFeed } from '../model/homeFeed.mock';
+import { demoFeaturedCandidates, demoHomeFeed } from '../model/homeFeed.mock';
+import { useHourlyFeatured } from '../model/useHourlyFeatured';
 import { FeaturedMedia } from '@/widgets/featured-media';
 import { ContinueWatchingCard } from '@/widgets/continue-watching-card';
 import { ContentRow, SearchInput } from '@/shared';
@@ -8,6 +9,7 @@ import { LandscapeMediaCard, type MediaRef } from '@/entities/media';
 
 export function HomePage() {
   const navigate = useNavigate();
+  const featured = useHourlyFeatured(demoFeaturedCandidates) ?? demoHomeFeed.featured;
 
   const openMedia = (mediaRef: MediaRef) => {
     navigate(`/media/${encodeURIComponent(mediaRef)}`);
@@ -15,12 +17,13 @@ export function HomePage() {
   return (
     <div className="-m-page">
       <section className="relative isolate overflow-hidden bg-elevated">
-        {demoHomeFeed.featured.backdrop && (
+        {featured.backdrop && (
           <img
-            src={demoHomeFeed.featured.backdrop.url}
+            key={featured.mediaRef}
+            src={featured.backdrop.url}
             alt=""
-            width={demoHomeFeed.featured.backdrop.width}
-            height={demoHomeFeed.featured.backdrop.height}
+            width={featured.backdrop.width}
+            height={featured.backdrop.height}
             className={[
               'absolute inset-x-0 top-0 -z-20 h-[420px] w-full object-cover',
               'object-[58%_center] md:inset-0 md:h-full md:object-center',
@@ -58,10 +61,7 @@ export function HomePage() {
         </header>
 
         <div className="relative md:px-page md:pt-56">
-          <FeaturedMedia
-            media={demoHomeFeed.featured}
-            onOpen={() => openMedia(demoHomeFeed.featured.mediaRef)}
-          />
+          <FeaturedMedia media={featured} onOpen={() => openMedia(featured.mediaRef)} />
         </div>
 
         <section className="relative px-5 pb-8 md:mt-10 md:px-page md:pb-page">

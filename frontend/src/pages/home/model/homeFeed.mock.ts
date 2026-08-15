@@ -1,6 +1,13 @@
 import { demoMedia } from '@/entities/media';
 import type { HomeFeed } from './homeFeed';
 
+export const demoFeaturedCandidates = [
+  demoMedia.featured,
+  demoMedia.severance,
+  demoMedia.frieren,
+  demoMedia.shogun,
+] as const;
+
 export const demoHomeFeed = {
   featured: demoMedia.featured,
   continueWatching: [

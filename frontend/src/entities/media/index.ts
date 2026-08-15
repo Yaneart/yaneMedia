@@ -18,10 +18,12 @@ export type {
 
 export {
   demoMedia,
+  demoAnimeDetails,
   demoMediaCatalog,
   demoMediaDetails,
   demoMediaDetailsCatalog,
   demoSeriesDetails,
+  demoShogunDetails,
 } from './model/media.mock';
 
 export { MediaCard } from './ui/MediaCard';

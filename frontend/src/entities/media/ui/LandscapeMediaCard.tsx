@@ -21,7 +21,7 @@ export function LandscapeMediaCard({ media, onOpen }: LandscapeMediaCardProps) {
       type="button"
       className={[
         'group relative block aspect-video w-full overflow-hidden',
-        'rounded-card bg-elevated text-left',
+        'rounded-card border border-context-border bg-elevated text-left',
         'transition-[transform,box-shadow] duration-200 ease-out',
         'active:scale-[0.992] active:duration-75',
         'motion-reduce:transform-none motion-reduce:transition-none',
