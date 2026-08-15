@@ -21,7 +21,7 @@ export function FeaturedMedia({ media, onOpen }: FeaturedMediaProps) {
 
   return (
     <div className="flex min-h-[420px] max-w-2xl flex-col justify-end px-5 py-8 md:min-h-0 md:px-0 md:py-0">
-      <div className="flex flex-wrap gap-y-1 text-sm text-white/65">
+      <div className="flex flex-wrap gap-y-1 text-sm text-hero-text-muted">
         {metadata.map((item, index) => (
           <span key={item}>
             {index > 0 && (
@@ -34,12 +34,12 @@ export function FeaturedMedia({ media, onOpen }: FeaturedMediaProps) {
         ))}
       </div>
 
-      <h2 className="mt-3 text-[clamp(2rem,3vw,3.5rem)] leading-tight font-bold text-white">
+      <h2 className="mt-3 text-[clamp(2rem,3vw,3.5rem)] leading-tight font-bold text-hero-text">
         {media.title}
       </h2>
 
       {media.shortDescription && (
-        <p className="mt-3 line-clamp-3 max-w-xl text-body text-white/70">
+        <p className="mt-3 line-clamp-3 max-w-xl text-body text-hero-text-muted">
           {media.shortDescription}
         </p>
       )}
@@ -47,7 +47,7 @@ export function FeaturedMedia({ media, onOpen }: FeaturedMediaProps) {
       <div className="mt-6">
         <Button
           size="large"
-          className="border border-watermark/60 bg-white text-black hover:border-watermark/80 hover:bg-white/90 focus-visible:ring-watermark/40"
+          className="border border-watermark/60 bg-hero-button text-hero-button-text hover:border-watermark/80 hover:bg-hero-button-hover focus-visible:ring-watermark/40"
           onClick={onOpen}
         >
           <PlayIcon className="size-5" />

@@ -31,30 +31,29 @@ export function HomePage() {
           />
         )}
 
-        <div className="absolute inset-x-0 top-0 -z-10 h-[420px] bg-gradient-to-r from-black/85 via-black/40 to-transparent md:inset-0 md:h-full" />
-        <div className="absolute inset-x-0 top-0 -z-10 h-[420px] bg-gradient-to-t from-black/85 via-black/15 to-transparent md:inset-0 md:h-full" />
+        <div className="home-hero-overlay absolute inset-x-0 top-0 -z-10 h-[420px] md:inset-0 md:h-full" />
         <div
           className={[
             'absolute inset-x-0 top-[300px] -z-10 h-[120px]',
-            'bg-linear-to-b from-transparent via-surface/35 to-surface',
-            'md:top-auto md:bottom-0 md:h-[32%]',
+            'bg-linear-to-b from-transparent from-0% via-surface/65 via-60% to-surface to-100%',
+            'md:top-auto md:bottom-0 md:h-64',
           ].join(' ')}
         />
 
         <header className="absolute left-10 top-8 z-10 hidden md:block">
-          <h1 className="text-title font-semibold text-white">Добрый вечер</h1>
+          <h1 className="text-title font-semibold text-hero-text">Добрый вечер</h1>
 
           <div className="mt-4 w-md">
             <SearchInput
               aria-label="Поиск фильмов, сериалов и аниме"
               placeholder="Что будем смотреть?"
               className={[
-                'border-white/25! bg-black/35!',
-                'text-white placeholder:text-white/60',
-                'hover:border-white/40! hover:bg-black/45!',
-                'focus:border-white/45! focus:bg-black/45!',
+                'border-hero-search-border! bg-hero-search!',
+                'text-hero-text placeholder:text-hero-text-muted',
+                'hover:border-hero-search-border-hover! hover:bg-hero-search-hover!',
+                'focus:border-hero-search-border-hover! focus:bg-hero-search-hover!',
                 'focus-visible:outline-none',
-                'focus-visible:ring-2 focus-visible:ring-white/25',
+                'focus-visible:ring-2 focus-visible:ring-hero-search-border',
               ].join(' ')}
             />
           </div>
@@ -65,7 +64,7 @@ export function HomePage() {
         </div>
 
         <section className="relative px-5 pb-8 md:mt-10 md:px-page md:pb-page">
-          <h2 className="mb-3 text-heading font-semibold text-text-primary md:text-white">
+          <h2 className="mb-3 text-heading font-semibold text-text-primary md:text-hero-text">
             Продолжить просмотр
           </h2>
 

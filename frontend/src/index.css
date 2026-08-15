@@ -100,6 +100,18 @@
   --color-favorite: var(--theme-favorite);
   --color-watermark: var(--theme-watermark);
   --color-context-border: var(--theme-context-border);
+
+  --color-hero-text: var(--theme-hero-text);
+  --color-hero-text-muted: var(--theme-hero-text-muted);
+  --color-hero-search: var(--theme-hero-search-bg);
+  --color-hero-search-hover: var(--theme-hero-search-bg-hover);
+  --color-hero-search-border: var(--theme-hero-search-border);
+  --color-hero-search-border-hover: var(--theme-hero-search-border-hover);
+  --color-hero-button: var(--theme-hero-button-bg);
+  --color-hero-button-hover: var(--theme-hero-button-bg-hover);
+  --color-hero-button-text: var(--theme-hero-button-text);
+
+  --opacity-watermark: var(--theme-watermark-opacity);
 }
 
 :root {
@@ -129,6 +141,18 @@
   --theme-watermark: #315fbd;
   --theme-watermark-opacity: 0.085;
   --theme-context-border: rgb(49 95 189 / 22%);
+
+  --theme-hero-overlay-start: rgb(0 0 0 / 85%);
+  --theme-hero-overlay-middle: rgb(0 0 0 / 40%);
+  --theme-hero-text: #ffffff;
+  --theme-hero-text-muted: rgb(255 255 255 / 65%);
+  --theme-hero-search-bg: rgb(0 0 0 / 35%);
+  --theme-hero-search-bg-hover: rgb(0 0 0 / 45%);
+  --theme-hero-search-border: rgb(255 255 255 / 25%);
+  --theme-hero-search-border-hover: rgb(255 255 255 / 40%);
+  --theme-hero-button-bg: #ffffff;
+  --theme-hero-button-bg-hover: rgb(255 255 255 / 90%);
+  --theme-hero-button-text: #000000;
 }
 
 [data-theme='light'] {
@@ -158,6 +182,37 @@
   --theme-watermark: #174f96;
   --theme-watermark-opacity: 0.38;
   --theme-context-border: rgb(23 79 150 / 28%);
+
+  --theme-hero-overlay-start: rgb(244 243 239 / 96%);
+  --theme-hero-overlay-middle: rgb(244 243 239 / 24%);
+  --theme-hero-text: #18191a;
+  --theme-hero-text-muted: rgb(24 25 26 / 68%);
+  --theme-hero-search-bg: rgb(255 255 255 / 48%);
+  --theme-hero-search-bg-hover: rgb(255 255 255 / 64%);
+  --theme-hero-search-border: rgb(24 25 26 / 24%);
+  --theme-hero-search-border-hover: rgb(24 25 26 / 38%);
+  --theme-hero-button-bg: #18191a;
+  --theme-hero-button-bg-hover: #292b2d;
+  --theme-hero-button-text: #f4f3ef;
+}
+
+.home-hero-overlay {
+  background-image: linear-gradient(
+    to right,
+    var(--theme-hero-overlay-start) 0%,
+    var(--theme-hero-overlay-start) 34%,
+    var(--theme-hero-overlay-middle) 52%,
+    transparent 70%
+  );
+}
+
+.home-mobile-header-overlay {
+  background-image: linear-gradient(
+    to bottom,
+    var(--theme-hero-overlay-start),
+    var(--theme-hero-overlay-middle),
+    transparent
+  );
 }
 
 @layer base {

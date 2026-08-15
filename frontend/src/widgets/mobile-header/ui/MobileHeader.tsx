@@ -13,7 +13,7 @@ export function MobileHeader({ homePath, profilePath, overlay = false }: MobileH
     <header
       className={[
         'pt-[env(safe-area-inset-top)]',
-        overlay ? 'bg-linear-to-b from-black/70 via-black/35 to-transparent' : 'bg-surface',
+        overlay ? 'home-mobile-header-overlay' : 'bg-surface',
       ].join(' ')}
     >
       <div className="flex min-h-16 items-center justify-between gap-4 px-page">
@@ -26,7 +26,10 @@ export function MobileHeader({ homePath, profilePath, overlay = false }: MobileH
             'motion-reduce:transform-none motion-reduce:transition-none',
           ].join(' ')}
         >
-          <Logo compact className={overlay ? '[&>span:first-child]:text-white' : ''} />
+          <Logo
+            compact
+            className={overlay ? '[&>span:first-child]:text-hero-text' : ''}
+          />
         </NavLink>
 
         <div className="flex items-center gap-2">

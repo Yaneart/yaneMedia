@@ -77,7 +77,7 @@ export function AppShellWatermarks({ area = 'navigation' }: AppShellWatermarksPr
       {marks.map((className) => (
         <YaneMark
           key={className}
-          className={`absolute ${className} text-[var(--theme-watermark)] opacity-[var(--theme-watermark-opacity)]`}
+          className={`absolute ${className} text-watermark opacity-watermark`}
         />
       ))}
     </div>
