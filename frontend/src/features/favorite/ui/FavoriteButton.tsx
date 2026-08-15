@@ -22,7 +22,7 @@ export function FavoriteButton({
       aria-label={mediaTitle ? `${actionLabel}: ${mediaTitle}` : actionLabel}
       aria-pressed={isFavorite}
       className={[
-        'rounded-pill shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-watermark/40',
+        'w-[9.5rem] rounded-pill shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-watermark/40',
         isFavorite
           ? 'border-watermark/70 bg-watermark/15! hover:border-watermark/85 hover:bg-watermark/20!'
           : 'border-watermark/45 bg-surface-elevated! hover:border-watermark/70 hover:bg-watermark/10!',
