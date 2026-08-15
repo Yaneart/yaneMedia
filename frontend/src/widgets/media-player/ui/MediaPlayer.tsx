@@ -1,13 +1,17 @@
 import type { MediaArtwork } from '@/entities/media';
 import type { MediaSourceOption } from '@/entities/media-source';
-import { IconButton, PlayIcon } from '@/shared';
+import { ErrorState, IconButton, PlayIcon, Spinner } from '@/shared';
+
+export type MediaPlayerStatus = 'loading' | 'ready' | 'error';
 
 export type MediaPlayerProps = {
   mediaTitle: string;
   backdrop?: MediaArtwork;
   source?: MediaSourceOption;
   isStarted: boolean;
+  status: MediaPlayerStatus;
   onStart: () => void;
+  onRetry?: () => void;
   embedded?: boolean;
 };
 
@@ -20,7 +24,9 @@ export function MediaPlayer({
   backdrop,
   source,
   isStarted,
+  status,
   onStart,
+  onRetry,
   embedded = false,
 }: MediaPlayerProps) {
   return (
@@ -67,13 +73,31 @@ export function MediaPlayer({
             </div>
           )}
 
-          {source && isStarted && (
+          {source && isStarted && status === 'loading' && (
+            <Spinner
+              size="large"
+              label={`Загрузка плеера ${source.label}`}
+              className="[&>span:first-child]:text-white [&>span:first-child>span:last-child]:text-white/60"
+            />
+          )}
+
+          {source && isStarted && status === 'ready' && (
             <div role="status">
               <p className="text-heading text-white">{source.label}</p>
               <p className="mt-2 text-caption text-white/60">
                 Здесь будет встроен iframe выбранного плеера
               </p>
             </div>
+          )}
+
+          {source && isStarted && status === 'error' && (
+            <ErrorState
+              title="Не удалось загрузить плеер"
+              description="Проверьте подключение и попробуйте ещё раз."
+              onRetry={onRetry}
+              retryLabel="Повторить"
+              className="[&>p:nth-of-type(2)]:text-white/65"
+            />
           )}
         </div>
       </div>

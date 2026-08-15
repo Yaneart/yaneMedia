@@ -4,8 +4,8 @@ import { FavoriteButton } from '@/features/favorite';
 import { SourceSelector } from '@/features/source-selection';
 import { ErrorState } from '@/shared';
 import { MediaInfo } from '@/widgets/media-info';
-import { MediaPlayer } from '@/widgets/media-player';
-import { useState } from 'react';
+import { MediaPlayer, type MediaPlayerStatus } from '@/widgets/media-player';
+import { useEffect, useState } from 'react';
 import { useParams } from 'react-router';
 
 export function MediaPage() {
@@ -15,13 +15,28 @@ export function MediaPage() {
     demoMediaSources[0]?.sourceRef ?? null,
   );
   const [isPlayerStarted, setIsPlayerStarted] = useState(false);
+  const [playerStatus, setPlayerStatus] = useState<MediaPlayerStatus>('ready');
 
   const selectedSource = demoMediaSources.find((source) => source.sourceRef === selectedSourceRef);
 
   const selectSource = (sourceRef: string | null) => {
     setSelectedSourceRef(sourceRef);
     setIsPlayerStarted(false);
+    setPlayerStatus('ready');
   };
+
+  const loadPlayer = () => {
+    setIsPlayerStarted(true);
+    setPlayerStatus('loading');
+  };
+
+  useEffect(() => {
+    if (!isPlayerStarted || playerStatus !== 'loading') return;
+
+    const readyTimeout = window.setTimeout(() => setPlayerStatus('ready'), 900);
+
+    return () => window.clearTimeout(readyTimeout);
+  }, [isPlayerStarted, playerStatus]);
 
   if (mediaRef !== demoMediaDetails.mediaRef) {
     return (
@@ -47,7 +62,9 @@ export function MediaPage() {
           backdrop={demoMediaDetails.backdrop}
           source={selectedSource}
           isStarted={isPlayerStarted}
-          onStart={() => setIsPlayerStarted(true)}
+          status={playerStatus}
+          onStart={loadPlayer}
+          onRetry={loadPlayer}
           embedded
         />
       </div>
