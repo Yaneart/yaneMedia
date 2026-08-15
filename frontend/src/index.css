@@ -98,6 +98,7 @@
   --color-error: var(--theme-error);
   --color-success: var(--theme-success);
   --color-favorite: var(--theme-favorite);
+  --color-watermark: var(--theme-watermark);
 }
 
 :root {

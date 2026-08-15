@@ -1,7 +1,9 @@
 import type { MediaDetails, MediaPersonRole } from '@/entities/media';
+import type { ReactNode } from 'react';
 
 export type MediaInfoProps = {
   media: MediaDetails;
+  actions?: ReactNode;
 };
 
 const typeLabels = {
@@ -25,7 +27,7 @@ function findPeopleByRole(media: MediaDetails, role: MediaPersonRole) {
   return media.persons.filter((credit) => credit.roles.includes(role));
 }
 
-export function MediaInfo({ media }: MediaInfoProps) {
+export function MediaInfo({ media, actions }: MediaInfoProps) {
   const metadata = [
     typeLabels[media.type],
     media.year?.toString(),
@@ -44,7 +46,7 @@ export function MediaInfo({ media }: MediaInfoProps) {
   return (
     <section
       className={[
-        'grid gap-x-4 gap-y-5 sm:gap-x-6 md:gap-x-8',
+        'grid max-w-6xl gap-x-4 gap-y-5 sm:gap-x-6 md:gap-x-8',
         media.poster
           ? 'grid-cols-[6rem_minmax(0,1fr)] min-[360px]:grid-cols-[7rem_minmax(0,1fr)] sm:grid-cols-[9rem_minmax(0,1fr)] md:grid-cols-[minmax(180px,240px)_minmax(0,1fr)]'
           : 'grid-cols-1',
@@ -104,30 +106,36 @@ export function MediaInfo({ media }: MediaInfoProps) {
         </p>
       )}
 
-      <dl className={`${fullWidthOnMobile} grid gap-x-8 gap-y-2 text-caption sm:grid-cols-2`}>
-        {directors.length > 0 && (
-          <div className="flex gap-2">
-            <dt className="text-text-secondary">Режиссёр:</dt>
-            <dd className="text-text-primary">
-              {directors.map((director) => director.name).join(', ')}
-            </dd>
-          </div>
-        )}
+      <div
+        className={`${fullWidthOnMobile} flex flex-col items-start gap-5 md:flex-row md:items-center md:gap-8`}
+      >
+        {actions && <div className="flex shrink-0 flex-wrap gap-3">{actions}</div>}
 
-        {media.countries.length > 0 && (
-          <div className="flex gap-2">
-            <dt className="text-text-secondary">Страна:</dt>
-            <dd className="text-text-primary">{media.countries.join(', ')}</dd>
-          </div>
-        )}
+        <dl className="flex flex-wrap gap-x-8 gap-y-2 text-caption">
+          {directors.length > 0 && (
+            <div className="flex gap-2">
+              <dt className="text-text-secondary">Режиссёр:</dt>
+              <dd className="text-text-primary">
+                {directors.map((director) => director.name).join(', ')}
+              </dd>
+            </div>
+          )}
 
-        {media.genres.length > 0 && (
-          <div className="flex gap-2 sm:col-span-2">
-            <dt className="text-text-secondary">Жанры:</dt>
-            <dd className="text-text-primary">{media.genres.join(', ')}</dd>
-          </div>
-        )}
-      </dl>
+          {media.countries.length > 0 && (
+            <div className="flex gap-2">
+              <dt className="text-text-secondary">Страна:</dt>
+              <dd className="text-text-primary">{media.countries.join(', ')}</dd>
+            </div>
+          )}
+
+          {media.genres.length > 0 && (
+            <div className="flex gap-2">
+              <dt className="text-text-secondary">Жанры:</dt>
+              <dd className="text-text-primary">{media.genres.join(', ')}</dd>
+            </div>
+          )}
+        </dl>
+      </div>
     </section>
   );
 }
