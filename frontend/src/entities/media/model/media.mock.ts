@@ -1,4 +1,4 @@
-import type { MediaSummary } from './media';
+import type { MediaDetails, MediaSummary } from './media';
 
 export const demoMedia = {
   featured: {
@@ -304,5 +304,35 @@ export const demoMedia = {
     rating: { value: 7.7, scale: 10 },
   },
 } satisfies Record<string, MediaSummary>;
+
+export const demoMediaDetails = {
+  ...demoMedia.featured,
+  description:
+    'Пол Атрейдес объединяется с Чани и фрименами, готовясь отомстить заговорщикам, уничтожившим его семью. Перед ним встаёт выбор между любовью всей жизни и судьбой известной вселенной.',
+  releaseDate: '2024-02-27',
+  status: 'released',
+  runtimeMinutes: 166,
+  countries: ['США', 'Канада'],
+  languages: ['Английский'],
+  persons: [
+    {
+      name: 'Тимоти Шаламе',
+      originalName: 'Timothée Chalamet',
+      roles: ['actor'],
+      characterName: 'Пол Атрейдес',
+    },
+    {
+      name: 'Зендея',
+      originalName: 'Zendaya',
+      roles: ['actor'],
+      characterName: 'Чани',
+    },
+    {
+      name: 'Дени Вильнёв',
+      originalName: 'Denis Villeneuve',
+      roles: ['director', 'writer'],
+    },
+  ],
+} satisfies MediaDetails;
 
 export const demoMediaCatalog = Object.values(demoMedia);
