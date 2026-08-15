@@ -335,4 +335,56 @@ export const demoMediaDetails = {
   ],
 } satisfies MediaDetails;
 
+export const demoSeriesDetails = {
+  ...demoMedia.severance,
+  description:
+    'Марк возглавляет команду офисных работников, чьи воспоминания хирургически разделены между работой и личной жизнью. Появление загадочного коллеги заставляет его искать правду о компании и самом себе.',
+  releaseDate: '2022-02-18',
+  status: 'ongoing',
+  countries: ['США'],
+  languages: ['Английский'],
+  persons: [
+    {
+      name: 'Бен Стиллер',
+      originalName: 'Ben Stiller',
+      roles: ['director', 'producer'],
+    },
+    {
+      name: 'Адам Скотт',
+      originalName: 'Adam Scott',
+      roles: ['actor'],
+      characterName: 'Марк Скаут',
+    },
+  ],
+  seasonsCount: 2,
+  episodesCount: 19,
+  seasons: [
+    {
+      number: 1,
+      releaseDate: '2022-02-18',
+      episodesCount: 9,
+      episodes: [
+        { seasonNumber: 1, episodeNumber: 1, title: 'Хорошие новости об аде' },
+        { seasonNumber: 1, episodeNumber: 2, title: 'Половинная петля' },
+        { seasonNumber: 1, episodeNumber: 3, title: 'Навеки' },
+      ],
+    },
+    {
+      number: 2,
+      releaseDate: '2025-01-17',
+      episodesCount: 10,
+      episodes: [
+        { seasonNumber: 2, episodeNumber: 1, title: 'Здравствуйте, мисс Кобел' },
+        { seasonNumber: 2, episodeNumber: 2, title: 'Прощай, миссис Селвиг' },
+        { seasonNumber: 2, episodeNumber: 3, title: 'Кто жив?' },
+      ],
+    },
+  ],
+} satisfies MediaDetails;
+
+export const demoMediaDetailsCatalog = [
+  demoMediaDetails,
+  demoSeriesDetails,
+] satisfies readonly MediaDetails[];
+
 export const demoMediaCatalog = Object.values(demoMedia);

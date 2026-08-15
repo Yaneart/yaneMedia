@@ -5,7 +5,7 @@ export type SourceSelectorProps = {
   sources: readonly MediaSourceOption[];
   selectedSourceRef: string | null;
   onSourceChange: (sourceRef: string | null) => void;
-  variant?: 'section' | 'toolbar';
+  variant?: 'section' | 'toolbar' | 'inline';
 };
 
 const availabilityLabels = {
@@ -31,14 +31,14 @@ export function SourceSelector({
     label: getSourceLabel(source),
   }));
 
-  const isToolbar = variant === 'toolbar';
+  const isToolbar = variant !== 'section';
 
   return (
     <section
       aria-label={isToolbar ? 'Настройки просмотра' : undefined}
       aria-labelledby={isToolbar ? undefined : 'source-selector-title'}
       className={
-        isToolbar
+        variant === 'toolbar'
           ? 'flex flex-col gap-3 bg-surface-elevated px-4 py-3 sm:flex-row sm:items-center sm:px-5'
           : ''
       }

@@ -16,7 +16,13 @@ export type {
   SeriesDetails,
 } from './model/media';
 
-export { demoMedia, demoMediaCatalog, demoMediaDetails } from './model/media.mock';
+export {
+  demoMedia,
+  demoMediaCatalog,
+  demoMediaDetails,
+  demoMediaDetailsCatalog,
+  demoSeriesDetails,
+} from './model/media.mock';
 
 export { MediaCard } from './ui/MediaCard';
 export type { MediaCardProps } from './ui/MediaCard';
