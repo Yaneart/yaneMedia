@@ -99,6 +99,7 @@
   --color-success: var(--theme-success);
   --color-favorite: var(--theme-favorite);
   --color-watermark: var(--theme-watermark);
+  --color-context-border: var(--theme-context-border);
 }
 
 :root {
@@ -127,6 +128,7 @@
   --theme-favorite: #ff5c7a;
   --theme-watermark: #315fbd;
   --theme-watermark-opacity: 0.085;
+  --theme-context-border: rgb(49 95 189 / 22%);
 }
 
 [data-theme='light'] {
@@ -155,6 +157,7 @@
   --theme-favorite: #d92d52;
   --theme-watermark: #174f96;
   --theme-watermark-opacity: 0.38;
+  --theme-context-border: rgb(23 79 150 / 28%);
 }
 
 @layer base {

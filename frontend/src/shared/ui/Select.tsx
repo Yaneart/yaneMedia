@@ -20,6 +20,8 @@ export type SelectProps = Omit<ComponentPropsWithoutRef<'div'>, 'onChange'> & {
   options: readonly SelectOption[];
   placeholder: string;
   onChange: (value: string | null) => void;
+  matchMenuWidth?: boolean;
+  allowEmpty?: boolean;
 };
 
 export function Select({
@@ -28,6 +30,8 @@ export function Select({
   options,
   placeholder,
   onChange,
+  matchMenuWidth = false,
+  allowEmpty = true,
   className = '',
   ...props
 }: SelectProps) {
@@ -80,15 +84,18 @@ export function Select({
       return;
     }
 
+    const optionOffset = allowEmpty ? 1 : 0;
     const selectedIndex =
-      value === null ? 0 : Math.max(0, options.findIndex((option) => option.value === value) + 1);
+      value === null
+        ? 0
+        : Math.max(0, options.findIndex((option) => option.value === value) + optionOffset);
 
     const frameId = requestAnimationFrame(() => {
       optionRefs.current[selectedIndex]?.focus();
     });
 
     return () => cancelAnimationFrame(frameId);
-  }, [isOpen, options, value]);
+  }, [allowEmpty, isOpen, options, value]);
 
   const selectValue = (nextValue: string | null) => {
     onChange(nextValue);
@@ -175,35 +182,38 @@ export function Select({
           aria-label={ariaLabel}
           onKeyDown={handleListboxKeyDown}
           className={[
-            'absolute top-full left-0 z-30 mt-2 max-h-[20.5rem] w-max min-w-full',
+            'absolute top-full left-0 z-30 mt-2 max-h-[20.5rem]',
+            matchMenuWidth ? 'w-full' : 'w-max min-w-full',
             'overflow-x-hidden overflow-y-auto',
             '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
             'rounded-overlay border border-border bg-popover p-1 shadow-overlay',
           ].join(' ')}
         >
-          <button
-            ref={(element) => {
-              optionRefs.current[0] = element;
-            }}
-            type="button"
-            role="option"
-            tabIndex={-1}
-            aria-selected={value === null}
-            onClick={() => selectValue(null)}
-            className={[
-              'flex min-h-10 w-full items-center justify-between gap-3 rounded-control px-3',
-              'whitespace-nowrap',
-              'text-left text-sm transition-colors duration-200 ease-out',
-              'hover:bg-interactive-hover motion-reduce:transition-none',
-              value === null ? 'text-text-primary' : 'text-text-secondary',
-            ].join(' ')}
-          >
-            {placeholder}
-            <CheckIcon
-              aria-hidden="true"
-              className={['size-4', value === null ? '' : 'invisible'].join(' ')}
-            />
-          </button>
+          {allowEmpty && (
+            <button
+              ref={(element) => {
+                optionRefs.current[0] = element;
+              }}
+              type="button"
+              role="option"
+              tabIndex={-1}
+              aria-selected={value === null}
+              onClick={() => selectValue(null)}
+              className={[
+                'flex min-h-10 w-full min-w-0 items-center justify-between gap-3 rounded-control px-3',
+                'whitespace-nowrap',
+                'text-left text-sm transition-colors duration-200 ease-out',
+                'hover:bg-interactive-hover motion-reduce:transition-none',
+                value === null ? 'text-text-primary' : 'text-text-secondary',
+              ].join(' ')}
+            >
+              <span className="truncate">{placeholder}</span>
+              <CheckIcon
+                aria-hidden="true"
+                className={['size-4', value === null ? '' : 'invisible'].join(' ')}
+              />
+            </button>
+          )}
 
           {options.map((option, index) => {
             const isSelected = option.value === value;
@@ -211,7 +221,7 @@ export function Select({
             return (
               <button
                 ref={(element) => {
-                  optionRefs.current[index + 1] = element;
+                  optionRefs.current[index + (allowEmpty ? 1 : 0)] = element;
                 }}
                 key={option.value}
                 type="button"
@@ -220,14 +230,14 @@ export function Select({
                 aria-selected={isSelected}
                 onClick={() => selectValue(option.value)}
                 className={[
-                  'flex min-h-10 w-full items-center justify-between gap-3 rounded-control px-3',
+                  'flex min-h-10 w-full min-w-0 items-center justify-between gap-3 rounded-control px-3',
                   'whitespace-nowrap',
                   'text-left text-sm transition-colors duration-200 ease-out',
                   'hover:bg-interactive-hover motion-reduce:transition-none',
                   isSelected ? 'text-text-primary' : 'text-text-secondary',
                 ].join(' ')}
               >
-                {option.label}
+                <span className="truncate">{option.label}</span>
                 <CheckIcon
                   aria-hidden="true"
                   className={['size-4', isSelected ? '' : 'invisible'].join(' ')}

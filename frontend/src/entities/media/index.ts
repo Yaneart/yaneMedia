@@ -23,3 +23,6 @@ export type { MediaCardProps } from './ui/MediaCard';
 
 export { LandscapeMediaCard } from './ui/LandscapeMediaCard';
 export type { LandscapeMediaCardProps } from './ui/LandscapeMediaCard';
+
+export { MediaPosterFallback } from './ui/MediaPosterFallback';
+export type { MediaPosterFallbackProps } from './ui/MediaPosterFallback';

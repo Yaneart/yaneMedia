@@ -4,6 +4,7 @@ import { FavoriteButton } from '@/features/favorite';
 import { SourceSelector } from '@/features/source-selection';
 import { ErrorState } from '@/shared';
 import { MediaInfo } from '@/widgets/media-info';
+import { MediaPlayer } from '@/widgets/media-player';
 import { useState } from 'react';
 import { useParams } from 'react-router';
 
@@ -13,6 +14,14 @@ export function MediaPage() {
   const [selectedSourceRef, setSelectedSourceRef] = useState<string | null>(
     demoMediaSources[0]?.sourceRef ?? null,
   );
+  const [isPlayerStarted, setIsPlayerStarted] = useState(false);
+
+  const selectedSource = demoMediaSources.find((source) => source.sourceRef === selectedSourceRef);
+
+  const selectSource = (sourceRef: string | null) => {
+    setSelectedSourceRef(sourceRef);
+    setIsPlayerStarted(false);
+  };
 
   if (mediaRef !== demoMediaDetails.mediaRef) {
     return (
@@ -24,9 +33,28 @@ export function MediaPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="grid items-start gap-8 2xl:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)] 2xl:gap-10">
+      <div className="order-2 overflow-hidden rounded-card border border-context-border bg-surface shadow-surface 2xl:order-none 2xl:col-start-2 2xl:row-start-1">
+        <SourceSelector
+          sources={demoMediaSources}
+          selectedSourceRef={selectedSourceRef}
+          onSourceChange={selectSource}
+          variant="toolbar"
+        />
+
+        <MediaPlayer
+          mediaTitle={demoMediaDetails.title}
+          backdrop={demoMediaDetails.backdrop}
+          source={selectedSource}
+          isStarted={isPlayerStarted}
+          onStart={() => setIsPlayerStarted(true)}
+          embedded
+        />
+      </div>
+
       <MediaInfo
         media={demoMediaDetails}
+        variant="watch"
         actions={
           <FavoriteButton
             isFavorite={isFavorite}
@@ -36,11 +64,17 @@ export function MediaPage() {
         }
       />
 
-      <SourceSelector
-        sources={demoMediaSources}
-        selectedSourceRef={selectedSourceRef}
-        onSourceChange={setSelectedSourceRef}
-      />
+      {demoMediaDetails.description && (
+        <section
+          aria-label="Полное описание"
+          className="order-3 hidden rounded-card border border-context-border bg-surface-elevated p-6 2xl:col-span-2 2xl:block"
+        >
+          <h2 className="text-heading text-text-primary">Описание</h2>
+          <p className="mt-3 max-w-5xl text-body text-text-secondary">
+            {demoMediaDetails.description}
+          </p>
+        </section>
+      )}
     </div>
   );
 }

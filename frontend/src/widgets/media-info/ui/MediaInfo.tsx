@@ -1,9 +1,10 @@
-import type { MediaDetails, MediaPersonRole } from '@/entities/media';
+import { MediaPosterFallback, type MediaDetails, type MediaPersonRole } from '@/entities/media';
 import type { ReactNode } from 'react';
 
 export type MediaInfoProps = {
   media: MediaDetails;
   actions?: ReactNode;
+  variant?: 'default' | 'watch';
 };
 
 const typeLabels = {
@@ -27,7 +28,8 @@ function findPeopleByRole(media: MediaDetails, role: MediaPersonRole) {
   return media.persons.filter((credit) => credit.roles.includes(role));
 }
 
-export function MediaInfo({ media, actions }: MediaInfoProps) {
+export function MediaInfo({ media, actions, variant = 'default' }: MediaInfoProps) {
+  const isWatchLayout = variant === 'watch';
   const metadata = [
     typeLabels[media.type],
     media.year?.toString(),
@@ -41,29 +43,65 @@ export function MediaInfo({ media, actions }: MediaInfoProps) {
   ].filter((item): item is string => item !== undefined);
 
   const directors = findPeopleByRole(media, 'director');
-  const fullWidthOnMobile = media.poster ? 'col-span-2 md:col-span-1 md:col-start-2' : '';
+  const fullWidthOnMobile = media.poster
+    ? isWatchLayout
+      ? 'col-span-2 2xl:col-span-1'
+      : 'col-span-2 md:col-span-1 md:col-start-2'
+    : '';
 
   return (
     <section
       className={[
-        'grid max-w-6xl gap-x-4 gap-y-5 sm:gap-x-6 md:gap-x-8',
-        media.poster
+        'grid gap-x-4 sm:gap-x-6 md:gap-x-8',
+        isWatchLayout
+          ? 'max-w-none grid-cols-[6rem_minmax(0,1fr)] gap-y-4 min-[360px]:grid-cols-[7rem_minmax(0,1fr)] sm:grid-cols-[9rem_minmax(0,1fr)] 2xl:grid-cols-1'
+          : 'max-w-6xl gap-y-5',
+        !isWatchLayout && media.poster
           ? 'grid-cols-[6rem_minmax(0,1fr)] min-[360px]:grid-cols-[7rem_minmax(0,1fr)] sm:grid-cols-[9rem_minmax(0,1fr)] md:grid-cols-[minmax(180px,240px)_minmax(0,1fr)]'
-          : 'grid-cols-1',
+          : !isWatchLayout
+            ? 'grid-cols-1'
+            : '',
       ].join(' ')}
     >
-      {media.poster && (
+      {isWatchLayout && (
+        <div className="relative aspect-2/3 w-full overflow-hidden rounded-overlay bg-elevated shadow-surface 2xl:rounded-card">
+          <MediaPosterFallback mediaRef={media.mediaRef} title={media.title} type={media.type} />
+
+          {media.poster && (
+            <img
+              src={media.poster.url}
+              alt={`Постер: ${media.title}`}
+              width={media.poster.width}
+              height={media.poster.height}
+              className="absolute inset-0 size-full object-cover"
+              onError={(event) => {
+                event.currentTarget.hidden = true;
+              }}
+            />
+          )}
+        </div>
+      )}
+
+      {!isWatchLayout && media.poster && (
         <img
           src={media.poster.url}
           alt={`Постер: ${media.title}`}
           width={media.poster.width}
           height={media.poster.height}
-          className="aspect-2/3 w-full rounded-overlay object-cover shadow-surface md:row-span-3 md:max-w-60 md:rounded-card"
+          className={[
+            'aspect-2/3 w-full object-cover shadow-surface',
+            'rounded-overlay md:row-span-3 md:max-w-60 md:rounded-card',
+          ].join(' ')}
         />
       )}
 
-      <div className="flex flex-col self-start">
-        <div className="order-3 mt-3 flex items-center gap-x-2 text-caption text-text-secondary md:hidden">
+      <div className="flex min-w-0 flex-col self-start">
+        <div
+          className={[
+            'order-3 mt-3 items-center gap-x-2 text-caption text-text-secondary',
+            isWatchLayout ? 'flex 2xl:hidden' : 'flex md:hidden',
+          ].join(' ')}
+        >
           {mobileMetadata.map((item, index) => (
             <span key={item} className="whitespace-nowrap">
               {index > 0 && (
@@ -76,7 +114,12 @@ export function MediaInfo({ media, actions }: MediaInfoProps) {
           ))}
         </div>
 
-        <div className="order-1 hidden flex-wrap items-center gap-x-2 gap-y-1 text-caption text-text-secondary md:flex">
+        <div
+          className={[
+            'order-1 flex-wrap items-center gap-x-2 gap-y-1 text-caption text-text-secondary',
+            isWatchLayout ? 'hidden 2xl:flex' : 'hidden md:flex',
+          ].join(' ')}
+        >
           {metadata.map((item, index) => (
             <span key={item} className="whitespace-nowrap">
               {index > 0 && (
@@ -89,7 +132,12 @@ export function MediaInfo({ media, actions }: MediaInfoProps) {
           ))}
         </div>
 
-        <h1 className="order-1 text-heading text-text-primary md:order-2 md:mt-3 md:text-title">
+        <h1
+          className={[
+            'order-1 text-heading text-text-primary md:order-2 md:mt-3',
+            isWatchLayout ? '2xl:text-title' : 'md:text-title',
+          ].join(' ')}
+        >
           {media.title}
         </h1>
 
@@ -101,20 +149,35 @@ export function MediaInfo({ media, actions }: MediaInfoProps) {
       </div>
 
       {media.description && (
-        <p className={`${fullWidthOnMobile} max-w-3xl text-body text-text-secondary`}>
+        <p
+          className={[
+            fullWidthOnMobile,
+            'max-w-3xl text-body text-text-secondary',
+            isWatchLayout ? '2xl:hidden' : '',
+          ].join(' ')}
+        >
           {media.description}
         </p>
       )}
 
       <div
-        className={`${fullWidthOnMobile} flex flex-col items-start gap-5 md:flex-row md:items-center md:gap-8`}
+        className={[
+          fullWidthOnMobile,
+          'flex flex-col items-start gap-5',
+          isWatchLayout ? '' : 'md:flex-row md:items-center md:gap-8',
+        ].join(' ')}
       >
-        {actions && <div className="flex shrink-0 flex-wrap gap-3">{actions}</div>}
+        {actions && <div className="flex w-full flex-wrap gap-3">{actions}</div>}
 
-        <dl className="flex flex-wrap gap-x-8 gap-y-2 text-caption">
+        <dl
+          className={[
+            'text-caption',
+            isWatchLayout ? 'grid gap-2' : 'flex flex-wrap gap-x-8 gap-y-2',
+          ].join(' ')}
+        >
           {directors.length > 0 && (
-            <div className="flex gap-2">
-              <dt className="text-text-secondary">Режиссёр:</dt>
+            <div className="flex min-w-0 gap-2">
+              <dt className="shrink-0 text-text-secondary">Режиссёр:</dt>
               <dd className="text-text-primary">
                 {directors.map((director) => director.name).join(', ')}
               </dd>
@@ -122,15 +185,15 @@ export function MediaInfo({ media, actions }: MediaInfoProps) {
           )}
 
           {media.countries.length > 0 && (
-            <div className="flex gap-2">
-              <dt className="text-text-secondary">Страна:</dt>
+            <div className="flex min-w-0 gap-2">
+              <dt className="shrink-0 text-text-secondary">Страна:</dt>
               <dd className="text-text-primary">{media.countries.join(', ')}</dd>
             </div>
           )}
 
           {media.genres.length > 0 && (
-            <div className="flex gap-2">
-              <dt className="text-text-secondary">Жанры:</dt>
+            <div className="flex min-w-0 gap-2">
+              <dt className="shrink-0 text-text-secondary">Жанры:</dt>
               <dd className="text-text-primary">{media.genres.join(', ')}</dd>
             </div>
           )}
