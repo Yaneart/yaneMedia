@@ -1,5 +1,6 @@
 import type { MediaDetails } from '@/entities/media';
 import { demoMediaSources } from '@/entities/media-source';
+import { EpisodeSelector } from '@/features/episode-selection';
 import { FavoriteButton } from '@/features/favorite';
 import { SeasonSelector } from '@/features/season-selection';
 import { SourceSelector } from '@/features/source-selection';
@@ -12,9 +13,17 @@ export type MediaViewProps = {
 };
 
 export function MediaView({ media }: MediaViewProps) {
+  const initialSeason = media.type === 'series' ? media.seasons[0] : undefined;
   const [isFavorite, setIsFavorite] = useState(false);
   const [selectedSeasonNumber, setSelectedSeasonNumber] = useState<number | null>(
-    media.type === 'series' ? (media.seasons[0]?.number ?? null) : null,
+    initialSeason?.number ?? null,
+  );
+  const [selectedEpisodeNumber, setSelectedEpisodeNumber] = useState<number | null>(
+    media.type === 'series'
+      ? (initialSeason?.episodes[0]?.episodeNumber ?? null)
+      : media.type === 'anime'
+        ? (media.episodes[0]?.episodeNumber ?? null)
+        : null,
   );
   const [selectedSourceRef, setSelectedSourceRef] = useState<string | null>(
     demoMediaSources[0]?.sourceRef ?? null,
@@ -23,6 +32,16 @@ export function MediaView({ media }: MediaViewProps) {
   const [playerStatus, setPlayerStatus] = useState<MediaPlayerStatus>('ready');
 
   const selectedSource = demoMediaSources.find((source) => source.sourceRef === selectedSourceRef);
+  const selectedSeason =
+    media.type === 'series'
+      ? media.seasons.find((season) => season.number === selectedSeasonNumber)
+      : undefined;
+  const episodes =
+    media.type === 'series'
+      ? (selectedSeason?.episodes ?? [])
+      : media.type === 'anime'
+        ? media.episodes
+        : [];
 
   const resetPlayer = () => {
     setIsPlayerStarted(false);
@@ -35,7 +54,18 @@ export function MediaView({ media }: MediaViewProps) {
   };
 
   const selectSeason = (seasonNumber: number) => {
+    const season =
+      media.type === 'series'
+        ? media.seasons.find((item) => item.number === seasonNumber)
+        : undefined;
+
     setSelectedSeasonNumber(seasonNumber);
+    setSelectedEpisodeNumber(season?.episodes[0]?.episodeNumber ?? null);
+    resetPlayer();
+  };
+
+  const selectEpisode = (episodeNumber: number) => {
+    setSelectedEpisodeNumber(episodeNumber);
     resetPlayer();
   };
 
@@ -55,22 +85,33 @@ export function MediaView({ media }: MediaViewProps) {
   return (
     <div className="grid items-start gap-8 2xl:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)] 2xl:gap-10">
       <div className="order-2 overflow-hidden rounded-card border border-context-border bg-surface shadow-surface 2xl:order-none 2xl:col-start-2 2xl:row-start-1">
-        <div className="flex flex-col gap-3 bg-surface-elevated px-4 py-3 sm:px-5 lg:flex-row lg:items-center lg:gap-5">
-          {media.type === 'series' && (
-            <SeasonSelector
-              seasons={media.seasons}
-              selectedSeasonNumber={selectedSeasonNumber}
-              onSeasonChange={selectSeason}
-              variant="inline"
-            />
-          )}
-
+        <div className="flex flex-col gap-3 bg-surface-elevated px-4 py-3 sm:px-5 lg:flex-row lg:items-center lg:gap-8">
           <SourceSelector
             sources={demoMediaSources}
             selectedSourceRef={selectedSourceRef}
             onSourceChange={selectSource}
             variant="inline"
           />
+
+          {media.type !== 'movie' && (
+            <div className="grid min-w-0 grid-cols-2 gap-3 lg:flex lg:items-center lg:gap-5">
+              {media.type === 'series' && (
+                <SeasonSelector
+                  seasons={media.seasons}
+                  selectedSeasonNumber={selectedSeasonNumber}
+                  onSeasonChange={selectSeason}
+                  variant="inline"
+                />
+              )}
+
+              <EpisodeSelector
+                episodes={episodes}
+                selectedEpisodeNumber={selectedEpisodeNumber}
+                onEpisodeChange={selectEpisode}
+                variant="inline"
+              />
+            </div>
+          )}
         </div>
 
         <MediaPlayer

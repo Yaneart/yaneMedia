@@ -27,7 +27,7 @@ export function SeasonSelector({
     <section
       aria-label="Выбор сезона"
       className={[
-        'flex flex-col gap-3 sm:flex-row sm:items-center',
+        'flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center',
         variant === 'section'
           ? 'border-b border-context-border bg-surface-elevated px-4 py-3 sm:px-5'
           : '',
@@ -45,7 +45,7 @@ export function SeasonSelector({
         }}
         matchMenuWidth
         allowEmpty={false}
-        className="w-full sm:w-48"
+        className="w-full sm:w-40"
       />
     </section>
   );
