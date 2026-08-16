@@ -18,14 +18,14 @@ export function FavoriteButton({
 
   return (
     <Button
-      variant="secondary"
+      variant="bare"
       aria-label={mediaTitle ? `${actionLabel}: ${mediaTitle}` : actionLabel}
       aria-pressed={isFavorite}
       className={[
-        'w-[9.5rem] rounded-pill shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-watermark/40',
+        'w-[9.5rem] rounded-pill border text-text-primary shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-watermark/40',
         isFavorite
-          ? 'border-watermark/70 bg-watermark/15! hover:border-watermark/85 hover:bg-watermark/20!'
-          : 'border-watermark/45 bg-surface-elevated! hover:border-watermark/70 hover:bg-watermark/10!',
+          ? 'border-watermark/70 bg-watermark/15 hover:border-watermark/85 hover:bg-watermark/20'
+          : 'border-watermark/45 bg-surface-elevated hover:border-watermark/70 hover:bg-watermark/10',
         className,
       ].join(' ')}
       onClick={() => onFavoriteChange(!isFavorite)}
@@ -34,7 +34,7 @@ export function FavoriteButton({
         className={[
           'size-5 transition-[transform,color] duration-200 ease-out',
           'motion-reduce:transform-none motion-reduce:transition-none',
-          isFavorite ? 'scale-110 text-watermark!' : 'scale-100',
+          isFavorite ? 'scale-110 text-watermark' : 'scale-100',
         ].join(' ')}
       />
       {isFavorite ? 'В избранном' : 'В избранное'}

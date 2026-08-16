@@ -44,7 +44,7 @@ export function LandscapeMediaCard({ media, onOpen }: LandscapeMediaCardProps) {
         />
       )}
 
-      <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/20 to-transparent" />
+      <div className="absolute inset-0 bg-linear-to-t from-black/95 via-black/20 to-transparent" />
 
       <div className="relative flex size-full flex-col justify-end p-4 text-white">
         <p className="line-clamp-2 font-semibold leading-tight">{media.title}</p>

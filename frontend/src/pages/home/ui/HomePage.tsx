@@ -47,14 +47,7 @@ export function HomePage() {
             <SearchInput
               aria-label="Поиск фильмов, сериалов и аниме"
               placeholder="Что будем смотреть?"
-              className={[
-                'border-hero-search-border! bg-hero-search!',
-                'text-hero-text placeholder:text-hero-text-muted',
-                'hover:border-hero-search-border-hover! hover:bg-hero-search-hover!',
-                'focus:border-hero-search-border-hover! focus:bg-hero-search-hover!',
-                'focus-visible:outline-none',
-                'focus-visible:ring-2 focus-visible:ring-hero-search-border',
-              ].join(' ')}
+              variant="hero"
             />
           </div>
         </header>

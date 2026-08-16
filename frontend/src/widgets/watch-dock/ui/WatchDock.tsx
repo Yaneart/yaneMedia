@@ -70,7 +70,9 @@ export function WatchDock({
   const progressId = useId();
   const volumeId = useId();
   const [previewSeconds, setPreviewSeconds] = useState<number | null>(null);
+  const [dragPositionSeconds, setDragPositionSeconds] = useState<number | null>(null);
   const isPointerSeeking = useRef(false);
+  const pendingSeekSeconds = useRef<number | null>(null);
   const lastAudibleVolume = useRef(session.volume > 0 ? session.volume : 1);
   const isPlaying = session.state === 'playing';
   const isMuted = session.volume <= 0;
@@ -80,10 +82,11 @@ export function WatchDock({
   const hasKnownDuration =
     durationSeconds !== null && Number.isFinite(durationSeconds) && durationSeconds > 0;
   const rawPositionSeconds = Number.isFinite(session.positionSeconds) ? session.positionSeconds : 0;
-  const positionSeconds = Math.max(
+  const sessionPositionSeconds = Math.max(
     0,
     hasKnownDuration ? Math.min(rawPositionSeconds, durationSeconds) : rawPositionSeconds,
   );
+  const positionSeconds = dragPositionSeconds ?? sessionPositionSeconds;
   const positionLabel = formatPlaybackTime(positionSeconds);
   const durationLabel = durationSeconds === null ? null : formatPlaybackTime(durationSeconds);
 
@@ -129,6 +132,11 @@ export function WatchDock({
 
     if (nextPreviewSeconds !== null) {
       setPreviewSeconds(nextPreviewSeconds);
+
+      if (isPointerSeeking.current) {
+        pendingSeekSeconds.current = nextPreviewSeconds;
+        setDragPositionSeconds(nextPreviewSeconds);
+      }
     }
 
     return nextPreviewSeconds;
@@ -186,35 +194,36 @@ export function WatchDock({
               event.currentTarget.focus();
               isPointerSeeking.current = true;
               event.currentTarget.setPointerCapture(event.pointerId);
-              const nextPositionSeconds = updatePreview(event);
-
-              if (nextPositionSeconds !== null) {
-                seekTo(nextPositionSeconds);
-              }
+              updatePreview(event);
             }}
             onPointerMove={(event) => {
-              const nextPositionSeconds = updatePreview(event);
-
-              if (
-                nextPositionSeconds !== null &&
-                event.currentTarget.hasPointerCapture(event.pointerId)
-              ) {
-                seekTo(nextPositionSeconds);
-              }
+              updatePreview(event);
             }}
             onPointerUp={(event) => {
+              const nextPositionSeconds = updatePreview(event) ?? pendingSeekSeconds.current;
+
+              if (isPointerSeeking.current && nextPositionSeconds !== null) {
+                seekTo(nextPositionSeconds);
+              }
+
+              isPointerSeeking.current = false;
+              pendingSeekSeconds.current = null;
+              setDragPositionSeconds(null);
+
               if (event.currentTarget.hasPointerCapture(event.pointerId)) {
                 event.currentTarget.releasePointerCapture(event.pointerId);
               }
-
-              isPointerSeeking.current = false;
             }}
             onPointerCancel={() => {
               isPointerSeeking.current = false;
+              pendingSeekSeconds.current = null;
+              setDragPositionSeconds(null);
               setPreviewSeconds(null);
             }}
             onLostPointerCapture={() => {
               isPointerSeeking.current = false;
+              pendingSeekSeconds.current = null;
+              setDragPositionSeconds(null);
             }}
             onPointerLeave={(event) => {
               if (!event.currentTarget.hasPointerCapture(event.pointerId)) {
@@ -291,7 +300,7 @@ export function WatchDock({
           size="medium"
           variant="ghost"
           aria-label="Перемотать назад на 10 секунд"
-          className="hidden! lg:inline-flex!"
+          className="max-lg:hidden"
           disabled={positionSeconds <= 0}
           onClick={() => seekTo(positionSeconds - 10)}
         >
@@ -300,9 +309,9 @@ export function WatchDock({
 
         <IconButton
           size="medium"
-          variant="ghost"
+          variant="bare"
           aria-label={isPlaying ? 'Поставить на паузу' : 'Продолжить воспроизведение'}
-          className="rounded-full bg-text-primary! text-surface! hover:opacity-90"
+          className="rounded-full bg-text-primary text-surface hover:opacity-90"
           onClick={isPlaying ? onPause : onResume}
         >
           {isPlaying ? <PauseIcon className="size-5" /> : <PlayIcon className="size-5" />}
@@ -312,7 +321,7 @@ export function WatchDock({
           size="medium"
           variant="ghost"
           aria-label="Перемотать вперёд на 10 секунд"
-          className="hidden! lg:inline-flex!"
+          className="max-lg:hidden"
           disabled={hasKnownDuration && positionSeconds >= durationSeconds}
           onClick={() => seekTo(positionSeconds + 10)}
         >
@@ -365,7 +374,7 @@ export function WatchDock({
           size="medium"
           variant="ghost"
           aria-label="Закрыть просмотр"
-          className="hidden! lg:inline-flex!"
+          className="max-lg:hidden"
           onClick={onClose}
         >
           <CloseIcon className="size-5" />

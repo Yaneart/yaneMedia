@@ -53,7 +53,7 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
 
   const pauseSession = () => {
     setSession((currentSession) =>
-      currentSession
+      currentSession && currentSession.state !== 'paused'
         ? { ...currentSession, state: 'paused', updatedAt: getUpdatedAt() }
         : currentSession,
     );
@@ -61,7 +61,7 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
 
   const resumeSession = () => {
     setSession((currentSession) =>
-      currentSession
+      currentSession && currentSession.state !== 'playing'
         ? { ...currentSession, state: 'playing', updatedAt: getUpdatedAt() }
         : currentSession,
     );
@@ -75,10 +75,18 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
         durationSeconds === undefined
           ? currentSession.durationSeconds
           : normalizeDuration(durationSeconds);
+      const nextPositionSeconds = normalizePosition(positionSeconds, nextDurationSeconds);
+
+      if (
+        nextPositionSeconds === currentSession.positionSeconds &&
+        nextDurationSeconds === currentSession.durationSeconds
+      ) {
+        return currentSession;
+      }
 
       return {
         ...currentSession,
-        positionSeconds: normalizePosition(positionSeconds, nextDurationSeconds),
+        positionSeconds: nextPositionSeconds,
         durationSeconds: nextDurationSeconds,
         updatedAt: getUpdatedAt(),
       };
@@ -86,11 +94,15 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
   };
 
   const setVolume = (volume: number) => {
-    setSession((currentSession) =>
-      currentSession
-        ? { ...currentSession, volume: normalizeVolume(volume), updatedAt: getUpdatedAt() }
-        : currentSession,
-    );
+    setSession((currentSession) => {
+      if (!currentSession) return currentSession;
+
+      const nextVolume = normalizeVolume(volume);
+
+      return nextVolume === currentSession.volume
+        ? currentSession
+        : { ...currentSession, volume: nextVolume, updatedAt: getUpdatedAt() };
+    });
   };
 
   const endSession = () => setSession(null);

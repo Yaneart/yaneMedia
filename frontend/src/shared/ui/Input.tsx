@@ -1,9 +1,28 @@
 import { useId, type ComponentPropsWithRef, type ReactNode } from 'react';
 
+export type InputVariant = 'default' | 'hero';
+
 export type InputProps = ComponentPropsWithRef<'input'> & {
   label?: ReactNode;
   hint?: ReactNode;
   error?: ReactNode;
+  variant?: InputVariant;
+};
+
+const surfaceClasses: Record<InputVariant, string> = {
+  default:
+    'bg-control text-text-primary placeholder:text-text-secondary hover:bg-control-hover focus:bg-control-hover',
+  hero: 'bg-hero-search text-hero-text placeholder:text-hero-text-muted hover:bg-hero-search-hover focus:bg-hero-search-hover',
+};
+
+const borderClasses: Record<InputVariant, string> = {
+  default: 'border-border hover:border-text-secondary focus:border-text-secondary',
+  hero: 'border-hero-search-border hover:border-hero-search-border-hover focus:border-hero-search-border-hover',
+};
+
+const focusRingClasses: Record<InputVariant, string> = {
+  default: 'focus-visible:ring-action/20',
+  hero: 'focus-visible:ring-hero-search-border',
 };
 
 export function Input({
@@ -11,6 +30,7 @@ export function Input({
   label,
   hint,
   error,
+  variant = 'default',
   className = '',
   'aria-describedby': ariaDescribedBy,
   ...props
@@ -33,16 +53,14 @@ export function Input({
         {...props}
         id={inputId}
         className={[
-          'min-h-11 w-full rounded-control border bg-control px-3',
-          'text-sm text-text-primary placeholder:text-text-secondary',
+          'min-h-11 w-full rounded-control border px-3 text-sm',
           'transition-[background-color,border-color,box-shadow] duration-200 ease-out',
-          'hover:bg-control-hover focus:bg-control-hover',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/20',
+          'focus-visible:outline-none focus-visible:ring-2',
           'motion-reduce:transition-none',
           'disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50',
-          error
-            ? 'border-error hover:border-error focus:border-error'
-            : 'border-border hover:border-text-secondary focus:border-text-secondary',
+          surfaceClasses[variant],
+          error ? 'border-error hover:border-error focus:border-error' : borderClasses[variant],
+          focusRingClasses[variant],
           className,
         ].join(' ')}
         aria-invalid={error ? true : undefined}

@@ -70,7 +70,7 @@ export function ContinueWatchingCard({ media, onOpen, progress }: ContinueWatchi
         />
       )}
 
-      <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/25 to-transparent" />
+      <div className="absolute inset-0 bg-linear-to-t from-black/95 via-black/25 to-transparent" />
       <div className="absolute inset-0 bg-black/0 transition-colors duration-200 ease-out group-hover:bg-black/10 motion-reduce:transition-none" />
 
       <span

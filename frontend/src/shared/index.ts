@@ -46,7 +46,7 @@ export { IconButton } from './ui/IconButton';
 export type { IconButtonProps } from './ui/IconButton';
 
 export { Input } from './ui/Input';
-export type { InputProps } from './ui/Input';
+export type { InputProps, InputVariant } from './ui/Input';
 
 export { SearchInput } from './ui/SearchInput';
 export type { SearchInputProps } from './ui/SearchInput';

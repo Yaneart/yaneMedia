@@ -76,11 +76,15 @@ export function MediaView({ media }: MediaViewProps) {
   };
 
   const selectSource = (sourceRef: string | null) => {
+    if (sourceRef === selectedSourceRef) return;
+
     setSelectedSourceRef(sourceRef);
     resetPlayer();
   };
 
   const selectSeason = (seasonNumber: number) => {
+    if (seasonNumber === selectedSeasonNumber) return;
+
     const season =
       media.type === 'series'
         ? media.seasons.find((item) => item.number === seasonNumber)
@@ -92,6 +96,8 @@ export function MediaView({ media }: MediaViewProps) {
   };
 
   const selectEpisode = (episodeNumber: number) => {
+    if (episodeNumber === selectedEpisodeNumber) return;
+
     setSelectedEpisodeNumber(episodeNumber);
     resetPlayer();
   };

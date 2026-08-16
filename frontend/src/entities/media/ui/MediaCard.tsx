@@ -51,7 +51,7 @@ export function MediaCard({ media, onOpen, isFavorite, onFavoriteChange }: Media
       </button>
 
       <IconButton
-        variant="ghost"
+        variant="bare"
         size="small"
         aria-label={
           isFavorite
@@ -61,9 +61,9 @@ export function MediaCard({ media, onOpen, isFavorite, onFavoriteChange }: Media
         aria-pressed={isFavorite}
         className={[
           'absolute right-2 top-2 rounded-full border border-transparent',
-          'bg-transparent! text-watermark! drop-shadow-md',
-          'hover:border-watermark/70 hover:bg-watermark/15! hover:text-watermark!',
-          'focus-visible:border-watermark/70 focus-visible:bg-watermark/15! focus-visible:outline-none',
+          'bg-transparent text-watermark drop-shadow-md',
+          'hover:border-watermark/70 hover:bg-watermark/15 hover:text-watermark',
+          'focus-visible:border-watermark/70 focus-visible:bg-watermark/15 focus-visible:outline-none',
           'focus-visible:ring-2 focus-visible:ring-watermark/60',
           'transition-transform duration-200 ease-out hover:scale-105 active:scale-95 active:duration-75',
           'motion-reduce:transform-none motion-reduce:transition-none',

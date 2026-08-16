@@ -55,12 +55,12 @@ export function MediaPlayer({
           {source && !isStarted && (
             <div className="flex flex-col items-center">
               <IconButton
-                size="large"
-                variant="ghost"
+                size="custom"
+                variant="bare"
                 aria-label={`Запустить ${source.label}`}
                 className={[
-                  'size-16! rounded-full border border-white/30 bg-black/45! text-white!',
-                  'backdrop-blur-sm hover:border-watermark/80 hover:bg-watermark/25!',
+                  'size-16 rounded-full border border-white/30 bg-black/45 text-white',
+                  'backdrop-blur-sm hover:border-watermark/80 hover:bg-watermark/25',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-watermark/60',
                 ].join(' ')}
                 onClick={onStart}
