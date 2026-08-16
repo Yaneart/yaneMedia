@@ -2,6 +2,7 @@ import type { MediaDetails } from '@/entities/media';
 import { demoMediaSources } from '@/entities/media-source';
 import { EpisodeSelector } from '@/features/episode-selection';
 import { FavoriteButton } from '@/features/favorite';
+import { usePlaybackSession } from '@/features/playback-session';
 import { SeasonSelector } from '@/features/season-selection';
 import { SourceSelector } from '@/features/source-selection';
 import { MediaInfo } from '@/widgets/media-info';
@@ -13,22 +14,37 @@ export type MediaViewProps = {
 };
 
 export function MediaView({ media }: MediaViewProps) {
-  const initialSeason = media.type === 'series' ? media.seasons[0] : undefined;
+  const { session, startSession, endSession } = usePlaybackSession();
+  const mediaSession = session?.mediaRef === media.mediaRef ? session : null;
+  const initialSeason =
+    media.type === 'series'
+      ? (media.seasons.find((season) => season.number === mediaSession?.episode?.seasonNumber) ??
+        media.seasons[0])
+      : undefined;
   const [isFavorite, setIsFavorite] = useState(false);
   const [selectedSeasonNumber, setSelectedSeasonNumber] = useState<number | null>(
     initialSeason?.number ?? null,
   );
   const [selectedEpisodeNumber, setSelectedEpisodeNumber] = useState<number | null>(
     media.type === 'series'
-      ? (initialSeason?.episodes[0]?.episodeNumber ?? null)
+      ? (initialSeason?.episodes.find(
+          (episode) => episode.episodeNumber === mediaSession?.episode?.episodeNumber,
+        )?.episodeNumber ??
+          initialSeason?.episodes[0]?.episodeNumber ??
+          null)
       : media.type === 'anime'
-        ? (media.episodes[0]?.episodeNumber ?? null)
+        ? (media.episodes.find(
+            (episode) => episode.episodeNumber === mediaSession?.episode?.episodeNumber,
+          )?.episodeNumber ??
+          media.episodes[0]?.episodeNumber ??
+          null)
         : null,
   );
   const [selectedSourceRef, setSelectedSourceRef] = useState<string | null>(
-    demoMediaSources[0]?.sourceRef ?? null,
+    demoMediaSources.some((source) => source.sourceRef === mediaSession?.sourceRef)
+      ? (mediaSession?.sourceRef ?? null)
+      : (demoMediaSources[0]?.sourceRef ?? null),
   );
-  const [isPlayerStarted, setIsPlayerStarted] = useState(false);
   const [playerStatus, setPlayerStatus] = useState<MediaPlayerStatus>('ready');
 
   const selectedSource = demoMediaSources.find((source) => source.sourceRef === selectedSourceRef);
@@ -42,9 +58,20 @@ export function MediaView({ media }: MediaViewProps) {
       : media.type === 'anime'
         ? media.episodes
         : [];
+  const selectedEpisode = episodes.find(
+    (episode) => episode.episodeNumber === selectedEpisodeNumber,
+  );
+  const isPlayerStarted =
+    mediaSession?.sourceRef === selectedSourceRef &&
+    (media.type === 'movie' ||
+      (mediaSession.episode?.seasonNumber === selectedEpisode?.seasonNumber &&
+        mediaSession.episode?.episodeNumber === selectedEpisode?.episodeNumber));
 
   const resetPlayer = () => {
-    setIsPlayerStarted(false);
+    if (mediaSession) {
+      endSession();
+    }
+
     setPlayerStatus('ready');
   };
 
@@ -70,7 +97,26 @@ export function MediaView({ media }: MediaViewProps) {
   };
 
   const loadPlayer = () => {
-    setIsPlayerStarted(true);
+    if (!selectedSource) return;
+
+    startSession({
+      mediaRef: media.mediaRef,
+      sourceRef: selectedSource.sourceRef,
+      episode:
+        media.type === 'movie' || !selectedEpisode
+          ? null
+          : {
+              seasonNumber: selectedEpisode.seasonNumber,
+              episodeNumber: selectedEpisode.episodeNumber,
+              absoluteEpisodeNumber: selectedEpisode.absoluteEpisodeNumber,
+            },
+      durationSeconds:
+        selectedEpisode?.runtimeMinutes !== undefined
+          ? selectedEpisode.runtimeMinutes * 60
+          : media.runtimeMinutes !== undefined
+            ? media.runtimeMinutes * 60
+            : null,
+    });
     setPlayerStatus('loading');
   };
 

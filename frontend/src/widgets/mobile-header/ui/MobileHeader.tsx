@@ -26,10 +26,7 @@ export function MobileHeader({ homePath, profilePath, overlay = false }: MobileH
             'motion-reduce:transform-none motion-reduce:transition-none',
           ].join(' ')}
         >
-          <Logo
-            compact
-            className={overlay ? '[&>span:first-child]:text-hero-text' : ''}
-          />
+          <Logo compact className={overlay ? '[&>span:first-child]:text-hero-text' : ''} />
         </NavLink>
 
         <div className="flex items-center gap-2">
