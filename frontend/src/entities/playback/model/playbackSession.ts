@@ -6,8 +6,21 @@ export interface PlaybackEpisodeSelection {
   absoluteEpisodeNumber?: number;
 }
 
+export interface PlaybackArtworkSnapshot {
+  url: string;
+  width?: number;
+  height?: number;
+  accentColor?: string;
+}
+
+export interface PlaybackMediaSnapshot {
+  title: string;
+  artwork?: PlaybackArtworkSnapshot;
+}
+
 export interface PlaybackSession {
   mediaRef: string;
+  mediaSnapshot: PlaybackMediaSnapshot;
   sourceRef: string;
   episode: PlaybackEpisodeSelection | null;
   state: PlaybackState;

@@ -6,6 +6,7 @@ export interface MediaArtwork {
   url: string;
   width?: number;
   height?: number;
+  accentColor?: string;
 }
 
 export interface MediaRating {

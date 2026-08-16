@@ -1,8 +1,13 @@
-import type { PlaybackEpisodeSelection, PlaybackSession } from '@/entities/playback';
+import type {
+  PlaybackEpisodeSelection,
+  PlaybackMediaSnapshot,
+  PlaybackSession,
+} from '@/entities/playback';
 import { createContext } from 'react';
 
 export type StartPlaybackSessionInput = {
   mediaRef: string;
+  mediaSnapshot: PlaybackMediaSnapshot;
   sourceRef: string;
   episode: PlaybackEpisodeSelection | null;
   positionSeconds?: number;

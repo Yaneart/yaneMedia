@@ -18,6 +18,7 @@ export const demoMedia = {
       url: '/images/demo/featured-desert-v1.png',
       width: 1664,
       height: 935,
+      accentColor: '#94887a',
     },
     genres: ['Фантастика', 'Драма', 'Приключения'],
     rating: {
@@ -40,6 +41,7 @@ export const demoMedia = {
       url: '/images/demo/featured-office-v1.png',
       width: 1536,
       height: 1024,
+      accentColor: '#68796e',
     },
     genres: ['Триллер', 'Драма'],
     rating: {
@@ -62,6 +64,7 @@ export const demoMedia = {
       url: '/images/demo/featured-fantasy-v1.png',
       width: 1536,
       height: 1024,
+      accentColor: '#687a80',
     },
     genres: ['Фэнтези', 'Драма', 'Приключения'],
     rating: {
@@ -104,6 +107,7 @@ export const demoMedia = {
       url: '/images/demo/featured-samurai-v1.png',
       width: 1536,
       height: 1024,
+      accentColor: '#66737d',
     },
     genres: ['Драма', 'История', 'Приключения'],
     rating: {
@@ -364,9 +368,14 @@ export const demoSeriesDetails = {
       releaseDate: '2022-02-18',
       episodesCount: 9,
       episodes: [
-        { seasonNumber: 1, episodeNumber: 1, title: 'Хорошие новости об аде' },
-        { seasonNumber: 1, episodeNumber: 2, title: 'Половинная петля' },
-        { seasonNumber: 1, episodeNumber: 3, title: 'Навеки' },
+        {
+          seasonNumber: 1,
+          episodeNumber: 1,
+          title: 'Хорошие новости об аде',
+          runtimeMinutes: 52,
+        },
+        { seasonNumber: 1, episodeNumber: 2, title: 'Половинная петля', runtimeMinutes: 52 },
+        { seasonNumber: 1, episodeNumber: 3, title: 'Навеки', runtimeMinutes: 52 },
       ],
     },
     {
@@ -374,9 +383,19 @@ export const demoSeriesDetails = {
       releaseDate: '2025-01-17',
       episodesCount: 10,
       episodes: [
-        { seasonNumber: 2, episodeNumber: 1, title: 'Здравствуйте, мисс Кобел' },
-        { seasonNumber: 2, episodeNumber: 2, title: 'Прощай, миссис Селвиг' },
-        { seasonNumber: 2, episodeNumber: 3, title: 'Кто жив?' },
+        {
+          seasonNumber: 2,
+          episodeNumber: 1,
+          title: 'Здравствуйте, мисс Кобел',
+          runtimeMinutes: 52,
+        },
+        {
+          seasonNumber: 2,
+          episodeNumber: 2,
+          title: 'Прощай, миссис Селвиг',
+          runtimeMinutes: 52,
+        },
+        { seasonNumber: 2, episodeNumber: 3, title: 'Кто жив?', runtimeMinutes: 52 },
       ],
     },
   ],
@@ -394,9 +413,24 @@ export const demoAnimeDetails = {
   animeKind: 'tv',
   episodesCount: 28,
   episodes: [
-    { episodeNumber: 1, absoluteEpisodeNumber: 1, title: 'Конец путешествия' },
-    { episodeNumber: 2, absoluteEpisodeNumber: 2, title: 'Это не обязательно была магия' },
-    { episodeNumber: 3, absoluteEpisodeNumber: 3, title: 'Магия убийства' },
+    {
+      episodeNumber: 1,
+      absoluteEpisodeNumber: 1,
+      title: 'Конец путешествия',
+      runtimeMinutes: 24,
+    },
+    {
+      episodeNumber: 2,
+      absoluteEpisodeNumber: 2,
+      title: 'Это не обязательно была магия',
+      runtimeMinutes: 24,
+    },
+    {
+      episodeNumber: 3,
+      absoluteEpisodeNumber: 3,
+      title: 'Магия убийства',
+      runtimeMinutes: 24,
+    },
   ],
   airedOn: '2023-09-29',
 } satisfies MediaDetails;
@@ -417,9 +451,19 @@ export const demoShogunDetails = {
       number: 1,
       episodesCount: 10,
       episodes: [
-        { seasonNumber: 1, episodeNumber: 1, title: 'Андзин' },
-        { seasonNumber: 1, episodeNumber: 2, title: 'Слуги двух господ' },
-        { seasonNumber: 1, episodeNumber: 3, title: 'Завтра есть завтра' },
+        { seasonNumber: 1, episodeNumber: 1, title: 'Андзин', runtimeMinutes: 60 },
+        {
+          seasonNumber: 1,
+          episodeNumber: 2,
+          title: 'Слуги двух господ',
+          runtimeMinutes: 60,
+        },
+        {
+          seasonNumber: 1,
+          episodeNumber: 3,
+          title: 'Завтра есть завтра',
+          runtimeMinutes: 60,
+        },
       ],
     },
   ],
@@ -432,4 +476,4 @@ export const demoMediaDetailsCatalog = [
   demoShogunDetails,
 ] satisfies readonly MediaDetails[];
 
-export const demoMediaCatalog = Object.values(demoMedia);
+export const demoMediaCatalog: readonly MediaSummary[] = Object.values(demoMedia);

@@ -1,15 +1,25 @@
-import { Outlet, useLocation } from 'react-router';
+import { Outlet, useLocation, useNavigate } from 'react-router';
 import { routePaths } from '../router/routes';
 import { primaryNavigationItems, secondaryNavigationItems } from '../router/navigation';
 import { DesktopNavigation } from '@/widgets/desktop-navigation';
 import { MobileNavigation } from '@/widgets/mobile-navigation';
 import { MobileHeader } from '@/widgets/mobile-header';
 import { AppShellWatermarks } from './AppShellWatermarks';
+import { usePlaybackSession } from '@/features/playback-session';
+import { WatchDock } from '@/widgets/watch-dock';
 
 export function AppShell() {
   const { pathname } = useLocation();
+  const navigate = useNavigate();
+
+  const { session, pauseSession, resumeSession, updateProgress, setVolume, endSession } =
+    usePlaybackSession();
+
   const isHomePage = pathname === routePaths.home;
 
+  const activeMediaPath = session ? `/media/${encodeURIComponent(session.mediaRef)}` : null;
+  const normalizedPathname = pathname.replace(/\/+$/, '') || routePaths.home;
+  const isActiveMediaPage = activeMediaPath === normalizedPathname;
   return (
     <div className="relative isolate flex h-dvh overflow-hidden bg-background">
       <div className="relative hidden md:block">
@@ -39,6 +49,21 @@ export function AppShell() {
         <main className="relative z-10 min-h-0 flex-1 overflow-y-auto bg-surface p-page [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:m-4 md:ml-0 md:rounded-card md:shadow-surface">
           <Outlet />
         </main>
+        {session && activeMediaPath && !isActiveMediaPage && (
+          <div className="relative z-20 shrink-0 bg-surface px-1 pb-1 md:mr-4 md:mb-4 md:bg-transparent md:px-0 md:pb-0">
+            <WatchDock
+              mediaTitle={session.mediaSnapshot.title}
+              artwork={session.mediaSnapshot.artwork}
+              session={session}
+              onPause={pauseSession}
+              onResume={resumeSession}
+              onSeek={updateProgress}
+              onVolumeChange={setVolume}
+              onExpand={() => navigate(activeMediaPath)}
+              onClose={endSession}
+            />
+          </div>
+        )}
         <div className="shrink-0 bg-surface md:hidden pl-1 pr-1">
           <MobileNavigation homePath={routePaths.home} items={primaryNavigationItems} />
         </div>

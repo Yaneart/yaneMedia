@@ -11,28 +11,41 @@ function getUpdatedAt() {
 }
 
 function normalizeSeconds(seconds: number) {
-  return Math.max(0, seconds);
+  return Number.isFinite(seconds) ? Math.max(0, seconds) : 0;
 }
 
 function normalizeDuration(durationSeconds: number | null) {
-  return durationSeconds === null ? null : normalizeSeconds(durationSeconds);
+  return durationSeconds === null || !Number.isFinite(durationSeconds)
+    ? null
+    : Math.max(0, durationSeconds);
 }
 
 function normalizeVolume(volume: number) {
-  return Math.min(1, Math.max(0, volume));
+  return Number.isFinite(volume) ? Math.min(1, Math.max(0, volume)) : 1;
+}
+
+function normalizePosition(positionSeconds: number, durationSeconds: number | null) {
+  const normalizedPosition = normalizeSeconds(positionSeconds);
+
+  return durationSeconds === null
+    ? normalizedPosition
+    : Math.min(normalizedPosition, durationSeconds);
 }
 
 export function PlaybackSessionProvider({ children }: PlaybackSessionProviderProps) {
   const [session, setSession] = useState<PlaybackSession | null>(null);
 
   const startSession = (input: StartPlaybackSessionInput) => {
+    const durationSeconds = normalizeDuration(input.durationSeconds ?? null);
+
     setSession({
       mediaRef: input.mediaRef,
+      mediaSnapshot: input.mediaSnapshot,
       sourceRef: input.sourceRef,
       episode: input.episode,
       state: 'playing',
-      positionSeconds: normalizeSeconds(input.positionSeconds ?? 0),
-      durationSeconds: normalizeDuration(input.durationSeconds ?? null),
+      positionSeconds: normalizePosition(input.positionSeconds ?? 0, durationSeconds),
+      durationSeconds,
       volume: 1,
       updatedAt: getUpdatedAt(),
     });
@@ -55,19 +68,21 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
   };
 
   const updateProgress = (positionSeconds: number, durationSeconds?: number | null) => {
-    setSession((currentSession) =>
-      currentSession
-        ? {
-            ...currentSession,
-            positionSeconds: normalizeSeconds(positionSeconds),
-            durationSeconds:
-              durationSeconds === undefined
-                ? currentSession.durationSeconds
-                : normalizeDuration(durationSeconds),
-            updatedAt: getUpdatedAt(),
-          }
-        : currentSession,
-    );
+    setSession((currentSession) => {
+      if (!currentSession) return currentSession;
+
+      const nextDurationSeconds =
+        durationSeconds === undefined
+          ? currentSession.durationSeconds
+          : normalizeDuration(durationSeconds);
+
+      return {
+        ...currentSession,
+        positionSeconds: normalizePosition(positionSeconds, nextDurationSeconds),
+        durationSeconds: nextDurationSeconds,
+        updatedAt: getUpdatedAt(),
+      };
+    });
   };
 
   const setVolume = (volume: number) => {

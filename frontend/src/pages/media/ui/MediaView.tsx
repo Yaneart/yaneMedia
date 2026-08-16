@@ -101,6 +101,10 @@ export function MediaView({ media }: MediaViewProps) {
 
     startSession({
       mediaRef: media.mediaRef,
+      mediaSnapshot: {
+        title: media.title,
+        artwork: media.backdrop ?? media.poster,
+      },
       sourceRef: selectedSource.sourceRef,
       episode:
         media.type === 'movie' || !selectedEpisode

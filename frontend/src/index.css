@@ -100,6 +100,8 @@
   --color-favorite: var(--theme-favorite);
   --color-watermark: var(--theme-watermark);
   --color-context-border: var(--theme-context-border);
+  --color-watch-progress: var(--theme-watch-progress);
+  --color-watch-progress-line: var(--theme-watch-progress-line);
 
   --color-hero-text: var(--theme-hero-text);
   --color-hero-text-muted: var(--theme-hero-text-muted);
@@ -141,6 +143,16 @@
   --theme-watermark: #315fbd;
   --theme-watermark-opacity: 0.085;
   --theme-context-border: rgb(49 95 189 / 22%);
+  --theme-watch-progress: color-mix(
+    in srgb,
+    var(--watch-dock-accent, var(--theme-watermark)) 46%,
+    transparent
+  );
+  --theme-watch-progress-line: color-mix(
+    in oklab,
+    var(--watch-dock-accent, var(--theme-watermark)) 72%,
+    var(--theme-text-primary)
+  );
 
   --theme-hero-overlay-start: rgb(0 0 0 / 85%);
   --theme-hero-overlay-middle: rgb(0 0 0 / 40%);
@@ -182,6 +194,16 @@
   --theme-watermark: #174f96;
   --theme-watermark-opacity: 0.38;
   --theme-context-border: rgb(23 79 150 / 28%);
+  --theme-watch-progress: color-mix(
+    in srgb,
+    var(--watch-dock-accent, var(--theme-watermark)) 28%,
+    transparent
+  );
+  --theme-watch-progress-line: color-mix(
+    in oklab,
+    var(--watch-dock-accent, var(--theme-watermark)) 76%,
+    var(--theme-text-primary)
+  );
 
   --theme-hero-overlay-start: rgb(244 243 239 / 96%);
   --theme-hero-overlay-middle: rgb(244 243 239 / 24%);
