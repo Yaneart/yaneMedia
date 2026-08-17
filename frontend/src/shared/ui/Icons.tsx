@@ -25,11 +25,5 @@ export { default as SunIcon } from '@mingcute/react/core-regular/sun';
 export { default as SystemThemeIcon } from '@mingcute/react/core-regular/computer';
 export { default as CheckIcon } from '@mingcute/react/core-regular/check';
 export { default as DownIcon } from '@mingcute/react/core-regular/down-small';
-export { default as ExpandPlayerIcon } from '@mingcute/react/core-regular/expand-player';
-export { default as PauseIcon } from '@mingcute/react/core-regular/pause';
-export { default as RewindBackward10Icon } from '@mingcute/react/core-regular/rewind-backward-10';
-export { default as RewindForward10Icon } from '@mingcute/react/core-regular/rewind-forward-10';
-export { default as VolumeIcon } from '@mingcute/react/core-regular/volume';
-export { default as VolumeMuteIcon } from '@mingcute/react/core-regular/volume-mute';
 
 export type { IconProps } from '@mingcute/react';

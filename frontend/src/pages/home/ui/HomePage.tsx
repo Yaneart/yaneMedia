@@ -41,7 +41,7 @@ export function HomePage() {
         />
 
         <header className="absolute left-10 top-8 z-10 hidden md:block">
-          <h1 className="text-title font-semibold text-hero-text">Добрый вечер</h1>
+          <h1 className="text-title font-extrabold text-hero-text">Добрый вечер</h1>
 
           <div className="mt-4 w-md">
             <SearchInput

@@ -67,12 +67,194 @@
   animation: yane-loader-shimmer 1.6s linear infinite;
 }
 
+@keyframes yani-mascot-arrival {
+  0% {
+    opacity: 0;
+    left: 0;
+    transform: translateX(-50%) scale(0.96);
+  }
+
+  6% {
+    opacity: 1;
+    left: 0;
+    transform: translateX(-50%) scale(1);
+  }
+
+  50%,
+  100% {
+    opacity: 1;
+    left: 50%;
+    transform: translateX(-50%) scale(1);
+  }
+}
+
+@keyframes yani-mascot-sheet-frames {
+  0%,
+  8.32% {
+    background-position: 0 0;
+  }
+
+  8.33%,
+  16.65% {
+    background-position: 33.333% 0;
+  }
+
+  16.66%,
+  24.99% {
+    background-position: 66.667% 0;
+  }
+
+  25%,
+  33.32% {
+    background-position: 100% 0;
+  }
+
+  33.33%,
+  41.65% {
+    background-position: 0 50%;
+  }
+
+  41.66%,
+  49.99% {
+    background-position: 33.333% 50%;
+  }
+
+  50%,
+  58.32% {
+    background-position: 66.667% 50%;
+  }
+
+  58.33%,
+  66.65% {
+    background-position: 100% 50%;
+  }
+
+  66.66%,
+  74.99% {
+    background-position: 0 100%;
+  }
+
+  75%,
+  83.32% {
+    background-position: 33.333% 100%;
+  }
+
+  83.33%,
+  91.65% {
+    background-position: 66.667% 100%;
+  }
+
+  91.66%,
+  100% {
+    background-position: 100% 100%;
+  }
+}
+
+@keyframes yani-mascot-walk-visibility {
+  0%,
+  49.99% {
+    opacity: 1;
+  }
+
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes yani-mascot-settle-visibility {
+  0%,
+  49.99% {
+    opacity: 0;
+  }
+
+  50%,
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes yani-mascot-reaction {
+  0%,
+  19.99% {
+    background-position: 100% 100%;
+  }
+
+  20%,
+  44.99% {
+    background-position: 33.333% 100%;
+  }
+
+  45%,
+  69.99% {
+    background-position: 66.667% 100%;
+  }
+
+  70%,
+  100% {
+    background-position: 100% 100%;
+  }
+}
+
+.yani-mascot-arriving,
+.yani-mascot-entered {
+  bottom: calc(100% - 1.25rem + 10px);
+}
+
+.yani-mascot-arriving {
+  animation: yani-mascot-arrival 2s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
+
+.yani-mascot-entered {
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.yani-mascot-sprite {
+  background-position: 100% 100%;
+  background-repeat: no-repeat;
+  background-size: 400% 300%;
+}
+
+.yani-mascot-arrival-layer {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+
+.yani-mascot-walk-sequence {
+  animation:
+    yani-mascot-sheet-frames 1s step-end both,
+    yani-mascot-walk-visibility 2s step-end both;
+}
+
+.yani-mascot-settle-sequence {
+  animation:
+    yani-mascot-sheet-frames 1s step-end 1s both,
+    yani-mascot-settle-visibility 2s step-end both;
+}
+
+.yani-mascot-reaction {
+  animation: yani-mascot-reaction 0.72s step-end both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .yane-loader-shimmer {
     color: var(--theme-text-primary);
     background: none;
     animation: none;
     -webkit-text-fill-color: currentColor;
+  }
+
+  .yani-mascot-arriving,
+  .yani-mascot-walk-sequence,
+  .yani-mascot-settle-sequence,
+  .yani-mascot-reaction {
+    animation: none;
+  }
+
+  .yani-mascot-reaction {
+    background-position: 66.667% 100%;
   }
 }
 

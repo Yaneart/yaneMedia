@@ -12,8 +12,7 @@ export function AppShell() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
 
-  const { session, pauseSession, resumeSession, updateProgress, setVolume, endSession } =
-    usePlaybackSession();
+  const { session, endSession } = usePlaybackSession();
 
   const isHomePage = pathname === routePaths.home;
 
@@ -55,10 +54,6 @@ export function AppShell() {
               mediaTitle={session.mediaSnapshot.title}
               artwork={session.mediaSnapshot.artwork}
               session={session}
-              onPause={pauseSession}
-              onResume={resumeSession}
-              onSeek={updateProgress}
-              onVolumeChange={setVolume}
               onExpand={() => navigate(activeMediaPath)}
               onClose={endSession}
             />

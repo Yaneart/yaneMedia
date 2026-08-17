@@ -9,7 +9,6 @@ export {
   CheckIcon,
   CloseIcon,
   DownIcon,
-  ExpandPlayerIcon,
   FavoriteIcon,
   FavoriteFilledIcon,
   HistoryIcon,
@@ -21,11 +20,8 @@ export {
   MoreIcon,
   MoviesIcon,
   MoviesFilledIcon,
-  PauseIcon,
   PlayIcon,
   ProfileIcon,
-  RewindBackward10Icon,
-  RewindForward10Icon,
   SearchIcon,
   SearchFilledIcon,
   SeriesIcon,
@@ -34,8 +30,6 @@ export {
   SunFilledIcon,
   SystemThemeIcon,
   SystemThemeFilledIcon,
-  VolumeIcon,
-  VolumeMuteIcon,
 } from './ui/Icons';
 export type { IconProps } from './ui/Icons';
 
