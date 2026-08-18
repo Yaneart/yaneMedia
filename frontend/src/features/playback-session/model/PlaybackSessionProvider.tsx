@@ -1,6 +1,11 @@
 import type { PlaybackSession } from '@/entities/playback';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { PlaybackSessionContext, type StartPlaybackSessionInput } from './playbackSessionContext';
+import {
+  loadPlaybackSession,
+  removePlaybackSession,
+  savePlaybackSession,
+} from './playbackSessionStorage';
 
 type PlaybackSessionProviderProps = {
   children: ReactNode;
@@ -33,7 +38,16 @@ function normalizePosition(positionSeconds: number, durationSeconds: number | nu
 }
 
 export function PlaybackSessionProvider({ children }: PlaybackSessionProviderProps) {
-  const [session, setSession] = useState<PlaybackSession | null>(null);
+  const [session, setSession] = useState<PlaybackSession | null>(loadPlaybackSession);
+
+  useEffect(() => {
+    if (session) {
+      savePlaybackSession(session);
+      return;
+    }
+
+    removePlaybackSession();
+  }, [session]);
 
   const startSession = (input: StartPlaybackSessionInput) => {
     const durationSeconds = normalizeDuration(input.durationSeconds ?? null);

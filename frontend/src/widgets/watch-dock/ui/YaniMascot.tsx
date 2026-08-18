@@ -71,7 +71,10 @@ export function YaniMascot() {
     }
 
     setEntrancePhase('arriving');
-    const idleTimer = window.setTimeout(() => setEntrancePhase('idle'), arrivalDurationMilliseconds);
+    const idleTimer = window.setTimeout(
+      () => setEntrancePhase('idle'),
+      arrivalDurationMilliseconds,
+    );
 
     return () => {
       window.clearTimeout(idleTimer);
