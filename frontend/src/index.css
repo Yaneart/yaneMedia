@@ -419,6 +419,28 @@
   );
 }
 
+.yane-content-scrollbar {
+  scrollbar-color: var(--theme-border) transparent;
+  scrollbar-width: thin;
+}
+
+.yane-content-scrollbar::-webkit-scrollbar {
+  height: 6px;
+}
+
+.yane-content-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.yane-content-scrollbar::-webkit-scrollbar-thumb {
+  border-radius: var(--radius-pill);
+  background: var(--theme-border);
+}
+
+.yane-content-scrollbar::-webkit-scrollbar-button {
+  display: none;
+}
+
 @layer base {
   html {
     min-width: 320px;

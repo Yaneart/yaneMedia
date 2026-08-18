@@ -3,7 +3,7 @@ import type {
   PlaybackEpisodeSelection,
   PlaybackSession,
 } from '@/entities/playback';
-import { Button, CloseIcon, IconButton } from '@/shared';
+import { Button, CloseIcon, IconButton, PlayIcon } from '@/shared';
 import type { CSSProperties } from 'react';
 import { YaniMascot } from './YaniMascot';
 
@@ -117,7 +117,7 @@ export function WatchDock({ mediaTitle, artwork, session, onExpand, onClose }: W
         </p>
       </div>
 
-      <div className="min-w-0 flex-1" />
+      <div className="hidden min-w-0 flex-1 xl:block" />
 
       <div className="relative z-10 flex shrink-0 items-center gap-1 pr-2 md:gap-2 md:pr-3">
         <div className="relative shrink-0">
@@ -126,10 +126,12 @@ export function WatchDock({ mediaTitle, artwork, session, onExpand, onClose }: W
           <Button
             size="small"
             variant="secondary"
-            className="shrink-0 whitespace-nowrap"
+            aria-label="Продолжить просмотр"
+            className="shrink-0 whitespace-nowrap max-[359px]:size-9 max-[359px]:px-0"
             onClick={onExpand}
           >
-            <span className="sm:hidden">Продолжить</span>
+            <PlayIcon className="hidden size-5 max-[359px]:block" />
+            <span className="max-[359px]:hidden sm:hidden">Продолжить</span>
             <span className="hidden sm:inline">Продолжить просмотр</span>
           </Button>
         </div>
