@@ -1,10 +1,20 @@
 import { ThemeToggle } from '@/features/theme';
-import { FavoriteFilledIcon, FavoriteIcon, Logo, ProfileIcon } from '@/shared';
-import { NavLink } from 'react-router';
+import {
+  FavoriteFilledIcon,
+  FavoriteIcon,
+  HistoryFilledIcon,
+  HistoryIcon,
+  Logo,
+  MoreIcon,
+  Popover,
+  ProfileIcon,
+} from '@/shared';
+import { NavLink, useLocation } from 'react-router';
 
 type MobileHeaderProps = {
   homePath: string;
   favoritesPath: string;
+  historyPath: string;
   profilePath: string;
   overlay?: boolean;
 };
@@ -12,9 +22,13 @@ type MobileHeaderProps = {
 export function MobileHeader({
   homePath,
   favoritesPath,
+  historyPath,
   profilePath,
   overlay = false,
 }: MobileHeaderProps) {
+  const { pathname } = useLocation();
+  const isLibraryRoute = pathname === favoritesPath || pathname === historyPath;
+
   return (
     <header
       className={[
@@ -38,29 +52,73 @@ export function MobileHeader({
         <div className="flex items-center gap-2">
           <ThemeToggle />
 
-          <NavLink
-            to={favoritesPath}
-            aria-label="Открыть избранное"
-            className={({ isActive }) =>
-              [
-                'flex size-10 shrink-0 items-center justify-center rounded-control border bg-background',
-                'transition-[background-color,border-color,color,transform] duration-200 ease-out',
-                'hover:bg-interactive-hover active:scale-[0.97] active:duration-75',
-                'motion-reduce:transform-none motion-reduce:transition-none',
-                isActive
-                  ? 'border-watermark/70 bg-watermark/15 text-watermark'
-                  : 'border-border text-text-primary',
-              ].join(' ')
-            }
+          <Popover
+            trigger={<MoreIcon className="size-5" />}
+            triggerLabel="Открыть разделы пользователя"
+            align="center"
+            triggerSize="custom"
+            triggerVariant="bare"
+            panelClassName="min-w-0 rounded-control bg-background p-1"
+            triggerClassName={[
+              'size-10 shrink-0 rounded-control border bg-background',
+              'transition-[background-color,border-color,color,transform] duration-200 ease-out',
+              'hover:bg-interactive-hover active:scale-[0.97] active:duration-75',
+              'motion-reduce:transform-none motion-reduce:transition-none',
+              isLibraryRoute
+                ? 'border-watermark/70 bg-watermark/15 text-watermark'
+                : 'border-border text-text-primary',
+            ].join(' ')}
           >
-            {({ isActive }) =>
-              isActive ? (
-                <FavoriteFilledIcon className="size-5" />
-              ) : (
-                <FavoriteIcon className="size-5" />
-              )
-            }
-          </NavLink>
+            {(closePopover) => (
+              <nav aria-label="Разделы пользователя" className="flex items-center gap-1">
+                <NavLink
+                  to={favoritesPath}
+                  aria-label="Открыть избранное"
+                  title="Избранное"
+                  className={({ isActive }) =>
+                    [
+                      'flex size-8 shrink-0 items-center justify-center rounded-lg border',
+                      'transition-[background-color,border-color,color] duration-200 ease-out',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-watermark/60',
+                      isActive
+                        ? 'border-watermark/70 bg-watermark/15 text-watermark'
+                        : 'border-border bg-background text-text-primary hover:bg-interactive-hover',
+                    ].join(' ')
+                  }
+                  onClick={closePopover}
+                >
+                  {({ isActive }) => {
+                    const FavoriteStateIcon = isActive ? FavoriteFilledIcon : FavoriteIcon;
+
+                    return <FavoriteStateIcon className="size-5 shrink-0" />;
+                  }}
+                </NavLink>
+
+                <NavLink
+                  to={historyPath}
+                  aria-label="Открыть историю"
+                  title="История"
+                  className={({ isActive }) =>
+                    [
+                      'flex size-8 shrink-0 items-center justify-center rounded-lg border',
+                      'transition-[background-color,border-color,color] duration-200 ease-out',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-watermark/60',
+                      isActive
+                        ? 'border-watermark/70 bg-watermark/15 text-watermark'
+                        : 'border-border bg-background text-text-primary hover:bg-interactive-hover',
+                    ].join(' ')
+                  }
+                  onClick={closePopover}
+                >
+                  {({ isActive }) => {
+                    const HistoryStateIcon = isActive ? HistoryFilledIcon : HistoryIcon;
+
+                    return <HistoryStateIcon className="size-5 shrink-0" />;
+                  }}
+                </NavLink>
+              </nav>
+            )}
+          </Popover>
 
           <NavLink
             to={profilePath}

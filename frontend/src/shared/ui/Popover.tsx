@@ -1,4 +1,4 @@
-import { IconButton } from './IconButton';
+import { IconButton, type IconButtonProps } from './IconButton';
 import {
   useEffect,
   useId,
@@ -8,13 +8,19 @@ import {
   type ReactNode,
 } from 'react';
 
-export type PopoverAlign = 'start' | 'end';
+export type PopoverAlign = 'start' | 'center' | 'end';
+
+type PopoverChildren = ReactNode | ((closePopover: () => void) => ReactNode);
 
 export type PopoverProps = Omit<ComponentPropsWithoutRef<'div'>, 'children'> & {
   trigger: ReactNode;
   triggerLabel: string;
-  children: ReactNode;
+  children: PopoverChildren;
   align?: PopoverAlign;
+  triggerSize?: IconButtonProps['size'];
+  triggerVariant?: IconButtonProps['variant'];
+  triggerClassName?: string;
+  panelClassName?: string;
 };
 
 export function Popover({
@@ -22,6 +28,10 @@ export function Popover({
   triggerLabel,
   children,
   align = 'end',
+  triggerSize = 'medium',
+  triggerVariant = 'ghost',
+  triggerClassName = '',
+  panelClassName = 'min-w-48 rounded-overlay bg-popover p-2',
   className = '',
   ...props
 }: PopoverProps) {
@@ -70,7 +80,12 @@ export function Popover({
     };
   }, [isOpen]);
 
-  const alignClass = align === 'end' ? 'right-0' : 'left-0';
+  const alignClasses: Record<PopoverAlign, string> = {
+    start: 'left-0',
+    center: 'left-1/2 -translate-x-1/2',
+    end: 'right-0',
+  };
+  const closePopover = () => setIsOpen(false);
 
   return (
     <div {...props} ref={containerRef} className={['relative inline-block', className].join(' ')}>
@@ -79,7 +94,9 @@ export function Popover({
         aria-label={triggerLabel}
         aria-controls={panelId}
         aria-expanded={isOpen}
-        variant="ghost"
+        size={triggerSize}
+        variant={triggerVariant}
+        className={triggerClassName}
         onClick={() => setIsOpen((current) => !current)}
       >
         {trigger}
@@ -89,13 +106,13 @@ export function Popover({
         <div
           id={panelId}
           className={[
-            'absolute top-full z-20 mt-2 min-w-48',
-            'rounded-overlay border border-border bg-popover',
-            'p-2 text-text-primary shadow-overlay',
-            alignClass,
+            'absolute top-full z-20 mt-2',
+            'border border-border text-text-primary shadow-overlay',
+            alignClasses[align],
+            panelClassName,
           ].join(' ')}
         >
-          {children}
+          {typeof children === 'function' ? children(closePopover) : children}
         </div>
       )}
     </div>
