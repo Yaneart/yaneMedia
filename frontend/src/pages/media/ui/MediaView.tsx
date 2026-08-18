@@ -5,6 +5,7 @@ import { FavoriteButton } from '@/features/favorite';
 import { usePlaybackSession } from '@/features/playback-session';
 import { SeasonSelector } from '@/features/season-selection';
 import { SourceSelector } from '@/features/source-selection';
+import { MediaCast } from '@/widgets/mdeia-cast';
 import { MediaInfo } from '@/widgets/media-info';
 import { MediaPlayer, type MediaPlayerStatus } from '@/widgets/media-player';
 import { useEffect, useState } from 'react';
@@ -203,6 +204,8 @@ export function MediaView({ media }: MediaViewProps) {
           <p className="mt-3 max-w-5xl text-body text-text-secondary">{media.description}</p>
         </section>
       )}
+
+      <MediaCast persons={media.persons} className="order-4 2xl:col-span-2" />
     </div>
   );
 }
