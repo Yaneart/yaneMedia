@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { OpeningHistoryContext, type OpeningHistoryEntry } from './openingHistoryContext';
 import {
   OPENING_HISTORY_LIMIT,
@@ -25,7 +25,7 @@ export function OpeningHistoryProvider({ children }: OpeningHistoryProviderProps
     saveOpeningHistory(openingHistoryEntries);
   }, [openingHistoryEntries]);
 
-  const recordOpening = (mediaRef: MediaRef) => {
+  const recordOpening = useCallback((mediaRef: MediaRef) => {
     if (mediaRef.trim().length === 0) {
       return;
     }
@@ -43,13 +43,13 @@ export function OpeningHistoryProvider({ children }: OpeningHistoryProviderProps
 
       return nextEntries.slice(0, OPENING_HISTORY_LIMIT);
     });
-  };
+  }, []);
 
-  const clearHistory = () => {
+  const clearHistory = useCallback(() => {
     setOpeningHistoryEntries((currentEntries) =>
       currentEntries.length === 0 ? currentEntries : [],
     );
-  };
+  }, []);
 
   return (
     <OpeningHistoryContext
