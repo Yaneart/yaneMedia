@@ -3,14 +3,17 @@ import { ThemeProvider } from '@/features/theme';
 import { RouterProvider } from 'react-router';
 import { router } from './router/router';
 import { FavoriteProvider } from '@/features/favorite';
+import { OpeningHistoryProvider } from '@/features/opening-history';
 
 function App() {
   return (
     <ThemeProvider>
       <FavoriteProvider>
-        <PlaybackSessionProvider>
-          <RouterProvider router={router} />
-        </PlaybackSessionProvider>
+        <OpeningHistoryProvider>
+          <PlaybackSessionProvider>
+            <RouterProvider router={router} />
+          </PlaybackSessionProvider>
+        </OpeningHistoryProvider>
       </FavoriteProvider>
     </ThemeProvider>
   );
