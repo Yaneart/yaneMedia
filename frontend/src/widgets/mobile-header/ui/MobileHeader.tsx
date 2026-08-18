@@ -1,14 +1,20 @@
 import { ThemeToggle } from '@/features/theme';
-import { Logo, ProfileIcon } from '@/shared';
+import { FavoriteFilledIcon, FavoriteIcon, Logo, ProfileIcon } from '@/shared';
 import { NavLink } from 'react-router';
 
 type MobileHeaderProps = {
   homePath: string;
+  favoritesPath: string;
   profilePath: string;
   overlay?: boolean;
 };
 
-export function MobileHeader({ homePath, profilePath, overlay = false }: MobileHeaderProps) {
+export function MobileHeader({
+  homePath,
+  favoritesPath,
+  profilePath,
+  overlay = false,
+}: MobileHeaderProps) {
   return (
     <header
       className={[
@@ -31,6 +37,30 @@ export function MobileHeader({ homePath, profilePath, overlay = false }: MobileH
 
         <div className="flex items-center gap-2">
           <ThemeToggle />
+
+          <NavLink
+            to={favoritesPath}
+            aria-label="Открыть избранное"
+            className={({ isActive }) =>
+              [
+                'flex size-10 shrink-0 items-center justify-center rounded-control border bg-background',
+                'transition-[background-color,border-color,color,transform] duration-200 ease-out',
+                'hover:bg-interactive-hover active:scale-[0.97] active:duration-75',
+                'motion-reduce:transform-none motion-reduce:transition-none',
+                isActive
+                  ? 'border-watermark/70 bg-watermark/15 text-watermark'
+                  : 'border-border text-text-primary',
+              ].join(' ')
+            }
+          >
+            {({ isActive }) =>
+              isActive ? (
+                <FavoriteFilledIcon className="size-5" />
+              ) : (
+                <FavoriteIcon className="size-5" />
+              )
+            }
+          </NavLink>
 
           <NavLink
             to={profilePath}

@@ -41,6 +41,7 @@ export function AppShell() {
         >
           <MobileHeader
             homePath={routePaths.home}
+            favoritesPath={routePaths.favorites}
             profilePath={routePaths.login}
             overlay={isHomePage}
           />
