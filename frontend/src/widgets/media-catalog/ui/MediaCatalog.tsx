@@ -3,6 +3,7 @@ import { useState, type ReactNode } from 'react';
 import { Button, EmptyState, MediaGrid, SearchInput, Select } from '@/shared';
 import { MediaCard, type MediaRef, type MediaSummary } from '@/entities/media';
 import { filterMedia } from '../model/filterMedia';
+import { useFavorites } from '@/features/favorite';
 
 export type MediaCatalogProps = {
   title: string;
@@ -18,25 +19,12 @@ const ratingOptions = [
 ] as const;
 
 export function MediaCatalog({ title, filters, media, onOpen }: MediaCatalogProps) {
+  const { isFavorite, toggleFavorite } = useFavorites();
+
   const [searchValue, setSearchValue] = useState('');
-  const [favoriteMediaRefs, setFavoriteMediaRefs] = useState<Set<MediaRef>>(() => new Set());
   const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const [minimumRating, setMinimumRating] = useState<number | null>(null);
-
-  const toggleFavorite = (mediaRef: MediaRef) => {
-    setFavoriteMediaRefs((current) => {
-      const next = new Set(current);
-
-      if (next.has(mediaRef)) {
-        next.delete(mediaRef);
-      } else {
-        next.add(mediaRef);
-      }
-
-      return next;
-    });
-  };
 
   const availableGenres = [...new Set(media.flatMap((item) => item.genres))].sort((first, second) =>
     first.localeCompare(second, 'ru'),
@@ -130,7 +118,7 @@ export function MediaCatalog({ title, filters, media, onOpen }: MediaCatalogProp
               key={item.mediaRef}
               media={item}
               onOpen={() => onOpen(item.mediaRef)}
-              isFavorite={favoriteMediaRefs.has(item.mediaRef)}
+              isFavorite={isFavorite(item.mediaRef)}
               onFavoriteChange={() => toggleFavorite(item.mediaRef)}
             />
           ))}

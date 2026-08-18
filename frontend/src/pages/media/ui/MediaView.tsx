@@ -1,7 +1,7 @@
 import type { MediaDetails } from '@/entities/media';
 import { demoMediaSources } from '@/entities/media-source';
 import { EpisodeSelector } from '@/features/episode-selection';
-import { FavoriteButton } from '@/features/favorite';
+import { FavoriteButton, useFavorites } from '@/features/favorite';
 import { usePlaybackSession } from '@/features/playback-session';
 import { SeasonSelector } from '@/features/season-selection';
 import { SourceSelector } from '@/features/source-selection';
@@ -16,16 +16,22 @@ export type MediaViewProps = {
 
 export function MediaView({ media }: MediaViewProps) {
   const { session, startSession, endSession } = usePlaybackSession();
+
+  const { isFavorite, addFavorite, removeFavorite } = useFavorites();
+  const mediaIsFavorite = isFavorite(media.mediaRef);
+
   const mediaSession = session?.mediaRef === media.mediaRef ? session : null;
+
   const initialSeason =
     media.type === 'series'
       ? (media.seasons.find((season) => season.number === mediaSession?.episode?.seasonNumber) ??
         media.seasons[0])
       : undefined;
-  const [isFavorite, setIsFavorite] = useState(false);
+
   const [selectedSeasonNumber, setSelectedSeasonNumber] = useState<number | null>(
     initialSeason?.number ?? null,
   );
+
   const [selectedEpisodeNumber, setSelectedEpisodeNumber] = useState<number | null>(
     media.type === 'series'
       ? (initialSeason?.episodes.find(
@@ -46,6 +52,7 @@ export function MediaView({ media }: MediaViewProps) {
       ? (mediaSession?.sourceRef ?? null)
       : (demoMediaSources[0]?.sourceRef ?? null),
   );
+
   const [playerStatus, setPlayerStatus] = useState<MediaPlayerStatus>('ready');
 
   const selectedSource = demoMediaSources.find((source) => source.sourceRef === selectedSourceRef);
@@ -62,6 +69,7 @@ export function MediaView({ media }: MediaViewProps) {
   const selectedEpisode = episodes.find(
     (episode) => episode.episodeNumber === selectedEpisodeNumber,
   );
+
   const isPlayerStarted =
     mediaSession?.sourceRef === selectedSourceRef &&
     (media.type === 'movie' ||
@@ -188,8 +196,14 @@ export function MediaView({ media }: MediaViewProps) {
         variant="watch"
         actions={
           <FavoriteButton
-            isFavorite={isFavorite}
-            onFavoriteChange={setIsFavorite}
+            isFavorite={mediaIsFavorite}
+            onFavoriteChange={(nextIsFavorite) => {
+              if (nextIsFavorite) {
+                addFavorite(media.mediaRef);
+              } else {
+                removeFavorite(media.mediaRef);
+              }
+            }}
             mediaTitle={media.title}
           />
         }
