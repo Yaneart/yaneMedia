@@ -15,6 +15,14 @@ import { NotFoundPage } from '@/pages/not-found';
 
 export const router = createBrowserRouter([
   {
+    path: routePaths.login,
+    element: <LoginPage homePath={routePaths.home} registerPath={routePaths.register} />,
+  },
+  {
+    path: routePaths.register,
+    element: <RegisterPage />,
+  },
+  {
     element: <AppShell />,
     children: [
       {
@@ -48,14 +56,6 @@ export const router = createBrowserRouter([
       {
         path: routePaths.history,
         element: <HistoryPage />,
-      },
-      {
-        path: routePaths.login,
-        element: <LoginPage />,
-      },
-      {
-        path: routePaths.register,
-        element: <RegisterPage />,
       },
       {
         path: routePaths.notFound,
