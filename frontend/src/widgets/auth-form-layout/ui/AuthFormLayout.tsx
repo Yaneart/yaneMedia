@@ -117,8 +117,8 @@ export function AuthFormLayout({
           >
             <YaneMark
               className={[
-                'absolute -right-20 -top-16 size-[28rem]',
-                'rotate-[18deg] text-watermark opacity-20',
+                'absolute -right-32 -top-8 size-[40rem]',
+                'rotate-[18deg] text-watermark opacity-[0.16]',
               ].join(' ')}
             />
 

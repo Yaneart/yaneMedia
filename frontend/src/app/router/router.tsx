@@ -20,7 +20,7 @@ export const router = createBrowserRouter([
   },
   {
     path: routePaths.register,
-    element: <RegisterPage />,
+    element: <RegisterPage homePath={routePaths.home} loginPath={routePaths.login} />,
   },
   {
     element: <AppShell />,
