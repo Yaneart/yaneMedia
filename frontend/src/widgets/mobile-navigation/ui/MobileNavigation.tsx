@@ -29,7 +29,7 @@ export function MobileNavigation({ homePath, items }: MobileNavigationProps) {
   return (
     <nav
       aria-label="Основная навигация"
-      className="overflow-hidden rounded-t-card border-t border-border bg-background pb-[env(safe-area-inset-bottom)]"
+      className="overflow-hidden rounded-t-card border-t border-navigation-border bg-background pb-[env(safe-area-inset-bottom)]"
     >
       <ul className="flex min-h-16">
         {items.map((item) => {

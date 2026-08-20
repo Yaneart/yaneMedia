@@ -40,7 +40,7 @@ export function HomePage() {
           ].join(' ')}
         />
 
-        <header className="absolute left-10 top-8 z-10 hidden md:block">
+        <header className="relative z-10 hidden px-page pt-8 md:block">
           <h1 className="text-title font-extrabold text-hero-text">Добрый вечер</h1>
 
           <div className="mt-4 w-md">
@@ -52,7 +52,7 @@ export function HomePage() {
           </div>
         </header>
 
-        <div className="relative md:px-page md:pt-56">
+        <div className="relative md:mt-12 md:px-page">
           <FeaturedMedia media={featured} onOpen={() => openMedia(featured.mediaRef)} />
         </div>
 

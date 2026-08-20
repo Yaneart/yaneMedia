@@ -52,7 +52,7 @@ export function ThemeToggle() {
     <div
       role="group"
       aria-label="Тема оформления"
-      className="relative grid h-10 w-28 grid-cols-3 rounded-control border border-border bg-background p-1"
+      className="relative grid h-10 w-28 grid-cols-3 rounded-control border border-navigation-border bg-background p-1"
     >
       <span
         aria-hidden="true"
