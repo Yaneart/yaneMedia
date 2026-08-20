@@ -1,6 +1,16 @@
+import {
+  DISPLAY_NAME_MAX_LENGTH,
+  DISPLAY_NAME_MIN_LENGTH,
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH,
+  focusFirstInvalidField,
+  validateRegisterForm,
+  type RegisterFormErrors,
+  type RegisterFormFields,
+} from '@/features/auth-form';
 import { Button, Input } from '@/shared';
 import { AuthDemoNotice, AuthFormLayout } from '@/widgets/auth-form-layout';
-import { useState, type SubmitEvent } from 'react';
+import { useState, type ChangeEvent, type SubmitEvent } from 'react';
 import { Link } from 'react-router';
 
 type RegisterPageProps = {
@@ -8,31 +18,83 @@ type RegisterPageProps = {
   loginPath: string;
 };
 
+function readRegisterFormFields(form: HTMLFormElement): RegisterFormFields {
+  const formData = new FormData(form);
+  const displayName = formData.get('displayName');
+  const email = formData.get('email');
+  const password = formData.get('password');
+  const passwordConfirmation = formData.get('passwordConfirmation');
+
+  return {
+    displayName: typeof displayName === 'string' ? displayName : '',
+    email: typeof email === 'string' ? email : '',
+    password: typeof password === 'string' ? password : '',
+    passwordConfirmation: typeof passwordConfirmation === 'string' ? passwordConfirmation : '',
+  };
+}
+
 export function RegisterPage({ homePath, loginPath }: RegisterPageProps) {
-  const [passwordConfirmationError, setPasswordConfirmationError] = useState<string>();
+  const [formErrors, setFormErrors] = useState<RegisterFormErrors>({});
   const [isDemoNoticeVisible, setIsDemoNoticeVisible] = useState(false);
 
   const handleSubmit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    const formData = new FormData(event.currentTarget);
-    const password = formData.get('password');
-    const passwordConfirmation = formData.get('passwordConfirmation');
+    const form = event.currentTarget;
+    const nextFormErrors = validateRegisterForm(readRegisterFormFields(form));
 
-    if (password !== passwordConfirmation) {
-      setPasswordConfirmationError('Пароли не совпадают');
-      setIsDemoNoticeVisible(false);
+    setFormErrors(nextFormErrors);
+    setIsDemoNoticeVisible(false);
+
+    const invalidFieldNames = Object.keys(nextFormErrors);
+
+    if (invalidFieldNames.length > 0) {
+      requestAnimationFrame(() => focusFirstInvalidField(form, invalidFieldNames));
       return;
     }
 
-    setPasswordConfirmationError(undefined);
     setIsDemoNoticeVisible(true);
   };
 
-  const clearPasswordConfirmationError = () => {
-    if (passwordConfirmationError) {
-      setPasswordConfirmationError(undefined);
+  const handleFieldChange = (
+    fieldName: keyof RegisterFormFields,
+    event: ChangeEvent<HTMLInputElement>,
+  ) => {
+    setIsDemoNoticeVisible(false);
+
+    const form = event.currentTarget.form;
+
+    if (!form) {
+      return;
     }
+
+    const nextValidationErrors = validateRegisterForm(readRegisterFormFields(form));
+    const affectedFieldNames: (keyof RegisterFormFields)[] =
+      fieldName === 'password' ? ['password', 'passwordConfirmation'] : [fieldName];
+
+    setFormErrors((currentFormErrors) => {
+      const hasAffectedError = affectedFieldNames.some(
+        (affectedFieldName) => currentFormErrors[affectedFieldName],
+      );
+
+      if (!hasAffectedError) {
+        return currentFormErrors;
+      }
+
+      const nextFormErrors = { ...currentFormErrors };
+
+      for (const affectedFieldName of affectedFieldNames) {
+        const nextFieldError = nextValidationErrors[affectedFieldName];
+
+        if (nextFieldError) {
+          nextFormErrors[affectedFieldName] = nextFieldError;
+        } else {
+          delete nextFormErrors[affectedFieldName];
+        }
+      }
+
+      return nextFormErrors;
+    });
   };
 
   return (
@@ -56,14 +118,18 @@ export function RegisterPage({ homePath, loginPath }: RegisterPageProps) {
         </p>
       }
     >
-      <form className="flex flex-col gap-5" onSubmit={handleSubmit}>
+      <form className="flex flex-col gap-2" noValidate onSubmit={handleSubmit}>
         <Input
           label="Отображаемое имя"
           name="displayName"
           type="text"
           autoComplete="name"
           placeholder="Как к вам обращаться"
+          error={formErrors.displayName}
+          hint={`От ${DISPLAY_NAME_MIN_LENGTH} до ${DISPLAY_NAME_MAX_LENGTH} символов`}
+          reserveMessageSpace
           required
+          onChange={(event) => handleFieldChange('displayName', event)}
         />
 
         <Input
@@ -72,7 +138,10 @@ export function RegisterPage({ homePath, loginPath }: RegisterPageProps) {
           type="email"
           autoComplete="email"
           placeholder="name@example.com"
+          error={formErrors.email}
+          reserveMessageSpace
           required
+          onChange={(event) => handleFieldChange('email', event)}
         />
 
         <Input
@@ -81,8 +150,11 @@ export function RegisterPage({ homePath, loginPath }: RegisterPageProps) {
           type="password"
           autoComplete="new-password"
           placeholder="Придумайте пароль"
+          error={formErrors.password}
+          hint={`От ${PASSWORD_MIN_LENGTH} до ${PASSWORD_MAX_LENGTH} символов`}
+          reserveMessageSpace
           required
-          onChange={clearPasswordConfirmationError}
+          onChange={(event) => handleFieldChange('password', event)}
         />
 
         <Input
@@ -91,12 +163,13 @@ export function RegisterPage({ homePath, loginPath }: RegisterPageProps) {
           type="password"
           autoComplete="new-password"
           placeholder="Введите пароль ещё раз"
-          error={passwordConfirmationError}
+          error={formErrors.passwordConfirmation}
+          reserveMessageSpace
           required
-          onChange={clearPasswordConfirmationError}
+          onChange={(event) => handleFieldChange('passwordConfirmation', event)}
         />
 
-        <Button type="submit" size="large" className="mt-2 w-full">
+        <Button type="submit" size="large" className="w-full">
           Зарегистрироваться
         </Button>
 

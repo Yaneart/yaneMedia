@@ -7,6 +7,7 @@ export type InputProps = ComponentPropsWithRef<'input'> & {
   hint?: ReactNode;
   error?: ReactNode;
   variant?: InputVariant;
+  reserveMessageSpace?: boolean;
 };
 
 const surfaceClasses: Record<InputVariant, string> = {
@@ -31,6 +32,7 @@ export function Input({
   hint,
   error,
   variant = 'default',
+  reserveMessageSpace = false,
   className = '',
   'aria-describedby': ariaDescribedBy,
   ...props
@@ -67,10 +69,13 @@ export function Input({
         aria-describedby={describedBy}
       />
 
-      {message && (
+      {(message || reserveMessageSpace) && (
         <p
           id={messageId}
-          className={['text-caption', error ? 'text-error' : 'text-text-secondary'].join(' ')}
+          aria-hidden={message ? undefined : true}
+          className={['min-h-5 text-caption', error ? 'text-error' : 'text-text-secondary'].join(
+            ' ',
+          )}
         >
           {message}
         </p>
