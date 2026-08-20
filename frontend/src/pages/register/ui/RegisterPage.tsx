@@ -1,6 +1,6 @@
 import { Button, Input } from '@/shared';
-import { AuthFormLayout } from '@/widgets/auth-form-layout';
-import { useState, type FormEvent } from 'react';
+import { AuthDemoNotice, AuthFormLayout } from '@/widgets/auth-form-layout';
+import { useState, type SubmitEvent } from 'react';
 import { Link } from 'react-router';
 
 type RegisterPageProps = {
@@ -10,8 +10,9 @@ type RegisterPageProps = {
 
 export function RegisterPage({ homePath, loginPath }: RegisterPageProps) {
   const [passwordConfirmationError, setPasswordConfirmationError] = useState<string>();
+  const [isDemoNoticeVisible, setIsDemoNoticeVisible] = useState(false);
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     const formData = new FormData(event.currentTarget);
@@ -20,10 +21,12 @@ export function RegisterPage({ homePath, loginPath }: RegisterPageProps) {
 
     if (password !== passwordConfirmation) {
       setPasswordConfirmationError('Пароли не совпадают');
+      setIsDemoNoticeVisible(false);
       return;
     }
 
     setPasswordConfirmationError(undefined);
+    setIsDemoNoticeVisible(true);
   };
 
   const clearPasswordConfirmationError = () => {
@@ -96,6 +99,8 @@ export function RegisterPage({ homePath, loginPath }: RegisterPageProps) {
         <Button type="submit" size="large" className="mt-2 w-full">
           Зарегистрироваться
         </Button>
+
+        {isDemoNoticeVisible && <AuthDemoNotice />}
       </form>
     </AuthFormLayout>
   );

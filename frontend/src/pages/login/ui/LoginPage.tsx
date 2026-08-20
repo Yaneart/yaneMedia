@@ -1,6 +1,6 @@
 import { Button, Input } from '@/shared';
-import { AuthFormLayout } from '@/widgets/auth-form-layout';
-import type { FormEvent } from 'react';
+import { AuthDemoNotice, AuthFormLayout } from '@/widgets/auth-form-layout';
+import { useState, type SubmitEvent } from 'react';
 import { Link } from 'react-router';
 
 type LoginPageProps = {
@@ -9,8 +9,11 @@ type LoginPageProps = {
 };
 
 export function LoginPage({ homePath, registerPath }: LoginPageProps) {
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const [isDemoNoticeVisible, setIsDemoNoticeVisible] = useState(false);
+
+  const handleSubmit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
+    setIsDemoNoticeVisible(true);
   };
 
   return (
@@ -56,6 +59,8 @@ export function LoginPage({ homePath, registerPath }: LoginPageProps) {
         <Button type="submit" size="large" className="mt-2 w-full">
           Войти
         </Button>
+
+        {isDemoNoticeVisible && <AuthDemoNotice />}
       </form>
     </AuthFormLayout>
   );
