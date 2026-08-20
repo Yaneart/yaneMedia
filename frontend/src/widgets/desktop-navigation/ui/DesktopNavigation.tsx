@@ -103,7 +103,7 @@ export function DesktopNavigation({
           aria-label="Войти"
           className={[
             'flex size-10 shrink-0 items-center justify-center rounded-control',
-            'border border-border bg-surface text-text-primary hover:bg-interactive-hover',
+            'border border-navigation-border bg-surface text-text-primary hover:bg-interactive-hover',
             'transition-[background-color,color,transform] duration-200 ease-out',
             'active:scale-[0.96] active:duration-75',
             'motion-reduce:transform-none motion-reduce:transition-none',
