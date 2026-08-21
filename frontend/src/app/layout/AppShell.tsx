@@ -47,7 +47,7 @@ export function AppShell() {
             overlay={isHomePage}
           />
         </div>
-        <main className="border border-navigation-border relative z-10 min-h-0 flex-1 overflow-y-auto bg-surface p-page [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:m-4 md:ml-0 md:rounded-card md:shadow-surface">
+        <main className="relative z-10 min-h-0 flex-1 overflow-y-auto bg-surface p-page [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:m-4 md:ml-0 md:rounded-card md:shadow-surface">
           <Outlet />
         </main>
         {session && activeMediaPath && !isActiveMediaPage && (
