@@ -14,7 +14,7 @@ async function bootstrap() {
     origin: 'http://localhost:5173',
   });
 
-  app.useGlobalFilters(new ApiExceptionFilter());
+  app.useGlobalFilters(app.get(ApiExceptionFilter));
   app.useGlobalInterceptors(new ApiResponseInterceptor());
 
   const port = configService.getOrThrow<number>('PORT');
