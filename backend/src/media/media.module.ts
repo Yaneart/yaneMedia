@@ -1,9 +1,26 @@
 import { Module } from '@nestjs/common';
-import { MediaSearchService } from './application/media-search.service';
-import { MediaEngineModule } from '../integrations/media-engine/media-engine.module';
+import { MediaController } from './media.controller';
+import { MEDIA_ENGINE, MediaService } from './media.service';
+
+async function createMediaEngine() {
+  const [{ MediaEngine }, { cinemetaProvider, kinobdProvider }] = await Promise.all([
+    import('@media-engine/core'),
+    import('@media-engine/providers'),
+  ]);
+
+  return new MediaEngine({
+    providers: [kinobdProvider(), cinemetaProvider()],
+  });
+}
 
 @Module({
-  imports: [MediaEngineModule],
-  providers: [MediaSearchService],
+  controllers: [MediaController],
+  providers: [
+    {
+      provide: MEDIA_ENGINE,
+      useFactory: createMediaEngine,
+    },
+    MediaService,
+  ],
 })
 export class MediaModule {}
