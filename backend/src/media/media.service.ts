@@ -95,7 +95,7 @@ export class MediaService {
   }
 
   private toMediaSummary(item: MediaItem): MediaSummaryDto | undefined {
-    const mediaRef = createMediaRef(item.ids ?? {});
+    const mediaRef = createMediaRef(item.ids ?? {}, item.type);
 
     return mediaRef ? this.buildMediaSummary(item, mediaRef) : undefined;
   }
