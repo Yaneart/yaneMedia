@@ -1,7 +1,7 @@
-import { Inject, Injectable } from '@nestjs/common';
-import type { Image, MediaEngine, MediaItem, Rating } from '@media-engine/core';
+import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import type { DetailsResponse, Image, MediaEngine, MediaItem, Rating } from '@media-engine/core';
 import type { MediaArtworkDto, MediaRatingDto, MediaSummaryDto } from './dto/media-summary.dto';
-import { createMediaRef } from './media-ref';
+import { createMediaRef, resolveMediaRef } from './media-ref';
 
 export const MEDIA_ENGINE = Symbol('MEDIA_ENGINE');
 
@@ -17,6 +17,16 @@ export class MediaService {
 
       return summary ? [summary] : [];
     });
+  }
+
+  getDetailsByRef(mediaRef: string): Promise<DetailsResponse> {
+    const ids = resolveMediaRef(mediaRef);
+
+    if (!ids) {
+      throw new BadRequestException('Invalid media reference');
+    }
+
+    return this.mediaEngine.getDetails({ ids });
   }
 
   private toMediaSummary(item: MediaItem): MediaSummaryDto | undefined {
