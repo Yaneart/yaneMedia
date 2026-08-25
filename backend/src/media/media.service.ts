@@ -2,17 +2,18 @@ import type {
   DetailsResponse,
   Episode,
   Image,
-  MediaAvailability,
   MediaDetails,
   MediaEngine,
   MediaItem,
   Rating,
   Season,
 } from '@media-engine/core';
-import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import type { MediaArtworkDto, MediaRatingDto, MediaSummaryDto } from './dto/media-summary.dto';
 import type { MediaDetailsDto, MediaEpisodeDto, MediaSeasonDto } from './dto/media-details.dto';
+import type { MediaAvailabilityDto } from './dto/media-availability.dto';
+import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { createMediaRef, resolveMediaRef } from './media-ref';
+import { mapMediaAvailability } from './media-availability.mapper';
 
 export const MEDIA_ENGINE = Symbol('MEDIA_ENGINE');
 
@@ -47,7 +48,7 @@ export class MediaService {
   async getAvailabilityByRef(
     mediaRef: string,
     playbackUserAgent?: string,
-  ): Promise<MediaAvailability | null> {
+  ): Promise<MediaAvailabilityDto | null> {
     const ids = this.resolveMediaRefOrThrow(mediaRef);
     const { details } = await this.mediaEngine.getDetails({ ids });
 
@@ -55,7 +56,7 @@ export class MediaService {
       return null;
     }
 
-    return this.mediaEngine.getAvailability(
+    const availability = await this.mediaEngine.getAvailability(
       {
         type: details.type,
         ids: {
@@ -67,6 +68,8 @@ export class MediaService {
       },
       { playbackUserAgent },
     );
+
+    return mapMediaAvailability(availability);
   }
 
   private toMediaDetails(mediaRef: string, details: MediaDetails): MediaDetailsDto {

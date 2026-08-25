@@ -58,7 +58,13 @@ describe('MediaService', () => {
 
     await expect(
       service.getAvailabilityByRef('imdb:tt0816692', 'browser-user-agent'),
-    ).resolves.toBe(availability);
+    ).resolves.toEqual({
+      sources: [],
+      episodes: [],
+      checkedAt: '2026-08-25T00:00:00.000Z',
+      degraded: false,
+      hasExpiredSources: false,
+    });
 
     expect(getDetails).toHaveBeenCalledWith({
       ids: { imdb: 'tt0816692' },
