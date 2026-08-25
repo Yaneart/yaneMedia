@@ -1,8 +1,18 @@
-import { Controller, Get, NotFoundException, Param, Query } from '@nestjs/common';
+import { MediaAvailabilityQueryDto } from './dto/media-availability-query.dto';
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  Headers,
+  NotFoundException,
+  Param,
+  Query,
+} from '@nestjs/common';
 import { MediaService } from './media.service';
 import { MediaSearchQueryDto } from './dto/media-search-query.dto';
-import type { MediaSummaryDto } from './dto/media-summary.dto';
+import { MediaAvailabilityDto } from './dto/media-availability.dto';
 import type { MediaDetailsResponseDto } from './dto/media-details-response.dto';
+import type { MediaSummaryDto } from './dto/media-summary.dto';
 
 @Controller('media')
 export class MediaController {
@@ -26,5 +36,28 @@ export class MediaController {
       degraded:
         meta.providers.failed.length > 0 || (meta.warnings?.length ?? 0) > 0 || meta.stale === true,
     };
+  }
+
+  @Get(':mediaRef/availability')
+  async getAvailability(
+    @Param('mediaRef') mediaRef: string,
+    @Query() query: MediaAvailabilityQueryDto,
+    @Headers('user-agent') playbackUserAgent?: string,
+  ): Promise<MediaAvailabilityDto> {
+    if (query.seasonNumber !== undefined && query.episodeNumber === undefined) {
+      throw new BadRequestException('episodeNumber is required when seasonNumber is provided');
+    }
+
+    const availability = await this.mediaService.getAvailabilityByRef(
+      mediaRef,
+      playbackUserAgent,
+      query,
+    );
+
+    if (!availability) {
+      throw new NotFoundException('Media not found');
+    }
+
+    return availability;
   }
 }

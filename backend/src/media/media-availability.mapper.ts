@@ -167,9 +167,9 @@ function mapEpisodeRef(
   }
 
   const mapped = {
-    seasonNumber: normalizePositiveInteger(episode.seasonNumber),
-    episodeNumber: normalizePositiveInteger(episode.episodeNumber),
-    absoluteEpisodeNumber: normalizePositiveInteger(episode.absoluteEpisodeNumber),
+    seasonNumber: normalizeNonNegativeInteger(episode.seasonNumber),
+    episodeNumber: normalizeNonNegativeInteger(episode.episodeNumber),
+    absoluteEpisodeNumber: normalizeNonNegativeInteger(episode.absoluteEpisodeNumber),
   };
 
   return Object.values(mapped).some((value) => value !== undefined) ? mapped : undefined;
@@ -220,6 +220,33 @@ function normalizeOptionalString(value: string | undefined): string | undefined 
   return normalized || undefined;
 }
 
-function normalizePositiveInteger(value: number | undefined): number | undefined {
-  return Number.isInteger(value) && value !== undefined && value > 0 ? value : undefined;
+function normalizeNonNegativeInteger(value: number | undefined): number | undefined {
+  return Number.isInteger(value) && value !== undefined && value >= 0 ? value : undefined;
+}
+
+export function selectMediaAvailabilityEpisode(
+  availability: MediaAvailabilityDto,
+  selection: MediaSourceEpisodeRefDto,
+): MediaAvailabilityDto {
+  const hasAbsoluteEpisode = selection.absoluteEpisodeNumber !== undefined;
+  const hasSeasonEpisode = selection.episodeNumber !== undefined;
+
+  if (!hasAbsoluteEpisode && !hasSeasonEpisode) {
+    return availability;
+  }
+
+  return {
+    ...availability,
+    episodes: availability.episodes.filter((episode) => {
+      const matchesAbsoluteEpisode =
+        hasAbsoluteEpisode && episode.absoluteEpisodeNumber === selection.absoluteEpisodeNumber;
+
+      const matchesSeasonEpisode =
+        hasSeasonEpisode &&
+        episode.episodeNumber === selection.episodeNumber &&
+        (selection.seasonNumber === undefined || episode.seasonNumber === selection.seasonNumber);
+
+      return matchesAbsoluteEpisode || matchesSeasonEpisode;
+    }),
+  };
 }

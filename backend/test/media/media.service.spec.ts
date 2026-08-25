@@ -85,6 +85,71 @@ describe('MediaService', () => {
     );
   });
 
+  it('selects an episode after requesting the full availability catalog', async () => {
+    const getDetails = jest.fn().mockResolvedValue({
+      details: {
+        id: 'frieren',
+        type: 'anime',
+        title: 'Провожающая в последний путь Фрирен',
+        originalTitle: 'Frieren: Beyond Journey’s End',
+        year: 2023,
+        ids: { aniList: '154587' },
+      },
+    });
+    const createEpisodeOption = (id: string) => ({
+      id,
+      provider: 'aniliberty',
+      player: {
+        kind: 'hls',
+        label: '720p',
+        providerPlayerId: id,
+      },
+      access: { url: `https://video.example/${id}.m3u8` },
+      availability: 'available',
+    });
+    const getAvailability = jest.fn().mockResolvedValue({
+      query: { type: 'anime' },
+      options: [],
+      episodes: [
+        {
+          absoluteEpisodeNumber: 1,
+          options: [createEpisodeOption('episode-1')],
+        },
+        {
+          absoluteEpisodeNumber: 2,
+          options: [createEpisodeOption('episode-2')],
+        },
+      ],
+      sourceProviders: ['aniliberty'],
+      checkedAt: '2026-08-25T00:00:00.000Z',
+    });
+    const mediaEngine = {
+      getDetails,
+      getAvailability,
+    } as unknown as MediaEngine;
+    const service = new MediaService(mediaEngine);
+
+    const result = await service.getAvailabilityByRef('anilist:154587', 'browser-user-agent', {
+      absoluteEpisodeNumber: 2,
+    });
+
+    expect(result?.episodes).toEqual([
+      expect.objectContaining({
+        absoluteEpisodeNumber: 2,
+        sources: [expect.objectContaining({ sourceRef: 'stream:aniliberty:episode-2' })],
+      }),
+    ]);
+    expect(getAvailability).toHaveBeenCalledWith(
+      {
+        type: 'anime',
+        ids: { aniList: '154587' },
+        title: 'Frieren: Beyond Journey’s End',
+        year: 2023,
+      },
+      { playbackUserAgent: 'browser-user-agent' },
+    );
+  });
+
   it('returns null availability without calling streaming providers when details are missing', async () => {
     const getDetails = jest.fn().mockResolvedValue({ details: null });
     const getAvailability = jest.fn();

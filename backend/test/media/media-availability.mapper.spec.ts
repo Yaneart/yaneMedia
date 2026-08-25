@@ -1,5 +1,8 @@
 import type { MediaAvailability, StreamOption } from '@media-engine/core';
-import { mapMediaAvailability } from '../../src/media/media-availability.mapper';
+import {
+  mapMediaAvailability,
+  selectMediaAvailabilityEpisode,
+} from '../../src/media/media-availability.mapper';
 
 const NOW = Date.parse('2026-08-25T12:00:00.000Z');
 
@@ -28,8 +31,6 @@ function createOption(overrides: Partial<StreamOption> = {}): StreamOption {
   return {
     id: 'provider-option-1',
     provider: 'test-provider',
-    player,
-    access,
     availability: 'available',
     sourceUrl: 'https://provider.example/internal-source',
     ...overrides,
@@ -222,5 +223,75 @@ describe('mapMediaAvailability', () => {
       seasonNumber: 1,
       episodeNumber: 2,
     });
+  });
+
+  it('preserves zero-valued episode identity', () => {
+    const availability = createAvailability({
+      query: { type: 'series' },
+      episodes: [
+        {
+          seasonNumber: 0,
+          episodeNumber: 0,
+          absoluteEpisodeNumber: 0,
+          options: [createOption({ id: 'special-episode' })],
+        },
+      ],
+    });
+
+    const result = mapMediaAvailability(availability, NOW);
+
+    expect(result.episodes[0]).toEqual(
+      expect.objectContaining({
+        seasonNumber: 0,
+        episodeNumber: 0,
+        absoluteEpisodeNumber: 0,
+      }),
+    );
+    expect(result.episodes[0].sources[0].episode).toEqual({
+      seasonNumber: 0,
+      episodeNumber: 0,
+      absoluteEpisodeNumber: 0,
+    });
+  });
+});
+
+describe('selectMediaAvailabilityEpisode', () => {
+  const availability = {
+    sources: [],
+    episodes: [
+      { seasonNumber: 1, episodeNumber: 1, sources: [] },
+      { seasonNumber: 1, episodeNumber: 2, sources: [] },
+      { absoluteEpisodeNumber: 2, sources: [] },
+      { seasonNumber: 2, episodeNumber: 2, sources: [] },
+    ],
+    checkedAt: '2026-08-25T11:59:00.000Z',
+    degraded: false,
+    hasExpiredSources: false,
+  };
+
+  it('returns the full availability when no episode identity is selected', () => {
+    expect(selectMediaAvailabilityEpisode(availability, {})).toBe(availability);
+  });
+
+  it('selects an episode by season and episode number', () => {
+    const result = selectMediaAvailabilityEpisode(availability, {
+      seasonNumber: 1,
+      episodeNumber: 2,
+    });
+
+    expect(result.episodes).toEqual([{ seasonNumber: 1, episodeNumber: 2, sources: [] }]);
+  });
+
+  it('keeps provider episode entries matching either supplied identity', () => {
+    const result = selectMediaAvailabilityEpisode(availability, {
+      seasonNumber: 1,
+      episodeNumber: 2,
+      absoluteEpisodeNumber: 2,
+    });
+
+    expect(result.episodes).toEqual([
+      { seasonNumber: 1, episodeNumber: 2, sources: [] },
+      { absoluteEpisodeNumber: 2, sources: [] },
+    ]);
   });
 });
