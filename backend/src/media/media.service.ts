@@ -2,6 +2,7 @@ import type {
   DetailsResponse,
   Episode,
   Image,
+  MediaAvailability,
   MediaDetails,
   MediaEngine,
   MediaItem,
@@ -33,11 +34,7 @@ export class MediaService {
     details: MediaDetailsDto | null;
     meta: DetailsResponse['meta'];
   }> {
-    const ids = resolveMediaRef(mediaRef);
-
-    if (!ids) {
-      throw new BadRequestException('Invalid media reference');
-    }
+    const ids = this.resolveMediaRefOrThrow(mediaRef);
 
     const response = await this.mediaEngine.getDetails({ ids });
 
@@ -45,6 +42,31 @@ export class MediaService {
       details: response.details ? this.toMediaDetails(mediaRef, response.details) : null,
       meta: response.meta,
     };
+  }
+
+  async getAvailabilityByRef(
+    mediaRef: string,
+    playbackUserAgent?: string,
+  ): Promise<MediaAvailability | null> {
+    const ids = this.resolveMediaRefOrThrow(mediaRef);
+    const { details } = await this.mediaEngine.getDetails({ ids });
+
+    if (!details) {
+      return null;
+    }
+
+    return this.mediaEngine.getAvailability(
+      {
+        type: details.type,
+        ids: {
+          ...(details.ids ?? {}),
+          ...ids,
+        },
+        title: details.originalTitle?.trim() || details.title,
+        year: details.year,
+      },
+      { playbackUserAgent },
+    );
   }
 
   private toMediaDetails(mediaRef: string, details: MediaDetails): MediaDetailsDto {
@@ -173,6 +195,16 @@ export class MediaService {
       value: Math.round(normalizedValue * 10) / 10,
       scale: 10,
     };
+  }
+
+  private resolveMediaRefOrThrow(mediaRef: string) {
+    const ids = resolveMediaRef(mediaRef);
+
+    if (!ids) {
+      throw new BadRequestException('Invalid media reference');
+    }
+
+    return ids;
   }
 
   private normalizeStrings(values: string[] | undefined): string[] {

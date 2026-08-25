@@ -5,7 +5,18 @@ import { MEDIA_ENGINE, MediaService } from './media.service';
 async function createMediaEngine() {
   const [
     { MediaEngine },
-    { aniListProvider, cinemetaProvider, kinobdProvider, shikimoriProvider, tvMazeProvider },
+    {
+      aniLibertyStreamingProvider,
+      aniListProvider,
+      cinemetaProvider,
+      ddbbStreamingProvider,
+      kinobdProvider,
+      kinobdStreamingProvider,
+      shikimoriProvider,
+      tvMazeProvider,
+      veoVeoStreamingProvider,
+      videoHubStreamingProvider,
+    },
   ] = await Promise.all([import('@media-engine/core'), import('@media-engine/providers')]);
 
   return new MediaEngine({
@@ -15,6 +26,13 @@ async function createMediaEngine() {
       shikimoriProvider(),
       aniListProvider(),
       tvMazeProvider(),
+    ],
+    streamingProviders: [
+      kinobdStreamingProvider({ playerValidationLimit: 0 }),
+      ddbbStreamingProvider(),
+      aniLibertyStreamingProvider(),
+      veoVeoStreamingProvider(),
+      videoHubStreamingProvider(),
     ],
   });
 }
