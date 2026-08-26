@@ -13,6 +13,7 @@ import { MediaSearchQueryDto } from './dto/media-search-query.dto';
 import { MediaAvailabilityDto } from './dto/media-availability.dto';
 import type { MediaDetailsResponseDto } from './dto/media-details-response.dto';
 import type { MediaSummaryDto } from './dto/media-summary.dto';
+import { HomeFeedDto } from './dto/home-feed.dto';
 
 @Controller('media')
 export class MediaController {
@@ -21,6 +22,11 @@ export class MediaController {
   @Get('search')
   search(@Query() query: MediaSearchQueryDto): Promise<MediaSummaryDto[]> {
     return this.mediaService.searchByTitle(query.query);
+  }
+
+  @Get('home')
+  getHome(): HomeFeedDto {
+    return this.mediaService.getHomeFeed();
   }
 
   @Get(':mediaRef')

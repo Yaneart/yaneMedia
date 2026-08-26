@@ -1,7 +1,31 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import type { MediaAvailabilityDto } from '../../src/media/dto/media-availability.dto';
+import type { HomeFeedDto } from '../../src/media/dto/home-feed.dto';
 import { MediaController } from '../../src/media/media.controller';
 import type { MediaService } from '../../src/media/media.service';
+
+describe('MediaController home feed', () => {
+  it('returns the home feed produced by the service', () => {
+    const homeFeed: HomeFeedDto = {
+      featured: {
+        mediaRef: 'imdb:tt15239678',
+        type: 'movie',
+        title: 'Dune: Part Two',
+        genres: ['Science fiction'],
+      },
+      featuredExpiresAt: '2026-08-26T11:00:00.000Z',
+      continueWatching: [],
+      collections: [],
+    };
+    const getHomeFeed = jest.fn().mockReturnValue(homeFeed) as jest.MockedFunction<
+      MediaService['getHomeFeed']
+    >;
+    const controller = new MediaController({ getHomeFeed } as unknown as MediaService);
+
+    expect(controller.getHome()).toBe(homeFeed);
+    expect(getHomeFeed).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe('MediaController availability', () => {
   const availability: MediaAvailabilityDto = {
