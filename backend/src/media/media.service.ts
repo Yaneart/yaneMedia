@@ -11,7 +11,12 @@ import type {
 import type { MediaArtworkDto, MediaRatingDto, MediaSummaryDto } from './dto/media-summary.dto';
 import type { MediaDetailsDto, MediaEpisodeDto, MediaSeasonDto } from './dto/media-details.dto';
 import type { MediaAvailabilityDto, MediaSourceEpisodeRefDto } from './dto/media-availability.dto';
-import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { createMediaRef, resolveMediaRef } from './media-ref';
 import { mapMediaAvailability, selectMediaAvailabilityEpisode } from './media-availability.mapper';
 
@@ -22,7 +27,7 @@ export class MediaService {
   constructor(@Inject(MEDIA_ENGINE) private readonly mediaEngine: MediaEngine) {}
 
   async searchByTitle(title: string): Promise<MediaSummaryDto[]> {
-    const response = await this.mediaEngine.search({ title });
+    const response = await this.runMediaEngine(() => this.mediaEngine.search({ title }));
 
     return response.results.flatMap(({ item }) => {
       const summary = this.toMediaSummary(item);
@@ -37,7 +42,7 @@ export class MediaService {
   }> {
     const ids = this.resolveMediaRefOrThrow(mediaRef);
 
-    const response = await this.mediaEngine.getDetails({ ids });
+    const response = await this.runMediaEngine(() => this.mediaEngine.getDetails({ ids }));
 
     return {
       details: response.details ? this.toMediaDetails(mediaRef, response.details) : null,
@@ -51,23 +56,25 @@ export class MediaService {
     episodeSelection: MediaSourceEpisodeRefDto = {},
   ): Promise<MediaAvailabilityDto | null> {
     const ids = this.resolveMediaRefOrThrow(mediaRef);
-    const { details } = await this.mediaEngine.getDetails({ ids });
+    const { details } = await this.runMediaEngine(() => this.mediaEngine.getDetails({ ids }));
 
     if (!details) {
       return null;
     }
 
-    const availability = await this.mediaEngine.getAvailability(
-      {
-        type: details.type,
-        ids: {
-          ...(details.ids ?? {}),
-          ...ids,
+    const availability = await this.runMediaEngine(() =>
+      this.mediaEngine.getAvailability(
+        {
+          type: details.type,
+          ids: {
+            ...(details.ids ?? {}),
+            ...ids,
+          },
+          title: details.originalTitle?.trim() || details.title,
+          year: details.year,
         },
-        title: details.originalTitle?.trim() || details.title,
-        year: details.year,
-      },
-      { playbackUserAgent },
+        { playbackUserAgent },
+      ),
     );
 
     const mappedAvailability = mapMediaAvailability(availability);
@@ -211,6 +218,27 @@ export class MediaService {
     }
 
     return ids;
+  }
+
+  private async runMediaEngine<T>(operation: () => Promise<T>): Promise<T> {
+    try {
+      return await operation();
+    } catch (error) {
+      if (this.isMediaEngineProviderError(error)) {
+        throw new ServiceUnavailableException('Media providers are temporarily unavailable');
+      }
+
+      throw error;
+    }
+  }
+
+  private isMediaEngineProviderError(error: unknown): error is Error & { code: 'PROVIDER_ERROR' } {
+    return (
+      error instanceof Error &&
+      error.name === 'MediaEngineError' &&
+      'code' in error &&
+      error.code === 'PROVIDER_ERROR'
+    );
   }
 
   private normalizeStrings(values: string[] | undefined): string[] {

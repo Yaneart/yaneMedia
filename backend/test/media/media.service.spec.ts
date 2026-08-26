@@ -1,7 +1,23 @@
 import type { MediaEngine } from '@media-engine/core';
+import { ServiceUnavailableException } from '@nestjs/common';
 import { MediaService } from '../../src/media/media.service';
 
 describe('MediaService', () => {
+  const createProviderFailure = () =>
+    Object.assign(new Error('All providers failed'), {
+      name: 'MediaEngineError',
+      code: 'PROVIDER_ERROR' as const,
+    });
+
+  const expectServiceUnavailable = async (
+    mediaEngine: Partial<MediaEngine>,
+    invoke: (service: MediaService) => Promise<unknown>,
+  ) => {
+    const service = new MediaService(mediaEngine as MediaEngine);
+
+    await expect(invoke(service)).rejects.toBeInstanceOf(ServiceUnavailableException);
+  };
+
   it('uses an anime-native reference for anime search results', async () => {
     const mediaEngine = {
       search: jest.fn().mockResolvedValue({
@@ -177,5 +193,47 @@ describe('MediaService', () => {
     );
     expect(getDetails).not.toHaveBeenCalled();
     expect(getAvailability).not.toHaveBeenCalled();
+  });
+
+  it('maps a complete provider failure from every engine call to service unavailable', async () => {
+    await expectServiceUnavailable(
+      { search: jest.fn().mockRejectedValue(createProviderFailure()) },
+      (service) => service.searchByTitle('Interstellar'),
+    );
+
+    await expectServiceUnavailable(
+      { getDetails: jest.fn().mockRejectedValue(createProviderFailure()) },
+      (service) => service.getDetailsByRef('imdb:tt0816692'),
+    );
+
+    await expectServiceUnavailable(
+      { getDetails: jest.fn().mockRejectedValue(createProviderFailure()) },
+      (service) => service.getAvailabilityByRef('imdb:tt0816692'),
+    );
+
+    await expectServiceUnavailable(
+      {
+        getDetails: jest.fn().mockResolvedValue({
+          details: {
+            id: 'interstellar',
+            type: 'movie',
+            title: 'Interstellar',
+            ids: { imdb: 'tt0816692' },
+          },
+        }),
+        getAvailability: jest.fn().mockRejectedValue(createProviderFailure()),
+      },
+      (service) => service.getAvailabilityByRef('imdb:tt0816692'),
+    );
+  });
+
+  it('preserves unexpected engine errors', async () => {
+    const unexpectedError = new Error('Unexpected engine failure');
+    const mediaEngine = {
+      search: jest.fn().mockRejectedValue(unexpectedError),
+    } as unknown as MediaEngine;
+    const service = new MediaService(mediaEngine);
+
+    await expect(service.searchByTitle('Interstellar')).rejects.toBe(unexpectedError);
   });
 });
