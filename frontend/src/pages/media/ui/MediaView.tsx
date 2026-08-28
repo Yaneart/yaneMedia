@@ -6,7 +6,7 @@ import { usePlaybackSession } from '@/features/playback-session';
 import { SeasonSelector } from '@/features/season-selection';
 import { SourceSelector } from '@/features/source-selection';
 import { MediaCast } from '@/widgets/mdeia-cast';
-import { MediaInfo } from '@/widgets/media-info';
+import { MediaFacts, MediaInfo } from '@/widgets/media-info';
 import { MediaPlayer, type MediaPlayerStatus } from '@/widgets/media-player';
 import { useEffect, useState } from 'react';
 
@@ -54,6 +54,7 @@ export function MediaView({ media }: MediaViewProps) {
   );
 
   const [playerStatus, setPlayerStatus] = useState<MediaPlayerStatus>('ready');
+  const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
 
   const selectedSource = demoMediaSources.find((source) => source.sourceRef === selectedSourceRef);
   const selectedSeason =
@@ -148,47 +149,59 @@ export function MediaView({ media }: MediaViewProps) {
   }, [isPlayerStarted, playerStatus]);
 
   return (
-    <div className="grid items-start gap-8 2xl:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)] 2xl:gap-10">
-      <div className="order-2 overflow-hidden rounded-card border border-context-border bg-surface shadow-surface 2xl:order-none 2xl:col-start-2 2xl:row-start-1">
-        <div className="flex flex-col gap-3 bg-surface-elevated px-4 py-3 sm:px-5 lg:flex-row lg:items-center lg:gap-8">
-          <SourceSelector
-            sources={demoMediaSources}
-            selectedSourceRef={selectedSourceRef}
-            onSourceChange={selectSource}
-            variant="inline"
-          />
+    <div className="grid items-start gap-8 xl:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)] xl:gap-10">
+      <div className="order-2 space-y-8 xl:order-none xl:col-start-2 xl:row-start-1">
+        <div className="overflow-hidden rounded-card border border-context-border bg-surface shadow-surface">
+          <div className="flex flex-col gap-3 bg-surface-elevated px-4 py-3 sm:px-5 lg:flex-row lg:items-center lg:gap-8">
+            <SourceSelector
+              sources={demoMediaSources}
+              selectedSourceRef={selectedSourceRef}
+              onSourceChange={selectSource}
+              variant="inline"
+            />
 
-          {media.type !== 'movie' && (
-            <div className="grid min-w-0 grid-cols-2 gap-3 lg:flex lg:items-center lg:gap-5">
-              {media.type === 'series' && (
-                <SeasonSelector
-                  seasons={media.seasons}
-                  selectedSeasonNumber={selectedSeasonNumber}
-                  onSeasonChange={selectSeason}
+            {media.type !== 'movie' && (
+              <div className="grid min-w-0 grid-cols-2 gap-3 lg:flex lg:items-center lg:gap-5">
+                {media.type === 'series' && (
+                  <SeasonSelector
+                    seasons={media.seasons}
+                    selectedSeasonNumber={selectedSeasonNumber}
+                    onSeasonChange={selectSeason}
+                    variant="inline"
+                  />
+                )}
+
+                <EpisodeSelector
+                  episodes={episodes}
+                  selectedEpisodeNumber={selectedEpisodeNumber}
+                  onEpisodeChange={selectEpisode}
                   variant="inline"
                 />
-              )}
+              </div>
+            )}
+          </div>
 
-              <EpisodeSelector
-                episodes={episodes}
-                selectedEpisodeNumber={selectedEpisodeNumber}
-                onEpisodeChange={selectEpisode}
-                variant="inline"
-              />
-            </div>
-          )}
+          <MediaPlayer
+            mediaTitle={media.title}
+            backdrop={media.backdrop}
+            source={selectedSource}
+            isStarted={isPlayerStarted}
+            status={playerStatus}
+            onStart={loadPlayer}
+            onRetry={loadPlayer}
+            embedded
+          />
         </div>
 
-        <MediaPlayer
-          mediaTitle={media.title}
-          backdrop={media.backdrop}
-          source={selectedSource}
-          isStarted={isPlayerStarted}
-          status={playerStatus}
-          onStart={loadPlayer}
-          onRetry={loadPlayer}
-          embedded
-        />
+        {media.description && (
+          <section
+            aria-label="Полное описание"
+            className="hidden rounded-card border border-context-border bg-surface-elevated p-6 xl:block 2xl:hidden"
+          >
+            <h2 className="text-heading text-text-primary">Описание</h2>
+            <p className="mt-3 text-body text-text-secondary">{media.description}</p>
+          </section>
+        )}
       </div>
 
       <MediaInfo
@@ -209,6 +222,32 @@ export function MediaView({ media }: MediaViewProps) {
         }
       />
 
+      <section className="order-3 space-y-5 xl:hidden">
+        {media.description && (
+          <div>
+            <h2 className="text-heading text-text-primary">Описание</h2>
+            <p
+              className={[
+                'mt-3 text-body text-text-secondary',
+                isDescriptionExpanded ? '' : 'line-clamp-4',
+              ].join(' ')}
+            >
+              {media.description}
+            </p>
+            <button
+              type="button"
+              className="mt-2 text-sm font-semibold text-text-primary transition-colors hover:text-watermark"
+              onClick={() => setIsDescriptionExpanded((current) => !current)}
+              aria-expanded={isDescriptionExpanded}
+            >
+              {isDescriptionExpanded ? 'Свернуть' : 'Подробнее'}
+            </button>
+          </div>
+        )}
+
+        <MediaFacts media={media} className="grid gap-2 text-caption" />
+      </section>
+
       {media.description && (
         <section
           aria-label="Полное описание"
@@ -219,7 +258,7 @@ export function MediaView({ media }: MediaViewProps) {
         </section>
       )}
 
-      <MediaCast persons={media.persons} className="order-4 2xl:col-span-2" />
+      <MediaCast persons={media.persons} className="order-4 xl:col-span-2" />
     </div>
   );
 }

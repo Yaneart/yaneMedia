@@ -58,7 +58,7 @@ export function ThemeToggle() {
         aria-hidden="true"
         className={[
           'pointer-events-none absolute inset-y-1 left-1 w-[calc((100%-0.5rem)/3)]',
-          'rounded-lg bg-surface-elevated shadow-sm',
+          'rounded-lg bg-navigation-active shadow-sm',
           'transition-transform duration-250 ease-out motion-reduce:transition-none',
           indicatorPositionClasses[themeMode],
         ].join(' ')}
@@ -79,8 +79,11 @@ export function ThemeToggle() {
               'relative z-10 flex items-center justify-center rounded-lg',
               'transition-[color,transform] duration-200 ease-out',
               'active:scale-[0.94] active:duration-75',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/20',
               'motion-reduce:transform-none motion-reduce:transition-none',
-              isActive ? 'text-text-primary' : 'text-text-secondary hover:text-text-primary',
+              isActive
+                ? 'text-navigation-active-text'
+                : 'text-text-secondary hover:text-text-primary',
             ].join(' ')}
             onClick={() => setThemeMode(option.value)}
           >

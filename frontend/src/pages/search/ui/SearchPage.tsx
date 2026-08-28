@@ -104,13 +104,11 @@ export function SearchPage() {
               value={query}
               maxLength={100}
               placeholder="Введите название"
-              className="min-h-12"
               onChange={(event) => setQuery(event.currentTarget.value)}
             />
 
             <Button
               type="submit"
-              size="large"
               disabled={!query.trim()}
               className="w-full shrink-0 sm:w-auto sm:min-w-28"
             >

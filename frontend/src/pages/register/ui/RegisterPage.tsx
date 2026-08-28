@@ -102,6 +102,7 @@ export function RegisterPage({ homePath, loginPath }: RegisterPageProps) {
       homePath={homePath}
       title="Регистрация"
       description="Создайте аккаунт yaneMedia."
+      compactMobile
       footer={
         <p>
           Уже есть аккаунт?{' '}
@@ -139,7 +140,6 @@ export function RegisterPage({ homePath, loginPath }: RegisterPageProps) {
           autoComplete="email"
           placeholder="name@example.com"
           error={formErrors.email}
-          reserveMessageSpace
           required
           onChange={(event) => handleFieldChange('email', event)}
         />
@@ -164,7 +164,6 @@ export function RegisterPage({ homePath, loginPath }: RegisterPageProps) {
           autoComplete="new-password"
           placeholder="Введите пароль ещё раз"
           error={formErrors.passwordConfirmation}
-          reserveMessageSpace
           required
           onChange={(event) => handleFieldChange('passwordConfirmation', event)}
         />

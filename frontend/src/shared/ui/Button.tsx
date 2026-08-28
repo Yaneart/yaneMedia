@@ -13,7 +13,7 @@ export type ButtonProps = ComponentPropsWithRef<'button'> & {
 const variantClasses: Record<ButtonVariant, string> = {
   primary: 'bg-action text-action-text hover:opacity-90',
   secondary:
-    'border border-border bg-control-secondary text-text-primary hover:bg-interactive-hover',
+    'border border-border bg-control text-text-primary hover:border-text-secondary hover:bg-control-hover',
   ghost: 'bg-transparent text-text-secondary hover:bg-interactive-hover hover:text-text-primary',
   bare: '',
 };
@@ -49,6 +49,7 @@ export function Button({
         'inline-flex items-center justify-center gap-2 rounded-control font-semibold',
         'transition-[background-color,border-color,color,opacity,transform,box-shadow]',
         'duration-200 ease-out active:scale-[0.985] active:duration-75',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/20',
         'motion-reduce:transform-none motion-reduce:transition-none',
         'disabled:pointer-events-none disabled:opacity-50',
         variantClasses[variant],

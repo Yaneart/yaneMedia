@@ -1,6 +1,7 @@
 import { demoMediaCatalog, MediaCard, type MediaRef } from '@/entities/media';
 import { useFavorites } from '@/features/favorite';
-import { Button, EmptyState, MediaGrid } from '@/shared';
+import { Button, FavoriteIcon, MediaGrid, SearchIcon } from '@/shared';
+import { LibraryEmptyState, LibraryPageHeader } from '@/widgets/library-page';
 import { useNavigate } from 'react-router';
 
 export function FavoritesPage() {
@@ -15,10 +16,19 @@ export function FavoritesPage() {
 
   return (
     <section>
-      <div className="mb-6">
-        <h1 className="text-title text-text-primary">Избранное</h1>
-        <p className="mt-2 text-body text-text-secondary">Сохранённые фильмы, сериалы и аниме</p>
-      </div>
+      <LibraryPageHeader
+        eyebrow="Личная медиатека"
+        title="Избранное"
+        description="Сохранённые фильмы, сериалы и аниме"
+        icon={<FavoriteIcon className="size-6" />}
+        actions={
+          favoriteMedia.length > 0 ? (
+            <p className="w-fit shrink-0 rounded-full bg-watermark/10 px-3 py-1.5 text-caption text-text-secondary">
+              Сохранено: {favoriteMedia.length}
+            </p>
+          ) : undefined
+        }
+      />
 
       {favoriteMedia.length > 0 ? (
         <MediaGrid>
@@ -33,15 +43,17 @@ export function FavoritesPage() {
           ))}
         </MediaGrid>
       ) : (
-        <EmptyState
-          title="В избранном пока ничего нет"
-          description="Добавляйте произведения из каталогов или со страницы просмотра — они появятся здесь."
+        <LibraryEmptyState
+          eyebrow="Коллекция ждёт"
+          title="Здесь появятся ваши любимые истории"
+          description="Добавляйте произведения из каталогов или со страницы просмотра — всё выбранное будет собрано в одном месте."
+          icon={<FavoriteIcon className="size-7" />}
           action={
-            <Button variant="secondary" onClick={() => navigate('/movies')}>
-              Перейти к фильмам
+            <Button className="rounded-pill" onClick={() => navigate('/search')}>
+              <SearchIcon className="size-4" />
+              Найти что посмотреть
             </Button>
           }
-          className="min-h-80 rounded-card border border-context-border bg-surface-elevated"
         />
       )}
     </section>

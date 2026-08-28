@@ -9,6 +9,7 @@ export type AuthFormLayoutProps = {
   description?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
+  compactMobile?: boolean;
 };
 
 const authBackgroundMarks = [
@@ -63,6 +64,7 @@ export function AuthFormLayout({
   description,
   children,
   footer,
+  compactMobile = false,
 }: AuthFormLayoutProps) {
   const titleId = useId();
 
@@ -80,7 +82,12 @@ export function AuthFormLayout({
         ))}
       </div>
       <header className="relative z-20 shrink-0 pt-[env(safe-area-inset-top)]">
-        <div className="flex min-h-20 items-center justify-between gap-4 px-page">
+        <div
+          className={[
+            'flex items-center justify-between gap-4 px-page',
+            compactMobile ? 'min-h-16 sm:min-h-20' : 'min-h-20',
+          ].join(' ')}
+        >
           <Link
             to={homePath}
             aria-label="Перейти на главную"
@@ -98,7 +105,14 @@ export function AuthFormLayout({
         </div>
       </header>
 
-      <main className="relative z-10 flex min-h-0 flex-1 overflow-y-auto px-page py-8 sm:py-10">
+      <main
+        className={[
+          'relative z-10 flex min-h-0 flex-1 overflow-y-auto px-page',
+          compactMobile
+            ? 'pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:py-10'
+            : 'py-8 sm:py-10',
+        ].join(' ')}
+      >
         <div
           className={[
             'm-auto grid w-full max-w-5xl overflow-hidden',
@@ -142,10 +156,13 @@ export function AuthFormLayout({
 
           <section
             aria-labelledby={titleId}
-            className="flex items-center px-5 py-8 sm:px-10 sm:py-12 lg:px-12"
+            className={[
+              'flex items-center px-5 sm:px-10 sm:py-12 lg:px-12',
+              compactMobile ? 'py-6' : 'py-8',
+            ].join(' ')}
           >
             <div className="mx-auto w-full max-w-sm">
-              <header className="mb-8">
+              <header className={compactMobile ? 'mb-6 sm:mb-8' : 'mb-8'}>
                 <h1 id={titleId} className="text-title text-text-primary">
                   {title}
                 </h1>
@@ -158,7 +175,12 @@ export function AuthFormLayout({
               {children}
 
               {footer && (
-                <div className="mt-8 border-t border-border pt-6 text-center text-caption text-text-secondary">
+                <div
+                  className={[
+                    'border-t border-border text-center text-caption text-text-secondary',
+                    compactMobile ? 'mt-6 pt-5 sm:mt-8 sm:pt-6' : 'mt-8 pt-6',
+                  ].join(' ')}
+                >
                   {footer}
                 </div>
               )}

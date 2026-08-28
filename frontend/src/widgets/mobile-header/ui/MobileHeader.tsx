@@ -63,9 +63,10 @@ export function MobileHeader({
               'size-10 shrink-0 rounded-control border bg-background',
               'transition-[background-color,border-color,color,transform] duration-200 ease-out',
               'hover:bg-interactive-hover active:scale-[0.97] active:duration-75',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/20',
               'motion-reduce:transform-none motion-reduce:transition-none',
               isLibraryRoute
-                ? 'border-watermark/70 bg-watermark/15 text-watermark'
+                ? 'border-watermark/70 bg-navigation-active text-navigation-active-text'
                 : 'border-navigation-border text-text-primary',
             ].join(' ')}
           >
@@ -81,7 +82,7 @@ export function MobileHeader({
                       'transition-[background-color,border-color,color] duration-200 ease-out',
                       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-watermark/60',
                       isActive
-                        ? 'border-watermark/70 bg-watermark/15 text-watermark'
+                        ? 'border-watermark/70 bg-navigation-active text-navigation-active-text'
                         : 'border-border bg-background text-text-primary hover:bg-interactive-hover',
                     ].join(' ')
                   }
@@ -104,7 +105,7 @@ export function MobileHeader({
                       'transition-[background-color,border-color,color] duration-200 ease-out',
                       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-watermark/60',
                       isActive
-                        ? 'border-watermark/70 bg-watermark/15 text-watermark'
+                        ? 'border-watermark/70 bg-navigation-active text-navigation-active-text'
                         : 'border-border bg-background text-text-primary hover:bg-interactive-hover',
                     ].join(' ')
                   }
@@ -124,10 +125,11 @@ export function MobileHeader({
             to={profilePath}
             aria-label="Войти"
             className={[
-              'flex min-h-10 items-center justify-center gap-2 rounded-control',
-              'border border-navigation-border bg-background px-3 text-caption font-semibold text-text-primary',
+              'flex size-10 shrink-0 items-center justify-center rounded-control',
+              'border border-navigation-border bg-background text-text-primary',
               'transition-[background-color,border-color,color,transform] duration-200 ease-out',
               'hover:bg-interactive-hover active:scale-[0.97] active:duration-75',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/20',
               'motion-reduce:transform-none motion-reduce:transition-none',
             ].join(' ')}
           >

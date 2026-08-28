@@ -64,7 +64,7 @@ export { Popover } from './ui/Popover';
 export type { PopoverAlign, PopoverProps } from './ui/Popover';
 
 export { ContentRow } from './ui/ContentRow';
-export type { ContentRowProps } from './ui/ContentRow';
+export type { ContentRowProps, ContentRowVariant } from './ui/ContentRow';
 
 export { MediaGrid } from './ui/MediaGrid';
 export type { MediaGridProps } from './ui/MediaGrid';

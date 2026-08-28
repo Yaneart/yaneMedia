@@ -4,19 +4,22 @@ import { demoFeaturedCandidates, demoHomeFeed } from '../model/homeFeed.mock';
 import { useHourlyFeatured } from '../model/useHourlyFeatured';
 import { FeaturedMedia } from '@/widgets/featured-media';
 import { ContinueWatchingCard } from '@/widgets/continue-watching-card';
-import { ContentRow, SearchInput } from '@/shared';
+import { ContentRow } from '@/shared';
 import { LandscapeMediaCard, type MediaRef } from '@/entities/media';
 
 export function HomePage() {
   const navigate = useNavigate();
   const featured = useHourlyFeatured(demoFeaturedCandidates) ?? demoHomeFeed.featured;
+  const continueWatching = demoHomeFeed.continueWatching.filter(
+    (item) => item.media.mediaRef !== featured.mediaRef,
+  );
 
   const openMedia = (mediaRef: MediaRef) => {
     navigate(`/media/${encodeURIComponent(mediaRef)}`);
   };
   return (
-    <div className="-m-page">
-      <section className="relative isolate overflow-hidden bg-elevated">
+    <div className="-m-page bg-surface">
+      <section className="relative isolate min-h-[500px] overflow-hidden bg-elevated md:min-h-[clamp(32rem,62vh,43rem)]">
         {featured.backdrop && (
           <img
             key={featured.mediaRef}
@@ -25,44 +28,32 @@ export function HomePage() {
             width={featured.backdrop.width}
             height={featured.backdrop.height}
             className={[
-              'absolute inset-x-0 top-0 -z-20 h-[420px] w-full object-cover',
-              'object-[58%_center] md:inset-0 md:h-full md:object-center',
+              'absolute inset-0 -z-20 size-full object-cover',
+              'object-[61%_center] md:object-center',
             ].join(' ')}
           />
         )}
 
-        <div className="home-hero-overlay absolute inset-x-0 top-0 -z-10 h-[420px] md:inset-0 md:h-full" />
+        <div className="home-hero-overlay absolute inset-0 -z-10" />
         <div
           className={[
-            'absolute inset-x-0 top-[300px] -z-10 h-[120px]',
-            'bg-linear-to-b from-transparent from-0% via-surface/65 via-60% to-surface to-100%',
-            'md:top-auto md:bottom-0 md:h-64',
+            'absolute inset-x-0 bottom-0 -z-10 h-28',
+            'bg-linear-to-b from-transparent via-surface/45 to-surface',
+            'md:h-36',
           ].join(' ')}
         />
 
-        <header className="relative z-10 hidden px-page pt-8 md:block">
-          <h1 className="text-title font-extrabold text-hero-text">Добрый вечер</h1>
-
-          <div className="mt-4 w-md">
-            <SearchInput
-              aria-label="Поиск фильмов, сериалов и аниме"
-              placeholder="Что будем смотреть?"
-              variant="hero"
-            />
-          </div>
-        </header>
-
-        <div className="relative md:mt-12 md:px-page">
+        <div className="relative flex min-h-[500px] items-end px-5 pt-28 pb-14 md:min-h-[clamp(32rem,62vh,43rem)] md:px-page md:pt-32 md:pb-20">
           <FeaturedMedia media={featured} onOpen={() => openMedia(featured.mediaRef)} />
         </div>
+      </section>
 
-        <section className="relative px-5 pb-8 md:mt-10 md:px-page md:pb-page">
-          <h2 className="mb-3 text-heading font-semibold text-text-primary md:text-hero-text">
-            Продолжить просмотр
-          </h2>
+      <div className="space-y-10 px-page py-8 md:space-y-12 md:py-10">
+        <section>
+          <h2 className="mb-4 text-heading font-semibold text-text-primary">Продолжить просмотр</h2>
 
-          <ContentRow>
-            {demoHomeFeed.continueWatching.map((item) => (
+          <ContentRow variant="continuation">
+            {continueWatching.map((item) => (
               <ContinueWatchingCard
                 key={item.media.mediaRef}
                 media={item.media}
@@ -72,14 +63,12 @@ export function HomePage() {
             ))}
           </ContentRow>
         </section>
-      </section>
 
-      <div className="space-y-6 px-page pt-6 pb-page">
-        {demoHomeFeed.collections.slice(0, 1).map((collection) => (
+        {demoHomeFeed.collections.map((collection) => (
           <section key={collection.id}>
-            <h2 className="mb-3 text-heading font-semibold">{collection.title}</h2>
+            <h2 className="mb-4 text-heading font-semibold">{collection.title}</h2>
 
-            <ContentRow>
+            <ContentRow variant="collection">
               {collection.items.map((media) => (
                 <LandscapeMediaCard
                   key={media.mediaRef}

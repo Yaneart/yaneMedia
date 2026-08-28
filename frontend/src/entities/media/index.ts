@@ -36,3 +36,6 @@ export type { LandscapeMediaCardProps } from './ui/LandscapeMediaCard';
 
 export { MediaPosterFallback } from './ui/MediaPosterFallback';
 export type { MediaPosterFallbackProps } from './ui/MediaPosterFallback';
+
+export { MediaLandscapeFallback } from './ui/MediaLandscapeFallback';
+export type { MediaLandscapeFallbackProps } from './ui/MediaLandscapeFallback';

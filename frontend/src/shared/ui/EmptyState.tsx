@@ -4,12 +4,14 @@ export type EmptyStateProps = Omit<ComponentPropsWithRef<'div'>, 'children' | 't
   title: string;
   description?: string;
   action?: ReactNode;
+  icon?: ReactNode;
 };
 
 export function EmptyState({
   title,
   description,
   action,
+  icon,
   className = '',
   ...props
 }: EmptyStateProps) {
@@ -21,6 +23,12 @@ export function EmptyState({
       ].join(' ')}
       {...props}
     >
+      {icon && (
+        <div className="mb-4 flex size-12 items-center justify-center rounded-full bg-watermark/10 text-watermark">
+          {icon}
+        </div>
+      )}
+
       <p className="text-heading text-text-primary">{title}</p>
 
       {description && <p className="mt-2 max-w-lg text-body text-text-secondary">{description}</p>}

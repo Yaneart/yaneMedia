@@ -102,6 +102,8 @@
   --color-accent-text: var(--theme-accent-text);
   --color-context-border: var(--theme-context-border);
   --color-navigation-border: var(--theme-navigation-border);
+  --color-navigation-active: var(--theme-navigation-active);
+  --color-navigation-active-text: var(--theme-navigation-active-text);
   --color-watch-progress: var(--theme-watch-progress);
   --color-watch-progress-line: var(--theme-watch-progress-line);
 
@@ -147,6 +149,8 @@
   --theme-watermark-opacity: 0.085;
   --theme-context-border: rgb(49 95 189 / 22%);
   --theme-navigation-border: var(--theme-border);
+  --theme-navigation-active: var(--theme-surface-elevated);
+  --theme-navigation-active-text: var(--theme-text-primary);
   --theme-watch-progress: color-mix(
     in srgb,
     var(--watch-dock-accent, var(--theme-watermark)) 46%,
@@ -200,6 +204,12 @@
   --theme-watermark-opacity: 0.38;
   --theme-context-border: rgb(23 79 150 / 28%);
   --theme-navigation-border: rgb(23 79 150 / 40%);
+  --theme-navigation-active: color-mix(
+    in srgb,
+    var(--theme-watermark) 16%,
+    var(--theme-background)
+  );
+  --theme-navigation-active-text: var(--theme-watermark);
   --theme-watch-progress: color-mix(
     in srgb,
     var(--watch-dock-accent, var(--theme-watermark)) 28%,
@@ -244,24 +254,10 @@
 }
 
 .yane-content-scrollbar {
-  scrollbar-color: var(--theme-border) transparent;
-  scrollbar-width: thin;
+  scrollbar-width: none;
 }
 
 .yane-content-scrollbar::-webkit-scrollbar {
-  height: 6px;
-}
-
-.yane-content-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.yane-content-scrollbar::-webkit-scrollbar-thumb {
-  border-radius: var(--radius-pill);
-  background: var(--theme-border);
-}
-
-.yane-content-scrollbar::-webkit-scrollbar-button {
   display: none;
 }
 

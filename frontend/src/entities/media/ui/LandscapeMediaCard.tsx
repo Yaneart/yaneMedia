@@ -1,4 +1,5 @@
 import type { MediaSummary } from '../model/media';
+import { MediaLandscapeFallback } from './MediaLandscapeFallback';
 
 export type LandscapeMediaCardProps = {
   media: MediaSummary;
@@ -15,6 +16,7 @@ export function LandscapeMediaCard({ media, onOpen }: LandscapeMediaCardProps) {
   const metadata = [mediaTypeLabels[media.type], media.year, media.rating?.value].filter(
     (value) => value !== undefined,
   );
+  const backdrop = media.backdrop?.url.includes('placehold.co') ? undefined : media.backdrop;
 
   return (
     <button
@@ -29,12 +31,12 @@ export function LandscapeMediaCard({ media, onOpen }: LandscapeMediaCardProps) {
       ].join(' ')}
       onClick={onOpen}
     >
-      {media.backdrop && (
+      {backdrop ? (
         <img
-          src={media.backdrop.url}
+          src={backdrop.url}
           alt=""
-          width={media.backdrop.width}
-          height={media.backdrop.height}
+          width={backdrop.width}
+          height={backdrop.height}
           className={[
             'absolute inset-0 size-full object-cover',
             'transition-transform duration-300 ease-out',
@@ -42,6 +44,10 @@ export function LandscapeMediaCard({ media, onOpen }: LandscapeMediaCardProps) {
             'motion-reduce:transform-none motion-reduce:transition-none',
           ].join(' ')}
         />
+      ) : (
+        <div className="absolute inset-0 transition-transform duration-300 ease-out group-hover:scale-[1.015] motion-reduce:transform-none motion-reduce:transition-none">
+          <MediaLandscapeFallback mediaRef={media.mediaRef} />
+        </div>
       )}
 
       <div className="absolute inset-0 bg-linear-to-t from-black/95 via-black/20 to-transparent" />

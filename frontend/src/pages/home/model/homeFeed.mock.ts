@@ -35,17 +35,54 @@ export const demoHomeFeed = {
         updatedAt: '2026-08-09T19:40:00.000Z',
       },
     },
+    {
+      media: demoMedia.vinlandSaga,
+      progress: {
+        positionSeconds: 1080,
+        durationSeconds: 1440,
+        updatedAt: '2026-08-08T17:10:00.000Z',
+      },
+    },
+    {
+      media: demoMedia.featured,
+      progress: {
+        positionSeconds: 4680,
+        durationSeconds: 9960,
+        updatedAt: '2026-08-07T21:25:00.000Z',
+      },
+    },
+    {
+      media: demoMedia.shogun,
+      progress: {
+        positionSeconds: 2140,
+        durationSeconds: 3600,
+        updatedAt: '2026-08-06T18:45:00.000Z',
+      },
+    },
   ],
   collections: [
     {
       id: 'popular',
       title: 'Сейчас смотрят',
-      items: [demoMedia.frieren, demoMedia.featured, demoMedia.severance],
+      items: [
+        demoMedia.silentSphere,
+        demoMedia.horizonAshes,
+        demoMedia.quietLands,
+        demoMedia.lastSignal,
+        demoMedia.cityOnWater,
+      ],
     },
     {
       id: 'recommended',
       title: 'Вам может понравиться',
-      items: [demoMedia.oppenheimer, demoMedia.shogun, demoMedia.vinlandSaga],
+      items: [
+        demoMedia.northernArchive,
+        demoMedia.secondShore,
+        demoMedia.zeroHour,
+        demoMedia.glassGarden,
+        demoMedia.beyondIce,
+        demoMedia.redGate,
+      ],
     },
   ],
 } satisfies HomeFeed;

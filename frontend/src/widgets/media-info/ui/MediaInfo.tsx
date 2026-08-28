@@ -7,6 +7,11 @@ export type MediaInfoProps = {
   variant?: 'default' | 'watch';
 };
 
+export type MediaFactsProps = {
+  media: MediaDetails;
+  className?: string;
+};
+
 const typeLabels = {
   movie: 'Фильм',
   series: 'Сериал',
@@ -28,6 +33,37 @@ function findPeopleByRole(media: MediaDetails, role: MediaPersonRole) {
   return media.persons.filter((credit) => credit.roles.includes(role));
 }
 
+export function MediaFacts({ media, className = '' }: MediaFactsProps) {
+  const directors = findPeopleByRole(media, 'director');
+
+  return (
+    <dl className={className}>
+      {directors.length > 0 && (
+        <div className="flex min-w-0 gap-2">
+          <dt className="shrink-0 text-text-secondary">Режиссёр:</dt>
+          <dd className="text-text-primary">
+            {directors.map((director) => director.name).join(', ')}
+          </dd>
+        </div>
+      )}
+
+      {media.countries.length > 0 && (
+        <div className="flex min-w-0 gap-2">
+          <dt className="shrink-0 text-text-secondary">Страна:</dt>
+          <dd className="text-text-primary">{media.countries.join(', ')}</dd>
+        </div>
+      )}
+
+      {media.genres.length > 0 && (
+        <div className="flex min-w-0 gap-2">
+          <dt className="shrink-0 text-text-secondary">Жанры:</dt>
+          <dd className="text-text-primary">{media.genres.join(', ')}</dd>
+        </div>
+      )}
+    </dl>
+  );
+}
+
 export function MediaInfo({ media, actions, variant = 'default' }: MediaInfoProps) {
   const isWatchLayout = variant === 'watch';
   const metadata = [
@@ -42,10 +78,9 @@ export function MediaInfo({ media, actions, variant = 'default' }: MediaInfoProp
     media.rating?.value.toString(),
   ].filter((item): item is string => item !== undefined);
 
-  const directors = findPeopleByRole(media, 'director');
   const fullWidthOnMobile = media.poster
     ? isWatchLayout
-      ? 'col-span-2 2xl:col-span-1'
+      ? 'col-span-2 xl:col-span-1'
       : 'col-span-2 md:col-span-1 md:col-start-2'
     : '';
 
@@ -54,7 +89,7 @@ export function MediaInfo({ media, actions, variant = 'default' }: MediaInfoProp
       className={[
         'grid gap-x-4 sm:gap-x-6 md:gap-x-8',
         isWatchLayout
-          ? 'max-w-none grid-cols-[6rem_minmax(0,1fr)] gap-y-4 min-[360px]:grid-cols-[7rem_minmax(0,1fr)] sm:grid-cols-[9rem_minmax(0,1fr)] 2xl:grid-cols-1'
+          ? 'max-w-none grid-cols-[6rem_minmax(0,1fr)] gap-y-4 min-[360px]:grid-cols-[7rem_minmax(0,1fr)] sm:grid-cols-[9rem_minmax(0,1fr)] xl:grid-cols-1'
           : 'max-w-6xl gap-y-5',
         !isWatchLayout && media.poster
           ? 'grid-cols-[6rem_minmax(0,1fr)] min-[360px]:grid-cols-[7rem_minmax(0,1fr)] sm:grid-cols-[9rem_minmax(0,1fr)] md:grid-cols-[minmax(180px,240px)_minmax(0,1fr)]'
@@ -64,7 +99,7 @@ export function MediaInfo({ media, actions, variant = 'default' }: MediaInfoProp
       ].join(' ')}
     >
       {isWatchLayout && (
-        <div className="relative aspect-2/3 w-full overflow-hidden rounded-overlay bg-elevated shadow-surface 2xl:rounded-card">
+        <div className="relative aspect-2/3 w-full overflow-hidden rounded-overlay bg-elevated shadow-surface xl:rounded-card">
           <MediaPosterFallback mediaRef={media.mediaRef} title={media.title} type={media.type} />
 
           {media.poster && (
@@ -99,7 +134,7 @@ export function MediaInfo({ media, actions, variant = 'default' }: MediaInfoProp
         <div
           className={[
             'order-3 mt-3 items-center gap-x-2 text-caption text-text-secondary',
-            isWatchLayout ? 'flex 2xl:hidden' : 'flex md:hidden',
+            isWatchLayout ? 'flex xl:hidden' : 'flex md:hidden',
           ].join(' ')}
         >
           {mobileMetadata.map((item, index) => (
@@ -117,7 +152,7 @@ export function MediaInfo({ media, actions, variant = 'default' }: MediaInfoProp
         <div
           className={[
             'order-1 flex-wrap items-center gap-x-2 gap-y-1 text-caption text-text-secondary',
-            isWatchLayout ? 'hidden 2xl:flex' : 'hidden md:flex',
+            isWatchLayout ? 'hidden xl:flex' : 'hidden md:flex',
           ].join(' ')}
         >
           {metadata.map((item, index) => (
@@ -135,7 +170,7 @@ export function MediaInfo({ media, actions, variant = 'default' }: MediaInfoProp
         <h1
           className={[
             'order-1 text-heading text-text-primary md:order-2 md:mt-3',
-            isWatchLayout ? '2xl:text-title' : 'md:text-title',
+            isWatchLayout ? 'xl:text-title' : 'md:text-title',
           ].join(' ')}
         >
           {media.title}
@@ -148,57 +183,30 @@ export function MediaInfo({ media, actions, variant = 'default' }: MediaInfoProp
         )}
       </div>
 
-      {media.description && (
-        <p
-          className={[
-            fullWidthOnMobile,
-            'max-w-3xl text-body text-text-secondary',
-            isWatchLayout ? '2xl:hidden' : '',
-          ].join(' ')}
-        >
+      {media.description && !isWatchLayout && (
+        <p className={[fullWidthOnMobile, 'max-w-3xl text-body text-text-secondary'].join(' ')}>
           {media.description}
         </p>
       )}
 
-      <div
-        className={[
-          fullWidthOnMobile,
-          'flex flex-col items-start gap-5',
-          isWatchLayout ? '' : 'md:flex-row md:items-center md:gap-8',
-        ].join(' ')}
-      >
-        {actions && <div className="flex w-full flex-wrap gap-3">{actions}</div>}
-
-        <dl
-          className={[
-            'text-caption',
-            isWatchLayout ? 'grid gap-2' : 'flex flex-wrap gap-x-8 gap-y-2',
-          ].join(' ')}
+      {isWatchLayout ? (
+        <>
+          {actions && (
+            <div className={`${fullWidthOnMobile} flex w-full flex-wrap gap-3`}>{actions}</div>
+          )}
+          <MediaFacts
+            media={media}
+            className={`${fullWidthOnMobile} hidden gap-2 text-caption xl:grid`}
+          />
+        </>
+      ) : (
+        <div
+          className={`${fullWidthOnMobile} flex flex-col items-start gap-5 md:flex-row md:items-center md:gap-8`}
         >
-          {directors.length > 0 && (
-            <div className="flex min-w-0 gap-2">
-              <dt className="shrink-0 text-text-secondary">Режиссёр:</dt>
-              <dd className="text-text-primary">
-                {directors.map((director) => director.name).join(', ')}
-              </dd>
-            </div>
-          )}
-
-          {media.countries.length > 0 && (
-            <div className="flex min-w-0 gap-2">
-              <dt className="shrink-0 text-text-secondary">Страна:</dt>
-              <dd className="text-text-primary">{media.countries.join(', ')}</dd>
-            </div>
-          )}
-
-          {media.genres.length > 0 && (
-            <div className="flex min-w-0 gap-2">
-              <dt className="shrink-0 text-text-secondary">Жанры:</dt>
-              <dd className="text-text-primary">{media.genres.join(', ')}</dd>
-            </div>
-          )}
-        </dl>
-      </div>
+          {actions && <div className="flex w-full flex-wrap gap-3">{actions}</div>}
+          <MediaFacts media={media} className="flex flex-wrap gap-x-8 gap-y-2 text-caption" />
+        </div>
+      )}
     </section>
   );
 }
