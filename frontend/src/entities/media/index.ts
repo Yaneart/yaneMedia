@@ -26,6 +26,8 @@ export {
   demoShogunDetails,
 } from './model/media.mock';
 
+export { searchMedia } from './api/searchMedia';
+
 export { MediaCard } from './ui/MediaCard';
 export type { MediaCardProps } from './ui/MediaCard';
 
