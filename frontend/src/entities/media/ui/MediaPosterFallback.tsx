@@ -109,7 +109,7 @@ export function MediaPosterFallback({ mediaRef, title, type }: MediaPosterFallba
             lang="ru"
             className={[
               'max-w-full',
-              'text-[2rem] sm:text-[2.25rem]',
+              'text-xl sm:text-2xl xl:text-[2.25rem]',
               'leading-[0.86] font-extrabold tracking-[-0.06em] uppercase',
               'wrap-break-word hyphens-auto',
               'text-white/80',

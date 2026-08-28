@@ -99,6 +99,7 @@
   --color-success: var(--theme-success);
   --color-favorite: var(--theme-favorite);
   --color-watermark: var(--theme-watermark);
+  --color-accent-text: var(--theme-accent-text);
   --color-context-border: var(--theme-context-border);
   --color-navigation-border: var(--theme-navigation-border);
   --color-watch-progress: var(--theme-watch-progress);
@@ -142,6 +143,7 @@
   --theme-success: #42c88a;
   --theme-favorite: #ff5c7a;
   --theme-watermark: #315fbd;
+  --theme-accent-text: #6f94df;
   --theme-watermark-opacity: 0.085;
   --theme-context-border: rgb(49 95 189 / 22%);
   --theme-navigation-border: var(--theme-border);
@@ -194,6 +196,7 @@
   --theme-success: #26875b;
   --theme-favorite: #d92d52;
   --theme-watermark: #174f96;
+  --theme-accent-text: #12447f;
   --theme-watermark-opacity: 0.38;
   --theme-context-border: rgb(23 79 150 / 28%);
   --theme-navigation-border: rgb(23 79 150 / 40%);

@@ -73,6 +73,67 @@ describe('MediaService', () => {
     ]);
   });
 
+  it('omits known provider artwork placeholders and keeps real artwork', async () => {
+    const mediaEngine = {
+      search: jest.fn().mockResolvedValue({
+        results: [
+          {
+            item: {
+              id: 'kinobd-placeholder',
+              type: 'movie',
+              title: 'Missing KinoBD poster',
+              ids: { imdb: 'tt1000001' },
+              poster: {
+                url: 'https://kbd.so/no_image_poster.png',
+                width: 600,
+                height: 900,
+              },
+            },
+          },
+          {
+            item: {
+              id: 'shikimori-placeholder',
+              type: 'anime',
+              title: 'Missing Shikimori poster',
+              ids: { shikimori: '100002' },
+              poster: {
+                url: 'https://shikimori.one/assets/globals/missing_original.jpg?version=1',
+                width: 600,
+                height: 900,
+              },
+            },
+          },
+          {
+            item: {
+              id: 'real-poster',
+              type: 'movie',
+              title: 'Real poster',
+              ids: { imdb: 'tt1000003' },
+              poster: {
+                url: 'https://images.example.com/poster.jpg',
+                width: 600,
+                height: 900,
+              },
+            },
+          },
+        ],
+      }),
+    } as unknown as MediaEngine;
+    const service = new MediaService(mediaEngine);
+
+    const results = await service.searchByTitle('Poster');
+
+    expect(results.map(({ poster }) => poster)).toEqual([
+      undefined,
+      undefined,
+      {
+        url: 'https://images.example.com/poster.jpg',
+        width: 600,
+        height: 900,
+      },
+    ]);
+  });
+
   it('enriches the availability query and forwards the playback User-Agent', async () => {
     const availability = {
       query: { type: 'movie' },

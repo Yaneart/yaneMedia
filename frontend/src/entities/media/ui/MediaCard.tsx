@@ -1,6 +1,7 @@
 import { FavoriteFilledIcon, FavoriteIcon, IconButton } from '@/shared';
 import { MediaPosterFallback } from './MediaPosterFallback';
 import type { MediaSummary } from '../model/media';
+import { useState } from 'react';
 
 export type MediaCardProps = {
   media: MediaSummary;
@@ -10,6 +11,11 @@ export type MediaCardProps = {
 };
 
 export function MediaCard({ media, onOpen, isFavorite, onFavoriteChange }: MediaCardProps) {
+  const [failedPosterUrl, setFailedPosterUrl] = useState<string | null>(null);
+
+  const poster = media.poster;
+  const canShowPoster = poster !== undefined && poster.url !== failedPosterUrl;
+
   const metadata = [media.year, media.rating?.value].filter((value) => value !== undefined);
   const FavoriteStateIcon = isFavorite ? FavoriteFilledIcon : FavoriteIcon;
 
@@ -26,17 +32,18 @@ export function MediaCard({ media, onOpen, isFavorite, onFavoriteChange }: Media
         onClick={onOpen}
       >
         <div className="aspect-2/3 overflow-hidden rounded-card border border-context-border bg-elevated">
-          {media.poster ? (
+          {canShowPoster ? (
             <img
-              src={media.poster.url}
+              src={poster.url}
               alt=""
-              width={media.poster.width}
-              height={media.poster.height}
+              width={poster.width}
+              height={poster.height}
               className={[
                 'size-full object-cover transition-transform duration-300 ease-out',
                 'group-hover/card:scale-[1.015] group-active/card:scale-[1.005]',
                 'motion-reduce:transform-none motion-reduce:transition-none',
               ].join(' ')}
+              onError={() => setFailedPosterUrl(poster.url)}
             />
           ) : (
             <MediaPosterFallback mediaRef={media.mediaRef} title={media.title} type={media.type} />
