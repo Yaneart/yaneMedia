@@ -23,24 +23,30 @@ export function MediaPage() {
 
   if (status === 'not-found') {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <ErrorState
-          title="Произведение не найдено"
-          description="Проверьте ссылку или вернитесь в каталог."
-        />
-      </div>
+      <ErrorState
+        variant="page"
+        eyebrow="Вне каталога"
+        title="Произведение не найдено"
+        description="Возможно, ссылка устарела или этого произведения ещё нет в медиатеке."
+        visualCode="404"
+        visualLabel="Нет в каталоге"
+        tone="accent"
+      />
     );
   }
 
   if (status === 'error') {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <ErrorState
-          title="Не удалось загрузить произведение"
-          description="Проверьте подключение и попробуйте ещё раз."
-          onRetry={retry}
-        />
-      </div>
+      <ErrorState
+        variant="page"
+        eyebrow="Связь прервана"
+        title="Не удалось загрузить произведение"
+        description="Медиатека временно не отвечает. Проверьте подключение и попробуйте восстановить сигнал."
+        visualCode="!"
+        visualLabel="Сигнал потерян"
+        retryLabel="Восстановить сигнал"
+        onRetry={retry}
+      />
     );
   }
 

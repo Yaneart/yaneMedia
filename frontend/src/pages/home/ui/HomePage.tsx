@@ -12,14 +12,16 @@ export function HomePage() {
 
   if (!feed && status === 'error') {
     return (
-      <div className="-m-page flex min-h-[70vh] items-center justify-center bg-surface p-page">
-        <ErrorState
-          title="Не удалось загрузить главную"
-          description="Проверьте подключение и попробуйте ещё раз."
-          onRetry={retry}
-          className="w-full max-w-2xl rounded-card bg-surface-elevated"
-        />
-      </div>
+      <ErrorState
+        variant="page"
+        eyebrow="Главная вне сигнала"
+        title="Не удалось загрузить главную"
+        description="Медиатека временно не отвечает. Проверьте подключение и попробуйте восстановить сигнал."
+        visualLabel="Лента недоступна"
+        retryLabel="Восстановить сигнал"
+        onRetry={retry}
+        className="-m-page min-h-[70vh] bg-surface px-page"
+      />
     );
   }
 

@@ -169,9 +169,11 @@ export function SearchPage() {
 
       {status === 'error' && (
         <ErrorState
+          variant="section"
           title="Не удалось выполнить поиск"
           description="Проверьте подключение и попробуйте ещё раз."
           onRetry={() => void runSearch(submittedQuery)}
+          visualLabel="Поиск недоступен"
           className="min-h-64 rounded-card bg-surface-elevated"
         />
       )}

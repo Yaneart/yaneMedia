@@ -1,5 +1,7 @@
 import type { ComponentPropsWithRef, ReactNode } from 'react';
 
+import { StateAmbientBackdrop } from './StateAmbientBackdrop';
+
 export type EmptyStateProps = Omit<ComponentPropsWithRef<'div'>, 'children' | 'title'> & {
   title: string;
   description?: string;
@@ -18,22 +20,28 @@ export function EmptyState({
   return (
     <div
       className={[
-        'flex flex-col items-center justify-center px-6 py-12 text-center',
+        'relative isolate flex flex-col items-center justify-center overflow-hidden px-6 py-12 text-center',
         className,
       ].join(' ')}
       {...props}
     >
-      {icon && (
-        <div className="mb-4 flex size-12 items-center justify-center rounded-full bg-watermark/10 text-watermark">
-          {icon}
-        </div>
-      )}
+      <StateAmbientBackdrop />
 
-      <p className="text-heading text-text-primary">{title}</p>
+      <div className="relative z-10 flex w-full flex-col items-center">
+        {icon && (
+          <div className="mb-4 flex size-12 items-center justify-center rounded-full bg-watermark/10 text-watermark">
+            {icon}
+          </div>
+        )}
 
-      {description && <p className="mt-2 max-w-lg text-body text-text-secondary">{description}</p>}
+        <p className="text-heading text-text-primary">{title}</p>
 
-      {action && <div className="mt-5">{action}</div>}
+        {description && (
+          <p className="mt-2 max-w-lg text-body text-text-secondary">{description}</p>
+        )}
+
+        {action && <div className="mt-5">{action}</div>}
+      </div>
     </div>
   );
 }

@@ -92,11 +92,12 @@ export function MediaPlayer({
 
           {source && isStarted && status === 'error' && (
             <ErrorState
+              variant="player"
               title="Не удалось загрузить плеер"
               description="Проверьте подключение и попробуйте ещё раз."
               onRetry={onRetry}
               retryLabel="Повторить"
-              className="[&>p:nth-of-type(2)]:text-white/65"
+              visualLabel="Плеер недоступен"
             />
           )}
         </div>

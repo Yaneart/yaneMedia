@@ -55,7 +55,7 @@ export { EmptyState } from './ui/EmptyState';
 export type { EmptyStateProps } from './ui/EmptyState';
 
 export { ErrorState } from './ui/ErrorState';
-export type { ErrorStateProps } from './ui/ErrorState';
+export type { ErrorStateProps, ErrorStateTone, ErrorStateVariant } from './ui/ErrorState';
 
 export { Modal } from './ui/Modal';
 export type { ModalProps } from './ui/Modal';
