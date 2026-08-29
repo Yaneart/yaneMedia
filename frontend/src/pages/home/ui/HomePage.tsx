@@ -1,16 +1,38 @@
 import { useNavigate } from 'react-router';
 
-import { demoFeaturedCandidates, demoHomeFeed } from '../model/homeFeed.mock';
-import { useHourlyFeatured } from '../model/useHourlyFeatured';
+import { LandscapeMediaCard, type MediaRef } from '@/entities/media';
 import { FeaturedMedia } from '@/widgets/featured-media';
 import { ContinueWatchingCard } from '@/widgets/continue-watching-card';
-import { ContentRow } from '@/shared';
-import { LandscapeMediaCard, type MediaRef } from '@/entities/media';
+import { ContentRow, ErrorState, Spinner } from '@/shared';
+import { useHomeFeed } from '../model/useHomeFeed';
 
 export function HomePage() {
   const navigate = useNavigate();
-  const featured = useHourlyFeatured(demoFeaturedCandidates) ?? demoHomeFeed.featured;
-  const continueWatching = demoHomeFeed.continueWatching.filter(
+  const { feed, status, retry } = useHomeFeed();
+
+  if (!feed && status === 'error') {
+    return (
+      <div className="-m-page flex min-h-[70vh] items-center justify-center bg-surface p-page">
+        <ErrorState
+          title="Не удалось загрузить главную"
+          description="Проверьте подключение и попробуйте ещё раз."
+          onRetry={retry}
+          className="w-full max-w-2xl rounded-card bg-surface-elevated"
+        />
+      </div>
+    );
+  }
+
+  if (!feed) {
+    return (
+      <div className="-m-page flex min-h-[70vh] items-center justify-center bg-surface">
+        <Spinner size="large" label="Загружаем главную" />
+      </div>
+    );
+  }
+
+  const featured = feed.featured;
+  const continueWatching = feed.continueWatching.filter(
     (item) => item.media.mediaRef !== featured.mediaRef,
   );
 
@@ -64,7 +86,7 @@ export function HomePage() {
           </ContentRow>
         </section>
 
-        {demoHomeFeed.collections.map((collection) => (
+        {feed.collections.map((collection) => (
           <section key={collection.id}>
             <h2 className="mb-4 text-heading font-semibold">{collection.title}</h2>
 

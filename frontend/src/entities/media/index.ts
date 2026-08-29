@@ -28,6 +28,9 @@ export {
 
 export { searchMedia } from './api/searchMedia';
 
+export { mapMediaSummary } from './api/mapMediaSummary';
+export type { MediaSummaryDto } from './api/mediaSummaryDto';
+
 export { MediaCard } from './ui/MediaCard';
 export type { MediaCardProps } from './ui/MediaCard';
 

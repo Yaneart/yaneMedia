@@ -50,9 +50,7 @@ export function LibraryEmptyState({
         <h2 className="mt-2 text-2xl font-semibold tracking-tight text-text-primary sm:text-3xl">
           {title}
         </h2>
-        <p className="mx-auto mt-3 max-w-xl text-body text-text-secondary md:mx-0">
-          {description}
-        </p>
+        <p className="mx-auto mt-3 max-w-xl text-body text-text-secondary md:mx-0">{description}</p>
         <div className="mt-6">{action}</div>
       </div>
     </div>

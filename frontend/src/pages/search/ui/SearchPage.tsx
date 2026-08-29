@@ -1,4 +1,4 @@
-import { useState, type SubmitEvent } from 'react';
+import { useEffect, useRef, useState, type SubmitEvent } from 'react';
 import { useNavigate } from 'react-router';
 
 import { MediaCard, searchMedia, type MediaRef, type MediaSummary } from '@/entities/media';
@@ -25,19 +25,43 @@ export function SearchPage() {
   const [submittedQuery, setSubmittedQuery] = useState('');
   const [results, setResults] = useState<MediaSummary[]>([]);
   const [status, setStatus] = useState<SearchStatus>('idle');
+  const activeSearchControllerRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    return () => {
+      activeSearchControllerRef.current?.abort();
+    };
+  }, []);
 
   const runSearch = async (searchQuery: string) => {
+    activeSearchControllerRef.current?.abort();
+
+    const controller = new AbortController();
+
+    activeSearchControllerRef.current = controller;
+
     setSubmittedQuery(searchQuery);
     setStatus('loading');
 
     try {
-      const nextResults = await searchMedia(searchQuery);
+      const nextResult = await searchMedia(searchQuery, controller.signal);
 
-      setResults(nextResults);
+      if (controller.signal.aborted) {
+        return;
+      }
+
+      setResults(nextResult);
       setStatus('success');
     } catch {
+      if (controller.signal.aborted) {
+        return;
+      }
       setResults([]);
       setStatus('error');
+    } finally {
+      if (activeSearchControllerRef.current === controller) {
+        activeSearchControllerRef.current = null;
+      }
     }
   };
 
@@ -52,6 +76,9 @@ export function SearchPage() {
     const normalizedQuery = query.trim();
 
     if (!normalizedQuery) {
+      activeSearchControllerRef.current?.abort();
+      activeSearchControllerRef.current = null;
+
       setSubmittedQuery('');
       setResults([]);
       setStatus('idle');

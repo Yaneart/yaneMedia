@@ -14,6 +14,7 @@ export interface HomeCollection {
 
 export interface HomeFeed {
   featured: MediaSummary;
+  featuredExpiresAt: string;
   continueWatching: ContinueWatchingItem[];
   collections: HomeCollection[];
 }
