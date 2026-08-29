@@ -34,6 +34,9 @@ export type { MediaSummaryDto } from './api/mediaSummaryDto';
 export { mapMediaDetails } from './api/mapMediaDetails';
 export type { MediaDetailsDto, MediaDetailsResponseDto } from './api/mediaDetailsDto';
 
+export { getMediaDetails } from './api/getMediaDetails';
+export type { MediaDetailsResult } from './api/getMediaDetails';
+
 export { MediaCard } from './ui/MediaCard';
 export type { MediaCardProps } from './ui/MediaCard';
 
