@@ -37,9 +37,7 @@ export function MediaFacts({ media, className = '' }: MediaFactsProps) {
   const directors = findPeopleByRole(media, 'director');
 
   return (
-    <dl
-      className={`grid min-w-0 grid-cols-[max-content_minmax(0,1fr)] gap-x-2 ${className}`}
-    >
+    <dl className={`grid min-w-0 grid-cols-[max-content_minmax(0,1fr)] gap-x-2 ${className}`}>
       {directors.length > 0 && (
         <div className="col-span-2 grid min-w-0 grid-cols-subgrid">
           <dt className="shrink-0 text-text-secondary">Режиссёр:</dt>
@@ -199,9 +197,7 @@ export function MediaInfo({ media, actions, variant = 'default' }: MediaInfoProp
         {isWatchLayout && media.description && (
           <div className="order-5 mt-5 hidden sm:block xl:hidden">
             <h2 className="text-heading text-text-primary">Описание</h2>
-            <p className="mt-2 line-clamp-6 text-body text-text-secondary">
-              {media.description}
-            </p>
+            <p className="mt-2 line-clamp-6 text-body text-text-secondary">{media.description}</p>
           </div>
         )}
       </div>

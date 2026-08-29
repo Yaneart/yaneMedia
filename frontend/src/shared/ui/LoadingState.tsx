@@ -8,11 +8,7 @@ export type LoadingStateProps = {
   className?: string;
 };
 
-export function LoadingState({
-  label,
-  variant = 'section',
-  className = '',
-}: LoadingStateProps) {
+export function LoadingState({ label, variant = 'section', className = '' }: LoadingStateProps) {
   const isPage = variant === 'page';
 
   return (

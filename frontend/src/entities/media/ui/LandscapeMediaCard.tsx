@@ -18,9 +18,7 @@ export function LandscapeMediaCard({ media, onOpen }: LandscapeMediaCardProps) {
   const metadata = [mediaTypeLabels[media.type], media.year, media.rating?.value].filter(
     (value) => value !== undefined,
   );
-  const fallbackMetadata = [media.year, media.rating?.value].filter(
-    (value) => value !== undefined,
-  );
+  const fallbackMetadata = [media.year, media.rating?.value].filter((value) => value !== undefined);
   const backdrop = media.backdrop?.url.includes('placehold.co') ? undefined : media.backdrop;
   const canShowBackdrop = backdrop !== undefined && backdrop.url !== failedBackdropUrl;
 
@@ -54,11 +52,7 @@ export function LandscapeMediaCard({ media, onOpen }: LandscapeMediaCardProps) {
         />
       ) : (
         <div className="absolute inset-0 transition-transform duration-300 ease-out group-hover:scale-[1.015] motion-reduce:transform-none motion-reduce:transition-none">
-          <MediaLandscapeFallback
-            mediaRef={media.mediaRef}
-            title={media.title}
-            type={media.type}
-          />
+          <MediaLandscapeFallback mediaRef={media.mediaRef} title={media.title} type={media.type} />
         </div>
       )}
 

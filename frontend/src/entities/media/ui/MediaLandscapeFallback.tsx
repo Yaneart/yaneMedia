@@ -32,9 +32,7 @@ export function MediaLandscapeFallback({
         variant.background,
       ].join(' ')}
     >
-      <YaneMark
-        className={['absolute h-[180%] w-[72%]', shape, variant.mark].join(' ')}
-      />
+      <YaneMark className={['absolute h-[180%] w-[72%]', shape, variant.mark].join(' ')} />
 
       <div className="absolute inset-0 bg-linear-to-t from-black/35 via-transparent to-white/10" />
 

@@ -161,9 +161,7 @@ export function SearchPage() {
         </div>
       </header>
 
-      {status === 'loading' && (
-        <LoadingState label={`Поиск: ${submittedQuery}`} />
-      )}
+      {status === 'loading' && <LoadingState label={`Поиск: ${submittedQuery}`} />}
 
       {status === 'error' && (
         <ErrorState

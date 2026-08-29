@@ -1,5 +1,5 @@
 import type { MediaDetails } from '@/entities/media';
-import { demoMediaSources } from '@/entities/media-source';
+import type { MediaSourceOption } from '@/entities/media-source';
 import { EpisodeSelector } from '@/features/episode-selection';
 import { FavoriteButton, useFavorites } from '@/features/favorite';
 import { usePlaybackSession } from '@/features/playback-session';
@@ -12,9 +12,10 @@ import { useEffect, useState } from 'react';
 
 export type MediaViewProps = {
   media: MediaDetails;
+  sources: readonly MediaSourceOption[];
 };
 
-export function MediaView({ media }: MediaViewProps) {
+export function MediaView({ media, sources }: MediaViewProps) {
   const { session, startSession, endSession } = usePlaybackSession();
 
   const { isFavorite, addFavorite, removeFavorite } = useFavorites();
@@ -47,16 +48,18 @@ export function MediaView({ media }: MediaViewProps) {
           null)
         : null,
   );
+
   const [selectedSourceRef, setSelectedSourceRef] = useState<string | null>(
-    demoMediaSources.some((source) => source.sourceRef === mediaSession?.sourceRef)
+    sources.some((source) => source.sourceRef === mediaSession?.sourceRef)
       ? (mediaSession?.sourceRef ?? null)
-      : (demoMediaSources[0]?.sourceRef ?? null),
+      : (sources[0]?.sourceRef ?? null),
   );
 
   const [playerStatus, setPlayerStatus] = useState<MediaPlayerStatus>('ready');
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
 
-  const selectedSource = demoMediaSources.find((source) => source.sourceRef === selectedSourceRef);
+  const selectedSource = sources.find((source) => source.sourceRef === selectedSourceRef);
+
   const selectedSeason =
     media.type === 'series'
       ? media.seasons.find((season) => season.number === selectedSeasonNumber)
@@ -154,7 +157,7 @@ export function MediaView({ media }: MediaViewProps) {
         <div className="min-w-0 overflow-hidden rounded-card border border-context-border bg-surface shadow-surface">
           <div className="flex min-w-0 flex-col gap-3 bg-surface-elevated px-4 py-3 sm:px-5 min-[70rem]:flex-row min-[70rem]:items-center min-[70rem]:gap-8">
             <SourceSelector
-              sources={demoMediaSources}
+              sources={sources}
               selectedSourceRef={selectedSourceRef}
               onSourceChange={selectSource}
               variant="inline"
