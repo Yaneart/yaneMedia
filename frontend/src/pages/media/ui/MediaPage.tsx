@@ -1,5 +1,5 @@
 import { useOpeningHistory } from '@/features/opening-history';
-import { ErrorState, Spinner } from '@/shared';
+import { ErrorState, LoadingState } from '@/shared';
 import { useEffect } from 'react';
 import { useParams } from 'react-router';
 
@@ -52,9 +52,7 @@ export function MediaPage() {
 
   if (!media) {
     return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <Spinner size="large" label="Загружаем информацию о произведении" />
-      </div>
+      <LoadingState variant="page" label="Загружаем произведение" />
     );
   }
 

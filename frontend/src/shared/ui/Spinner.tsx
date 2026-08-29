@@ -10,7 +10,7 @@ export type SpinnerProps = Omit<ComponentPropsWithRef<'span'>, 'children' | 'rol
 const sizeClasses: Record<SpinnerSize, string> = {
   small: 'text-sm',
   medium: 'text-xl',
-  large: 'text-3xl',
+  large: 'text-4xl sm:text-5xl',
 };
 
 export function Spinner({
@@ -35,7 +35,9 @@ export function Spinner({
         aria-hidden="true"
         className="inline-flex font-extrabold tracking-[-0.06em] text-text-primary"
       >
-        <span className="yane-loader-shimmer">yane</span>
+        <span className="yane-loader-shimmer" data-text="yane">
+          yane
+        </span>
         <span className="ml-[0.3em] self-end pb-[0.08em] text-[0.45em] font-medium tracking-tight text-text-secondary">
           Media
         </span>

@@ -9,7 +9,7 @@ import {
   ErrorState,
   MediaGrid,
   SearchInput,
-  Spinner,
+  LoadingState,
   YaneMark,
 } from '@/shared';
 
@@ -162,9 +162,7 @@ export function SearchPage() {
       </header>
 
       {status === 'loading' && (
-        <div className="flex min-h-64 items-center justify-center">
-          <Spinner size="large" label={`Поиск: ${submittedQuery}`} />
-        </div>
+        <LoadingState label={`Поиск: ${submittedQuery}`} />
       )}
 
       {status === 'error' && (

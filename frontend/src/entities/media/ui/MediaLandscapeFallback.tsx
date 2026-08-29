@@ -1,47 +1,67 @@
-import type { MediaRef } from '../model/media';
+import type { MediaRef, MediaType } from '../model/media';
 import { YaneMark } from '@/shared';
+import { getMediaFallbackDesign, mediaTypeLabels } from './mediaFallbackDesign';
 
 export type MediaLandscapeFallbackProps = {
   mediaRef: MediaRef;
+  title: string;
+  type: MediaType;
+  showType?: boolean;
 };
 
-const landscapeVariants = [
-  'from-[#213b52] via-[#172a3a] to-[#0c151f]',
-  'from-[#6f3c2b] via-[#48271f] to-[#191111]',
-  'from-[#405044] via-[#29352d] to-[#111a16]',
-  'from-[#373047] via-[#252033] to-[#121019]',
-  'from-[#254651] via-[#18313a] to-[#0c171c]',
-  'from-[#533849] via-[#382633] to-[#181117]',
+const landscapeShapes = [
+  '-right-[8%] -bottom-[58%] rotate-[18deg]',
+  '-left-[4%] -bottom-[62%] -rotate-[16deg] scale-x-[-1]',
+  'left-[38%] -bottom-[66%] rotate-[8deg]',
 ] as const;
 
-function hashMediaRef(mediaRef: MediaRef) {
-  let hash = 0;
-
-  for (const character of mediaRef) {
-    hash = (hash * 31 + character.codePointAt(0)!) >>> 0;
-  }
-
-  return hash;
-}
-
-export function MediaLandscapeFallback({ mediaRef }: MediaLandscapeFallbackProps) {
-  const hash = hashMediaRef(mediaRef);
-  const background = landscapeVariants[hash % landscapeVariants.length];
-  const mirrorMark = (hash & 1) === 1;
+export function MediaLandscapeFallback({
+  mediaRef,
+  title,
+  type,
+  showType = true,
+}: MediaLandscapeFallbackProps) {
+  const { hash, variant, variantNumber } = getMediaFallbackDesign(mediaRef);
+  const shape = landscapeShapes[(hash >>> 13) % landscapeShapes.length];
 
   return (
     <div
       aria-hidden="true"
-      className={['relative size-full overflow-hidden bg-linear-to-br', background].join(' ')}
+      className={[
+        'relative isolate size-full overflow-hidden bg-linear-to-br text-white',
+        variant.background,
+      ].join(' ')}
     >
       <YaneMark
-        className={[
-          'absolute -right-[12%] -bottom-[75%] h-[190%] w-[78%] rotate-[18deg]',
-          'text-white/12',
-          mirrorMark ? 'scale-x-[-1]' : '',
-        ].join(' ')}
+        className={['absolute h-[180%] w-[72%]', shape, variant.mark].join(' ')}
       />
-      <div className="absolute inset-0 bg-linear-to-br from-white/8 via-transparent to-black/20" />
+
+      <div className="absolute inset-0 bg-linear-to-t from-black/35 via-transparent to-white/10" />
+
+      <div className="relative size-full p-4">
+        <span className="text-[0.65rem] font-semibold tracking-[0.16em] uppercase">
+          YM / {variantNumber}
+        </span>
+
+        <div className="absolute inset-x-4 top-8 bottom-10 flex items-center overflow-hidden">
+          <p
+            lang="ru"
+            className={[
+              'max-w-[76%] text-xl sm:text-2xl xl:text-[1.75rem]',
+              'leading-[0.88] font-extrabold tracking-[-0.055em] uppercase',
+              'wrap-break-word hyphens-auto text-white/80',
+            ].join(' ')}
+          >
+            {title}
+          </p>
+        </div>
+
+        {showType && (
+          <span className="absolute bottom-4 left-4 text-xs font-semibold tracking-[0.16em] uppercase">
+            {mediaTypeLabels[type]}
+          </span>
+        )}
+      </div>
     </div>
   );
 }

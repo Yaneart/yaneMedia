@@ -48,6 +48,9 @@ export type { SearchInputProps } from './ui/SearchInput';
 export { Spinner } from './ui/Spinner';
 export type { SpinnerProps, SpinnerSize } from './ui/Spinner';
 
+export { LoadingState } from './ui/LoadingState';
+export type { LoadingStateProps, LoadingStateVariant } from './ui/LoadingState';
+
 export { Skeleton } from './ui/Skeleton';
 export type { SkeletonProps } from './ui/Skeleton';
 

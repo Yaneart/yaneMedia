@@ -1,6 +1,7 @@
 import { MediaLandscapeFallback, type MediaSummary } from '@/entities/media';
 import type { PlaybackProgress } from '@/entities/playback';
 import { PlayIcon } from '@/shared';
+import { useState } from 'react';
 
 export type ContinueWatchingCardProps = {
   media: MediaSummary;
@@ -34,7 +35,9 @@ function formatRemaining(totalSeconds: number) {
 }
 
 export function ContinueWatchingCard({ media, onOpen, progress }: ContinueWatchingCardProps) {
+  const [failedBackdropUrl, setFailedBackdropUrl] = useState<string | null>(null);
   const backdrop = media.backdrop?.url.includes('placehold.co') ? undefined : media.backdrop;
+  const canShowBackdrop = backdrop !== undefined && backdrop.url !== failedBackdropUrl;
   const durationSeconds = Math.max(0, progress.durationSeconds);
   const positionSeconds = Math.min(durationSeconds, Math.max(0, progress.positionSeconds));
   const progressMax = Math.max(1, durationSeconds);
@@ -48,6 +51,7 @@ export function ContinueWatchingCard({ media, onOpen, progress }: ContinueWatchi
   return (
     <button
       type="button"
+      aria-label={`Продолжить просмотр: ${media.title}`}
       className={[
         'group relative block aspect-[2.35/1] w-full overflow-hidden rounded-card border border-context-border bg-elevated text-left',
         'transition-[transform,box-shadow] duration-200 ease-out',
@@ -57,7 +61,7 @@ export function ContinueWatchingCard({ media, onOpen, progress }: ContinueWatchi
       ].join(' ')}
       onClick={onOpen}
     >
-      {backdrop ? (
+      {canShowBackdrop ? (
         <img
           src={backdrop.url}
           alt=""
@@ -68,10 +72,16 @@ export function ContinueWatchingCard({ media, onOpen, progress }: ContinueWatchi
             'group-hover:scale-[1.015] group-active:scale-[1.005]',
             'motion-reduce:transform-none motion-reduce:transition-none',
           ].join(' ')}
+          onError={() => setFailedBackdropUrl(backdrop.url)}
         />
       ) : (
         <div className="absolute inset-0 transition-transform duration-300 ease-out group-hover:scale-[1.015] motion-reduce:transform-none motion-reduce:transition-none">
-          <MediaLandscapeFallback mediaRef={media.mediaRef} />
+          <MediaLandscapeFallback
+            mediaRef={media.mediaRef}
+            title={media.title}
+            type={media.type}
+            showType={false}
+          />
         </div>
       )}
 
@@ -94,7 +104,7 @@ export function ContinueWatchingCard({ media, onOpen, progress }: ContinueWatchi
       </span>
 
       <div className="relative flex size-full flex-col justify-end p-3 text-white sm:p-4">
-        <h3 className="truncate font-semibold leading-tight">{media.title}</h3>
+        {canShowBackdrop && <h3 className="truncate font-semibold leading-tight">{media.title}</h3>}
 
         <div className="mt-1.5 flex items-center justify-between gap-3 text-caption text-white/65">
           <span className="hidden min-w-0 truncate sm:block">{resumeLabel}</span>

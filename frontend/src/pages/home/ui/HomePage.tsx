@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router';
 import { LandscapeMediaCard, type MediaRef } from '@/entities/media';
 import { FeaturedMedia } from '@/widgets/featured-media';
 import { ContinueWatchingCard } from '@/widgets/continue-watching-card';
-import { ContentRow, ErrorState, Spinner } from '@/shared';
+import { ContentRow, ErrorState, LoadingState } from '@/shared';
 import { useHomeFeed } from '../model/useHomeFeed';
 
 export function HomePage() {
@@ -27,9 +27,11 @@ export function HomePage() {
 
   if (!feed) {
     return (
-      <div className="-m-page flex min-h-[70vh] items-center justify-center bg-surface">
-        <Spinner size="large" label="Загружаем главную" />
-      </div>
+      <LoadingState
+        variant="page"
+        label="Загружаем главную"
+        className="-m-page min-h-[70vh] bg-surface px-page"
+      />
     );
   }
 

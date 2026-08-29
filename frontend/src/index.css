@@ -51,13 +51,21 @@
 }
 
 .yane-loader-shimmer {
-  color: var(--theme-text-disabled);
+  position: relative;
+  color: var(--theme-text-secondary);
+}
+
+.yane-loader-shimmer::after {
+  position: absolute;
+  inset: 0;
+  content: attr(data-text);
+  color: transparent;
   background-image: linear-gradient(
     105deg,
-    var(--theme-text-disabled) 25%,
+    transparent 25%,
     var(--theme-text-primary) 44%,
     var(--theme-text-primary) 56%,
-    var(--theme-text-disabled) 75%
+    transparent 75%
   );
   background-position: 125% 0;
   background-size: 250% 100%;
@@ -70,9 +78,11 @@
 @media (prefers-reduced-motion: reduce) {
   .yane-loader-shimmer {
     color: var(--theme-text-primary);
-    background: none;
+  }
+
+  .yane-loader-shimmer::after {
+    display: none;
     animation: none;
-    -webkit-text-fill-color: currentColor;
   }
 }
 

@@ -149,10 +149,10 @@ export function MediaView({ media }: MediaViewProps) {
   }, [isPlayerStarted, playerStatus]);
 
   return (
-    <div className="grid items-start gap-8 xl:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)] xl:gap-10">
-      <div className="order-2 space-y-8 xl:order-none xl:col-start-2 xl:row-start-1">
-        <div className="overflow-hidden rounded-card border border-context-border bg-surface shadow-surface">
-          <div className="flex flex-col gap-3 bg-surface-elevated px-4 py-3 sm:px-5 lg:flex-row lg:items-center lg:gap-8">
+    <div className="grid min-w-0 items-start gap-8 xl:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)] xl:gap-10">
+      <div className="order-2 min-w-0 space-y-8 xl:order-none xl:col-start-2 xl:row-start-1">
+        <div className="min-w-0 overflow-hidden rounded-card border border-context-border bg-surface shadow-surface">
+          <div className="flex min-w-0 flex-col gap-3 bg-surface-elevated px-4 py-3 sm:px-5 min-[70rem]:flex-row min-[70rem]:items-center min-[70rem]:gap-8">
             <SourceSelector
               sources={demoMediaSources}
               selectedSourceRef={selectedSourceRef}
@@ -161,7 +161,7 @@ export function MediaView({ media }: MediaViewProps) {
             />
 
             {media.type !== 'movie' && (
-              <div className="grid min-w-0 grid-cols-2 gap-3 lg:flex lg:items-center lg:gap-5">
+              <div className="grid min-w-0 grid-cols-2 gap-3 min-[70rem]:flex min-[70rem]:items-center min-[70rem]:gap-5">
                 {media.type === 'series' && (
                   <SeasonSelector
                     seasons={media.seasons}
@@ -224,7 +224,7 @@ export function MediaView({ media }: MediaViewProps) {
 
       <section className="order-3 space-y-5 xl:hidden">
         {media.description && (
-          <div>
+          <div className="sm:hidden">
             <h2 className="text-heading text-text-primary">Описание</h2>
             <p
               className={[
