@@ -10,7 +10,10 @@ export async function getMediaAvailability(
 ): Promise<MediaAvailability> {
   const dto = await apiRequest<MediaAvailabilityDto>(
     `/media/${encodeURIComponent(mediaRef)}/availability`,
-    { signal },
+    {
+      signal,
+      cache: 'no-store',
+    },
   );
 
   return mapMediaAvailability(dto);

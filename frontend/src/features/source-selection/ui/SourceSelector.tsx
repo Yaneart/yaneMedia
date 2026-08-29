@@ -8,8 +8,28 @@ export type SourceSelectorProps = {
   variant?: 'section' | 'toolbar' | 'inline';
 };
 
+const providerLabels: Readonly<Record<string, string>> = {
+  'kinobd-streaming': 'KinoBD',
+  'ddbb-streaming': 'DDBB',
+  'veoveo-streaming': 'VeoVeo',
+  'videohub-streaming': 'VideoHUB',
+  'aniliberty-streaming': 'AniLiberty',
+};
+
 function getSourceLabel(source: MediaSourceOption) {
-  return [source.label, source.translation?.title, source.quality?.label]
+  const providerLabel = providerLabels[source.provider] ?? source.provider;
+
+  const hasDistinctProviderLabel =
+    providerLabel.localeCompare(source.label, undefined, {
+      sensitivity: 'base',
+    }) !== 0;
+
+  return [
+    source.label,
+    hasDistinctProviderLabel ? providerLabel : undefined,
+    source.translation?.title,
+    source.quality?.label,
+  ]
     .filter(Boolean)
     .join(' · ');
 }

@@ -8,7 +8,7 @@ import { SourceSelector } from '@/features/source-selection';
 import { MediaCast } from '@/widgets/mdeia-cast';
 import { MediaFacts, MediaInfo } from '@/widgets/media-info';
 import { MediaPlayer, type MediaPlayerStatus } from '@/widgets/media-player';
-import { useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 
 export type MediaViewProps = {
   media: MediaDetails;
@@ -140,16 +140,23 @@ export function MediaView({ media, sources }: MediaViewProps) {
             ? media.runtimeMinutes * 60
             : null,
     });
-    setPlayerStatus('loading');
+    const canLoadSource =
+      (selectedSource.kind === 'embed' ||
+        selectedSource.kind === 'hls' ||
+        selectedSource.kind === 'mp4') &&
+      selectedSource.browserSupported &&
+      selectedSource.availability === 'available';
+
+    setPlayerStatus(canLoadSource ? 'loading' : 'ready');
   };
 
-  useEffect(() => {
-    if (!isPlayerStarted || playerStatus !== 'loading') return;
+  const handlePlayerReady = useCallback(() => {
+    setPlayerStatus('ready');
+  }, []);
 
-    const readyTimeout = window.setTimeout(() => setPlayerStatus('ready'), 900);
-
-    return () => window.clearTimeout(readyTimeout);
-  }, [isPlayerStarted, playerStatus]);
+  const handlePlayerError = useCallback(() => {
+    setPlayerStatus('error');
+  }, []);
 
   return (
     <div className="grid min-w-0 items-start gap-8 xl:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)] xl:gap-10">
@@ -191,6 +198,8 @@ export function MediaView({ media, sources }: MediaViewProps) {
             isStarted={isPlayerStarted}
             status={playerStatus}
             onStart={loadPlayer}
+            onReady={handlePlayerReady}
+            onError={handlePlayerError}
             onRetry={loadPlayer}
             embedded
           />

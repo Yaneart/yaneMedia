@@ -2,6 +2,8 @@ import type { MediaArtwork } from '@/entities/media';
 import type { MediaSourceOption } from '@/entities/media-source';
 import { ErrorState, IconButton, PlayIcon, Spinner } from '@/shared';
 
+import { MediaVideoRenderer } from './MediaVideoRenderer';
+
 export type MediaPlayerStatus = 'loading' | 'ready' | 'error';
 
 export type MediaPlayerProps = {
@@ -11,6 +13,8 @@ export type MediaPlayerProps = {
   isStarted: boolean;
   status: MediaPlayerStatus;
   onStart: () => void;
+  onReady: () => void;
+  onError: () => void;
   onRetry?: () => void;
   embedded?: boolean;
 };
@@ -26,9 +30,23 @@ export function MediaPlayer({
   isStarted,
   status,
   onStart,
+  onReady,
+  onError,
   onRetry,
   embedded = false,
 }: MediaPlayerProps) {
+  const activeSource =
+    source &&
+    isStarted &&
+    source.browserSupported &&
+    source.availability === 'available' &&
+    (source.kind === 'embed' || source.kind === 'hls' || source.kind === 'mp4')
+      ? source
+      : undefined;
+  const activeEmbedSource = activeSource?.kind === 'embed' ? activeSource : undefined;
+  const activeVideoSource =
+    activeSource?.kind === 'hls' || activeSource?.kind === 'mp4' ? activeSource : undefined;
+
   return (
     <section aria-label={`Плеер: ${mediaTitle}`}>
       <div
@@ -49,7 +67,33 @@ export function MediaPlayer({
 
         {!isStarted && <div className="absolute inset-0 -z-10 bg-black/55" />}
 
-        <div className="flex size-full items-center justify-center p-5 text-center sm:p-8">
+        {activeEmbedSource && status !== 'error' && (
+          <iframe
+            src={activeEmbedSource.url}
+            title={`Плеер ${activeEmbedSource.label}: ${mediaTitle}`}
+            className="absolute inset-0 z-0 size-full border-0"
+            sandbox="allow-forms allow-presentation allow-same-origin allow-scripts"
+            allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+            onLoad={onReady}
+            onError={onError}
+          />
+        )}
+
+        {activeVideoSource && status !== 'error' && (
+          <MediaVideoRenderer
+            source={activeVideoSource}
+            mediaTitle={mediaTitle}
+            onReady={onReady}
+            onError={onError}
+          />
+        )}
+
+        <div
+          className={[
+            'relative z-10 flex size-full items-center justify-center p-5 text-center sm:p-8',
+            activeSource && status === 'ready' ? 'pointer-events-none' : '',
+          ].join(' ')}
+        >
           {!source && <p className="text-body text-white/70">Выберите плеер для просмотра</p>}
 
           {source && !isStarted && (
@@ -81,11 +125,11 @@ export function MediaPlayer({
             />
           )}
 
-          {source && isStarted && status === 'ready' && (
+          {source && isStarted && status === 'ready' && !activeSource && (
             <div role="status">
               <p className="text-heading text-white">{source.label}</p>
               <p className="mt-2 text-caption text-white/60">
-                Здесь будет встроен iframe выбранного плеера
+                Этот тип источника пока не подключён
               </p>
             </div>
           )}
