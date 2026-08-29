@@ -1,7 +1,7 @@
 import type { MediaArtwork, MediaSummary } from '../model/media';
 import type { MediaArtworkDto, MediaSummaryDto } from './mediaSummaryDto';
 
-function mapMediaArtwork(dto: MediaArtworkDto): MediaArtwork {
+export function mapMediaArtwork(dto: MediaArtworkDto): MediaArtwork {
   return {
     url: dto.url,
     width: dto.width,
