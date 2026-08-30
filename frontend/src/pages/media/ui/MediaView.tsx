@@ -123,11 +123,12 @@ function mergeEpisodeSources(
 ) {
   if (!availability || !selection) return baseSources;
 
-  const exactSources = availability.episodes.find((episode) =>
-    matchesEpisode(episode, selection),
-  )?.sources;
+  const exactSources = availability.episodes
+    .filter((episode) => matchesEpisode(episode, selection))
+    .flatMap((episode) => episode.sources)
+    .filter((source) => source.kind !== 'embed');
 
-  if (!exactSources || exactSources.length === 0) return baseSources;
+  if (exactSources.length === 0) return baseSources;
 
   return [
     ...new Map(

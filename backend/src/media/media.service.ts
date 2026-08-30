@@ -1,6 +1,7 @@
 import type {
   DetailsResponse,
   Episode,
+  ExternalIds,
   Image,
   MediaDetails,
   MediaEngine,
@@ -29,6 +30,7 @@ const PLACEHOLDER_ARTWORK_PATHS = [
   '/no_image_poster.png',
   '/assets/globals/missing_original.jpg',
 ] as const;
+const ANIME_ID_SOURCES = ['shikimori', 'aniList', 'myAnimeList'] as const;
 
 function isPlaceholderArtworkUrl(url: string): boolean {
   try {
@@ -88,14 +90,13 @@ export class MediaService {
       return null;
     }
 
+    const availabilityIds = await this.resolveAvailabilityIds(details, ids, episodeSelection);
+
     const availability = await this.runMediaEngine(() =>
       this.mediaEngine.getAvailability(
         {
           type: details.type,
-          ids: {
-            ...(details.ids ?? {}),
-            ...ids,
-          },
+          ids: availabilityIds,
           title: details.originalTitle?.trim() || details.title,
           year: details.year,
           seasonNumber: episodeSelection.seasonNumber,
@@ -109,6 +110,102 @@ export class MediaService {
     const mappedAvailability = mapMediaAvailability(availability);
 
     return selectMediaAvailabilityEpisode(mappedAvailability, episodeSelection);
+  }
+
+  private async resolveAvailabilityIds(
+    details: MediaDetails,
+    resolvedIds: ExternalIds,
+    episodeSelection: MediaSourceEpisodeRefDto,
+  ): Promise<ExternalIds> {
+    const ids = {
+      ...(details.ids ?? {}),
+      ...resolvedIds,
+    };
+
+    if (
+      details.type !== 'anime' ||
+      ids.kinopoisk ||
+      !this.hasExactEpisodeSelection(episodeSelection)
+    ) {
+      return ids;
+    }
+
+    let response: Awaited<ReturnType<MediaEngine['search']>>;
+
+    try {
+      response = await this.mediaEngine.search({
+        title: details.originalTitle?.trim() || details.title,
+        year: details.year,
+        limit: 10,
+      });
+    } catch (error) {
+      if (this.isMediaEngineProviderError(error)) {
+        return ids;
+      }
+
+      throw error;
+    }
+
+    const kinopoiskIds = new Set(
+      response.results.flatMap(({ item }) => {
+        const kinopoisk = item.ids?.kinopoisk;
+
+        return kinopoisk && this.matchesAnimeIdentity(details, item) ? [kinopoisk] : [];
+      }),
+    );
+
+    return kinopoiskIds.size === 1 ? { ...ids, kinopoisk: [...kinopoiskIds][0] } : ids;
+  }
+
+  private hasExactEpisodeSelection(selection: MediaSourceEpisodeRefDto): boolean {
+    return (
+      selection.absoluteEpisodeNumber !== undefined ||
+      (selection.seasonNumber !== undefined && selection.episodeNumber !== undefined)
+    );
+  }
+
+  private matchesAnimeIdentity(details: MediaDetails, item: MediaItem): boolean {
+    if (
+      ANIME_ID_SOURCES.some((source) => {
+        const detailsId = details.ids?.[source]?.trim();
+        const itemId = item.ids?.[source]?.trim();
+
+        return Boolean(detailsId && itemId && detailsId === itemId);
+      })
+    ) {
+      return true;
+    }
+
+    if (item.type !== 'anime' || details.year === undefined || item.year !== details.year) {
+      return false;
+    }
+
+    const detailsTitles = this.normalizeIdentityTitles([
+      details.title,
+      details.originalTitle,
+      ...(details.alternativeTitles ?? []),
+    ]);
+    const itemTitles = this.normalizeIdentityTitles([
+      item.title,
+      item.originalTitle,
+      ...(item.alternativeTitles ?? []),
+    ]);
+
+    return [...detailsTitles].some((title) => itemTitles.has(title));
+  }
+
+  private normalizeIdentityTitles(values: Array<string | undefined>): Set<string> {
+    return new Set(
+      values.flatMap((value) => {
+        const normalized = value
+          ?.normalize('NFKC')
+          .toLocaleLowerCase()
+          .replace(/[^\p{L}\p{N}]+/gu, ' ')
+          .trim();
+
+        return normalized ? [normalized] : [];
+      }),
+    );
   }
 
   private toMediaDetails(mediaRef: string, details: MediaDetails): MediaDetailsDto {

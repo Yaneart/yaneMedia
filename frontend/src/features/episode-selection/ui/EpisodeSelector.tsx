@@ -10,7 +10,7 @@ export type EpisodeSelectorProps = {
 };
 
 function getEpisodeLabel(episode: MediaEpisode) {
-  return [`${episode.episodeNumber} серия`, episode.title].filter(Boolean).join(' · ');
+  return `${episode.episodeNumber} серия`;
 }
 
 export function EpisodeSelector({

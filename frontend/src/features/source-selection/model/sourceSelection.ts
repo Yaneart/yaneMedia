@@ -168,11 +168,7 @@ export function getDirectTrackKey(source: MediaSourceOption) {
 }
 
 function getDirectTrackLabel(source: MediaSourceOption) {
-  const title = source.translation?.title ?? source.label;
-  const providerLabel = getProviderLabel(source.provider);
-  const sourceIdentifiesProvider = isSameLabel(title, providerLabel);
-
-  return [title, sourceIdentifiesProvider ? undefined : providerLabel].filter(Boolean).join(' · ');
+  return source.translation?.title ?? source.label;
 }
 
 export function getDirectTrackOptions(
