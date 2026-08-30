@@ -1,5 +1,9 @@
 import type { MediaDetails, MediaEpisode, MediaSeason } from '@/entities/media';
-import type { MediaAvailability, MediaSourceOption } from '@/entities/media-source';
+import type {
+  MediaAvailability,
+  MediaSourceEpisodeRef,
+  MediaSourceOption,
+} from '@/entities/media-source';
 import type { PlaybackEpisodeSelection } from '@/entities/playback';
 import { EpisodeSelector } from '@/features/episode-selection';
 import { FavoriteButton, useFavorites } from '@/features/favorite';
@@ -24,12 +28,44 @@ import {
 import { MediaCast } from '@/widgets/mdeia-cast';
 import { MediaFacts, MediaInfo } from '@/widgets/media-info';
 import { MediaPlayer, type MediaPlayerStatus } from '@/widgets/media-player';
+import { Spinner } from '@/shared';
 import { useCallback, useState } from 'react';
+
+import type { MediaAvailabilityStatus } from '../model/useMediaAvailability';
+import { useMediaEpisodeAvailability } from '../model/useMediaEpisodeAvailability';
 
 export type MediaViewProps = {
   media: MediaDetails;
-  availability: MediaAvailability;
+  availability: MediaAvailability | null;
+  availabilityStatus: MediaAvailabilityStatus;
 };
+
+const emptyAvailability: MediaAvailability = {
+  sources: [],
+  episodes: [],
+  checkedAt: '',
+  degraded: false,
+  hasExpiredSources: false,
+};
+
+type AvailabilityToolbarStatusProps = Pick<MediaViewProps, 'availability' | 'availabilityStatus'>;
+
+function AvailabilityToolbarStatus({
+  availability,
+  availabilityStatus,
+}: AvailabilityToolbarStatusProps) {
+  const isInitialLoading = !availability && availabilityStatus === 'loading';
+
+  if (isInitialLoading) {
+    return (
+      <div className="flex min-h-10 min-w-48 flex-1 items-center justify-center" aria-live="polite">
+        <Spinner size="medium" label="Подбираем варианты просмотра" />
+      </div>
+    );
+  }
+
+  return null;
+}
 
 function getPlaybackEpisode(
   episode: DirectEpisodeOption | undefined,
@@ -45,6 +81,59 @@ function getPlaybackEpisode(
     episodeNumber,
     absoluteEpisodeNumber: episode.absoluteEpisodeNumber,
   };
+}
+
+function getAvailabilityEpisode(
+  media: MediaDetails,
+  episode: DirectEpisodeOption | undefined,
+): MediaSourceEpisodeRef | null {
+  if (!episode || media.type === 'movie') return null;
+
+  if (media.type === 'anime') {
+    return episode.absoluteEpisodeNumber === undefined
+      ? null
+      : { absoluteEpisodeNumber: episode.absoluteEpisodeNumber };
+  }
+
+  if (episode.seasonNumber === undefined || episode.episodeNumber === undefined) {
+    return null;
+  }
+
+  return {
+    seasonNumber: episode.seasonNumber,
+    episodeNumber: episode.episodeNumber,
+  };
+}
+
+function matchesEpisode(episode: MediaSourceEpisodeRef, selection: MediaSourceEpisodeRef) {
+  if (selection.absoluteEpisodeNumber !== undefined) {
+    return episode.absoluteEpisodeNumber === selection.absoluteEpisodeNumber;
+  }
+
+  return (
+    episode.seasonNumber === selection.seasonNumber &&
+    episode.episodeNumber === selection.episodeNumber
+  );
+}
+
+function mergeEpisodeSources(
+  baseSources: readonly MediaSourceOption[],
+  availability: MediaAvailability | null,
+  selection: MediaSourceEpisodeRef | null,
+) {
+  if (!availability || !selection) return baseSources;
+
+  const exactSources = availability.episodes.find((episode) =>
+    matchesEpisode(episode, selection),
+  )?.sources;
+
+  if (!exactSources || exactSources.length === 0) return baseSources;
+
+  return [
+    ...new Map(
+      [...baseSources, ...exactSources].map((source) => [source.sourceRef, source]),
+    ).values(),
+  ];
 }
 
 function findEpisodeMetadata(media: MediaDetails, episode: DirectEpisodeOption | undefined) {
@@ -94,18 +183,19 @@ function hasSameEpisode(
   );
 }
 
-export function MediaView({ media, availability }: MediaViewProps) {
+export function MediaView({ media, availability, availabilityStatus }: MediaViewProps) {
   const { session, startSession, endSession } = usePlaybackSession();
   const { isFavorite, addFavorite, removeFavorite } = useFavorites();
   const mediaIsFavorite = isFavorite(media.mediaRef);
   const mediaSession = session?.mediaRef === media.mediaRef ? session : null;
 
-  const catalog = createPlaybackSourceCatalog(availability);
+  const catalog = createPlaybackSourceCatalog(availability ?? emptyAvailability);
   const usesDirectEpisodes = media.type !== 'movie' && catalog.directEpisodes.length > 0;
   const hasEmbedMode = catalog.embedSources.length > 0;
   const hasDirectMode = usesDirectEpisodes
     ? catalog.directEpisodes.length > 0
     : catalog.directSources.length > 0;
+  const hasPlaybackSources = hasEmbedMode || hasDirectMode;
 
   const sessionEmbedSource = catalog.embedSources.find(
     (source) => source.sourceRef === mediaSession?.sourceRef,
@@ -120,7 +210,7 @@ export function MediaView({ media, availability }: MediaViewProps) {
 
   const initialMode: PlaybackMode = sessionEmbedSource
     ? 'embed'
-    : sessionDirectSource
+    : sessionDirectSource || (sessionDirectEpisode && mediaSession)
       ? 'direct'
       : hasEmbedMode
         ? 'embed'
@@ -138,7 +228,10 @@ export function MediaView({ media, availability }: MediaViewProps) {
     initialDirectEpisode?.key ?? null,
   );
   const [selectedDirectSourceRef, setSelectedDirectSourceRef] = useState<string | null>(
-    sessionDirectSource?.sourceRef ?? getPreferredSource(initialDirectSources)?.sourceRef ?? null,
+    sessionDirectSource?.sourceRef ??
+      (sessionDirectEpisode && mediaSession ? mediaSession.sourceRef : undefined) ??
+      getPreferredSource(initialDirectSources)?.sourceRef ??
+      null,
   );
   const [playerStatus, setPlayerStatus] = useState<MediaPlayerStatus>('ready');
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
@@ -150,8 +243,14 @@ export function MediaView({ media, availability }: MediaViewProps) {
     ? (catalog.directEpisodes.find((episode) => episode.key === selectedDirectEpisodeKey) ??
       catalog.directEpisodes[0])
     : undefined;
+  const availabilityEpisode = getAvailabilityEpisode(media, selectedDirectEpisode);
+  const episodeAvailability = useMediaEpisodeAvailability(media.mediaRef, availabilityEpisode);
   const currentDirectSources = usesDirectEpisodes
-    ? (selectedDirectEpisode?.sources ?? [])
+    ? mergeEpisodeSources(
+        selectedDirectEpisode?.sources ?? [],
+        episodeAvailability,
+        availabilityEpisode,
+      )
     : catalog.directSources;
   const selectedDirectSource =
     currentDirectSources.find((source) => source.sourceRef === selectedDirectSourceRef) ??
@@ -398,6 +497,11 @@ export function MediaView({ media, availability }: MediaViewProps) {
                 )}
               </>
             )}
+
+            <AvailabilityToolbarStatus
+              availability={availability}
+              availabilityStatus={availabilityStatus}
+            />
           </div>
 
           <MediaPlayer
@@ -410,6 +514,7 @@ export function MediaView({ media, availability }: MediaViewProps) {
             onReady={handlePlayerReady}
             onError={handlePlayerError}
             onRetry={loadPlayer}
+            sourcePlaceholder={hasPlaybackSources ? undefined : null}
             embedded
           />
         </div>

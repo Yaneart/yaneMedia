@@ -16,6 +16,7 @@ export type MediaPlayerProps = {
   onReady: () => void;
   onError: () => void;
   onRetry?: () => void;
+  sourcePlaceholder?: string | null;
   embedded?: boolean;
 };
 
@@ -33,6 +34,7 @@ export function MediaPlayer({
   onReady,
   onError,
   onRetry,
+  sourcePlaceholder = 'Выберите плеер для просмотра',
   embedded = false,
 }: MediaPlayerProps) {
   const activeSource =
@@ -94,7 +96,9 @@ export function MediaPlayer({
             activeSource && status === 'ready' ? 'pointer-events-none' : '',
           ].join(' ')}
         >
-          {!source && <p className="text-body text-white/70">Выберите плеер для просмотра</p>}
+          {!source && sourcePlaceholder && (
+            <p className="text-body text-white/70">{sourcePlaceholder}</p>
+          )}
 
           {source && !isStarted && (
             <div className="flex flex-col items-center">

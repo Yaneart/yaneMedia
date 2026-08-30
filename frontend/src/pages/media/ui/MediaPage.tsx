@@ -13,11 +13,7 @@ export function MediaPage() {
 
   const { result, status: detailsStatus, retry: retryDetails } = useMediaDetails(mediaRef);
 
-  const {
-    availability,
-    status: availabilityStatus,
-    retry: retryAvailability,
-  } = useMediaAvailability(mediaRef);
+  const { availability, status: availabilityStatus } = useMediaAvailability(mediaRef);
 
   const media = result?.details ?? null;
 
@@ -29,7 +25,7 @@ export function MediaPage() {
     recordOpening(media.mediaRef);
   }, [media, recordOpening]);
 
-  if (detailsStatus === 'not-found' || availabilityStatus === 'not-found') {
+  if (detailsStatus === 'not-found') {
     return (
       <ErrorState
         variant="page"
@@ -58,29 +54,16 @@ export function MediaPage() {
     );
   }
 
-  if (availabilityStatus === 'error') {
-    return (
-      <ErrorState
-        variant="page"
-        eyebrow="Источники недоступны"
-        title="Не удалось загрузить варианты просмотра"
-        description="Список доступных плееров временно не загрузился. Попробуйте восстановить соединение."
-        visualCode="!"
-        visualLabel="Нет источников"
-        retryLabel="Повторить загрузку"
-        onRetry={retryAvailability}
-      />
-    );
+  if (!media) {
+    return <LoadingState variant="page" label="Загружаем произведение" />;
   }
 
-  if (!media || !availability) {
-    return (
-      <LoadingState
-        variant="page"
-        label={media ? 'Загружаем источники' : 'Загружаем произведение'}
-      />
-    );
-  }
-
-  return <MediaView key={media.mediaRef} media={media} availability={availability} />;
+  return (
+    <MediaView
+      key={`${media.mediaRef}:${availability ? 'ready' : 'pending'}`}
+      media={media}
+      availability={availability}
+      availabilityStatus={availabilityStatus}
+    />
+  );
 }
