@@ -6,6 +6,7 @@ export type SeasonSelectorProps = {
   selectedSeasonNumber: number | null;
   onSeasonChange: (seasonNumber: number) => void;
   variant?: 'section' | 'inline';
+  compactDesktop?: boolean;
 };
 
 function getSeasonLabel(season: MediaSeason) {
@@ -17,6 +18,7 @@ export function SeasonSelector({
   selectedSeasonNumber,
   onSeasonChange,
   variant = 'section',
+  compactDesktop = false,
 }: SeasonSelectorProps) {
   const options = seasons.map((season) => ({
     value: season.number.toString(),
@@ -31,6 +33,7 @@ export function SeasonSelector({
         variant === 'section'
           ? 'border-b border-context-border bg-surface-elevated px-4 py-3 sm:px-5'
           : '',
+        compactDesktop ? 'min-[70rem]:shrink-0' : '',
       ].join(' ')}
     >
       <span className="shrink-0 text-caption text-text-secondary">Сезон</span>
@@ -45,7 +48,7 @@ export function SeasonSelector({
         }}
         matchMenuWidth
         allowEmpty={false}
-        className="w-full sm:w-40"
+        className={['w-full sm:w-40', compactDesktop ? 'min-[70rem]:w-40' : ''].join(' ')}
       />
     </section>
   );

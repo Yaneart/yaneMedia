@@ -1,48 +1,26 @@
 import type { MediaSourceOption } from '@/entities/media-source';
 import { Select } from '@/shared';
 
+import { getSourceLabel } from '../model/sourceSelection';
+
 export type SourceSelectorProps = {
   sources: readonly MediaSourceOption[];
   selectedSourceRef: string | null;
   onSourceChange: (sourceRef: string | null) => void;
   variant?: 'section' | 'toolbar' | 'inline';
+  includeDetails?: boolean;
 };
-
-const providerLabels: Readonly<Record<string, string>> = {
-  'kinobd-streaming': 'KinoBD',
-  'ddbb-streaming': 'DDBB',
-  'veoveo-streaming': 'VeoVeo',
-  'videohub-streaming': 'VideoHUB',
-  'aniliberty-streaming': 'AniLiberty',
-};
-
-function getSourceLabel(source: MediaSourceOption) {
-  const providerLabel = providerLabels[source.provider] ?? source.provider;
-
-  const hasDistinctProviderLabel =
-    providerLabel.localeCompare(source.label, undefined, {
-      sensitivity: 'base',
-    }) !== 0;
-
-  return [
-    source.label,
-    hasDistinctProviderLabel ? providerLabel : undefined,
-    source.translation?.title,
-    source.quality?.label,
-  ]
-    .filter(Boolean)
-    .join(' · ');
-}
 
 export function SourceSelector({
   sources,
   selectedSourceRef,
   onSourceChange,
   variant = 'section',
+  includeDetails = true,
 }: SourceSelectorProps) {
   const options = sources.map((source) => ({
     value: source.sourceRef,
-    label: getSourceLabel(source),
+    label: getSourceLabel(source, includeDetails),
   }));
 
   const isToolbar = variant !== 'section';

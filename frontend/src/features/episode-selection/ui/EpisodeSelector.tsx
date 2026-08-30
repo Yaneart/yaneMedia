@@ -6,10 +6,11 @@ export type EpisodeSelectorProps = {
   selectedEpisodeNumber: number | null;
   onEpisodeChange: (episodeNumber: number) => void;
   variant?: 'section' | 'inline';
+  compactDesktop?: boolean;
 };
 
 function getEpisodeLabel(episode: MediaEpisode) {
-  return `${episode.episodeNumber} серия`;
+  return [`${episode.episodeNumber} серия`, episode.title].filter(Boolean).join(' · ');
 }
 
 export function EpisodeSelector({
@@ -17,6 +18,7 @@ export function EpisodeSelector({
   selectedEpisodeNumber,
   onEpisodeChange,
   variant = 'section',
+  compactDesktop = false,
 }: EpisodeSelectorProps) {
   const options = episodes.map((episode) => ({
     value: episode.episodeNumber.toString(),
@@ -31,6 +33,7 @@ export function EpisodeSelector({
         variant === 'section'
           ? 'border-b border-context-border bg-surface-elevated px-4 py-3 sm:px-5'
           : '',
+        compactDesktop ? 'min-[70rem]:shrink-0' : '',
       ].join(' ')}
     >
       <span className="shrink-0 text-caption text-text-secondary">Серия</span>
@@ -45,7 +48,7 @@ export function EpisodeSelector({
         }}
         matchMenuWidth
         allowEmpty={false}
-        className="w-full min-w-0 sm:w-40"
+        className={['w-full min-w-0 sm:w-56', compactDesktop ? 'min-[70rem]:w-48' : ''].join(' ')}
       />
     </section>
   );

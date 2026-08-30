@@ -82,5 +82,5 @@ export function MediaPage() {
     );
   }
 
-  return <MediaView key={media.mediaRef} media={media} sources={availability.sources} />;
+  return <MediaView key={media.mediaRef} media={media} availability={availability} />;
 }
