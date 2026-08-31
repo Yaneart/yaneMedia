@@ -1,4 +1,8 @@
-import { getMediaAvailability, type MediaAvailability } from '@/entities/media-source';
+import {
+  getMediaAvailability,
+  getMediaAvailabilityExpirationDelay,
+  type MediaAvailability,
+} from '@/entities/media-source';
 import { ApiClientError } from '@/shared/api';
 import { useEffect, useRef, useState } from 'react';
 
@@ -21,8 +25,12 @@ function countUniqueSources(availability: MediaAvailability) {
   ]).size;
 }
 
+function needsBackgroundRefresh(availability: MediaAvailability) {
+  return availability.degraded || availability.hasExpiredSources;
+}
+
 function selectBetterAvailability(current: MediaAvailability | null, next: MediaAvailability) {
-  if (!current || !next.degraded) {
+  if (!current || !next.degraded || getMediaAvailabilityExpirationDelay(current) === 0) {
     return next;
   }
 
@@ -70,23 +78,51 @@ export function useMediaAvailability(mediaRef: string | undefined) {
       status: preservedAvailability ? 'success' : 'loading',
     });
 
-    const scheduleBackgroundRefresh = () => {
+    const scheduleRefresh = (delay: number, advanceRetry: boolean) => {
       if (controller.signal.aborted) {
         return;
       }
 
-      const delay =
-        backgroundRetryDelaysMs[Math.min(backgroundRetryIndex, backgroundRetryDelaysMs.length - 1)];
+      if (refreshTimerId !== undefined) {
+        window.clearTimeout(refreshTimerId);
+      }
 
       refreshTimerId = window.setTimeout(() => {
+        refreshTimerId = undefined;
+
         if (document.visibilityState !== 'visible' || navigator.onLine === false) {
           scheduleBackgroundRefresh();
           return;
         }
 
-        backgroundRetryIndex += 1;
+        if (advanceRetry) {
+          backgroundRetryIndex += 1;
+        }
+
         void loadAvailability();
       }, delay);
+    };
+
+    const scheduleBackgroundRefresh = () => {
+      const delay =
+        backgroundRetryDelaysMs[Math.min(backgroundRetryIndex, backgroundRetryDelaysMs.length - 1)];
+
+      scheduleRefresh(delay, true);
+    };
+
+    const scheduleNextRefresh = (nextAvailability: MediaAvailability) => {
+      const expirationDelay = getMediaAvailabilityExpirationDelay(nextAvailability);
+
+      if (needsBackgroundRefresh(nextAvailability) || expirationDelay === 0) {
+        scheduleBackgroundRefresh();
+        return;
+      }
+
+      backgroundRetryIndex = 0;
+
+      if (expirationDelay !== null) {
+        scheduleRefresh(expirationDelay, false);
+      }
     };
 
     const loadAvailability = async () => {
@@ -112,9 +148,7 @@ export function useMediaAvailability(mediaRef: string | undefined) {
           status: 'success',
         });
 
-        if (availability.degraded) {
-          scheduleBackgroundRefresh();
-        }
+        scheduleNextRefresh(availability);
       } catch (error) {
         if (controller.signal.aborted) {
           return;
@@ -129,9 +163,7 @@ export function useMediaAvailability(mediaRef: string | undefined) {
             status: 'success',
           });
 
-          if (availability.degraded) {
-            scheduleBackgroundRefresh();
-          }
+          scheduleNextRefresh(availability);
 
           return;
         }

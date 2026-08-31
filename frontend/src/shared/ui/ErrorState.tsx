@@ -175,11 +175,11 @@ export function ErrorState({
 
   return (
     <div
-      role="alert"
+      role={isError ? 'alert' : 'status'}
       className={[
         'relative isolate flex items-center justify-center',
         isPlayer
-          ? 'flex-row gap-4 px-4 py-4 text-left'
+          ? 'flex-row gap-3 px-3 py-3 text-left min-[360px]:gap-4 min-[360px]:px-4 min-[360px]:py-4'
           : 'flex-col gap-5 overflow-hidden px-6 py-10 text-center sm:flex-row sm:text-left',
         className,
       ].join(' ')}
@@ -191,7 +191,7 @@ export function ErrorState({
         className={[
           'relative z-10 flex shrink-0 items-center justify-center overflow-hidden rounded-overlay border',
           isPlayer
-            ? 'size-16 border-white/20 bg-white/10'
+            ? 'size-12 border-white/20 bg-white/10 min-[360px]:size-16'
             : 'size-20 border-context-border bg-linear-to-br from-watermark/25 via-surface-elevated to-surface',
         ].join(' ')}
       >
@@ -199,8 +199,11 @@ export function ErrorState({
         <span
           className={[
             'relative flex size-9 items-center justify-center rounded-full border font-semibold',
-            'border-error/70 bg-error/10 text-xl text-error ring-2 ring-error/10',
-            isPlayer ? 'bg-black/45' : 'bg-surface-elevated/90',
+            'text-xl ring-2',
+            isError
+              ? 'border-error/70 text-error ring-error/10'
+              : 'border-watermark/60 text-watermark ring-watermark/10',
+            isPlayer ? 'bg-black/45' : isError ? 'bg-error/10' : 'bg-watermark/10',
           ].join(' ')}
         >
           {visualCode}
@@ -220,7 +223,9 @@ export function ErrorState({
         <p
           className={[
             'mt-1 font-semibold',
-            isPlayer ? 'text-base text-white' : 'text-heading text-text-primary',
+            isPlayer
+              ? 'text-sm text-white min-[360px]:text-base'
+              : 'text-heading text-text-primary',
           ].join(' ')}
         >
           {title}
@@ -230,7 +235,9 @@ export function ErrorState({
           <p
             className={[
               'mt-1.5',
-              isPlayer ? 'text-caption text-white/65' : 'text-body text-text-secondary',
+              isPlayer
+                ? 'text-caption text-white/65 max-[359px]:sr-only'
+                : 'text-body text-text-secondary',
             ].join(' ')}
           >
             {description}

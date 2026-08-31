@@ -1,8 +1,9 @@
 import type { MediaDetails, MediaEpisode, MediaSeason } from '@/entities/media';
-import type {
-  MediaAvailability,
-  MediaSourceEpisodeRef,
-  MediaSourceOption,
+import {
+  getMediaSourcePlaybackIssue,
+  type MediaAvailability,
+  type MediaSourceEpisodeRef,
+  type MediaSourceOption,
 } from '@/entities/media-source';
 import type { PlaybackEpisodeSelection } from '@/entities/playback';
 import { EpisodeSelector } from '@/features/episode-selection';
@@ -27,7 +28,11 @@ import {
 } from '@/features/source-selection';
 import { MediaCast } from '@/widgets/mdeia-cast';
 import { MediaFacts, MediaInfo } from '@/widgets/media-info';
-import { MediaPlayer, type MediaPlayerStatus } from '@/widgets/media-player';
+import {
+  MediaPlayer,
+  type MediaPlayerEmptyState,
+  type MediaPlayerStatus,
+} from '@/widgets/media-player';
 import { Spinner } from '@/shared';
 import { useCallback, useState } from 'react';
 
@@ -65,6 +70,45 @@ function AvailabilityToolbarStatus({
   }
 
   return null;
+}
+
+function getMediaPlayerEmptyState(
+  availability: MediaAvailability | null,
+  availabilityStatus: MediaAvailabilityStatus,
+  hasPlaybackSources: boolean,
+): MediaPlayerEmptyState | undefined {
+  if (hasPlaybackSources) {
+    return undefined;
+  }
+
+  if (!availability && availabilityStatus === 'loading') {
+    return undefined;
+  }
+
+  if (availability?.hasExpiredSources) {
+    return {
+      title: 'Ссылки на просмотр устарели',
+      description: 'Мы обновляем доступные варианты просмотра.',
+      visualCode: '↻',
+      visualLabel: 'Обновление ссылок',
+    };
+  }
+
+  if (availability?.degraded || availabilityStatus === 'error') {
+    return {
+      title: 'Ищем доступные варианты',
+      description: 'Часть медиатеки временно не отвечает. Мы продолжим поиск автоматически.',
+      visualCode: '…',
+      visualLabel: 'Восстановление',
+    };
+  }
+
+  return {
+    title: 'Варианты просмотра пока не найдены',
+    description: 'Для этого произведения сейчас нет доступных источников.',
+    visualCode: '—',
+    visualLabel: 'Нет источников',
+  };
 }
 
 function getPlaybackEpisode(
@@ -197,6 +241,12 @@ export function MediaView({ media, availability, availabilityStatus }: MediaView
     ? catalog.directEpisodes.length > 0
     : catalog.directSources.length > 0;
   const hasPlaybackSources = hasEmbedMode || hasDirectMode;
+
+  const playerEmptyState = getMediaPlayerEmptyState(
+    availability,
+    availabilityStatus,
+    hasPlaybackSources,
+  );
 
   const sessionEmbedSource = catalog.embedSources.find(
     (source) => source.sourceRef === mediaSession?.sourceRef,
@@ -362,7 +412,9 @@ export function MediaView({ media, availability, availabilityStatus }: MediaView
   };
 
   const loadPlayer = () => {
-    if (!selectedSource) return;
+    if (!selectedSource || getMediaSourcePlaybackIssue(selectedSource)) {
+      return;
+    }
 
     const selectedEpisodeMetadata = findEpisodeMetadata(media, selectedDirectEpisode);
 
@@ -515,7 +567,7 @@ export function MediaView({ media, availability, availabilityStatus }: MediaView
             onReady={handlePlayerReady}
             onError={handlePlayerError}
             onRetry={loadPlayer}
-            sourcePlaceholder={hasPlaybackSources ? undefined : null}
+            emptyState={playerEmptyState}
             embedded
           />
         </div>

@@ -1,10 +1,21 @@
 import type { MediaArtwork } from '@/entities/media';
-import type { MediaSourceOption } from '@/entities/media-source';
+import {
+  getMediaSourcePlaybackIssue,
+  type MediaSourceOption,
+  type MediaSourcePlaybackIssue,
+} from '@/entities/media-source';
 import { ErrorState, IconButton, PlayIcon, Spinner } from '@/shared';
 
 import { MediaVideoRenderer } from './MediaVideoRenderer';
 
 export type MediaPlayerStatus = 'loading' | 'ready' | 'error';
+
+export type MediaPlayerEmptyState = {
+  title: string;
+  description: string;
+  visualCode: string;
+  visualLabel: string;
+};
 
 export type MediaPlayerProps = {
   mediaTitle: string;
@@ -16,13 +27,58 @@ export type MediaPlayerProps = {
   onReady: () => void;
   onError: () => void;
   onRetry?: () => void;
-  sourcePlaceholder?: string | null;
+  emptyState?: MediaPlayerEmptyState;
   embedded?: boolean;
+};
+
+type PlaybackIssueContent = {
+  title: string;
+  description: string;
+  visualCode: string;
+  visualLabel: string;
+};
+
+const playbackIssueContent: Record<MediaSourcePlaybackIssue, PlaybackIssueContent> = {
+  expired: {
+    title: 'Ссылка устарела',
+    description: 'Мы попробуем подобрать новый вариант просмотра.',
+    visualCode: '↻',
+    visualLabel: 'Обновление',
+  },
+  'region-locked': {
+    title: 'Просмотр недоступен в вашем регионе',
+    description: 'Выберите другой вариант просмотра, если он доступен.',
+    visualCode: '—',
+    visualLabel: 'Ограничение доступа',
+  },
+  'account-required': {
+    title: 'Требуется дополнительный доступ',
+    description: 'Этот вариант нельзя открыть без дополнительного доступа. Выберите другой.',
+    visualCode: 'i',
+    visualLabel: 'Ограничение доступа',
+  },
+  'temporarily-unavailable': {
+    title: 'Источник временно недоступен',
+    description: 'Выберите другой вариант или вернитесь немного позже.',
+    visualCode: '…',
+    visualLabel: 'Временно недоступен',
+  },
+  'browser-unsupported': {
+    title: 'Этот вариант нельзя открыть в браузере',
+    description: 'Выберите другой доступный вариант просмотра.',
+    visualCode: '×',
+    visualLabel: 'Не поддерживается',
+  },
 };
 
 function getSourceDescription(source: MediaSourceOption) {
   return [source.translation?.title, source.quality?.label].filter(Boolean).join(' · ');
 }
+
+const friendlyStateClassName = [
+  'w-full max-w-xl rounded-card border border-white/15',
+  'bg-black/40 px-3 py-3 shadow-overlay backdrop-blur-md min-[360px]:px-5 min-[360px]:py-5 sm:px-6',
+].join(' ');
 
 export function MediaPlayer({
   mediaTitle,
@@ -34,14 +90,16 @@ export function MediaPlayer({
   onReady,
   onError,
   onRetry,
-  sourcePlaceholder = 'Выберите плеер для просмотра',
+  emptyState,
   embedded = false,
 }: MediaPlayerProps) {
+  const sourceIssue = source ? getMediaSourcePlaybackIssue(source) : null;
+  const sourceIssueContent = sourceIssue ? playbackIssueContent[sourceIssue] : null;
+
   const activeSource =
     source &&
     isStarted &&
-    source.browserSupported &&
-    source.availability === 'available' &&
+    !sourceIssue &&
     (source.kind === 'embed' || source.kind === 'hls' || source.kind === 'mp4')
       ? source
       : undefined;
@@ -96,11 +154,31 @@ export function MediaPlayer({
             activeSource && status === 'ready' ? 'pointer-events-none' : '',
           ].join(' ')}
         >
-          {!source && sourcePlaceholder && (
-            <p className="text-body text-white/70">{sourcePlaceholder}</p>
+          {!source && emptyState && (
+            <ErrorState
+              variant="player"
+              title={emptyState.title}
+              description={emptyState.description}
+              visualCode={emptyState.visualCode}
+              visualLabel={emptyState.visualLabel}
+              className={friendlyStateClassName}
+              tone="accent"
+            />
           )}
 
-          {source && !isStarted && (
+          {source && sourceIssueContent && (
+            <ErrorState
+              variant="player"
+              title={sourceIssueContent.title}
+              description={sourceIssueContent.description}
+              visualCode={sourceIssueContent.visualCode}
+              visualLabel={sourceIssueContent.visualLabel}
+              className={friendlyStateClassName}
+              tone="accent"
+            />
+          )}
+
+          {source && !isStarted && !sourceIssue && (
             <div className="flex flex-col items-center">
               <IconButton
                 size="custom"
@@ -121,7 +199,7 @@ export function MediaPlayer({
             </div>
           )}
 
-          {source && isStarted && status === 'loading' && (
+          {source && isStarted && !sourceIssue && status === 'loading' && (
             <Spinner
               size="large"
               label={`Загрузка плеера ${source.label}`}
@@ -129,7 +207,7 @@ export function MediaPlayer({
             />
           )}
 
-          {source && isStarted && status === 'ready' && !activeSource && (
+          {source && isStarted && !sourceIssue && status === 'ready' && !activeSource && (
             <div role="status">
               <p className="text-heading text-white">{source.label}</p>
               <p className="mt-2 text-caption text-white/60">
@@ -138,7 +216,7 @@ export function MediaPlayer({
             </div>
           )}
 
-          {source && isStarted && status === 'error' && (
+          {source && isStarted && !sourceIssue && status === 'error' && (
             <ErrorState
               variant="player"
               title="Не удалось загрузить плеер"
