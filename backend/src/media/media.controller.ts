@@ -13,16 +13,18 @@ import { MediaSearchQueryDto } from './dto/media-search-query.dto';
 import { MediaAvailabilityDto } from './dto/media-availability.dto';
 import type { MediaDetailsResponseDto } from './dto/media-details-response.dto';
 import type { MediaSummaryDto } from './dto/media-summary.dto';
-import { HomeFeedDto } from './dto/home-feed.dto';
 import { MediaCatalogService } from './catalog/media-catalog.service';
 import { MediaCatalogQueryDto } from './catalog/dto/media-catalog-query.dto';
 import type { MediaCatalogResponseDto } from './catalog/dto/media-catalog-response.dto';
+import type { HomeFeedDto } from './home/dto/home-feed.dto';
+import { HomeFeedService } from './home/home-feed.service';
 
 @Controller('media')
 export class MediaController {
   constructor(
     private readonly mediaService: MediaService,
     private readonly mediaCatalogService: MediaCatalogService,
+    private readonly homeFeedService: HomeFeedService,
   ) {}
 
   @Get('search')
@@ -31,8 +33,8 @@ export class MediaController {
   }
 
   @Get('home')
-  getHome(): HomeFeedDto {
-    return this.mediaService.getHomeFeed();
+  getHome(): Promise<HomeFeedDto> {
+    return this.homeFeedService.getHomeFeed();
   }
 
   @Get('catalog')

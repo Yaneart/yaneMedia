@@ -1,4 +1,4 @@
-import type { MediaSummaryDto } from './media-summary.dto';
+import type { MediaSummaryDto } from '../../dto/media-summary.dto';
 
 export class HomePlaybackProgressDto {
   positionSeconds!: number;
@@ -22,4 +22,7 @@ export class HomeFeedDto {
   featuredExpiresAt!: string;
   continueWatching!: HomeContinueWatchingItemDto[];
   collections!: HomeCollectionDto[];
+  partial!: boolean;
+  degraded!: boolean;
+  stale!: boolean;
 }

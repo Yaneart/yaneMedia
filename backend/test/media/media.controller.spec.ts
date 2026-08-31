@@ -1,13 +1,14 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import type { MediaAvailabilityDto } from '../../src/media/dto/media-availability.dto';
-import type { HomeFeedDto } from '../../src/media/dto/home-feed.dto';
 import type { MediaCatalogResponseDto } from '../../src/media/catalog/dto/media-catalog-response.dto';
 import type { MediaCatalogService } from '../../src/media/catalog/media-catalog.service';
+import type { HomeFeedDto } from '../../src/media/home/dto/home-feed.dto';
+import type { HomeFeedService } from '../../src/media/home/home-feed.service';
 import { MediaController } from '../../src/media/media.controller';
 import type { MediaService } from '../../src/media/media.service';
 
 describe('MediaController home feed', () => {
-  it('returns the home feed produced by the service', () => {
+  it('returns the home feed produced by the service', async () => {
     const homeFeed: HomeFeedDto = {
       featured: {
         mediaRef: 'imdb:tt15239678',
@@ -18,16 +19,20 @@ describe('MediaController home feed', () => {
       featuredExpiresAt: '2026-08-26T11:00:00.000Z',
       continueWatching: [],
       collections: [],
+      partial: false,
+      degraded: false,
+      stale: false,
     };
-    const getHomeFeed = jest.fn().mockReturnValue(homeFeed) as jest.MockedFunction<
-      MediaService['getHomeFeed']
+    const getHomeFeed = jest.fn().mockResolvedValue(homeFeed) as jest.MockedFunction<
+      HomeFeedService['getHomeFeed']
     >;
     const controller = new MediaController(
-      { getHomeFeed } as unknown as MediaService,
+      {} as MediaService,
       {} as MediaCatalogService,
+      { getHomeFeed } as unknown as HomeFeedService,
     );
 
-    expect(controller.getHome()).toBe(homeFeed);
+    await expect(controller.getHome()).resolves.toBe(homeFeed);
     expect(getHomeFeed).toHaveBeenCalledTimes(1);
   });
 });
@@ -46,6 +51,7 @@ describe('MediaController catalog', () => {
     const controller = new MediaController(
       {} as MediaService,
       { getCatalog } as unknown as MediaCatalogService,
+      {} as HomeFeedService,
     );
 
     await expect(controller.getCatalog({ type: 'anime' })).resolves.toBe(catalog);
@@ -69,7 +75,11 @@ describe('MediaController availability', () => {
     const mediaService = { getAvailabilityByRef } as unknown as MediaService;
 
     return {
-      controller: new MediaController(mediaService, {} as MediaCatalogService),
+      controller: new MediaController(
+        mediaService,
+        {} as MediaCatalogService,
+        {} as HomeFeedService,
+      ),
       getAvailabilityByRef,
     };
   }

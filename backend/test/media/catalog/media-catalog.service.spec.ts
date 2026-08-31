@@ -1,7 +1,9 @@
 import type { DetailsResponse } from '@media-engine/core';
 import { ServiceUnavailableException } from '@nestjs/common';
+import { editorialCatalog } from '../../../src/media/catalog/editorial-catalog';
 import type { MediaDetailsDto } from '../../../src/media/dto/media-details.dto';
 import { MediaCatalogService } from '../../../src/media/catalog/media-catalog.service';
+import type { MediaRefType } from '../../../src/media/media-ref';
 import type { MediaService } from '../../../src/media/media.service';
 
 describe('MediaCatalogService', () => {
@@ -29,6 +31,27 @@ describe('MediaCatalogService', () => {
       languages: [],
       persons: [],
     };
+  }
+
+  function createDetails(mediaRef: string, type: MediaRefType): MediaDetailsDto {
+    const base = {
+      mediaRef,
+      title: mediaRef,
+      genres: [],
+      countries: [],
+      languages: [],
+      persons: [],
+    };
+
+    if (type === 'series') {
+      return { ...base, type, seasons: [] };
+    }
+
+    if (type === 'anime') {
+      return { ...base, type, episodes: [] };
+    }
+
+    return { ...base, type };
   }
 
   function createService(
@@ -64,6 +87,32 @@ describe('MediaCatalogService', () => {
     });
     expect(second).toEqual(first);
     expect(getDetailsByRef).toHaveBeenCalledTimes(2);
+  });
+
+  it('hydrates the complete editorial manifest for home feed composition', async () => {
+    const getDetailsByRef = jest.fn((mediaRef: string) => {
+      const entry = editorialCatalog.find((candidate) => candidate.mediaRef === mediaRef);
+
+      return Promise.resolve({
+        details: entry ? createDetails(entry.mediaRef, entry.type) : null,
+        meta: healthyMeta,
+      });
+    }) as jest.MockedFunction<MediaService['getDetailsByRef']>;
+    const service = createService(getDetailsByRef);
+
+    const catalog = await service.getEditorialCatalog();
+
+    expect(catalog.items.map(({ mediaRef }) => mediaRef)).toEqual(
+      editorialCatalog.map(({ mediaRef }) => mediaRef),
+    );
+    expect(catalog).toEqual(
+      expect.objectContaining({
+        partial: false,
+        degraded: false,
+        stale: false,
+      }),
+    );
+    expect(getDetailsByRef).toHaveBeenCalledTimes(editorialCatalog.length);
   });
 
   it('returns an app-owned partial result when one configured title is missing', async () => {

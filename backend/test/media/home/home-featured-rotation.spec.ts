@@ -1,5 +1,5 @@
-import type { MediaSummaryDto } from '../../src/media/dto/media-summary.dto';
-import { selectHourlyFeatured } from '../../src/media/home-featured-rotation';
+import type { MediaSummaryDto } from '../../../src/media/dto/media-summary.dto';
+import { selectHourlyFeatured } from '../../../src/media/home/home-featured-rotation';
 
 function createCandidate(mediaRef: string): MediaSummaryDto {
   return {

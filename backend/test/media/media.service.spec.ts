@@ -1,11 +1,5 @@
 import type { MediaEngine } from '@media-engine/core';
 import { ServiceUnavailableException } from '@nestjs/common';
-import {
-  homeCollections,
-  homeContinueWatching,
-  homeFeaturedCandidates,
-} from '../../src/media/home-feed.fixture';
-import { selectHourlyFeatured } from '../../src/media/home-featured-rotation';
 import { MediaService } from '../../src/media/media.service';
 
 describe('MediaService', () => {
@@ -23,28 +17,6 @@ describe('MediaService', () => {
 
     await expect(invoke(service)).rejects.toBeInstanceOf(ServiceUnavailableException);
   };
-
-  it('builds the home feed without calling Media Engine', () => {
-    const search = jest.fn();
-    const getDetails = jest.fn();
-    const getAvailability = jest.fn();
-    const mediaEngine = {
-      search,
-      getDetails,
-      getAvailability,
-    } as unknown as MediaEngine;
-    const service = new MediaService(mediaEngine);
-    const timestamp = Date.UTC(2026, 7, 26, 10, 15);
-
-    expect(service.getHomeFeed(timestamp)).toEqual({
-      ...selectHourlyFeatured(homeFeaturedCandidates, timestamp),
-      continueWatching: homeContinueWatching,
-      collections: homeCollections,
-    });
-    expect(search).not.toHaveBeenCalled();
-    expect(getDetails).not.toHaveBeenCalled();
-    expect(getAvailability).not.toHaveBeenCalled();
-  });
 
   it('uses an anime-native reference for anime search results', async () => {
     const mediaEngine = {

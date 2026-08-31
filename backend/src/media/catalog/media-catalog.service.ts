@@ -36,6 +36,17 @@ export class MediaCatalogService {
     const entries = editorialCatalog
       .filter((entry) => entry.type === type)
       .sort((left, right) => left.catalogOrder - right.catalogOrder);
+
+    return this.hydrateCatalog(entries);
+  }
+
+  async getEditorialCatalog(): Promise<MediaCatalogResponseDto> {
+    return this.hydrateCatalog(editorialCatalog);
+  }
+
+  private async hydrateCatalog(
+    entries: readonly EditorialCatalogEntry[],
+  ): Promise<MediaCatalogResponseDto> {
     const resolutions = await this.resolveEntries(entries);
     const items = resolutions.flatMap(({ summary }) => (summary ? [summary] : []));
     const partial = items.length !== entries.length;

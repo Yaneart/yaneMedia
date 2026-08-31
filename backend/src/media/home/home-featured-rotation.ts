@@ -1,16 +1,14 @@
-import type { MediaSummaryDto } from './dto/media-summary.dto';
-
 const HOUR_MS = 60 * 60 * 1_000;
 
-export interface HourlyFeaturedSelection {
-  featured: MediaSummaryDto;
+export interface HourlyFeaturedSelection<T> {
+  featured: T;
   featuredExpiresAt: string;
 }
 
-export function selectHourlyFeatured(
-  candidates: readonly MediaSummaryDto[],
+export function selectHourlyFeatured<T>(
+  candidates: readonly T[],
   timestamp = Date.now(),
-): HourlyFeaturedSelection {
+): HourlyFeaturedSelection<T> {
   if (candidates.length === 0) {
     throw new RangeError('At least one featured candidate is required');
   }

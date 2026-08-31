@@ -20,9 +20,6 @@ import {
 } from '@nestjs/common';
 import { createMediaRef, resolveMediaRef } from './media-ref';
 import { mapMediaAvailability, selectMediaAvailabilityEpisode } from './media-availability.mapper';
-import { HomeFeedDto } from './dto/home-feed.dto';
-import { selectHourlyFeatured } from './home-featured-rotation';
-import { homeCollections, homeContinueWatching, homeFeaturedCandidates } from './home-feed.fixture';
 
 export const MEDIA_ENGINE = Symbol('MEDIA_ENGINE');
 
@@ -45,14 +42,6 @@ function isPlaceholderArtworkUrl(url: string): boolean {
 @Injectable()
 export class MediaService {
   constructor(@Inject(MEDIA_ENGINE) private readonly mediaEngine: MediaEngine) {}
-
-  getHomeFeed(timestamp = Date.now()): HomeFeedDto {
-    return {
-      ...selectHourlyFeatured(homeFeaturedCandidates, timestamp),
-      continueWatching: homeContinueWatching,
-      collections: homeCollections,
-    };
-  }
 
   async searchByTitle(title: string): Promise<MediaSummaryDto[]> {
     const response = await this.runMediaEngine(() => this.mediaEngine.search({ title }));
