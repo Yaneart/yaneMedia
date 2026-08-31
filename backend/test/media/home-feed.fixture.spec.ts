@@ -3,6 +3,7 @@ import {
   homeContinueWatching,
   homeFeaturedCandidates,
 } from '../../src/media/home-feed.fixture';
+import type { MediaSummaryDto } from '../../src/media/dto/media-summary.dto';
 import { resolveMediaRef } from '../../src/media/media-ref';
 
 describe('home feed fixture', () => {
@@ -17,11 +18,16 @@ describe('home feed fixture', () => {
     }
   });
 
-  it('provides a backdrop for every featured candidate', () => {
-    for (const candidate of homeFeaturedCandidates) {
-      expect(candidate.backdrop?.url).toBeTruthy();
-      expect(candidate.backdrop?.width).toBeGreaterThan(0);
-      expect(candidate.backdrop?.height).toBeGreaterThan(0);
+  it('leaves temporary artwork empty so the frontend uses branded fallbacks', () => {
+    const media: MediaSummaryDto[] = [
+      ...homeFeaturedCandidates,
+      ...homeContinueWatching.map((item) => item.media),
+      ...homeCollections.flatMap((collection) => collection.items),
+    ];
+
+    for (const item of media) {
+      expect(item.poster).toBeUndefined();
+      expect(item.backdrop).toBeUndefined();
     }
   });
 

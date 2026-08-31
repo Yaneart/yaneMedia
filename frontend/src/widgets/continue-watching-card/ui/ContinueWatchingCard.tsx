@@ -36,7 +36,7 @@ function formatRemaining(totalSeconds: number) {
 
 export function ContinueWatchingCard({ media, onOpen, progress }: ContinueWatchingCardProps) {
   const [failedBackdropUrl, setFailedBackdropUrl] = useState<string | null>(null);
-  const backdrop = media.backdrop?.url.includes('placehold.co') ? undefined : media.backdrop;
+  const backdrop = media.backdrop;
   const canShowBackdrop = backdrop !== undefined && backdrop.url !== failedBackdropUrl;
   const durationSeconds = Math.max(0, progress.durationSeconds);
   const positionSeconds = Math.min(durationSeconds, Math.max(0, progress.positionSeconds));
@@ -77,6 +77,7 @@ export function ContinueWatchingCard({ media, onOpen, progress }: ContinueWatchi
       ) : (
         <div className="absolute inset-0 transition-transform duration-300 ease-out group-hover:scale-[1.015] motion-reduce:transform-none motion-reduce:transition-none">
           <MediaLandscapeFallback
+            compact
             mediaRef={media.mediaRef}
             title={media.title}
             type={media.type}

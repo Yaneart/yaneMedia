@@ -9,17 +9,6 @@ export const demoMedia = {
     year: 2024,
     shortDescription:
       'Пол Атрейдес объединяется с фрименами и готовится отомстить заговорщикам, уничтожившим его семью.',
-    poster: {
-      url: 'https://placehold.co/600x900/29251f/f1f0ec?text=Dune',
-      width: 600,
-      height: 900,
-    },
-    backdrop: {
-      url: '/images/demo/featured-desert-v1.png',
-      width: 1664,
-      height: 935,
-      accentColor: '#94887a',
-    },
     genres: ['Фантастика', 'Драма', 'Приключения'],
     rating: {
       value: 8.2,
@@ -32,17 +21,6 @@ export const demoMedia = {
     title: 'Разделение',
     originalTitle: 'Severance',
     year: 2022,
-    poster: {
-      url: 'https://placehold.co/600x900/26282b/f1f0ec?text=Severance',
-      width: 600,
-      height: 900,
-    },
-    backdrop: {
-      url: '/images/demo/featured-office-v1.png',
-      width: 1536,
-      height: 1024,
-      accentColor: '#68796e',
-    },
     genres: ['Триллер', 'Драма'],
     rating: {
       value: 8.7,
@@ -55,17 +33,6 @@ export const demoMedia = {
     title: 'Провожающая в последний путь Фрирен',
     originalTitle: 'Sousou no Frieren',
     year: 2023,
-    poster: {
-      url: 'https://placehold.co/600x900/26302d/f1f0ec?text=Frieren',
-      width: 600,
-      height: 900,
-    },
-    backdrop: {
-      url: '/images/demo/featured-fantasy-v1.png',
-      width: 1536,
-      height: 1024,
-      accentColor: '#687a80',
-    },
     genres: ['Фэнтези', 'Драма', 'Приключения'],
     rating: {
       value: 9.0,
@@ -79,11 +46,6 @@ export const demoMedia = {
     originalTitle: 'Oppenheimer',
     year: 2023,
     shortDescription: 'История физика Роберта Оппенгеймера и создания первой атомной бомбы.',
-    backdrop: {
-      url: 'https://placehold.co/1600x900/302822/f1f0ec?text=Oppenheimer',
-      width: 1600,
-      height: 900,
-    },
     genres: ['Биография', 'Драма', 'История'],
     rating: {
       value: 8.5,
@@ -98,17 +60,6 @@ export const demoMedia = {
     year: 2024,
     shortDescription:
       'Английский моряк оказывается в Японии на пороге масштабной борьбы за власть.',
-    poster: {
-      url: 'https://placehold.co/600x900/2c2925/f1f0ec?text=Shogun',
-      width: 600,
-      height: 900,
-    },
-    backdrop: {
-      url: '/images/demo/featured-samurai-v1.png',
-      width: 1536,
-      height: 1024,
-      accentColor: '#66737d',
-    },
     genres: ['Драма', 'История', 'Приключения'],
     rating: {
       value: 8.7,
@@ -123,16 +74,6 @@ export const demoMedia = {
     year: 2019,
     shortDescription:
       'Юный воин ищет мести, взрослея среди викингов и мечтая о мирной земле Винланд.',
-    poster: {
-      url: 'https://placehold.co/600x900/27302e/f1f0ec?text=Vinland+Saga',
-      width: 600,
-      height: 900,
-    },
-    backdrop: {
-      url: 'https://placehold.co/1600x900/27302e/f1f0ec?text=Vinland+Saga',
-      width: 1600,
-      height: 900,
-    },
     genres: ['Драма', 'История', 'Приключения'],
     rating: {
       value: 8.8,
@@ -145,11 +86,6 @@ export const demoMedia = {
     title: 'Сфера молчания',
     originalTitle: 'Silent Sphere',
     year: 2024,
-    poster: {
-      url: 'https://placehold.co/600x900/1f2933/f1f0ec?text=Silent+Sphere',
-      width: 600,
-      height: 900,
-    },
     genres: ['Фантастика', 'Триллер'],
     rating: { value: 7.6, scale: 10 },
   },
@@ -159,11 +95,6 @@ export const demoMedia = {
     title: 'Пепел горизонта',
     originalTitle: 'Ashes of the Horizon',
     year: 2023,
-    poster: {
-      url: 'https://placehold.co/600x900/4a2718/f1f0ec?text=Horizon+Ashes',
-      width: 600,
-      height: 900,
-    },
     genres: ['Драма', 'Фантастика'],
     rating: { value: 7.2, scale: 10 },
   },
@@ -173,11 +104,6 @@ export const demoMedia = {
     title: 'Тихие земли',
     originalTitle: 'Quiet Lands',
     year: 2022,
-    poster: {
-      url: 'https://placehold.co/600x900/3d4437/f1f0ec?text=Quiet+Lands',
-      width: 600,
-      height: 900,
-    },
     genres: ['Драма', 'Приключения'],
     rating: { value: 7.1, scale: 10 },
   },
@@ -187,11 +113,6 @@ export const demoMedia = {
     title: 'Последний сигнал',
     originalTitle: 'The Last Signal',
     year: 2024,
-    poster: {
-      url: 'https://placehold.co/600x900/211f2b/f1f0ec?text=Last+Signal',
-      width: 600,
-      height: 900,
-    },
     genres: ['Детектив', 'Триллер'],
     rating: { value: 7.5, scale: 10 },
   },
@@ -201,11 +122,6 @@ export const demoMedia = {
     title: 'Город на воде',
     originalTitle: 'City on Water',
     year: 2023,
-    poster: {
-      url: 'https://placehold.co/600x900/263238/f1f0ec?text=City+on+Water',
-      width: 600,
-      height: 900,
-    },
     genres: ['Драма', 'Детектив'],
     rating: { value: 7.4, scale: 10 },
   },
@@ -215,11 +131,6 @@ export const demoMedia = {
     title: 'Архив северной станции',
     originalTitle: 'The Northern Archive',
     year: 2021,
-    poster: {
-      url: 'https://placehold.co/600x900/24313a/f1f0ec?text=Northern+Archive',
-      width: 600,
-      height: 900,
-    },
     genres: ['Детектив', 'Фантастика'],
     rating: { value: 8.0, scale: 10 },
   },
@@ -229,11 +140,6 @@ export const demoMedia = {
     title: 'Второй берег',
     originalTitle: 'The Second Shore',
     year: 2020,
-    poster: {
-      url: 'https://placehold.co/600x900/26352f/f1f0ec?text=Second+Shore',
-      width: 600,
-      height: 900,
-    },
     genres: ['Драма', 'Триллер'],
     rating: { value: 7.8, scale: 10 },
   },
@@ -243,11 +149,6 @@ export const demoMedia = {
     title: 'Нулевой час',
     originalTitle: 'Zero Hour',
     year: 2024,
-    poster: {
-      url: 'https://placehold.co/600x900/30282d/f1f0ec?text=Zero+Hour',
-      width: 600,
-      height: 900,
-    },
     genres: ['Триллер', 'Криминал'],
     rating: { value: 8.1, scale: 10 },
   },
@@ -257,11 +158,6 @@ export const demoMedia = {
     title: 'Сад из стекла',
     originalTitle: 'Glass Garden',
     year: 2024,
-    poster: {
-      url: 'https://placehold.co/600x900/3b3040/f1f0ec?text=Glass+Garden',
-      width: 600,
-      height: 900,
-    },
     genres: ['Фэнтези', 'Драма'],
     rating: { value: 8.4, scale: 10 },
   },
@@ -271,11 +167,6 @@ export const demoMedia = {
     title: 'За гранью льда',
     originalTitle: 'Beyond the Ice',
     year: 2022,
-    poster: {
-      url: 'https://placehold.co/600x900/293943/f1f0ec?text=Beyond+Ice',
-      width: 600,
-      height: 900,
-    },
     genres: ['Приключения', 'Фэнтези'],
     rating: { value: 7.8, scale: 10 },
   },
@@ -285,11 +176,6 @@ export const demoMedia = {
     title: 'Врата багрового рассвета',
     originalTitle: 'Gate of the Crimson Dawn',
     year: 2021,
-    poster: {
-      url: 'https://placehold.co/600x900/432328/f1f0ec?text=Red+Gate',
-      width: 600,
-      height: 900,
-    },
     genres: ['Фэнтези', 'Боевик'],
     rating: { value: 8.3, scale: 10 },
   },
@@ -299,11 +185,6 @@ export const demoMedia = {
     title: 'Бумажная луна над спящим городом',
     originalTitle: 'Paper Moon',
     year: 2020,
-    poster: {
-      url: 'https://placehold.co/600x900/302d42/f1f0ec?text=Paper+Moon',
-      width: 600,
-      height: 900,
-    },
     genres: ['Драма', 'Фэнтези'],
     rating: { value: 7.7, scale: 10 },
   },

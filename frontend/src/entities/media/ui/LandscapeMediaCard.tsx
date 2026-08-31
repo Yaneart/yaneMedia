@@ -19,7 +19,7 @@ export function LandscapeMediaCard({ media, onOpen }: LandscapeMediaCardProps) {
     (value) => value !== undefined,
   );
   const fallbackMetadata = [media.year, media.rating?.value].filter((value) => value !== undefined);
-  const backdrop = media.backdrop?.url.includes('placehold.co') ? undefined : media.backdrop;
+  const backdrop = media.backdrop;
   const canShowBackdrop = backdrop !== undefined && backdrop.url !== failedBackdropUrl;
 
   return (

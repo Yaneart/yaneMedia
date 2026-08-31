@@ -3,9 +3,11 @@ import { YaneMark } from '@/shared';
 import { getMediaFallbackDesign, mediaTypeLabels } from './mediaFallbackDesign';
 
 export type MediaLandscapeFallbackProps = {
+  compact?: boolean;
   mediaRef: MediaRef;
   title: string;
   type: MediaType;
+  showTitle?: boolean;
   showType?: boolean;
 };
 
@@ -16,13 +18,16 @@ const landscapeShapes = [
 ] as const;
 
 export function MediaLandscapeFallback({
+  compact = false,
   mediaRef,
   title,
   type,
+  showTitle = true,
   showType = true,
 }: MediaLandscapeFallbackProps) {
   const { hash, variant, variantNumber } = getMediaFallbackDesign(mediaRef);
   const shape = landscapeShapes[(hash >>> 13) % landscapeShapes.length];
+  const hasLongTitle = title.length > 24;
 
   return (
     <div
@@ -41,18 +46,24 @@ export function MediaLandscapeFallback({
           YM / {variantNumber}
         </span>
 
-        <div className="absolute inset-x-4 top-8 bottom-10 flex items-center overflow-hidden">
-          <p
-            lang="ru"
-            className={[
-              'max-w-[76%] text-xl sm:text-2xl xl:text-[1.75rem]',
-              'leading-[0.88] font-extrabold tracking-[-0.055em] uppercase',
-              'wrap-break-word hyphens-auto text-white/80',
-            ].join(' ')}
-          >
-            {title}
-          </p>
-        </div>
+        {showTitle && (
+          <div className="absolute inset-x-4 top-8 bottom-10 flex items-center overflow-hidden">
+            <p
+              lang="ru"
+              className={[
+                'line-clamp-3 max-w-[76%] font-extrabold tracking-[-0.055em] uppercase',
+                'wrap-break-word leading-[0.88] hyphens-auto text-white/80',
+                compact
+                  ? 'text-[0.7rem] min-[360px]:text-xs sm:text-base xl:text-lg'
+                  : hasLongTitle
+                    ? 'text-sm min-[360px]:text-base sm:text-lg xl:text-xl'
+                    : 'text-xl sm:text-2xl xl:text-[1.75rem]',
+              ].join(' ')}
+            >
+              {title}
+            </p>
+          </div>
+        )}
 
         {showType && (
           <span className="absolute bottom-4 left-4 text-xs font-semibold tracking-[0.16em] uppercase">

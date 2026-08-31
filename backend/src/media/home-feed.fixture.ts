@@ -9,11 +9,6 @@ export const dune = {
   year: 2024,
   shortDescription:
     'Пол Атрейдес объединяется с фрименами и готовится отомстить заговорщикам, уничтожившим его семью.',
-  backdrop: {
-    url: '/images/demo/featured-desert-v1.png',
-    width: 1664,
-    height: 935,
-  },
   genres: ['Фантастика', 'Драма', 'Приключения'],
   rating: {
     value: 8.2,
@@ -27,11 +22,6 @@ const severance = {
   title: 'Разделение',
   originalTitle: 'Severance',
   year: 2022,
-  backdrop: {
-    url: '/images/demo/featured-office-v1.png',
-    width: 1536,
-    height: 1024,
-  },
   genres: ['Триллер', 'Драма'],
   rating: {
     value: 8.7,
@@ -45,11 +35,6 @@ const frieren = {
   title: 'Провожающая в последний путь Фрирен',
   originalTitle: 'Sousou no Frieren',
   year: 2023,
-  backdrop: {
-    url: '/images/demo/featured-fantasy-v1.png',
-    width: 1536,
-    height: 1024,
-  },
   genres: ['Фэнтези', 'Драма', 'Приключения'],
   rating: {
     value: 9,
@@ -64,11 +49,6 @@ const shogun = {
   originalTitle: 'Shōgun',
   year: 2024,
   shortDescription: 'Английский моряк оказывается в Японии на пороге масштабной борьбы за власть.',
-  backdrop: {
-    url: '/images/demo/featured-samurai-v1.png',
-    width: 1536,
-    height: 1024,
-  },
   genres: ['Драма', 'История', 'Приключения'],
   rating: {
     value: 8.7,
@@ -83,11 +63,6 @@ const oppenheimer = {
   originalTitle: 'Oppenheimer',
   year: 2023,
   shortDescription: 'История физика Роберта Оппенгеймера и создания первой атомной бомбы.',
-  backdrop: {
-    url: 'https://placehold.co/1600x900/302822/f1f0ec?text=Oppenheimer',
-    width: 1600,
-    height: 900,
-  },
   genres: ['Биография', 'Драма', 'История'],
   rating: {
     value: 8.5,
@@ -103,16 +78,6 @@ const vinlandSaga = {
   year: 2019,
   shortDescription:
     'Юный воин ищет мести, взрослея среди викингов и мечтая о мирной земле Винланд.',
-  poster: {
-    url: 'https://placehold.co/600x900/27302e/f1f0ec?text=Vinland+Saga',
-    width: 600,
-    height: 900,
-  },
-  backdrop: {
-    url: 'https://placehold.co/1600x900/27302e/f1f0ec?text=Vinland+Saga',
-    width: 1600,
-    height: 900,
-  },
   genres: ['Драма', 'История', 'Приключения'],
   rating: {
     value: 8.8,
