@@ -15,6 +15,7 @@ export class HomeCollectionDto {
   id!: string;
   title!: string;
   items!: MediaSummaryDto[];
+  total!: number;
 }
 
 export class HomeFeedDto {

@@ -4,6 +4,7 @@ export const routePaths = {
   movies: '/movies',
   series: '/series',
   anime: '/anime',
+  editorialPicks: '/collections/editorial-picks',
   media: '/media/:mediaRef',
   favorites: '/favorites',
   history: '/history',

@@ -3,8 +3,14 @@ import type { DetailsResponse } from '@media-engine/core';
 import type { MediaDetailsDto } from '../dto/media-details.dto';
 import type { MediaSummaryDto } from '../dto/media-summary.dto';
 import type { MediaRefType } from '../media-ref';
+import { INCOMPLETE_ARTWORK_CACHE_TTL_MS } from '../media-engine-cache';
 import { MediaService } from '../media.service';
-import { editorialCatalog, type EditorialCatalogEntry } from './editorial-catalog';
+import {
+  editorialCatalog,
+  type EditorialCatalogEntry,
+  type EditorialCollectionId,
+} from './editorial-catalog';
+import type { MediaCollectionResponseDto } from './dto/media-collection-response.dto';
 import type { MediaCatalogResponseDto } from './dto/media-catalog-response.dto';
 
 const CATALOG_HYDRATION_CONCURRENCY = 3;
@@ -40,8 +46,23 @@ export class MediaCatalogService {
     return this.hydrateCatalog(entries);
   }
 
-  async getEditorialCatalog(): Promise<MediaCatalogResponseDto> {
-    return this.hydrateCatalog(editorialCatalog);
+  async getCollection(
+    collectionId: EditorialCollectionId,
+    offset: number,
+    limit: number,
+  ): Promise<MediaCollectionResponseDto> {
+    const entries = editorialCatalog.filter((entry: EditorialCatalogEntry) =>
+      entry.collections.includes(collectionId),
+    );
+    const page = entries.slice(offset, offset + limit);
+    const catalog = await this.hydrateCatalog(page);
+
+    return {
+      ...catalog,
+      total: entries.length,
+      offset,
+      limit,
+    };
   }
 
   private async hydrateCatalog(
@@ -106,16 +127,19 @@ export class MediaCatalogService {
         return this.useStaleOrMissing(cached, now);
       }
 
-      const summary = this.toMediaSummary(details);
-      const degraded = this.isDegraded(meta);
+      const mappedSummary = this.toMediaSummary(details);
+      const summary = this.preserveCachedArtwork(mappedSummary, cached, now);
+      const artworkIncomplete = this.isArtworkIncomplete(summary);
+      const degraded = this.isDegraded(meta) || artworkIncomplete;
       const stale = meta.stale === true;
+      const cacheTtl = artworkIncomplete ? INCOMPLETE_ARTWORK_CACHE_TTL_MS : CATALOG_CACHE_TTL_MS;
 
       this.cache.set(entry.mediaRef, {
         summary,
         degraded,
         stale,
-        expiresAt: now + CATALOG_CACHE_TTL_MS,
-        staleUntil: now + CATALOG_CACHE_TTL_MS + CATALOG_STALE_TTL_MS,
+        expiresAt: now + cacheTtl,
+        staleUntil: now + cacheTtl + CATALOG_STALE_TTL_MS,
       });
 
       return {
@@ -186,6 +210,26 @@ export class MediaCatalogService {
       genres: details.genres,
       rating: details.rating,
     };
+  }
+
+  private preserveCachedArtwork(
+    summary: MediaSummaryDto,
+    cached: CatalogCacheEntry | undefined,
+    now: number,
+  ): MediaSummaryDto {
+    if (!cached || now >= cached.staleUntil) {
+      return summary;
+    }
+
+    return {
+      ...summary,
+      poster: summary.poster ?? cached.summary.poster,
+      backdrop: summary.backdrop ?? cached.summary.backdrop,
+    };
+  }
+
+  private isArtworkIncomplete(summary: MediaSummaryDto): boolean {
+    return summary.type !== 'anime' && summary.backdrop === undefined;
   }
 
   private isDegraded(meta: DetailsResponse['meta']): boolean {

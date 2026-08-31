@@ -10,23 +10,41 @@ describe('HomeFeedService', () => {
     mediaRef: entry.mediaRef,
     type: entry.type,
     title: entry.mediaRef,
+    backdrop: { url: `https://images.example.com/${encodeURIComponent(entry.mediaRef)}.jpg` },
     genres: [],
   }));
+  const homeSummaries = summaries.slice(0, 10);
 
   function createService(catalog: MediaCatalogResponseDto) {
-    const getEditorialCatalog = jest.fn().mockResolvedValue(catalog) as jest.MockedFunction<
-      MediaCatalogService['getEditorialCatalog']
-    >;
+    const getCollection = jest.fn().mockResolvedValue({
+      ...catalog,
+      total: 50,
+      offset: 0,
+      limit: 10,
+    }) as jest.MockedFunction<MediaCatalogService['getCollection']>;
 
     return {
-      service: new HomeFeedService({ getEditorialCatalog } as unknown as MediaCatalogService),
-      getEditorialCatalog,
+      service: new HomeFeedService({ getCollection } as unknown as MediaCatalogService),
+      getCollection,
     };
   }
 
+  it('requests only the first ten editorial summaries for the home feed', async () => {
+    const { service, getCollection } = createService({
+      items: homeSummaries,
+      partial: false,
+      degraded: false,
+      stale: false,
+    });
+
+    await service.getHomeFeed(0);
+
+    expect(getCollection).toHaveBeenCalledWith('editorial-picks', 0, 10);
+  });
+
   it('builds featured and editorial collections from hydrated catalog summaries', async () => {
-    const { service, getEditorialCatalog } = createService({
-      items: summaries,
+    const { service, getCollection } = createService({
+      items: homeSummaries,
       partial: false,
       degraded: false,
       stale: false,
@@ -35,25 +53,26 @@ describe('HomeFeedService', () => {
     const feed = await service.getHomeFeed(0);
 
     expect(feed).toEqual({
-      featured: summaries[0],
+      featured: homeSummaries[0],
       featuredExpiresAt: '1970-01-01T01:00:00.000Z',
       continueWatching: [],
       collections: [
         {
           id: 'editorial-picks',
           title: 'Выбор редакции',
-          items: summaries,
+          items: homeSummaries,
+          total: 50,
         },
       ],
       partial: false,
       degraded: false,
       stale: false,
     });
-    expect(getEditorialCatalog).toHaveBeenCalledTimes(1);
+    expect(getCollection).toHaveBeenCalledTimes(1);
   });
 
   it('keeps a partial feed useful and falls forward to the next available featured item', async () => {
-    const items = summaries.filter(({ mediaRef }) => mediaRef !== 'imdb:tt15239678');
+    const items = homeSummaries.filter(({ mediaRef }) => mediaRef !== 'imdb:tt15239678');
     const { service } = createService({
       items,
       partial: true,
@@ -66,19 +85,37 @@ describe('HomeFeedService', () => {
     expect(feed.featured.mediaRef).toBe('imdb:tt11280740');
     expect(feed.collections[0].items).toEqual(items);
     expect(feed.continueWatching).toEqual([]);
-    expect(feed).toEqual(
-      expect.objectContaining({
-        partial: true,
-        degraded: true,
-        stale: true,
-      }),
+    expect(feed).toEqual(expect.objectContaining({ partial: true, degraded: true, stale: true }));
+  });
+
+  it('excludes anime and summaries without backdrops from featured rotation', async () => {
+    const items = homeSummaries.map((summary) =>
+      summary.mediaRef === 'imdb:tt15239678'
+        ? {
+            mediaRef: summary.mediaRef,
+            type: summary.type,
+            title: summary.title,
+            genres: summary.genres,
+          }
+        : summary,
     );
+    const { service } = createService({
+      items,
+      partial: false,
+      degraded: false,
+      stale: false,
+    });
+
+    const feed = await service.getHomeFeed(0);
+
+    expect(feed.featured.mediaRef).toBe('imdb:tt11280740');
+    expect(feed.featured.type).toBe('series');
+    expect(feed.featured.backdrop).toBeDefined();
   });
 
   it('returns service unavailable when no configured featured item can be resolved', async () => {
-    const nonFeaturedRefs = new Set(['imdb:tt15398776', 'anilist:101348']);
     const { service } = createService({
-      items: summaries.filter(({ mediaRef }) => nonFeaturedRefs.has(mediaRef)),
+      items: homeSummaries.filter(({ type }) => type === 'anime'),
       partial: true,
       degraded: true,
       stale: false,

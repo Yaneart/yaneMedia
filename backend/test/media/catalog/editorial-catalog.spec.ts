@@ -9,6 +9,7 @@ describe('editorial catalog', () => {
     const mediaRefs = editorialCatalog.map(({ mediaRef }) => mediaRef);
 
     expect(new Set(mediaRefs).size).toBe(mediaRefs.length);
+    expect(mediaRefs).toHaveLength(50);
 
     for (const entry of editorialCatalog) {
       expect(Object.keys(entry).sort()).toEqual([
@@ -34,5 +35,15 @@ describe('editorial catalog', () => {
       expect(entries.length).toBeGreaterThan(0);
       expect(new Set(orders).size).toBe(orders.length);
     }
+  });
+
+  it('keeps anime out of the home featured collection', () => {
+    const featuredEntries = editorialCatalog.filter(({ collections }) =>
+      (collections as readonly string[]).includes('featured'),
+    );
+
+    expect(featuredEntries.length).toBeGreaterThan(0);
+    expect(featuredEntries.every(({ type }) => type === 'movie' || type === 'series')).toBe(true);
+    expect(featuredEntries.every((entry) => editorialCatalog.indexOf(entry) < 10)).toBe(true);
   });
 });

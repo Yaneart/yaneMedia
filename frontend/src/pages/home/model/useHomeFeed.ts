@@ -6,6 +6,13 @@ import type { HomeFeed } from './homeFeed';
 type HomeFeedStatus = 'loading' | 'success' | 'error';
 
 const backgroundRetryDelayMs = 60_000;
+const degradedArtworkRetryDelayMs = 15_000;
+
+function hasIncompleteLandscapeArtwork(feed: HomeFeed): boolean {
+  return feed.collections.some((collection) =>
+    collection.items.some((media) => media.type !== 'anime' && media.backdrop === undefined),
+  );
+}
 
 export function useHomeFeed() {
   const [feed, setFeed] = useState<HomeFeed | null>(null);
@@ -28,9 +35,13 @@ export function useHomeFeed() {
         setStatus('success');
 
         const expiresAt = Date.parse(nextFeed.featuredExpiresAt);
-        const refreshDelay = expiresAt - Date.now();
+        const featuredRefreshDelay = expiresAt - Date.now();
+        const shouldRetryArtwork = nextFeed.degraded && hasIncompleteLandscapeArtwork(nextFeed);
+        const refreshDelay = shouldRetryArtwork
+          ? degradedArtworkRetryDelayMs
+          : featuredRefreshDelay;
 
-        if (Number.isFinite(expiresAt) && refreshDelay > 0) {
+        if (refreshDelay > 0 && (shouldRetryArtwork || Number.isFinite(expiresAt))) {
           refreshTimerId = window.setTimeout(() => {
             void loadFeed(false);
           }, refreshDelay);

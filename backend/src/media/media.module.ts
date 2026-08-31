@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { MediaCatalogService } from './catalog/media-catalog.service';
 import { HomeFeedService } from './home/home-feed.service';
 import { MediaController } from './media.controller';
+import { createArtworkAwareCache } from './media-engine-cache';
 import { MEDIA_ENGINE, MediaService } from './media.service';
 
 const MEDIA_ENGINE_PROVIDER_TIMEOUT_MS = 5_000;
@@ -15,6 +16,7 @@ const MEDIA_ENGINE_TIMEOUT_MS = Math.max(
 const MEDIA_ENGINE_CACHE_TTL_MS = 5 * 60_000;
 const MEDIA_ENGINE_STALE_TTL_MS = 30 * 60_000;
 const MEDIA_ENGINE_CACHE_MAX_ENTRIES = 500;
+const MEDIA_ENGINE_CIRCUIT_RECOVERY_TIMEOUT_MS = 10_000;
 
 async function createMediaEngine() {
   const [
@@ -35,6 +37,9 @@ async function createMediaEngine() {
 
   return new MediaEngine({
     timeoutMs: MEDIA_ENGINE_TIMEOUT_MS,
+    circuitBreaker: {
+      recoveryTimeoutMs: MEDIA_ENGINE_CIRCUIT_RECOVERY_TIMEOUT_MS,
+    },
     providerTimeouts: {
       kinobd: MEDIA_ENGINE_PROVIDER_TIMEOUT_MS,
       cinemeta: MEDIA_ENGINE_PROVIDER_TIMEOUT_MS,
@@ -47,11 +52,13 @@ async function createMediaEngine() {
       'veoveo-streaming': MEDIA_ENGINE_STREAMING_PROVIDER_TIMEOUT_MS,
       'videohub-streaming': MEDIA_ENGINE_VIDEOHUB_STREAMING_PROVIDER_TIMEOUT_MS,
     },
-    cache: new MemoryCache({
-      defaultTtlMs: MEDIA_ENGINE_CACHE_TTL_MS,
-      defaultStaleTtlMs: MEDIA_ENGINE_STALE_TTL_MS,
-      maxEntries: MEDIA_ENGINE_CACHE_MAX_ENTRIES,
-    }),
+    cache: createArtworkAwareCache(
+      new MemoryCache({
+        defaultTtlMs: MEDIA_ENGINE_CACHE_TTL_MS,
+        defaultStaleTtlMs: MEDIA_ENGINE_STALE_TTL_MS,
+        maxEntries: MEDIA_ENGINE_CACHE_MAX_ENTRIES,
+      }),
+    ),
     providers: [
       kinobdProvider(),
       cinemetaProvider(),

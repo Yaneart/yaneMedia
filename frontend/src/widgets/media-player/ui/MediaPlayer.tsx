@@ -1,4 +1,4 @@
-import type { MediaArtwork } from '@/entities/media';
+import { MediaBackdropArtwork, type MediaArtwork } from '@/entities/media';
 import {
   getMediaSourcePlaybackIssue,
   type MediaSourceOption,
@@ -116,13 +116,7 @@ export function MediaPlayer({
         ].join(' ')}
       >
         {!isStarted && backdrop && (
-          <img
-            src={backdrop.url}
-            alt=""
-            width={backdrop.width}
-            height={backdrop.height}
-            className="absolute inset-0 -z-20 size-full object-cover"
-          />
+          <MediaBackdropArtwork artwork={backdrop} className="absolute inset-0 -z-20" />
         )}
 
         {!isStarted && <div className="absolute inset-0 -z-10 bg-black/55" />}

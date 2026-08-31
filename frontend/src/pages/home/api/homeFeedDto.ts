@@ -15,6 +15,7 @@ export interface HomeCollectionDto {
   id: string;
   title: string;
   items: MediaSummaryDto[];
+  total: number;
 }
 
 export interface HomeFeedDto {
@@ -22,4 +23,7 @@ export interface HomeFeedDto {
   featuredExpiresAt: string;
   continueWatching: HomeContinueWatchingItemDto[];
   collections: HomeCollectionDto[];
+  partial: boolean;
+  degraded: boolean;
+  stale: boolean;
 }

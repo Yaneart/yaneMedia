@@ -45,6 +45,33 @@ describe('MediaService', () => {
     ]);
   });
 
+  it('preserves a normalized anime backdrop in media details', async () => {
+    const getDetails = jest.fn().mockResolvedValue({
+      details: {
+        id: 'frieren',
+        type: 'anime',
+        title: 'Frieren: Beyond Journey’s End',
+        ids: { aniList: '154587' },
+        backdrop: {
+          url: 'https://images.example.com/frieren-banner.jpg',
+          width: 1920,
+          height: 1080,
+        },
+      },
+      meta: { failures: [] },
+    });
+    const service = new MediaService({ getDetails } as unknown as MediaEngine);
+
+    const response = await service.getDetailsByRef('anilist:154587');
+
+    expect(response.details?.type).toBe('anime');
+    expect(response.details?.backdrop).toEqual({
+      url: 'https://images.example.com/frieren-banner.jpg',
+      width: 1920,
+      height: 1080,
+    });
+  });
+
   it('omits known provider artwork placeholders and keeps real artwork', async () => {
     const mediaEngine = {
       search: jest.fn().mockResolvedValue({

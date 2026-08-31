@@ -10,6 +10,7 @@ export interface HomeCollection {
   id: string;
   title: string;
   items: MediaSummary[];
+  total: number;
 }
 
 export interface HomeFeed {
@@ -17,4 +18,7 @@ export interface HomeFeed {
   featuredExpiresAt: string;
   continueWatching: ContinueWatchingItem[];
   collections: HomeCollection[];
+  partial: boolean;
+  degraded: boolean;
+  stale: boolean;
 }

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router';
 import { LandscapeMediaCard, MediaLandscapeArtwork, type MediaRef } from '@/entities/media';
 import { FeaturedMedia } from '@/widgets/featured-media';
 import { ContinueWatchingCard } from '@/widgets/continue-watching-card';
-import { ContentRow, ErrorState, LoadingState } from '@/shared';
+import { ContentRow, ErrorState, LoadingState, YaneMark } from '@/shared';
 import { useHomeFeed } from '../model/useHomeFeed';
 
 export function HomePage() {
@@ -97,6 +97,38 @@ export function HomePage() {
                   onOpen={() => openMedia(media.mediaRef)}
                 />
               ))}
+
+              {collection.id === 'editorial-picks' &&
+                collection.total > collection.items.length && (
+                  <button
+                    type="button"
+                    aria-label={`Открыть все ${collection.total} произведений из выбора редакции`}
+                    className={[
+                      'group relative aspect-video w-full overflow-hidden rounded-card',
+                      'border border-context-border bg-linear-to-br',
+                      'from-watermark/35 via-watermark/15 to-surface-elevated text-left',
+                      'transition-[transform,border-color] duration-200 ease-out',
+                      'hover:border-watermark/60 active:scale-[0.992]',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action',
+                    ].join(' ')}
+                    onClick={() => navigate('/collections/editorial-picks')}
+                  >
+                    <YaneMark
+                      aria-hidden="true"
+                      className="absolute -top-12 -right-10 h-[150%] w-[75%] rotate-12 text-watermark/45 transition-transform duration-300 group-hover:scale-105"
+                    />
+
+                    <div className="relative flex size-full flex-col justify-end bg-linear-to-t from-black/70 via-black/10 to-transparent p-4 text-white">
+                      <span className="text-caption text-white/65">Редакционная коллекция</span>
+                      <span className="mt-1 text-lg font-semibold">
+                        Все {collection.total} произведений
+                      </span>
+                      <span className="mt-2 text-caption font-semibold text-white/85">
+                        Показать подборку →
+                      </span>
+                    </div>
+                  </button>
+                )}
             </ContentRow>
           </section>
         ))}

@@ -1,6 +1,7 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import type { MediaAvailabilityDto } from '../../src/media/dto/media-availability.dto';
 import type { MediaCatalogResponseDto } from '../../src/media/catalog/dto/media-catalog-response.dto';
+import type { MediaCollectionResponseDto } from '../../src/media/catalog/dto/media-collection-response.dto';
 import type { MediaCatalogService } from '../../src/media/catalog/media-catalog.service';
 import type { HomeFeedDto } from '../../src/media/home/dto/home-feed.dto';
 import type { HomeFeedService } from '../../src/media/home/home-feed.service';
@@ -56,6 +57,29 @@ describe('MediaController catalog', () => {
 
     await expect(controller.getCatalog({ type: 'anime' })).resolves.toBe(catalog);
     expect(getCatalog).toHaveBeenCalledWith('anime');
+  });
+
+  it('returns a bounded editorial collection page', async () => {
+    const collection: MediaCollectionResponseDto = {
+      items: [],
+      total: 50,
+      offset: 20,
+      limit: 20,
+      partial: false,
+      degraded: false,
+      stale: false,
+    };
+    const getCollection = jest.fn().mockResolvedValue(collection) as jest.MockedFunction<
+      MediaCatalogService['getCollection']
+    >;
+    const controller = new MediaController(
+      {} as MediaService,
+      { getCollection } as unknown as MediaCatalogService,
+      {} as HomeFeedService,
+    );
+
+    await expect(controller.getEditorialPicks({ offset: 20, limit: 20 })).resolves.toBe(collection);
+    expect(getCollection).toHaveBeenCalledWith('editorial-picks', 20, 20);
   });
 });
 

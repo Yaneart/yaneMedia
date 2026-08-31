@@ -172,7 +172,7 @@
     var(--theme-text-primary)
   );
 
-  --theme-hero-overlay-start: rgb(0 0 0 / 85%);
+  --theme-hero-overlay-start: rgb(0 0 0 / 95%);
   --theme-hero-overlay-middle: rgb(0 0 0 / 40%);
   --theme-hero-text: #ffffff;
   --theme-hero-text-muted: rgb(255 255 255 / 65%);

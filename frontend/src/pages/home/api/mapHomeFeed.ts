@@ -19,6 +19,10 @@ export function mapHomeFeed(dto: HomeFeedDto): HomeFeed {
       id: collection.id,
       title: collection.title,
       items: collection.items.map((item) => mapMediaSummary(item)),
+      total: collection.total,
     })),
+    partial: dto.partial,
+    degraded: dto.degraded,
+    stale: dto.stale,
   };
 }

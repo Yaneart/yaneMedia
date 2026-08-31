@@ -6,6 +6,7 @@ import { SearchPage } from '@/pages/search';
 import { MoviesPage } from '@/pages/movies';
 import { SeriesPage } from '@/pages/series';
 import { AnimePage } from '@/pages/anime';
+import { EditorialCollectionPage } from '@/pages/editorial-collection';
 import { MediaPage } from '@/pages/media';
 import { FavoritesPage } from '@/pages/favorites';
 import { HistoryPage } from '@/pages/history';
@@ -44,6 +45,10 @@ export const router = createBrowserRouter([
       {
         path: routePaths.anime,
         element: <AnimePage />,
+      },
+      {
+        path: routePaths.editorialPicks,
+        element: <EditorialCollectionPage />,
       },
       {
         path: routePaths.media,

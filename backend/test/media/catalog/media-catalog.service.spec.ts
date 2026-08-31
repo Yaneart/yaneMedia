@@ -21,11 +21,14 @@ describe('MediaCatalogService', () => {
     jest.restoreAllMocks();
   });
 
-  function createMovie(mediaRef: string, title: string): MediaDetailsDto {
+  function createMovie(mediaRef: string, title: string, withBackdrop = true): MediaDetailsDto {
     return {
       mediaRef,
       type: 'movie',
       title,
+      backdrop: withBackdrop
+        ? { url: `https://images.example.com/${encodeURIComponent(mediaRef)}.jpg` }
+        : undefined,
       genres: ['Drama'],
       countries: [],
       languages: [],
@@ -37,6 +40,10 @@ describe('MediaCatalogService', () => {
     const base = {
       mediaRef,
       title: mediaRef,
+      backdrop:
+        type === 'anime'
+          ? undefined
+          : { url: `https://images.example.com/${encodeURIComponent(mediaRef)}.jpg` },
       genres: [],
       countries: [],
       languages: [],
@@ -61,10 +68,10 @@ describe('MediaCatalogService', () => {
   }
 
   it('hydrates one media type in editorial order and reuses the fresh cache', async () => {
-    const detailsByRef = new Map([
-      ['imdb:tt15239678', createMovie('imdb:tt15239678', 'Dune: Part Two')],
-      ['imdb:tt15398776', createMovie('imdb:tt15398776', 'Oppenheimer')],
-    ]);
+    const movieEntries = editorialCatalog.filter(({ type }) => type === 'movie');
+    const detailsByRef = new Map(
+      movieEntries.map(({ mediaRef }) => [mediaRef, createMovie(mediaRef, mediaRef)]),
+    );
     const getDetailsByRef = jest.fn((mediaRef: string) =>
       Promise.resolve({
         details: detailsByRef.get(mediaRef) ?? null,
@@ -76,20 +83,17 @@ describe('MediaCatalogService', () => {
     const first = await service.getCatalog('movie');
     const second = await service.getCatalog('movie');
 
-    expect(first).toEqual({
-      items: [
-        expect.objectContaining({ mediaRef: 'imdb:tt15239678', title: 'Dune: Part Two' }),
-        expect.objectContaining({ mediaRef: 'imdb:tt15398776', title: 'Oppenheimer' }),
-      ],
-      partial: false,
-      degraded: false,
-      stale: false,
-    });
+    expect(first.items.map(({ mediaRef }) => mediaRef)).toEqual(
+      movieEntries.map(({ mediaRef }) => mediaRef),
+    );
+    expect(first).toEqual(
+      expect.objectContaining({ partial: false, degraded: false, stale: false }),
+    );
     expect(second).toEqual(first);
-    expect(getDetailsByRef).toHaveBeenCalledTimes(2);
+    expect(getDetailsByRef).toHaveBeenCalledTimes(movieEntries.length);
   });
 
-  it('hydrates the complete editorial manifest for home feed composition', async () => {
+  it('hydrates only the requested editorial collection page', async () => {
     const getDetailsByRef = jest.fn((mediaRef: string) => {
       const entry = editorialCatalog.find((candidate) => candidate.mediaRef === mediaRef);
 
@@ -100,19 +104,25 @@ describe('MediaCatalogService', () => {
     }) as jest.MockedFunction<MediaService['getDetailsByRef']>;
     const service = createService(getDetailsByRef);
 
-    const catalog = await service.getEditorialCatalog();
+    const collectionEntries = editorialCatalog.filter(({ collections }) =>
+      (collections as readonly string[]).includes('editorial-picks'),
+    );
+    const catalog = await service.getCollection('editorial-picks', 10, 20);
 
     expect(catalog.items.map(({ mediaRef }) => mediaRef)).toEqual(
-      editorialCatalog.map(({ mediaRef }) => mediaRef),
+      collectionEntries.slice(10, 30).map(({ mediaRef }) => mediaRef),
     );
     expect(catalog).toEqual(
       expect.objectContaining({
+        total: 50,
+        offset: 10,
+        limit: 20,
         partial: false,
         degraded: false,
         stale: false,
       }),
     );
-    expect(getDetailsByRef).toHaveBeenCalledTimes(editorialCatalog.length);
+    expect(getDetailsByRef).toHaveBeenCalledTimes(20);
   });
 
   it('returns an app-owned partial result when one configured title is missing', async () => {
@@ -150,15 +160,85 @@ describe('MediaCatalogService', () => {
       new ServiceUnavailableException('Media providers are temporarily unavailable'),
     );
 
-    await expect(service.getCatalog('movie')).resolves.toEqual({
-      items: [
-        expect.objectContaining({ mediaRef: 'imdb:tt15239678' }),
-        expect.objectContaining({ mediaRef: 'imdb:tt15398776' }),
-      ],
-      partial: false,
-      degraded: true,
-      stale: true,
+    const catalog = await service.getCatalog('movie');
+
+    expect(catalog.items).toHaveLength(
+      editorialCatalog.filter(({ type }) => type === 'movie').length,
+    );
+    expect(catalog).toEqual(
+      expect.objectContaining({ partial: false, degraded: true, stale: true }),
+    );
+  });
+
+  it('quickly revalidates movie summaries that are missing a backdrop', async () => {
+    const now = jest.spyOn(Date, 'now').mockReturnValue(0);
+    const getDetailsByRef = jest.fn((mediaRef: string) =>
+      Promise.resolve({
+        details: createMovie(mediaRef, mediaRef, false),
+        meta: healthyMeta,
+      }),
+    ) as jest.MockedFunction<MediaService['getDetailsByRef']>;
+    const service = createService(getDetailsByRef);
+
+    const first = await service.getCollection('editorial-picks', 0, 1);
+
+    expect(first.degraded).toBe(true);
+    expect(getDetailsByRef).toHaveBeenCalledTimes(1);
+
+    now.mockReturnValue(15_001);
+    getDetailsByRef.mockResolvedValue({
+      details: {
+        ...createMovie('imdb:tt15239678', 'Dune: Part Two'),
+        backdrop: { url: 'https://images.example.com/dune-backdrop.jpg' },
+      },
+      meta: healthyMeta,
     });
+
+    const recovered = await service.getCollection('editorial-picks', 0, 1);
+
+    expect(getDetailsByRef).toHaveBeenCalledTimes(2);
+    expect(recovered.degraded).toBe(false);
+    expect(recovered.items[0].backdrop?.url).toBe('https://images.example.com/dune-backdrop.jpg');
+  });
+
+  it('does not replace a cached backdrop with a temporarily poorer provider response', async () => {
+    const now = jest.spyOn(Date, 'now').mockReturnValue(0);
+    const mediaRef = 'imdb:tt15239678';
+    const getDetailsByRef = jest.fn().mockResolvedValue({
+      details: {
+        ...createMovie(mediaRef, 'Dune: Part Two'),
+        backdrop: { url: 'https://images.example.com/dune-backdrop.jpg' },
+      },
+      meta: healthyMeta,
+    }) as jest.MockedFunction<MediaService['getDetailsByRef']>;
+    const service = createService(getDetailsByRef);
+
+    await service.getCollection('editorial-picks', 0, 1);
+
+    now.mockReturnValue(5 * 60_000 + 1);
+    getDetailsByRef.mockResolvedValue({
+      details: createMovie(mediaRef, 'Dune: Part Two', false),
+      meta: {
+        ...healthyMeta,
+        providers: {
+          requested: ['cinemeta'],
+          successful: [],
+          failed: [
+            {
+              provider: 'cinemeta',
+              code: 'TIMEOUT',
+              message: 'Timed out',
+              retryable: true,
+            },
+          ],
+        },
+      },
+    });
+
+    const degraded = await service.getCollection('editorial-picks', 0, 1);
+
+    expect(degraded.degraded).toBe(true);
+    expect(degraded.items[0].backdrop?.url).toBe('https://images.example.com/dune-backdrop.jpg');
   });
 
   it('returns service unavailable when every configured title fails without stale cache', async () => {

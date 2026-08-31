@@ -51,3 +51,5 @@ export type { MediaLandscapeFallbackProps } from './ui/MediaLandscapeFallback';
 
 export { MediaLandscapeArtwork } from './ui/MediaLandscapeArtwork';
 export type { MediaLandscapeArtworkProps } from './ui/MediaLandscapeArtwork';
+export { MediaBackdropArtwork } from './ui/MediaBackdropArtwork';
+export type { MediaBackdropArtworkProps } from './ui/MediaBackdropArtwork';
