@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router';
 
-import { LandscapeMediaCard, MediaLandscapeFallback, type MediaRef } from '@/entities/media';
+import { LandscapeMediaCard, MediaLandscapeArtwork, type MediaRef } from '@/entities/media';
 import { FeaturedMedia } from '@/widgets/featured-media';
 import { ContinueWatchingCard } from '@/widgets/continue-watching-card';
 import { ContentRow, ErrorState, LoadingState } from '@/shared';
@@ -46,29 +46,14 @@ export function HomePage() {
   return (
     <div className="-m-page bg-surface">
       <section className="relative isolate min-h-[500px] overflow-hidden bg-elevated md:min-h-[clamp(32rem,62vh,43rem)]">
-        {featured.backdrop ? (
-          <img
+        <div className="absolute inset-0 -z-20">
+          <MediaLandscapeArtwork
             key={featured.mediaRef}
-            src={featured.backdrop.url}
-            alt=""
-            width={featured.backdrop.width}
-            height={featured.backdrop.height}
-            className={[
-              'absolute inset-0 -z-20 size-full object-cover',
-              'object-[61%_center] md:object-center',
-            ].join(' ')}
+            media={featured}
+            variant="hero"
+            backdropClassName="object-[61%_center] md:object-center"
           />
-        ) : (
-          <div className="absolute inset-0 -z-20">
-            <MediaLandscapeFallback
-              mediaRef={featured.mediaRef}
-              title={featured.title}
-              type={featured.type}
-              showTitle={false}
-              showType={false}
-            />
-          </div>
-        )}
+        </div>
 
         <div className="home-hero-overlay absolute inset-0 -z-10" />
         <div

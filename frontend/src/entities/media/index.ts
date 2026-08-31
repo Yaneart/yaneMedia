@@ -48,3 +48,6 @@ export type { MediaPosterFallbackProps } from './ui/MediaPosterFallback';
 
 export { MediaLandscapeFallback } from './ui/MediaLandscapeFallback';
 export type { MediaLandscapeFallbackProps } from './ui/MediaLandscapeFallback';
+
+export { MediaLandscapeArtwork } from './ui/MediaLandscapeArtwork';
+export type { MediaLandscapeArtworkProps } from './ui/MediaLandscapeArtwork';

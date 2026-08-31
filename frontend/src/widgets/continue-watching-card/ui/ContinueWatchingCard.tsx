@@ -1,7 +1,6 @@
-import { MediaLandscapeFallback, type MediaSummary } from '@/entities/media';
+import { MediaLandscapeArtwork, type MediaSummary } from '@/entities/media';
 import type { PlaybackProgress } from '@/entities/playback';
 import { PlayIcon } from '@/shared';
-import { useState } from 'react';
 
 export type ContinueWatchingCardProps = {
   media: MediaSummary;
@@ -35,9 +34,6 @@ function formatRemaining(totalSeconds: number) {
 }
 
 export function ContinueWatchingCard({ media, onOpen, progress }: ContinueWatchingCardProps) {
-  const [failedBackdropUrl, setFailedBackdropUrl] = useState<string | null>(null);
-  const backdrop = media.backdrop;
-  const canShowBackdrop = backdrop !== undefined && backdrop.url !== failedBackdropUrl;
   const durationSeconds = Math.max(0, progress.durationSeconds);
   const positionSeconds = Math.min(durationSeconds, Math.max(0, progress.positionSeconds));
   const progressMax = Math.max(1, durationSeconds);
@@ -61,30 +57,15 @@ export function ContinueWatchingCard({ media, onOpen, progress }: ContinueWatchi
       ].join(' ')}
       onClick={onOpen}
     >
-      {canShowBackdrop ? (
-        <img
-          src={backdrop.url}
-          alt=""
-          width={backdrop.width}
-          height={backdrop.height}
-          className={[
-            'absolute inset-0 size-full object-cover transition-transform duration-300 ease-out',
-            'group-hover:scale-[1.015] group-active:scale-[1.005]',
-            'motion-reduce:transform-none motion-reduce:transition-none',
-          ].join(' ')}
-          onError={() => setFailedBackdropUrl(backdrop.url)}
-        />
-      ) : (
-        <div className="absolute inset-0 transition-transform duration-300 ease-out group-hover:scale-[1.015] motion-reduce:transform-none motion-reduce:transition-none">
-          <MediaLandscapeFallback
-            compact
-            mediaRef={media.mediaRef}
-            title={media.title}
-            type={media.type}
-            showType={false}
-          />
-        </div>
-      )}
+      <div
+        className={[
+          'absolute inset-0 transition-transform duration-300 ease-out',
+          'group-hover:scale-[1.015] group-active:scale-[1.005]',
+          'motion-reduce:transform-none motion-reduce:transition-none',
+        ].join(' ')}
+      >
+        <MediaLandscapeArtwork media={media} />
+      </div>
 
       <div className="absolute inset-0 bg-linear-to-t from-black/95 via-black/25 to-transparent" />
       <div className="absolute inset-0 bg-black/0 transition-colors duration-200 ease-out group-hover:bg-black/10 motion-reduce:transition-none" />
@@ -105,7 +86,7 @@ export function ContinueWatchingCard({ media, onOpen, progress }: ContinueWatchi
       </span>
 
       <div className="relative flex size-full flex-col justify-end p-3 text-white sm:p-4">
-        {canShowBackdrop && <h3 className="truncate font-semibold leading-tight">{media.title}</h3>}
+        <h3 className="truncate font-semibold leading-tight">{media.title}</h3>
 
         <div className="mt-1.5 flex items-center justify-between gap-3 text-caption text-white/65">
           <span className="hidden min-w-0 truncate sm:block">{resumeLabel}</span>

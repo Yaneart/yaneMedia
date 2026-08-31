@@ -1,6 +1,5 @@
 import type { MediaSummary } from '../model/media';
-import { MediaLandscapeFallback } from './MediaLandscapeFallback';
-import { useState } from 'react';
+import { MediaLandscapeArtwork } from './MediaLandscapeArtwork';
 
 export type LandscapeMediaCardProps = {
   media: MediaSummary;
@@ -14,13 +13,9 @@ const mediaTypeLabels = {
 } satisfies Record<MediaSummary['type'], string>;
 
 export function LandscapeMediaCard({ media, onOpen }: LandscapeMediaCardProps) {
-  const [failedBackdropUrl, setFailedBackdropUrl] = useState<string | null>(null);
   const metadata = [mediaTypeLabels[media.type], media.year, media.rating?.value].filter(
     (value) => value !== undefined,
   );
-  const fallbackMetadata = [media.year, media.rating?.value].filter((value) => value !== undefined);
-  const backdrop = media.backdrop;
-  const canShowBackdrop = backdrop !== undefined && backdrop.url !== failedBackdropUrl;
 
   return (
     <button
@@ -36,47 +31,23 @@ export function LandscapeMediaCard({ media, onOpen }: LandscapeMediaCardProps) {
       ].join(' ')}
       onClick={onOpen}
     >
-      {canShowBackdrop ? (
-        <img
-          src={backdrop.url}
-          alt=""
-          width={backdrop.width}
-          height={backdrop.height}
-          className={[
-            'absolute inset-0 size-full object-cover',
-            'transition-transform duration-300 ease-out',
-            'group-hover:scale-[1.015] group-active:scale-[1.005]',
-            'motion-reduce:transform-none motion-reduce:transition-none',
-          ].join(' ')}
-          onError={() => setFailedBackdropUrl(backdrop.url)}
-        />
-      ) : (
-        <div className="absolute inset-0 transition-transform duration-300 ease-out group-hover:scale-[1.015] motion-reduce:transform-none motion-reduce:transition-none">
-          <MediaLandscapeFallback mediaRef={media.mediaRef} title={media.title} type={media.type} />
-        </div>
-      )}
-
       <div
         className={[
-          'absolute inset-0 bg-linear-to-t to-transparent',
-          canShowBackdrop ? 'from-black/95 via-black/20' : 'from-black/45 via-transparent',
-        ].join(' ')}
-      />
-
-      <div
-        className={[
-          'relative flex size-full flex-col justify-end p-4 text-white',
-          canShowBackdrop ? '' : 'items-end text-right',
+          'absolute inset-0 transition-transform duration-300 ease-out',
+          'group-hover:scale-[1.015] group-active:scale-[1.005]',
+          'motion-reduce:transform-none motion-reduce:transition-none',
         ].join(' ')}
       >
-        {canShowBackdrop && (
-          <p className="line-clamp-2 font-semibold leading-tight">{media.title}</p>
-        )}
+        <MediaLandscapeArtwork media={media} />
+      </div>
 
-        {(canShowBackdrop ? metadata : fallbackMetadata).length > 0 && (
-          <p className="mt-1.5 text-caption text-white/60">
-            {(canShowBackdrop ? metadata : fallbackMetadata).join(' · ')}
-          </p>
+      <div className="absolute inset-0 bg-linear-to-t from-black/95 via-black/20 to-transparent" />
+
+      <div className="relative flex size-full flex-col justify-end p-4 text-white">
+        <p className="line-clamp-2 font-semibold leading-tight">{media.title}</p>
+
+        {metadata.length > 0 && (
+          <p className="mt-1.5 text-caption text-white/60">{metadata.join(' · ')}</p>
         )}
       </div>
     </button>
