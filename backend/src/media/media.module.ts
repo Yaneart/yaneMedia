@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { MediaCatalogService } from './catalog/media-catalog.service';
 import { MediaController } from './media.controller';
 import { MEDIA_ENGINE, MediaService } from './media.service';
 
@@ -75,6 +76,7 @@ async function createMediaEngine() {
       useFactory: createMediaEngine,
     },
     MediaService,
+    MediaCatalogService,
   ],
 })
 export class MediaModule {}

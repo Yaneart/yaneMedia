@@ -1,6 +1,8 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import type { MediaAvailabilityDto } from '../../src/media/dto/media-availability.dto';
 import type { HomeFeedDto } from '../../src/media/dto/home-feed.dto';
+import type { MediaCatalogResponseDto } from '../../src/media/catalog/dto/media-catalog-response.dto';
+import type { MediaCatalogService } from '../../src/media/catalog/media-catalog.service';
 import { MediaController } from '../../src/media/media.controller';
 import type { MediaService } from '../../src/media/media.service';
 
@@ -20,10 +22,34 @@ describe('MediaController home feed', () => {
     const getHomeFeed = jest.fn().mockReturnValue(homeFeed) as jest.MockedFunction<
       MediaService['getHomeFeed']
     >;
-    const controller = new MediaController({ getHomeFeed } as unknown as MediaService);
+    const controller = new MediaController(
+      { getHomeFeed } as unknown as MediaService,
+      {} as MediaCatalogService,
+    );
 
     expect(controller.getHome()).toBe(homeFeed);
     expect(getHomeFeed).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('MediaController catalog', () => {
+  it('returns the requested catalog produced by the catalog service', async () => {
+    const catalog: MediaCatalogResponseDto = {
+      items: [],
+      partial: false,
+      degraded: false,
+      stale: false,
+    };
+    const getCatalog = jest.fn().mockResolvedValue(catalog) as jest.MockedFunction<
+      MediaCatalogService['getCatalog']
+    >;
+    const controller = new MediaController(
+      {} as MediaService,
+      { getCatalog } as unknown as MediaCatalogService,
+    );
+
+    await expect(controller.getCatalog({ type: 'anime' })).resolves.toBe(catalog);
+    expect(getCatalog).toHaveBeenCalledWith('anime');
   });
 });
 
@@ -43,7 +69,7 @@ describe('MediaController availability', () => {
     const mediaService = { getAvailabilityByRef } as unknown as MediaService;
 
     return {
-      controller: new MediaController(mediaService),
+      controller: new MediaController(mediaService, {} as MediaCatalogService),
       getAvailabilityByRef,
     };
   }
