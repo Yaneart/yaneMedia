@@ -9,6 +9,23 @@ import { MediaController } from '../../src/media/media.controller';
 import type { MediaService } from '../../src/media/media.service';
 import type { MediaSummaryResolutionResponseDto } from '../../src/media/summary-resolution/dto/media-summary-resolution-response.dto';
 
+describe('MediaController search', () => {
+  it('forwards the title and media type to the media service', async () => {
+    const results = [];
+    const searchByTitle = jest.fn().mockResolvedValue(results) as jest.MockedFunction<
+      MediaService['searchByTitle']
+    >;
+    const controller = new MediaController(
+      { searchByTitle } as unknown as MediaService,
+      {} as MediaCatalogService,
+      {} as HomeFeedService,
+    );
+
+    await expect(controller.search({ query: 'Dune', type: 'movie' })).resolves.toBe(results);
+    expect(searchByTitle).toHaveBeenCalledWith('Dune', 'movie');
+  });
+});
+
 describe('MediaController home feed', () => {
   it('returns the home feed produced by the service', async () => {
     const homeFeed: HomeFeedDto = {

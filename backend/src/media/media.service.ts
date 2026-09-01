@@ -18,7 +18,7 @@ import {
   Injectable,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { createMediaRef, resolveMediaRef } from './media-ref';
+import { createMediaRef, type MediaRefType, resolveMediaRef } from './media-ref';
 import { mapMediaAvailability, selectMediaAvailabilityEpisode } from './media-availability.mapper';
 
 export const MEDIA_ENGINE = Symbol('MEDIA_ENGINE');
@@ -43,8 +43,8 @@ function isPlaceholderArtworkUrl(url: string): boolean {
 export class MediaService {
   constructor(@Inject(MEDIA_ENGINE) private readonly mediaEngine: MediaEngine) {}
 
-  async searchByTitle(title: string): Promise<MediaSummaryDto[]> {
-    const response = await this.runMediaEngine(() => this.mediaEngine.search({ title }));
+  async searchByTitle(title: string, type?: MediaRefType): Promise<MediaSummaryDto[]> {
+    const response = await this.runMediaEngine(() => this.mediaEngine.search({ title, type }));
 
     return response.results.flatMap(({ item }) => {
       const summary = this.toMediaSummary(item);

@@ -44,7 +44,7 @@ export function SearchPage() {
     setStatus('loading');
 
     try {
-      const nextResult = await searchMedia(searchQuery, controller.signal);
+      const nextResult = await searchMedia(searchQuery, { signal: controller.signal });
 
       if (controller.signal.aborted) {
         return;

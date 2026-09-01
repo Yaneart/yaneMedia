@@ -1,8 +1,6 @@
-import { demoMediaCatalog, type MediaRef } from '@/entities/media';
+import type { MediaRef } from '@/entities/media';
 import { MediaCatalog } from '@/widgets/media-catalog';
 import { useNavigate } from 'react-router';
-
-const demoSeries = demoMediaCatalog.filter((media) => media.type === 'series');
 
 export function SeriesPage() {
   const navigate = useNavigate();
@@ -11,5 +9,5 @@ export function SeriesPage() {
     navigate(`/media/${encodeURIComponent(mediaRef)}`);
   };
 
-  return <MediaCatalog title="Сериалы" media={demoSeries} onOpen={openMedia} />;
+  return <MediaCatalog type="series" title="Сериалы" onOpen={openMedia} />;
 }
