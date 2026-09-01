@@ -125,6 +125,53 @@ describe('MediaCatalogService', () => {
     expect(getDetailsByRef).toHaveBeenCalledTimes(20);
   });
 
+  it('resolves mixed media references in input order', async () => {
+    const mediaRefs = ['anilist:154587', 'imdb:tt15239678', 'imdb:tt11280740'];
+    const detailsByRef = new Map<string, MediaDetailsDto>([
+      [mediaRefs[0], createDetails(mediaRefs[0], 'anime')],
+      [mediaRefs[1], createDetails(mediaRefs[1], 'movie')],
+      [mediaRefs[2], createDetails(mediaRefs[2], 'series')],
+    ]);
+    const getDetailsByRef = jest.fn((mediaRef: string) =>
+      Promise.resolve({
+        details: detailsByRef.get(mediaRef) ?? null,
+        meta: healthyMeta,
+      }),
+    ) as jest.MockedFunction<MediaService['getDetailsByRef']>;
+    const service = createService(getDetailsByRef);
+
+    const resolution = await service.resolveMediaRefs(mediaRefs);
+
+    expect(resolution.items.map(({ mediaRef }) => mediaRef)).toEqual(mediaRefs);
+    expect(resolution).toEqual(
+      expect.objectContaining({ partial: false, degraded: false, stale: false }),
+    );
+  });
+
+  it('skips missing media references and marks the result as partial', async () => {
+    const mediaRefs = ['imdb:tt15239678', 'imdb:tt0000000', 'anilist:154587'];
+    const getDetailsByRef = jest.fn((mediaRef: string) =>
+      Promise.resolve({
+        details:
+          mediaRef === 'imdb:tt0000000'
+            ? null
+            : createDetails(mediaRef, mediaRef.startsWith('anilist:') ? 'anime' : 'movie'),
+        meta: healthyMeta,
+      }),
+    ) as jest.MockedFunction<MediaService['getDetailsByRef']>;
+    const service = createService(getDetailsByRef);
+
+    await expect(service.resolveMediaRefs(mediaRefs)).resolves.toEqual({
+      items: [
+        expect.objectContaining({ mediaRef: 'imdb:tt15239678' }),
+        expect.objectContaining({ mediaRef: 'anilist:154587' }),
+      ],
+      partial: true,
+      degraded: true,
+      stale: false,
+    });
+  });
+
   it('returns an app-owned partial result when one configured title is missing', async () => {
     const getDetailsByRef = jest.fn((mediaRef: string) =>
       Promise.resolve({

@@ -1,11 +1,13 @@
 import { MediaAvailabilityQueryDto } from './dto/media-availability-query.dto';
 import {
   BadRequestException,
+  Body,
   Controller,
   Get,
   Headers,
   NotFoundException,
   Param,
+  Post,
   Query,
 } from '@nestjs/common';
 import { MediaService } from './media.service';
@@ -20,6 +22,8 @@ import { MediaCollectionQueryDto } from './catalog/dto/media-collection-query.dt
 import type { MediaCollectionResponseDto } from './catalog/dto/media-collection-response.dto';
 import type { HomeFeedDto } from './home/dto/home-feed.dto';
 import { HomeFeedService } from './home/home-feed.service';
+import { MediaSummaryResolutionRequestDto } from './summary-resolution/dto/media-summary-resolution-request.dto';
+import type { MediaSummaryResolutionResponseDto } from './summary-resolution/dto/media-summary-resolution-response.dto';
 
 @Controller('media')
 export class MediaController {
@@ -62,6 +66,13 @@ export class MediaController {
       degraded:
         meta.providers.failed.length > 0 || (meta.warnings?.length ?? 0) > 0 || meta.stale === true,
     };
+  }
+
+  @Post('summaries/resolve')
+  resolveMediaSummaries(
+    @Body() body: MediaSummaryResolutionRequestDto,
+  ): Promise<MediaSummaryResolutionResponseDto> {
+    return this.mediaCatalogService.resolveMediaRefs(body.mediaRefs);
   }
 
   @Get(':mediaRef/availability')

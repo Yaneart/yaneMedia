@@ -7,6 +7,7 @@ import type { HomeFeedDto } from '../../src/media/home/dto/home-feed.dto';
 import type { HomeFeedService } from '../../src/media/home/home-feed.service';
 import { MediaController } from '../../src/media/media.controller';
 import type { MediaService } from '../../src/media/media.service';
+import type { MediaSummaryResolutionResponseDto } from '../../src/media/summary-resolution/dto/media-summary-resolution-response.dto';
 
 describe('MediaController home feed', () => {
   it('returns the home feed produced by the service', async () => {
@@ -80,6 +81,29 @@ describe('MediaController catalog', () => {
 
     await expect(controller.getEditorialPicks({ offset: 20, limit: 20 })).resolves.toBe(collection);
     expect(getCollection).toHaveBeenCalledWith('editorial-picks', 20, 20);
+  });
+
+  it('resolves a validated batch of media references', async () => {
+    const resolution: MediaSummaryResolutionResponseDto = {
+      items: [],
+      partial: false,
+      degraded: false,
+      stale: false,
+    };
+    const resolveMediaRefs = jest.fn().mockResolvedValue(resolution) as jest.MockedFunction<
+      MediaCatalogService['resolveMediaRefs']
+    >;
+    const controller = new MediaController(
+      {} as MediaService,
+      { resolveMediaRefs } as unknown as MediaCatalogService,
+      {} as HomeFeedService,
+    );
+    const body = {
+      mediaRefs: ['imdb:tt1160419', 'anilist:154587'],
+    };
+
+    await expect(controller.resolveMediaSummaries(body)).resolves.toBe(resolution);
+    expect(resolveMediaRefs).toHaveBeenCalledWith(body.mediaRefs);
   });
 });
 

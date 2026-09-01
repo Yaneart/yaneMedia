@@ -12,6 +12,7 @@ import {
 } from './editorial-catalog';
 import type { MediaCollectionResponseDto } from './dto/media-collection-response.dto';
 import type { MediaCatalogResponseDto } from './dto/media-catalog-response.dto';
+import type { MediaSummaryResolutionResponseDto } from '../summary-resolution/dto/media-summary-resolution-response.dto';
 
 const CATALOG_HYDRATION_CONCURRENCY = 3;
 const CATALOG_CACHE_TTL_MS = 5 * 60_000;
@@ -32,6 +33,11 @@ interface CatalogEntryResolution {
   unavailable: boolean;
 }
 
+interface MediaSummaryResolutionEntry {
+  mediaRef: string;
+  type?: MediaRefType;
+}
+
 @Injectable()
 export class MediaCatalogService {
   private readonly cache = new Map<string, CatalogCacheEntry>();
@@ -43,7 +49,13 @@ export class MediaCatalogService {
       .filter((entry) => entry.type === type)
       .sort((left, right) => left.catalogOrder - right.catalogOrder);
 
-    return this.hydrateCatalog(entries);
+    return this.hydrateEntries(entries);
+  }
+
+  async resolveMediaRefs(mediaRefs: readonly string[]): Promise<MediaSummaryResolutionResponseDto> {
+    const entries = mediaRefs.map((mediaRef) => ({ mediaRef }));
+
+    return this.hydrateEntries(entries);
   }
 
   async getCollection(
@@ -55,7 +67,7 @@ export class MediaCatalogService {
       entry.collections.includes(collectionId),
     );
     const page = entries.slice(offset, offset + limit);
-    const catalog = await this.hydrateCatalog(page);
+    const catalog = await this.hydrateEntries(page);
 
     return {
       ...catalog,
@@ -65,9 +77,9 @@ export class MediaCatalogService {
     };
   }
 
-  private async hydrateCatalog(
-    entries: readonly EditorialCatalogEntry[],
-  ): Promise<MediaCatalogResponseDto> {
+  private async hydrateEntries(
+    entries: readonly MediaSummaryResolutionEntry[],
+  ): Promise<MediaSummaryResolutionResponseDto> {
     const resolutions = await this.resolveEntries(entries);
     const items = resolutions.flatMap(({ summary }) => (summary ? [summary] : []));
     const partial = items.length !== entries.length;
@@ -87,7 +99,7 @@ export class MediaCatalogService {
   }
 
   private async resolveEntries(
-    entries: readonly EditorialCatalogEntry[],
+    entries: readonly MediaSummaryResolutionEntry[],
   ): Promise<CatalogEntryResolution[]> {
     const resolutions = new Array<CatalogEntryResolution>(entries.length);
     let nextIndex = 0;
@@ -107,9 +119,11 @@ export class MediaCatalogService {
     return resolutions;
   }
 
-  private async resolveEntry(entry: EditorialCatalogEntry): Promise<CatalogEntryResolution> {
+  private async resolveEntry(entry: MediaSummaryResolutionEntry): Promise<CatalogEntryResolution> {
     const now = Date.now();
-    const cached = this.cache.get(entry.mediaRef);
+    const stored = this.cache.get(entry.mediaRef);
+    const cached =
+      entry.type === undefined || stored?.summary.type === entry.type ? stored : undefined;
 
     if (cached && now < cached.expiresAt) {
       return {
@@ -123,7 +137,7 @@ export class MediaCatalogService {
     try {
       const { details, meta } = await this.mediaService.getDetailsByRef(entry.mediaRef);
 
-      if (!details || details.type !== entry.type) {
+      if (!details || (entry.type !== undefined && details.type !== entry.type)) {
         return this.useStaleOrMissing(cached, now);
       }
 
