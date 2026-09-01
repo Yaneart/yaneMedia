@@ -1,8 +1,8 @@
-import { demoMediaCatalog, MediaCard, type MediaRef } from '@/entities/media';
+import { MediaCard, useMediaSummaryResolution, type MediaRef } from '@/entities/media';
 import { useFavorites } from '@/features/favorite';
 import { useOpeningHistory } from '@/features/opening-history';
-import { Button, HistoryIcon, MediaGrid, SearchIcon } from '@/shared';
-import { LibraryEmptyState, LibraryPageHeader } from '@/widgets/library-page';
+import { Button, ErrorState, HistoryIcon, LoadingState, MediaGrid, SearchIcon } from '@/shared';
+import { LibraryDataNotice, LibraryEmptyState, LibraryPageHeader } from '@/widgets/library-page';
 import { useNavigate } from 'react-router';
 
 const openingDateFormatter = new Intl.DateTimeFormat('ru-RU', {
@@ -43,19 +43,18 @@ export function HistoryPage() {
   const navigate = useNavigate();
   const { openingHistoryEntries, clearHistory } = useOpeningHistory();
   const { isFavorite, toggleFavorite } = useFavorites();
+  const { resolution, status, retry } = useMediaSummaryResolution(
+    openingHistoryEntries.map((entry) => entry.mediaRef),
+  );
+  const openedAtByMediaRef = new Map(
+    openingHistoryEntries.map((entry) => [entry.mediaRef, entry.openedAt]),
+  );
+  const historyMedia = (resolution?.items ?? []).flatMap((media) => {
+    const openedAt = openedAtByMediaRef.get(media.mediaRef);
 
-  const historyMedia = openingHistoryEntries.flatMap((entry) => {
-    const media = demoMediaCatalog.find((item) => item.mediaRef === entry.mediaRef);
-
-    return media
-      ? [
-          {
-            media,
-            openedAt: entry.openedAt,
-          },
-        ]
-      : [];
+    return openedAt ? [{ media, openedAt }] : [];
   });
+  const hasStoredHistory = openingHistoryEntries.length > 0;
 
   const openMedia = (mediaRef: MediaRef) => {
     navigate(`/media/${encodeURIComponent(mediaRef)}`);
@@ -82,7 +81,33 @@ export function HistoryPage() {
         }
       />
 
-      {historyMedia.length > 0 ? (
+      {resolution && (
+        <LibraryDataNotice partial={resolution.partial} stale={resolution.stale} onRetry={retry} />
+      )}
+
+      {!hasStoredHistory ? (
+        <LibraryEmptyState
+          eyebrow="Первый шаг"
+          title="История просмотров начнётся здесь"
+          description="Открывайте страницы фильмов, сериалов и аниме — недавние произведения будут сохраняться автоматически."
+          icon={<HistoryIcon className="size-7" />}
+          action={
+            <Button className="rounded-pill" onClick={() => navigate('/search')}>
+              <SearchIcon className="size-4" />
+              Найти что посмотреть
+            </Button>
+          }
+        />
+      ) : status === 'loading' && historyMedia.length === 0 ? (
+        <LoadingState label="Загружаем историю" />
+      ) : status === 'error' ? (
+        <ErrorState
+          title="Не удалось загрузить историю"
+          description="Локальная история осталась на этом устройстве. Попробуйте загрузить её ещё раз."
+          retryLabel="Повторить"
+          onRetry={retry}
+        />
+      ) : historyMedia.length > 0 ? (
         <MediaGrid>
           {historyMedia.map(({ media, openedAt }) => (
             <div key={media.mediaRef} className="min-w-0">
@@ -99,14 +124,13 @@ export function HistoryPage() {
         </MediaGrid>
       ) : (
         <LibraryEmptyState
-          eyebrow="Первый шаг"
-          title="История просмотров начнётся здесь"
-          description="Открывайте страницы фильмов, сериалов и аниме — недавние произведения будут сохраняться автоматически."
+          eyebrow="История сохранена"
+          title="Произведения пока недоступны"
+          description="Сохранённые ссылки не потеряны. Попробуйте обновить данные немного позже."
           icon={<HistoryIcon className="size-7" />}
           action={
-            <Button className="rounded-pill" onClick={() => navigate('/search')}>
-              <SearchIcon className="size-4" />
-              Найти что посмотреть
+            <Button className="rounded-pill" variant="secondary" onClick={retry}>
+              Обновить
             </Button>
           }
         />

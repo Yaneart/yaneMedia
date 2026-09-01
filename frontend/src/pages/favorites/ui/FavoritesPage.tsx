@@ -1,14 +1,16 @@
-import { demoMediaCatalog, MediaCard, type MediaRef } from '@/entities/media';
+import { MediaCard, useMediaSummaryResolution, type MediaRef } from '@/entities/media';
 import { useFavorites } from '@/features/favorite';
-import { Button, FavoriteIcon, MediaGrid, SearchIcon } from '@/shared';
-import { LibraryEmptyState, LibraryPageHeader } from '@/widgets/library-page';
+import { Button, ErrorState, FavoriteIcon, LoadingState, MediaGrid, SearchIcon } from '@/shared';
+import { LibraryDataNotice, LibraryEmptyState, LibraryPageHeader } from '@/widgets/library-page';
 import { useNavigate } from 'react-router';
 
 export function FavoritesPage() {
   const navigate = useNavigate();
   const { favoriteMediaRefs, isFavorite, toggleFavorite } = useFavorites();
-
-  const favoriteMedia = demoMediaCatalog.filter((media) => favoriteMediaRefs.has(media.mediaRef));
+  const { resolution, status, retry } = useMediaSummaryResolution(Array.from(favoriteMediaRefs));
+  const favoriteMedia =
+    resolution?.items.filter((media) => favoriteMediaRefs.has(media.mediaRef)) ?? [];
+  const hasStoredFavorites = favoriteMediaRefs.size > 0;
 
   const openMedia = (mediaRef: MediaRef) => {
     navigate(`/media/${encodeURIComponent(mediaRef)}`);
@@ -30,7 +32,33 @@ export function FavoritesPage() {
         }
       />
 
-      {favoriteMedia.length > 0 ? (
+      {resolution && (
+        <LibraryDataNotice partial={resolution.partial} stale={resolution.stale} onRetry={retry} />
+      )}
+
+      {!hasStoredFavorites ? (
+        <LibraryEmptyState
+          eyebrow="Коллекция ждёт"
+          title="Здесь появятся ваши любимые истории"
+          description="Добавляйте произведения из каталогов или со страницы просмотра — всё выбранное будет собрано в одном месте."
+          icon={<FavoriteIcon className="size-7" />}
+          action={
+            <Button className="rounded-pill" onClick={() => navigate('/search')}>
+              <SearchIcon className="size-4" />
+              Найти что посмотреть
+            </Button>
+          }
+        />
+      ) : status === 'loading' && favoriteMedia.length === 0 ? (
+        <LoadingState label="Загружаем избранное" />
+      ) : status === 'error' ? (
+        <ErrorState
+          title="Не удалось загрузить избранное"
+          description="Сохранённые ссылки остались на этом устройстве. Попробуйте загрузить их ещё раз."
+          retryLabel="Повторить"
+          onRetry={retry}
+        />
+      ) : favoriteMedia.length > 0 ? (
         <MediaGrid>
           {favoriteMedia.map((media) => (
             <MediaCard
@@ -44,14 +72,13 @@ export function FavoritesPage() {
         </MediaGrid>
       ) : (
         <LibraryEmptyState
-          eyebrow="Коллекция ждёт"
-          title="Здесь появятся ваши любимые истории"
-          description="Добавляйте произведения из каталогов или со страницы просмотра — всё выбранное будет собрано в одном месте."
+          eyebrow="Коллекция сохранена"
+          title="Произведения пока недоступны"
+          description="Сохранённые ссылки не потеряны. Попробуйте обновить данные немного позже."
           icon={<FavoriteIcon className="size-7" />}
           action={
-            <Button className="rounded-pill" onClick={() => navigate('/search')}>
-              <SearchIcon className="size-4" />
-              Найти что посмотреть
+            <Button className="rounded-pill" variant="secondary" onClick={retry}>
+              Обновить
             </Button>
           }
         />

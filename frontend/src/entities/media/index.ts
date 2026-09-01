@@ -28,6 +28,11 @@ export {
 
 export { searchMedia } from './api/searchMedia';
 
+export { resolveMediaSummaries } from './api/resolveMediaSummaries';
+export type { MediaSummaryResolutionResult } from './api/resolveMediaSummaries';
+export { useMediaSummaryResolution } from './model/useMediaSummaryResolution';
+export type { MediaSummaryResolutionStatus } from './model/useMediaSummaryResolution';
+
 export { mapMediaSummary } from './api/mapMediaSummary';
 export type { MediaSummaryDto } from './api/mediaSummaryDto';
 
