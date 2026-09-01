@@ -16,16 +16,6 @@ export type {
   SeriesDetails,
 } from './model/media';
 
-export {
-  demoMedia,
-  demoAnimeDetails,
-  demoMediaCatalog,
-  demoMediaDetails,
-  demoMediaDetailsCatalog,
-  demoSeriesDetails,
-  demoShogunDetails,
-} from './model/media.mock';
-
 export { searchMedia } from './api/searchMedia';
 
 export { resolveMediaSummaries } from './api/resolveMediaSummaries';
