@@ -3,15 +3,21 @@ import type {
   Episode,
   ExternalIds,
   Image,
+  MediaAvailabilityProgressSnapshot,
   MediaDetails,
   MediaEngine,
   MediaItem,
   Rating,
   Season,
+  StreamQuery,
 } from '@media-engine/core';
 import type { MediaArtworkDto, MediaRatingDto, MediaSummaryDto } from './dto/media-summary.dto';
 import type { MediaDetailsDto, MediaEpisodeDto, MediaSeasonDto } from './dto/media-details.dto';
-import type { MediaAvailabilityDto, MediaSourceEpisodeRefDto } from './dto/media-availability.dto';
+import type {
+  MediaAvailabilityDto,
+  MediaAvailabilityProgressDto,
+  MediaSourceEpisodeRefDto,
+} from './dto/media-availability.dto';
 import {
   BadRequestException,
   Inject,
@@ -28,6 +34,12 @@ const PLACEHOLDER_ARTWORK_PATHS = [
   '/assets/globals/missing_original.jpg',
 ] as const;
 const ANIME_ID_SOURCES = ['shikimori', 'aniList', 'myAnimeList'] as const;
+
+interface AvailabilityRequest {
+  query: StreamQuery;
+  playbackUserAgent?: string;
+  signal?: AbortSignal;
+}
 
 function isPlaceholderArtworkUrl(url: string): boolean {
   try {
@@ -72,28 +84,20 @@ export class MediaService {
     playbackUserAgent?: string,
     episodeSelection: MediaSourceEpisodeRefDto = {},
   ): Promise<MediaAvailabilityDto | null> {
-    const ids = this.resolveMediaRefOrThrow(mediaRef);
-    const { details } = await this.runMediaEngine(() => this.mediaEngine.getDetails({ ids }));
+    const request = await this.createAvailabilityRequest(
+      mediaRef,
+      playbackUserAgent,
+      episodeSelection,
+    );
 
-    if (!details) {
+    if (!request) {
       return null;
     }
 
-    const availabilityIds = await this.resolveAvailabilityIds(details, ids, episodeSelection);
-
     const availability = await this.runMediaEngine(() =>
-      this.mediaEngine.getAvailability(
-        {
-          type: details.type,
-          ids: availabilityIds,
-          title: details.originalTitle?.trim() || details.title,
-          year: details.year,
-          seasonNumber: episodeSelection.seasonNumber,
-          episodeNumber: episodeSelection.episodeNumber,
-          absoluteEpisodeNumber: episodeSelection.absoluteEpisodeNumber,
-        },
-        { playbackUserAgent },
-      ),
+      this.mediaEngine.getAvailability(request.query, {
+        playbackUserAgent: request.playbackUserAgent,
+      }),
     );
 
     const mappedAvailability = mapMediaAvailability(availability);
@@ -101,10 +105,99 @@ export class MediaService {
     return selectMediaAvailabilityEpisode(mappedAvailability, episodeSelection);
   }
 
+  async getAvailabilityProgressivelyByRef(
+    mediaRef: string,
+    playbackUserAgent?: string,
+    episodeSelection: MediaSourceEpisodeRefDto = {},
+    signal?: AbortSignal,
+  ): Promise<AsyncIterable<MediaAvailabilityProgressDto> | null> {
+    const request = await this.createAvailabilityRequest(
+      mediaRef,
+      playbackUserAgent,
+      episodeSelection,
+      signal,
+    );
+
+    if (!request) {
+      return null;
+    }
+
+    return this.mapAvailabilityProgress(
+      this.mediaEngine.getAvailabilityProgressively(request.query, {
+        playbackUserAgent: request.playbackUserAgent,
+        signal: request.signal,
+      }),
+      episodeSelection,
+    );
+  }
+
+  private async createAvailabilityRequest(
+    mediaRef: string,
+    playbackUserAgent: string | undefined,
+    episodeSelection: MediaSourceEpisodeRefDto,
+    signal?: AbortSignal,
+  ): Promise<AvailabilityRequest | null> {
+    const ids = this.resolveMediaRefOrThrow(mediaRef);
+    const { details } = await this.runMediaEngine(() =>
+      signal
+        ? this.mediaEngine.getDetails({ ids }, { signal })
+        : this.mediaEngine.getDetails({ ids }),
+    );
+
+    if (!details) {
+      return null;
+    }
+
+    const availabilityIds = await this.resolveAvailabilityIds(
+      details,
+      ids,
+      episodeSelection,
+      signal,
+    );
+
+    return {
+      query: {
+        type: details.type,
+        ids: availabilityIds,
+        title: details.originalTitle?.trim() || details.title,
+        year: details.year,
+        seasonNumber: episodeSelection.seasonNumber,
+        episodeNumber: episodeSelection.episodeNumber,
+        absoluteEpisodeNumber: episodeSelection.absoluteEpisodeNumber,
+      },
+      playbackUserAgent,
+      signal,
+    };
+  }
+
+  private async *mapAvailabilityProgress(
+    snapshots: AsyncIterable<MediaAvailabilityProgressSnapshot>,
+    episodeSelection: MediaSourceEpisodeRefDto,
+  ): AsyncGenerator<MediaAvailabilityProgressDto> {
+    try {
+      for await (const snapshot of snapshots) {
+        const availability = snapshot.availability
+          ? selectMediaAvailabilityEpisode(
+              mapMediaAvailability(snapshot.availability),
+              episodeSelection,
+            )
+          : null;
+
+        yield {
+          availability,
+          state: snapshot.state,
+        };
+      }
+    } catch (error) {
+      this.throwMediaEngineError(error);
+    }
+  }
+
   private async resolveAvailabilityIds(
     details: MediaDetails,
     resolvedIds: ExternalIds,
     episodeSelection: MediaSourceEpisodeRefDto,
+    signal?: AbortSignal,
   ): Promise<ExternalIds> {
     const ids = {
       ...(details.ids ?? {}),
@@ -122,11 +215,14 @@ export class MediaService {
     let response: Awaited<ReturnType<MediaEngine['search']>>;
 
     try {
-      response = await this.mediaEngine.search({
+      const query = {
         title: details.originalTitle?.trim() || details.title,
         year: details.year,
         limit: 10,
-      });
+      };
+      response = signal
+        ? await this.mediaEngine.search(query, { signal })
+        : await this.mediaEngine.search(query);
     } catch (error) {
       if (this.isMediaEngineProviderError(error)) {
         return ids;
@@ -339,12 +435,16 @@ export class MediaService {
     try {
       return await operation();
     } catch (error) {
-      if (this.isMediaEngineProviderError(error)) {
-        throw new ServiceUnavailableException('Media providers are temporarily unavailable');
-      }
-
-      throw error;
+      this.throwMediaEngineError(error);
     }
+  }
+
+  private throwMediaEngineError(error: unknown): never {
+    if (this.isMediaEngineProviderError(error)) {
+      throw new ServiceUnavailableException('Media providers are temporarily unavailable');
+    }
+
+    throw error;
   }
 
   private isMediaEngineProviderError(error: unknown): error is Error & { code: 'PROVIDER_ERROR' } {

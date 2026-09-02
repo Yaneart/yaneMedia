@@ -42,6 +42,7 @@ import { useMediaEpisodeAvailability } from '../model/useMediaEpisodeAvailabilit
 export type MediaViewProps = {
   media: MediaDetails;
   availability: MediaAvailability | null;
+  availabilityPending: boolean;
   availabilityStatus: MediaAvailabilityStatus;
 };
 
@@ -53,13 +54,17 @@ const emptyAvailability: MediaAvailability = {
   hasExpiredSources: false,
 };
 
-type AvailabilityToolbarStatusProps = Pick<MediaViewProps, 'availability' | 'availabilityStatus'>;
+type AvailabilityToolbarStatusProps = Pick<
+  MediaViewProps,
+  'availability' | 'availabilityPending' | 'availabilityStatus'
+>;
 
 function AvailabilityToolbarStatus({
   availability,
+  availabilityPending,
   availabilityStatus,
 }: AvailabilityToolbarStatusProps) {
-  const isInitialLoading = !availability && availabilityStatus === 'loading';
+  const isInitialLoading = !availability && availabilityPending && availabilityStatus === 'loading';
 
   if (isInitialLoading) {
     return (
@@ -74,6 +79,7 @@ function AvailabilityToolbarStatus({
 
 function getMediaPlayerEmptyState(
   availability: MediaAvailability | null,
+  availabilityPending: boolean,
   availabilityStatus: MediaAvailabilityStatus,
   hasPlaybackSources: boolean,
 ): MediaPlayerEmptyState | undefined {
@@ -81,7 +87,7 @@ function getMediaPlayerEmptyState(
     return undefined;
   }
 
-  if (!availability && availabilityStatus === 'loading') {
+  if (availabilityPending || (!availability && availabilityStatus === 'loading')) {
     return undefined;
   }
 
@@ -228,8 +234,14 @@ function hasSameEpisode(
   );
 }
 
-export function MediaView({ media, availability, availabilityStatus }: MediaViewProps) {
-  const { session, startSession, updateProgress, endSession } = usePlaybackSession();
+export function MediaView({
+  media,
+  availability,
+  availabilityPending,
+  availabilityStatus,
+}: MediaViewProps) {
+  const { session, startSession, pauseSession, resumeSession, updateProgress, endSession } =
+    usePlaybackSession();
   const { isFavorite, addFavorite, removeFavorite } = useFavorites();
   const mediaIsFavorite = isFavorite(media.mediaRef);
   const mediaSession = session?.mediaRef === media.mediaRef ? session : null;
@@ -244,6 +256,7 @@ export function MediaView({ media, availability, availabilityStatus }: MediaView
 
   const playerEmptyState = getMediaPlayerEmptyState(
     availability,
+    availabilityPending,
     availabilityStatus,
     hasPlaybackSources,
   );
@@ -295,7 +308,8 @@ export function MediaView({ media, availability, availabilityStatus }: MediaView
       catalog.directEpisodes[0])
     : undefined;
   const availabilityEpisode = getAvailabilityEpisode(media, selectedDirectEpisode);
-  const episodeAvailability = useMediaEpisodeAvailability(media.mediaRef, availabilityEpisode);
+  const { availability: episodeAvailability, isPending: episodeAvailabilityPending } =
+    useMediaEpisodeAvailability(media.mediaRef, availabilityEpisode);
   const currentDirectSources = usesDirectEpisodes
     ? mergeEpisodeSources(
         selectedDirectEpisode?.sources ?? [],
@@ -528,6 +542,7 @@ export function MediaView({ media, availability, availabilityStatus }: MediaView
                       selectedQualityKey={selectedQualityKey}
                       onQualityChange={selectQuality}
                       compactDesktop
+                      isLoading={episodeAvailabilityPending}
                       showQuality={directQualities.length > 1}
                     />
                   </div>
@@ -547,6 +562,7 @@ export function MediaView({ media, availability, availabilityStatus }: MediaView
                     }))}
                     selectedQualityKey={selectedQualityKey}
                     onQualityChange={selectQuality}
+                    isLoading={availabilityPending}
                     showQuality={directQualities.length > 1}
                   />
                 )}
@@ -555,6 +571,7 @@ export function MediaView({ media, availability, availabilityStatus }: MediaView
 
             <AvailabilityToolbarStatus
               availability={availability}
+              availabilityPending={availabilityPending}
               availabilityStatus={availabilityStatus}
             />
           </div>
@@ -564,11 +581,14 @@ export function MediaView({ media, availability, availabilityStatus }: MediaView
             backdrop={media.backdrop}
             source={selectedSource}
             isStarted={isPlayerStarted}
+            shouldAutoPlay={mediaSession?.state === 'playing'}
             initialPositionSeconds={mediaSession?.positionSeconds ?? 0}
             status={playerStatus}
             onStart={loadPlayer}
             onReady={handlePlayerReady}
             onError={handlePlayerError}
+            onPlay={resumeSession}
+            onPause={pauseSession}
             onProgress={updateProgress}
             onRetry={loadPlayer}
             emptyState={playerEmptyState}

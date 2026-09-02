@@ -49,3 +49,8 @@ export class MediaAvailabilityDto {
   degraded!: boolean;
   hasExpiredSources!: boolean;
 }
+
+export class MediaAvailabilityProgressDto {
+  availability!: MediaAvailabilityDto | null;
+  state!: 'pending' | 'complete';
+}

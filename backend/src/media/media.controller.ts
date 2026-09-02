@@ -5,11 +5,16 @@ import {
   Controller,
   Get,
   Headers,
+  type MessageEvent,
   NotFoundException,
   Param,
   Post,
   Query,
+  Res,
+  Sse,
 } from '@nestjs/common';
+import type { Response } from 'express';
+import { defer, finalize, from, map, type Observable, switchMap, throwError } from 'rxjs';
 import { MediaService } from './media.service';
 import { MediaSearchQueryDto } from './dto/media-search-query.dto';
 import { MediaAvailabilityDto } from './dto/media-availability.dto';
@@ -96,5 +101,41 @@ export class MediaController {
     }
 
     return availability;
+  }
+
+  @Sse(':mediaRef/availability/stream')
+  streamAvailability(
+    @Param('mediaRef') mediaRef: string,
+    @Query() query: MediaAvailabilityQueryDto,
+    @Headers('user-agent') playbackUserAgent: string | undefined,
+    @Res({ passthrough: true }) response: Response,
+  ): Observable<MessageEvent> {
+    if (query.seasonNumber !== undefined && query.episodeNumber === undefined) {
+      throw new BadRequestException('episodeNumber is required when seasonNumber is provided');
+    }
+
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    response.once('close', abort);
+
+    return defer(() =>
+      from(
+        this.mediaService.getAvailabilityProgressivelyByRef(
+          mediaRef,
+          playbackUserAgent,
+          query,
+          controller.signal,
+        ),
+      ),
+    ).pipe(
+      switchMap((snapshots) =>
+        snapshots ? from(snapshots) : throwError(() => new NotFoundException('Media not found')),
+      ),
+      map((snapshot) => ({ data: snapshot })),
+      finalize(() => {
+        response.off('close', abort);
+        controller.abort();
+      }),
+    );
   }
 }

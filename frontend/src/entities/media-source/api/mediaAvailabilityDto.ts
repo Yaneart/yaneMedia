@@ -49,3 +49,8 @@ export interface MediaAvailabilityDto {
   degraded: boolean;
   hasExpiredSources: boolean;
 }
+
+export interface MediaAvailabilityProgressDto {
+  availability: MediaAvailabilityDto | null;
+  state: 'pending' | 'complete';
+}

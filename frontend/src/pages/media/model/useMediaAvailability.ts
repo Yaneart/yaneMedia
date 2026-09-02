@@ -1,50 +1,36 @@
 import {
-  getMediaAvailability,
   getMediaAvailabilityExpirationDelay,
+  streamMediaAvailability,
   type MediaAvailability,
 } from '@/entities/media-source';
 import { ApiClientError } from '@/shared/api';
 import { useEffect, useRef, useState } from 'react';
+
+import {
+  mergeProgressiveAvailability,
+  selectSettledAvailability,
+} from './mediaAvailabilityProgress';
 
 export type MediaAvailabilityStatus = 'loading' | 'success' | 'not-found' | 'error';
 
 interface MediaAvailabilityState {
   mediaRef: string | undefined;
   availability: MediaAvailability | null;
+  isPending: boolean;
   status: MediaAvailabilityStatus;
 }
 
 const backgroundRetryDelaysMs = [35_000, 60_000, 120_000] as const;
 
-function countUniqueSources(availability: MediaAvailability) {
-  return new Set([
-    ...availability.sources.map((source) => source.sourceRef),
-    ...availability.episodes.flatMap((episode) =>
-      episode.sources.map((source) => source.sourceRef),
-    ),
-  ]).size;
-}
-
 function needsBackgroundRefresh(availability: MediaAvailability) {
   return availability.degraded || availability.hasExpiredSources;
-}
-
-function selectBetterAvailability(current: MediaAvailability | null, next: MediaAvailability) {
-  if (!current || !next.degraded || getMediaAvailabilityExpirationDelay(current) === 0) {
-    return next;
-  }
-
-  if (!current.degraded || countUniqueSources(next) < countUniqueSources(current)) {
-    return current;
-  }
-
-  return next;
 }
 
 export function useMediaAvailability(mediaRef: string | undefined) {
   const [state, setState] = useState<MediaAvailabilityState>(() => ({
     mediaRef,
     availability: null,
+    isPending: Boolean(mediaRef),
     status: mediaRef ? 'loading' : 'not-found',
   }));
   const currentMediaRef = useRef(mediaRef);
@@ -57,6 +43,7 @@ export function useMediaAvailability(mediaRef: string | undefined) {
       setState({
         mediaRef,
         availability: null,
+        isPending: false,
         status: 'not-found',
       });
 
@@ -75,6 +62,7 @@ export function useMediaAvailability(mediaRef: string | undefined) {
     setState({
       mediaRef,
       availability: preservedAvailability,
+      isPending: true,
       status: preservedAvailability ? 'success' : 'loading',
     });
 
@@ -126,29 +114,43 @@ export function useMediaAvailability(mediaRef: string | undefined) {
     };
 
     const loadAvailability = async () => {
+      setState({
+        mediaRef,
+        availability: currentAvailability.current,
+        isPending: true,
+        status: currentAvailability.current ? 'success' : 'loading',
+      });
+
+      let completedAvailability: MediaAvailability | null = null;
+
       try {
-        const nextAvailability = await getMediaAvailability(mediaRef, {
-          signal: controller.signal,
+        await streamMediaAvailability(mediaRef, { signal: controller.signal }, (snapshot) => {
+          if (controller.signal.aborted) {
+            return;
+          }
+
+          if (snapshot.availability) {
+            currentAvailability.current =
+              snapshot.state === 'pending'
+                ? mergeProgressiveAvailability(currentAvailability.current, snapshot.availability)
+                : selectSettledAvailability(currentAvailability.current, snapshot.availability);
+          }
+
+          if (snapshot.state === 'complete') {
+            completedAvailability = currentAvailability.current;
+          }
+
+          setState({
+            mediaRef,
+            availability: currentAvailability.current,
+            isPending: snapshot.state === 'pending',
+            status: currentAvailability.current ? 'success' : 'loading',
+          });
         });
 
-        if (controller.signal.aborted) {
-          return;
+        if (completedAvailability) {
+          scheduleNextRefresh(completedAvailability);
         }
-
-        const availability = selectBetterAvailability(
-          currentAvailability.current,
-          nextAvailability,
-        );
-
-        currentAvailability.current = availability;
-
-        setState({
-          mediaRef,
-          availability,
-          status: 'success',
-        });
-
-        scheduleNextRefresh(availability);
       } catch (error) {
         if (controller.signal.aborted) {
           return;
@@ -160,6 +162,7 @@ export function useMediaAvailability(mediaRef: string | undefined) {
           setState({
             mediaRef,
             availability,
+            isPending: false,
             status: 'success',
           });
 
@@ -173,6 +176,7 @@ export function useMediaAvailability(mediaRef: string | undefined) {
         setState({
           mediaRef,
           availability: null,
+          isPending: false,
           status: isNotFound ? 'not-found' : 'error',
         });
 
@@ -197,6 +201,7 @@ export function useMediaAvailability(mediaRef: string | undefined) {
 
   return {
     availability: isCurrentResult ? state.availability : null,
+    isPending: isCurrentResult ? state.isPending : true,
     status: isCurrentResult ? state.status : 'loading',
   };
 }

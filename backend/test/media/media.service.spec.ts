@@ -1,5 +1,6 @@
 import type { MediaEngine } from '@media-engine/core';
 import { ServiceUnavailableException } from '@nestjs/common';
+import type { MediaAvailabilityProgressDto } from '../../src/media/dto/media-availability.dto';
 import { MediaService } from '../../src/media/media.service';
 
 describe('MediaService', () => {
@@ -192,6 +193,127 @@ describe('MediaService', () => {
         playbackUserAgent: 'browser-user-agent',
       },
     );
+  });
+
+  it('maps progressive availability snapshots and forwards cancellation', async () => {
+    const createOption = (id: string) => ({
+      id,
+      provider: 'videohub-streaming',
+      player: {
+        kind: 'mp4' as const,
+        label: id,
+        providerPlayerId: id,
+      },
+      access: { url: `https://video.example/${id}.mp4` },
+      availability: 'available' as const,
+    });
+    const getDetails = jest.fn().mockResolvedValue({
+      details: {
+        id: 'dune',
+        type: 'movie',
+        title: 'Дюна',
+        originalTitle: 'Dune',
+        year: 2021,
+        ids: { imdb: 'tt1160419', kinopoisk: '409118' },
+      },
+    });
+    const getAvailabilityProgressively = jest.fn().mockImplementation(async function* () {
+      await Promise.resolve();
+      yield {
+        availability: {
+          query: { type: 'movie' },
+          options: [createOption('first')],
+          sourceProviders: ['videohub-streaming'],
+          checkedAt: '2026-09-02T00:00:00.000Z',
+        },
+        state: 'pending',
+        pendingProviders: ['videohub-streaming'],
+      };
+      yield {
+        availability: {
+          query: { type: 'movie' },
+          options: [createOption('first'), createOption('second')],
+          sourceProviders: ['videohub-streaming'],
+          checkedAt: '2026-09-02T00:00:01.000Z',
+        },
+        state: 'complete',
+        pendingProviders: [],
+      };
+    });
+    const service = new MediaService({
+      getDetails,
+      getAvailabilityProgressively,
+    } as unknown as MediaEngine);
+    const controller = new AbortController();
+    const snapshots = await service.getAvailabilityProgressivelyByRef(
+      'imdb:tt1160419',
+      'browser-user-agent',
+      {},
+      controller.signal,
+    );
+    const results: MediaAvailabilityProgressDto[] = [];
+
+    for await (const snapshot of snapshots ?? []) {
+      results.push(snapshot);
+    }
+
+    expect(results.map(({ state, availability }) => [state, availability?.sources.length])).toEqual(
+      [
+        ['pending', 1],
+        ['complete', 2],
+      ],
+    );
+    expect(results[1]?.availability?.sources.map(({ sourceRef }) => sourceRef)).toEqual([
+      'stream:videohub-streaming:first',
+      'stream:videohub-streaming:second',
+    ]);
+    expect(getDetails).toHaveBeenCalledWith(
+      { ids: { imdb: 'tt1160419' } },
+      { signal: controller.signal },
+    );
+    expect(getAvailabilityProgressively).toHaveBeenCalledWith(
+      {
+        type: 'movie',
+        ids: { imdb: 'tt1160419', kinopoisk: '409118' },
+        title: 'Dune',
+        year: 2021,
+      },
+      { playbackUserAgent: 'browser-user-agent', signal: controller.signal },
+    );
+  });
+
+  it('maps a progressive provider failure to service unavailable during iteration', async () => {
+    const getAvailabilityProgressively = jest.fn().mockImplementation(async function* () {
+      await Promise.resolve();
+      const failure = createProviderFailure();
+
+      if (failure.code === 'PROVIDER_ERROR') {
+        throw failure;
+      }
+
+      yield { availability: null, state: 'complete' as const, pendingProviders: [] };
+    });
+    const service = new MediaService({
+      getDetails: jest.fn().mockResolvedValue({
+        details: {
+          id: 'dune',
+          type: 'movie',
+          title: 'Dune',
+          ids: { imdb: 'tt1160419' },
+        },
+      }),
+      getAvailabilityProgressively,
+    } as unknown as MediaEngine);
+    const snapshots = await service.getAvailabilityProgressivelyByRef('imdb:tt1160419');
+
+    const consume = async () => {
+      for await (const snapshot of snapshots ?? []) {
+        // Consume the progressive operation so provider failures surface here.
+        void snapshot;
+      }
+    };
+
+    await expect(consume()).rejects.toBeInstanceOf(ServiceUnavailableException);
   });
 
   it('enriches an exact anime episode with one confirmed Kinopoisk identity', async () => {

@@ -1,4 +1,7 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { EventEmitter } from 'node:events';
+import type { Response } from 'express';
+import { lastValueFrom, toArray } from 'rxjs';
 import type { MediaAvailabilityDto } from '../../src/media/dto/media-availability.dto';
 import type { MediaCatalogResponseDto } from '../../src/media/catalog/dto/media-catalog-response.dto';
 import type { MediaCollectionResponseDto } from '../../src/media/catalog/dto/media-collection-response.dto';
@@ -180,5 +183,111 @@ describe('MediaController availability', () => {
       new BadRequestException('episodeNumber is required when seasonNumber is provided'),
     );
     expect(getAvailabilityByRef).not.toHaveBeenCalled();
+  });
+
+  it('streams progressive snapshots and aborts provider work after completion', async () => {
+    const snapshots = [
+      { availability, state: 'pending' as const },
+      { availability, state: 'complete' as const },
+    ];
+    const getAvailabilityProgressivelyByRef = jest.fn().mockResolvedValue(
+      (async function* () {
+        await Promise.resolve();
+        yield* snapshots;
+      })(),
+    ) as jest.MockedFunction<MediaService['getAvailabilityProgressivelyByRef']>;
+    const controller = new MediaController(
+      { getAvailabilityProgressivelyByRef } as unknown as MediaService,
+      {} as MediaCatalogService,
+      {} as HomeFeedService,
+    );
+    const response = new EventEmitter() as Response;
+
+    const events = await lastValueFrom(
+      controller
+        .streamAvailability('imdb:tt0816692', {}, 'Playback Browser', response)
+        .pipe(toArray()),
+    );
+
+    expect(events).toEqual(snapshots.map((snapshot) => ({ data: snapshot })));
+    expect(getAvailabilityProgressivelyByRef).toHaveBeenCalledWith(
+      'imdb:tt0816692',
+      'Playback Browser',
+      {},
+      expect.any(AbortSignal),
+    );
+    expect(getAvailabilityProgressivelyByRef.mock.calls[0]?.[3]?.aborted).toBe(true);
+  });
+
+  it('aborts progressive provider work when the client connection closes', async () => {
+    let operationSignal: AbortSignal | undefined;
+    const getAvailabilityProgressivelyByRef = jest
+      .fn()
+      .mockImplementation(
+        (
+          _mediaRef: string,
+          _playbackUserAgent: string | undefined,
+          _query: unknown,
+          signal: AbortSignal,
+        ) => {
+          operationSignal = signal;
+
+          return Promise.resolve(
+            (async function* () {
+              yield { availability, state: 'pending' as const };
+
+              await new Promise<void>((resolve) => {
+                signal.addEventListener('abort', () => resolve(), { once: true });
+              });
+            })(),
+          );
+        },
+      );
+    const controller = new MediaController(
+      { getAvailabilityProgressivelyByRef } as unknown as MediaService,
+      {} as MediaCatalogService,
+      {} as HomeFeedService,
+    );
+    const response = new EventEmitter() as Response;
+    const completed = new Promise<void>((resolve, reject) => {
+      controller
+        .streamAvailability('imdb:tt0816692', {}, undefined, response)
+        .subscribe({ complete: resolve, error: reject });
+    });
+
+    await new Promise((resolve) => setImmediate(resolve));
+    response.emit('close');
+    await completed;
+
+    expect(operationSignal?.aborted).toBe(true);
+  });
+
+  it('returns 404 when the progressive availability media is missing', async () => {
+    const getAvailabilityProgressivelyByRef = jest.fn().mockResolvedValue(null);
+    const controller = new MediaController(
+      { getAvailabilityProgressivelyByRef } as unknown as MediaService,
+      {} as MediaCatalogService,
+      {} as HomeFeedService,
+    );
+    const response = new EventEmitter() as Response;
+
+    await expect(
+      lastValueFrom(controller.streamAvailability('imdb:tt0000000', {}, undefined, response)),
+    ).rejects.toThrow(new NotFoundException('Media not found'));
+  });
+
+  it('returns 400 before starting a progressive stream with an incomplete episode', () => {
+    const getAvailabilityProgressivelyByRef = jest.fn();
+    const controller = new MediaController(
+      { getAvailabilityProgressivelyByRef } as unknown as MediaService,
+      {} as MediaCatalogService,
+      {} as HomeFeedService,
+    );
+    const response = new EventEmitter() as Response;
+
+    expect(() =>
+      controller.streamAvailability('imdb:tt0903747', { seasonNumber: 1 }, undefined, response),
+    ).toThrow(new BadRequestException('episodeNumber is required when seasonNumber is provided'));
+    expect(getAvailabilityProgressivelyByRef).not.toHaveBeenCalled();
   });
 });

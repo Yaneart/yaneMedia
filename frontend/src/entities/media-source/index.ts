@@ -11,6 +11,11 @@ export type {
 } from './model/mediaSource';
 
 export { getMediaAvailability } from './api/getMediaAvailability';
+export { streamMediaAvailability } from './api/streamMediaAvailability';
+export type {
+  MediaAvailabilityProgress,
+  StreamMediaAvailabilityOptions,
+} from './api/streamMediaAvailability';
 
 export { mapMediaAvailability } from './api/mapMediaAvailability';
 export type { MediaAvailabilityDto } from './api/mediaAvailabilityDto';

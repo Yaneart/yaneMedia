@@ -4,9 +4,12 @@ import { useEffect, useRef, type SyntheticEvent } from 'react';
 type MediaVideoRendererProps = {
   source: MediaSourceOption;
   mediaTitle: string;
+  shouldAutoPlay: boolean;
   initialPositionSeconds: number;
   onReady: () => void;
   onError: () => void;
+  onPlay: () => void;
+  onPause: () => void;
   onProgress: (positionSeconds: number, durationSeconds?: number | null) => void;
 };
 
@@ -16,14 +19,20 @@ const PROGRESS_REPORT_INTERVAL_SECONDS = 5;
 export function MediaVideoRenderer({
   source,
   mediaTitle,
+  shouldAutoPlay,
   initialPositionSeconds,
   onReady,
   onError,
+  onPlay,
+  onPause,
   onProgress,
 }: MediaVideoRendererProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const sourceUrlRef = useRef(source.url);
   const hasRestoredPositionRef = useRef(false);
   const lastReportedProgressBucketRef = useRef<number | null>(null);
+
+  sourceUrlRef.current = source.url;
 
   const reportProgress = (video: HTMLVideoElement, force = false) => {
     const positionSeconds = Number.isFinite(video.currentTime) ? Math.max(0, video.currentTime) : 0;
@@ -84,9 +93,10 @@ export function MediaVideoRenderer({
 
     hasRestoredPositionRef.current = false;
     lastReportedProgressBucketRef.current = null;
+    const sourceUrl = sourceUrlRef.current;
 
     if (source.kind === 'mp4') {
-      video.src = source.url;
+      video.src = sourceUrl;
       video.load();
 
       return () => {
@@ -120,14 +130,14 @@ export function MediaVideoRenderer({
               onError();
             }
           });
-          hls.loadSource(source.url);
+          hls.loadSource(sourceUrl);
           hls.attachMedia(video);
 
           return;
         }
 
         if (video.canPlayType(HLS_MIME_TYPE)) {
-          video.src = source.url;
+          video.src = sourceUrl;
           video.load();
 
           return;
@@ -149,7 +159,7 @@ export function MediaVideoRenderer({
       video.removeAttribute('src');
       video.load();
     };
-  }, [onError, source.kind, source.url]);
+  }, [onError, source.kind, source.sourceRef]);
 
   return (
     <video
@@ -157,13 +167,17 @@ export function MediaVideoRenderer({
       title={`Плеер ${source.label}: ${mediaTitle}`}
       className="absolute inset-0 z-0 size-full bg-black object-contain"
       controls
-      autoPlay
+      autoPlay={shouldAutoPlay}
       playsInline
       preload="metadata"
       onLoadedMetadata={handleLoadedMetadata}
       onTimeUpdate={(event) => reportProgress(event.currentTarget)}
       onSeeked={(event) => reportProgress(event.currentTarget, true)}
-      onPause={(event) => reportProgress(event.currentTarget, true)}
+      onPlay={onPlay}
+      onPause={(event) => {
+        reportProgress(event.currentTarget, true);
+        onPause();
+      }}
       onEnded={(event) => reportProgress(event.currentTarget, true)}
       onCanPlay={handleCanPlay}
       onError={onError}

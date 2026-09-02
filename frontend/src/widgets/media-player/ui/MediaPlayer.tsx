@@ -22,11 +22,14 @@ export type MediaPlayerProps = {
   backdrop?: MediaArtwork;
   source?: MediaSourceOption;
   isStarted: boolean;
+  shouldAutoPlay: boolean;
   initialPositionSeconds: number;
   status: MediaPlayerStatus;
   onStart: () => void;
   onReady: () => void;
   onError: () => void;
+  onPlay: () => void;
+  onPause: () => void;
   onProgress: (positionSeconds: number, durationSeconds?: number | null) => void;
   onRetry?: () => void;
   emptyState?: MediaPlayerEmptyState;
@@ -87,11 +90,14 @@ export function MediaPlayer({
   backdrop,
   source,
   isStarted,
+  shouldAutoPlay,
   initialPositionSeconds,
   status,
   onStart,
   onReady,
   onError,
+  onPlay,
+  onPause,
   onProgress,
   onRetry,
   emptyState,
@@ -141,9 +147,12 @@ export function MediaPlayer({
           <MediaVideoRenderer
             source={activeVideoSource}
             mediaTitle={mediaTitle}
+            shouldAutoPlay={shouldAutoPlay}
             initialPositionSeconds={initialPositionSeconds}
             onReady={onReady}
             onError={onError}
+            onPlay={onPlay}
+            onPause={onPause}
             onProgress={onProgress}
           />
         )}

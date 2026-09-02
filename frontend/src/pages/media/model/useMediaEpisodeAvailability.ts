@@ -1,10 +1,15 @@
 import {
-  getMediaAvailability,
   getMediaAvailabilityExpirationDelay,
+  streamMediaAvailability,
   type MediaAvailability,
   type MediaSourceEpisodeRef,
 } from '@/entities/media-source';
 import { useEffect, useState } from 'react';
+
+import {
+  mergeProgressiveAvailability,
+  selectSettledAvailability,
+} from './mediaAvailabilityProgress';
 
 const backgroundRetryDelaysMs = [35_000, 60_000, 120_000] as const;
 
@@ -17,29 +22,8 @@ function createEpisodeKey(mediaRef: string, episode: MediaSourceEpisodeRef) {
   ].join(':');
 }
 
-function countUniqueSources(availability: MediaAvailability) {
-  return new Set([
-    ...availability.sources.map((source) => source.sourceRef),
-    ...availability.episodes.flatMap((episode) =>
-      episode.sources.map((source) => source.sourceRef),
-    ),
-  ]).size;
-}
-
 function needsBackgroundRefresh(availability: MediaAvailability) {
   return availability.degraded || availability.hasExpiredSources;
-}
-
-function selectBetterAvailability(current: MediaAvailability | null, next: MediaAvailability) {
-  if (!current || !next.degraded || getMediaAvailabilityExpirationDelay(current) === 0) {
-    return next;
-  }
-
-  if (!current.degraded || countUniqueSources(next) < countUniqueSources(current)) {
-    return current;
-  }
-
-  return next;
 }
 
 export function useMediaEpisodeAvailability(
@@ -50,9 +34,11 @@ export function useMediaEpisodeAvailability(
   const [state, setState] = useState<{
     requestKey: string | null;
     availability: MediaAvailability | null;
+    isPending: boolean;
   }>({
     requestKey,
     availability: null,
+    isPending: Boolean(requestKey),
   });
 
   const seasonNumber = episode?.seasonNumber;
@@ -61,7 +47,7 @@ export function useMediaEpisodeAvailability(
 
   useEffect(() => {
     if (!requestKey) {
-      setState({ requestKey: null, availability: null });
+      setState({ requestKey: null, availability: null, isPending: false });
       return;
     }
 
@@ -70,7 +56,7 @@ export function useMediaEpisodeAvailability(
     let backgroundRetryIndex = 0;
     let currentAvailability: MediaAvailability | null = null;
 
-    setState({ requestKey, availability: null });
+    setState({ requestKey, availability: null, isPending: true });
 
     const scheduleRefresh = (delay: number, advanceRetry: boolean) => {
       if (controller.signal.aborted) return;
@@ -118,28 +104,53 @@ export function useMediaEpisodeAvailability(
     };
 
     const loadAvailability = async () => {
+      setState({ requestKey, availability: currentAvailability, isPending: true });
+      let completedAvailability: MediaAvailability | null = null;
+
       try {
-        const nextAvailability = await getMediaAvailability(mediaRef, {
-          seasonNumber,
-          episodeNumber,
-          absoluteEpisodeNumber,
-          signal: controller.signal,
-        });
+        await streamMediaAvailability(
+          mediaRef,
+          {
+            seasonNumber,
+            episodeNumber,
+            absoluteEpisodeNumber,
+            signal: controller.signal,
+          },
+          (snapshot) => {
+            if (controller.signal.aborted) return;
 
-        if (controller.signal.aborted) return;
+            if (snapshot.availability) {
+              currentAvailability =
+                snapshot.state === 'pending'
+                  ? mergeProgressiveAvailability(currentAvailability, snapshot.availability)
+                  : selectSettledAvailability(currentAvailability, snapshot.availability);
+            }
 
-        currentAvailability = selectBetterAvailability(currentAvailability, nextAvailability);
-        setState({ requestKey, availability: currentAvailability });
+            if (snapshot.state === 'complete') {
+              completedAvailability = currentAvailability;
+            }
 
-        scheduleNextRefresh(currentAvailability);
+            setState({
+              requestKey,
+              availability: currentAvailability,
+              isPending: snapshot.state === 'pending',
+            });
+          },
+        );
+
+        if (completedAvailability) {
+          scheduleNextRefresh(completedAvailability);
+        }
       } catch {
         if (controller.signal.aborted) {
           return;
         }
 
         if (currentAvailability) {
+          setState({ requestKey, availability: currentAvailability, isPending: false });
           scheduleNextRefresh(currentAvailability);
         } else {
+          setState({ requestKey, availability: null, isPending: false });
           scheduleBackgroundRefresh();
         }
       }
@@ -156,5 +167,7 @@ export function useMediaEpisodeAvailability(
     };
   }, [absoluteEpisodeNumber, episodeNumber, mediaRef, requestKey, seasonNumber]);
 
-  return state.requestKey === requestKey ? state.availability : null;
+  return state.requestKey === requestKey
+    ? { availability: state.availability, isPending: state.isPending }
+    : { availability: null, isPending: Boolean(requestKey) };
 }

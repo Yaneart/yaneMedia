@@ -13,7 +13,11 @@ export function MediaPage() {
 
   const { result, status: detailsStatus, retry: retryDetails } = useMediaDetails(mediaRef);
 
-  const { availability, status: availabilityStatus } = useMediaAvailability(mediaRef);
+  const {
+    availability,
+    isPending: availabilityPending,
+    status: availabilityStatus,
+  } = useMediaAvailability(mediaRef);
 
   const media = result?.details ?? null;
 
@@ -63,6 +67,7 @@ export function MediaPage() {
       key={`${media.mediaRef}:${availability ? 'ready' : 'pending'}`}
       media={media}
       availability={availability}
+      availabilityPending={availabilityPending}
       availabilityStatus={availabilityStatus}
     />
   );

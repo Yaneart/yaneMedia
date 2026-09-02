@@ -8,6 +8,7 @@ export type DirectSourceSelectorProps = {
   selectedQualityKey: string | null;
   onQualityChange: (qualityKey: string) => void;
   compactDesktop?: boolean;
+  isLoading?: boolean;
   showQuality?: boolean;
 };
 
@@ -19,6 +20,7 @@ export function DirectSourceSelector({
   selectedQualityKey,
   onQualityChange,
   compactDesktop = false,
+  isLoading = false,
   showQuality = true,
 }: DirectSourceSelectorProps) {
   return (
@@ -32,18 +34,33 @@ export function DirectSourceSelector({
       >
         <span className="shrink-0 text-caption text-text-secondary">Озвучка</span>
 
-        <Select
-          aria-label="Озвучка для просмотра"
-          value={selectedTrackKey}
-          options={tracks}
-          placeholder="Выберите озвучку"
-          onChange={(value) => {
-            if (value !== null) onTrackChange(value);
-          }}
-          matchMenuWidth
-          allowEmpty={false}
-          className={['w-full min-w-0 sm:w-56', compactDesktop ? 'min-[70rem]:w-48' : ''].join(' ')}
-        />
+        <div className="flex w-full min-w-0 items-center gap-2 sm:w-auto">
+          <Select
+            aria-label="Озвучка для просмотра"
+            value={selectedTrackKey}
+            options={tracks}
+            placeholder="Выберите озвучку"
+            onChange={(value) => {
+              if (value !== null) onTrackChange(value);
+            }}
+            matchMenuWidth
+            allowEmpty={false}
+            className={['w-full min-w-0 sm:w-56', compactDesktop ? 'min-[70rem]:w-48' : ''].join(
+              ' ',
+            )}
+          />
+
+          <span className="inline-flex size-4 shrink-0 items-center justify-center">
+            {isLoading && (
+              <span
+                role="status"
+                aria-live="polite"
+                aria-label="Ищем другие озвучки"
+                className="size-3 animate-spin rounded-full border-2 border-border border-t-action motion-reduce:animate-none"
+              />
+            )}
+          </span>
+        </div>
       </section>
 
       {showQuality && (
