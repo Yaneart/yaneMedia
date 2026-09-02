@@ -1,14 +1,29 @@
 import { useNavigate } from 'react-router';
 
-import { LandscapeMediaCard, MediaLandscapeArtwork, type MediaRef } from '@/entities/media';
+import {
+  LandscapeMediaCard,
+  MediaLandscapeArtwork,
+  useMediaSummaryResolution,
+  type MediaRef,
+} from '@/entities/media';
+import { usePlaybackSession } from '@/features/playback-session';
 import { FeaturedMedia } from '@/widgets/featured-media';
 import { ContinueWatchingCard } from '@/widgets/continue-watching-card';
-import { ContentRow, ErrorState, LoadingState, YaneMark } from '@/shared';
+import { ContentRow, ErrorState, LoadingState, Skeleton, YaneMark } from '@/shared';
 import { useHomeFeed } from '../model/useHomeFeed';
+
+const CONTINUE_WATCHING_LIMIT = 5;
 
 export function HomePage() {
   const navigate = useNavigate();
   const { feed, status, retry } = useHomeFeed();
+  const { continueWatchingEntries, restoreSession } = usePlaybackSession();
+  const visibleContinueWatchingEntries = continueWatchingEntries.slice(0, CONTINUE_WATCHING_LIMIT);
+  const {
+    resolution: continueWatchingResolution,
+    status: continueWatchingResolutionStatus,
+    retry: retryContinueWatchingResolution,
+  } = useMediaSummaryResolution(visibleContinueWatchingEntries.map((entry) => entry.mediaRef));
 
   if (!feed && status === 'error') {
     return (
@@ -36,13 +51,24 @@ export function HomePage() {
   }
 
   const featured = feed.featured;
-  const continueWatching = feed.continueWatching.filter(
-    (item) => item.media.mediaRef !== featured.mediaRef,
+  const continueWatchingMediaByRef = new Map(
+    continueWatchingResolution?.items.map((media) => [media.mediaRef, media]),
   );
+  const resolvedContinueWatchingEntries = visibleContinueWatchingEntries.flatMap((entry) => {
+    const media = continueWatchingMediaByRef.get(entry.mediaRef);
+
+    return media ? [{ entry, media }] : [];
+  });
 
   const openMedia = (mediaRef: MediaRef) => {
     navigate(`/media/${encodeURIComponent(mediaRef)}`);
   };
+
+  const continueWatching = (mediaRef: MediaRef) => {
+    restoreSession(mediaRef);
+    openMedia(mediaRef);
+  };
+
   return (
     <div className="-m-page bg-surface">
       <section className="relative isolate min-h-[500px] overflow-hidden bg-elevated md:min-h-[clamp(32rem,62vh,43rem)]">
@@ -70,20 +96,44 @@ export function HomePage() {
       </section>
 
       <div className="space-y-10 px-page py-8 md:space-y-12 md:py-10">
-        <section>
-          <h2 className="mb-4 text-heading font-semibold text-text-primary">Продолжить просмотр</h2>
+        {visibleContinueWatchingEntries.length > 0 && (
+          <section>
+            <h2 className="mb-4 text-heading font-semibold text-text-primary">
+              Продолжить просмотр
+            </h2>
 
-          <ContentRow variant="continuation">
-            {continueWatching.map((item) => (
-              <ContinueWatchingCard
-                key={item.media.mediaRef}
-                media={item.media}
-                progress={item.progress}
-                onOpen={() => openMedia(item.media.mediaRef)}
+            {continueWatchingResolutionStatus === 'loading' ? (
+              <ContentRow variant="continuation" aria-label="Загружаем продолжение просмотра">
+                {visibleContinueWatchingEntries.map((entry) => (
+                  <Skeleton key={entry.mediaRef} className="aspect-[2.35/1] w-full rounded-card" />
+                ))}
+              </ContentRow>
+            ) : resolvedContinueWatchingEntries.length > 0 ? (
+              <ContentRow variant="continuation">
+                {resolvedContinueWatchingEntries.map(({ entry, media }) => (
+                  <ContinueWatchingCard
+                    key={entry.mediaRef}
+                    media={media}
+                    progress={{
+                      positionSeconds: entry.positionSeconds,
+                      durationSeconds: entry.durationSeconds,
+                      updatedAt: entry.updatedAt,
+                    }}
+                    episode={entry.episode}
+                    onOpen={() => continueWatching(entry.mediaRef)}
+                  />
+                ))}
+              </ContentRow>
+            ) : (
+              <ErrorState
+                title="Не удалось восстановить продолжение просмотра"
+                description="Прогресс сохранён на этом устройстве. Попробуйте загрузить сведения о произведениях ещё раз."
+                retryLabel="Повторить"
+                onRetry={retryContinueWatchingResolution}
               />
-            ))}
-          </ContentRow>
-        </section>
+            )}
+          </section>
+        )}
 
         {feed.collections.map((collection) => (
           <section key={collection.id}>

@@ -229,7 +229,7 @@ function hasSameEpisode(
 }
 
 export function MediaView({ media, availability, availabilityStatus }: MediaViewProps) {
-  const { session, startSession, endSession } = usePlaybackSession();
+  const { session, startSession, updateProgress, endSession } = usePlaybackSession();
   const { isFavorite, addFavorite, removeFavorite } = useFavorites();
   const mediaIsFavorite = isFavorite(media.mediaRef);
   const mediaSession = session?.mediaRef === media.mediaRef ? session : null;
@@ -427,11 +427,13 @@ export function MediaView({ media, availability, availabilityStatus }: MediaView
       sourceRef: selectedSource.sourceRef,
       episode: selectedPlaybackEpisode,
       durationSeconds:
-        selectedEpisodeMetadata?.runtimeMinutes !== undefined
-          ? selectedEpisodeMetadata.runtimeMinutes * 60
-          : media.runtimeMinutes !== undefined
-            ? media.runtimeMinutes * 60
-            : null,
+        selectedSource.kind === 'hls' || selectedSource.kind === 'mp4'
+          ? selectedEpisodeMetadata?.runtimeMinutes !== undefined
+            ? selectedEpisodeMetadata.runtimeMinutes * 60
+            : media.runtimeMinutes !== undefined
+              ? media.runtimeMinutes * 60
+              : null
+          : null,
     });
     const canLoadSource =
       (selectedSource.kind === 'embed' ||
@@ -562,10 +564,12 @@ export function MediaView({ media, availability, availabilityStatus }: MediaView
             backdrop={media.backdrop}
             source={selectedSource}
             isStarted={isPlayerStarted}
+            initialPositionSeconds={mediaSession?.positionSeconds ?? 0}
             status={playerStatus}
             onStart={loadPlayer}
             onReady={handlePlayerReady}
             onError={handlePlayerError}
+            onProgress={updateProgress}
             onRetry={loadPlayer}
             emptyState={playerEmptyState}
             embedded

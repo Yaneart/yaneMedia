@@ -6,4 +6,5 @@ export type {
   PlaybackArtworkSnapshot,
   PlaybackMediaSnapshot,
   PlaybackSession,
+  ContinueWatchingEntry,
 } from './model/playbackSession';

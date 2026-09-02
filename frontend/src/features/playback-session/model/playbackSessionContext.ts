@@ -1,4 +1,5 @@
 import type {
+  ContinueWatchingEntry,
   PlaybackEpisodeSelection,
   PlaybackMediaSnapshot,
   PlaybackSession,
@@ -16,7 +17,9 @@ export type StartPlaybackSessionInput = {
 
 export type PlaybackSessionContextValue = {
   session: PlaybackSession | null;
+  continueWatchingEntries: readonly ContinueWatchingEntry[];
   startSession: (input: StartPlaybackSessionInput) => void;
+  restoreSession: (mediaRef: string) => void;
   pauseSession: () => void;
   resumeSession: () => void;
   updateProgress: (positionSeconds: number, durationSeconds?: number | null) => void;

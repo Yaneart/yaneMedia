@@ -1,5 +1,10 @@
-import type { PlaybackSession } from '@/entities/playback';
+import type { ContinueWatchingEntry, PlaybackSession } from '@/entities/playback';
 import { useEffect, useState, type ReactNode } from 'react';
+import {
+  loadContinueWatchingEntries,
+  removeContinueWatchingEntries,
+  saveContinueWatchingEntries,
+} from './continueWatchingStorage';
 import { PlaybackSessionContext, type StartPlaybackSessionInput } from './playbackSessionContext';
 import {
   loadPlaybackSession,
@@ -10,6 +15,8 @@ import {
 type PlaybackSessionProviderProps = {
   children: ReactNode;
 };
+
+const CONTINUE_WATCHING_ENTRY_LIMIT = 100;
 
 function getUpdatedAt() {
   return new Date().toISOString();
@@ -37,8 +44,43 @@ function normalizePosition(positionSeconds: number, durationSeconds: number | nu
     : Math.min(normalizedPosition, durationSeconds);
 }
 
+function toContinueWatchingEntry(session: PlaybackSession): ContinueWatchingEntry {
+  return {
+    mediaRef: session.mediaRef,
+    mediaSnapshot: session.mediaSnapshot,
+    sourceRef: session.sourceRef,
+    episode: session.episode,
+    positionSeconds: session.positionSeconds,
+    durationSeconds: session.durationSeconds,
+    updatedAt: session.updatedAt,
+  };
+}
+
+function updateContinueWatchingEntries(
+  entries: readonly ContinueWatchingEntry[],
+  session: PlaybackSession,
+) {
+  const withoutCurrentMedia = entries.filter((entry) => entry.mediaRef !== session.mediaRef);
+  const isCompleted =
+    session.durationSeconds !== null &&
+    session.durationSeconds > 0 &&
+    session.positionSeconds >= session.durationSeconds;
+
+  if (isCompleted) {
+    return withoutCurrentMedia;
+  }
+
+  return [toContinueWatchingEntry(session), ...withoutCurrentMedia].slice(
+    0,
+    CONTINUE_WATCHING_ENTRY_LIMIT,
+  );
+}
+
 export function PlaybackSessionProvider({ children }: PlaybackSessionProviderProps) {
   const [session, setSession] = useState<PlaybackSession | null>(loadPlaybackSession);
+  const [continueWatchingEntries, setContinueWatchingEntries] = useState<ContinueWatchingEntry[]>(
+    loadContinueWatchingEntries,
+  );
 
   useEffect(() => {
     if (session) {
@@ -47,6 +89,23 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
     }
 
     removePlaybackSession();
+  }, [session]);
+
+  useEffect(() => {
+    if (continueWatchingEntries.length > 0) {
+      saveContinueWatchingEntries(continueWatchingEntries);
+      return;
+    }
+
+    removeContinueWatchingEntries();
+  }, [continueWatchingEntries]);
+
+  useEffect(() => {
+    if (!session) {
+      return;
+    }
+
+    setContinueWatchingEntries((entries) => updateContinueWatchingEntries(entries, session));
   }, [session]);
 
   const startSession = (input: StartPlaybackSessionInput) => {
@@ -63,6 +122,21 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
       volume: 1,
       updatedAt: getUpdatedAt(),
     });
+  };
+
+  const restoreSession = (mediaRef: string) => {
+    const entry = continueWatchingEntries.find((candidate) => candidate.mediaRef === mediaRef);
+
+    if (!entry) {
+      return;
+    }
+
+    setSession((currentSession) => ({
+      ...entry,
+      state: 'paused',
+      volume: currentSession?.volume ?? 1,
+      updatedAt: getUpdatedAt(),
+    }));
   };
 
   const pauseSession = () => {
@@ -125,7 +199,9 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
     <PlaybackSessionContext
       value={{
         session,
+        continueWatchingEntries,
         startSession,
+        restoreSession,
         pauseSession,
         resumeSession,
         updateProgress,

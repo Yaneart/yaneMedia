@@ -1,10 +1,4 @@
 import type { MediaSummary } from '@/entities/media';
-import type { PlaybackProgress } from '@/entities/playback';
-
-export interface ContinueWatchingItem {
-  media: MediaSummary;
-  progress: PlaybackProgress;
-}
 
 export interface HomeCollection {
   id: string;
@@ -16,7 +10,6 @@ export interface HomeCollection {
 export interface HomeFeed {
   featured: MediaSummary;
   featuredExpiresAt: string;
-  continueWatching: ContinueWatchingItem[];
   collections: HomeCollection[];
   partial: boolean;
   degraded: boolean;

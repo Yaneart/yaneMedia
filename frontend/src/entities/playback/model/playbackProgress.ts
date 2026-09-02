@@ -1,5 +1,5 @@
 export interface PlaybackProgress {
   positionSeconds: number;
-  durationSeconds: number;
+  durationSeconds: number | null;
   updatedAt: string;
 }

@@ -1,10 +1,11 @@
 import { MediaLandscapeArtwork, type MediaSummary } from '@/entities/media';
-import type { PlaybackProgress } from '@/entities/playback';
+import type { PlaybackEpisodeSelection, PlaybackProgress } from '@/entities/playback';
 import { PlayIcon } from '@/shared';
 
 export type ContinueWatchingCardProps = {
   media: MediaSummary;
   progress: PlaybackProgress;
+  episode?: PlaybackEpisodeSelection | null;
   onOpen: () => void;
 };
 
@@ -21,28 +22,42 @@ function formatDuration(totalSeconds: number) {
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
-function formatRemaining(totalSeconds: number) {
-  const safeMinutes = Math.max(1, Math.ceil(totalSeconds / 60));
-  const hours = Math.floor(safeMinutes / 60);
-  const minutes = safeMinutes % 60;
-
-  if (hours > 0) {
-    return minutes > 0 ? `${hours} ч ${minutes} мин` : `${hours} ч`;
+function formatEpisode(episode: PlaybackEpisodeSelection | null | undefined) {
+  if (!episode) {
+    return null;
   }
 
-  return `${safeMinutes} мин`;
+  const episodeNumber = episode.absoluteEpisodeNumber ?? episode.episodeNumber;
+
+  return episode.seasonNumber === undefined
+    ? `Серия ${episodeNumber}`
+    : `Сезон ${episode.seasonNumber} · серия ${episodeNumber}`;
 }
 
-export function ContinueWatchingCard({ media, onOpen, progress }: ContinueWatchingCardProps) {
-  const durationSeconds = Math.max(0, progress.durationSeconds);
-  const positionSeconds = Math.min(durationSeconds, Math.max(0, progress.positionSeconds));
-  const progressMax = Math.max(1, durationSeconds);
-  const progressLabel = `${formatDuration(positionSeconds)} из ${formatDuration(durationSeconds)}`;
-  const remainingSeconds = Math.max(0, durationSeconds - positionSeconds);
+export function ContinueWatchingCard({
+  media,
+  onOpen,
+  progress,
+  episode,
+}: ContinueWatchingCardProps) {
+  const durationSeconds =
+    progress.durationSeconds !== null &&
+    Number.isFinite(progress.durationSeconds) &&
+    progress.durationSeconds > 0
+      ? progress.durationSeconds
+      : null;
+  const rawPositionSeconds = Number.isFinite(progress.positionSeconds)
+    ? Math.max(0, progress.positionSeconds)
+    : 0;
+  const positionSeconds =
+    durationSeconds === null ? rawPositionSeconds : Math.min(durationSeconds, rawPositionSeconds);
   const resumeLabel =
     positionSeconds > 0 ? `Продолжить с ${formatDuration(positionSeconds)}` : 'Начать просмотр';
-  const remainingLabel =
-    remainingSeconds > 0 ? `Осталось ${formatRemaining(remainingSeconds)}` : 'Просмотрено';
+  const episodeLabel = formatEpisode(episode);
+  const progressLabel =
+    durationSeconds === null
+      ? resumeLabel
+      : `${formatDuration(positionSeconds)} из ${formatDuration(durationSeconds)}`;
 
   return (
     <button
@@ -89,16 +104,18 @@ export function ContinueWatchingCard({ media, onOpen, progress }: ContinueWatchi
         <h3 className="truncate font-semibold leading-tight">{media.title}</h3>
 
         <div className="mt-1.5 flex items-center justify-between gap-3 text-caption text-white/65">
-          <span className="hidden min-w-0 truncate sm:block">{resumeLabel}</span>
-          <span className="truncate sm:shrink-0">{remainingLabel}</span>
+          <span className="hidden min-w-0 truncate sm:block">{episodeLabel ?? resumeLabel}</span>
+          <span className="truncate sm:shrink-0">{progressLabel}</span>
         </div>
 
-        <progress
-          value={positionSeconds}
-          max={progressMax}
-          aria-label={`Просмотрено ${progressLabel}`}
-          className="mt-2 h-1.5 w-full appearance-none overflow-hidden rounded-pill bg-white/20 sm:mt-3 [&::-moz-progress-bar]:bg-white [&::-webkit-progress-bar]:bg-white/20 [&::-webkit-progress-value]:bg-white"
-        />
+        {durationSeconds !== null && (
+          <progress
+            value={positionSeconds}
+            max={durationSeconds}
+            aria-label={`Просмотрено ${formatDuration(positionSeconds)} из ${formatDuration(durationSeconds)}`}
+            className="mt-2 h-1.5 w-full appearance-none overflow-hidden rounded-pill bg-white/20 sm:mt-3 [&::-moz-progress-bar]:bg-white [&::-webkit-progress-bar]:bg-white/20 [&::-webkit-progress-value]:bg-white"
+          />
+        )}
       </div>
     </button>
   );

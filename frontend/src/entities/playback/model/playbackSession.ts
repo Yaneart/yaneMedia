@@ -29,3 +29,13 @@ export interface PlaybackSession {
   volume: number;
   updatedAt: string;
 }
+
+export interface ContinueWatchingEntry {
+  mediaRef: string;
+  mediaSnapshot: PlaybackMediaSnapshot;
+  sourceRef: string;
+  episode: PlaybackEpisodeSelection | null;
+  positionSeconds: number;
+  durationSeconds: number | null;
+  updatedAt: string;
+}
