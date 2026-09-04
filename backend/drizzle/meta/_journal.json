@@ -8,6 +8,13 @@
       "when": 1788423047556,
       "tag": "0000_storage_foundation",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788509741495,
+      "tag": "0001_create_users",
+      "breakpoints": true
     }
   ]
 }
