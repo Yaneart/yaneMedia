@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { pgTable, timestamp, uniqueIndex, uuid, varchar } from 'drizzle-orm/pg-core';
+import { pgTable, timestamp, uniqueIndex, uuid, varchar, text } from 'drizzle-orm/pg-core';
 
 export const users = pgTable(
   'users',
@@ -7,6 +7,7 @@ export const users = pgTable(
     id: uuid('id').defaultRandom().primaryKey(),
     displayName: varchar('display_name', { length: 50 }).notNull(),
     email: varchar('email', { length: 254 }).notNull(),
+    passwordHash: text('password_hash').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },

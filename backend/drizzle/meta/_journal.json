@@ -15,6 +15,13 @@
       "when": 1788509741495,
       "tag": "0001_create_users",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788590225331,
+      "tag": "0002_add_auth_storage",
+      "breakpoints": true
     }
   ]
 }

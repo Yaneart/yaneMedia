@@ -6,9 +6,10 @@ import { ApiExceptionFilter } from './platform/http/api-error/api-exception/api-
 import { MediaModule } from './media/media.module';
 import { DatabaseModule } from './database/database.module';
 import { UsersModule } from './users/users.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
-  imports: [AppConfigModule, HealthModule, MediaModule, DatabaseModule, UsersModule],
+  imports: [AppConfigModule, HealthModule, MediaModule, DatabaseModule, UsersModule, AuthModule],
   providers: [AppLogger, ApiExceptionFilter],
 })
 export class AppModule {}

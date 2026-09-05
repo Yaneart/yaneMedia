@@ -9,6 +9,7 @@ describe('UsersRepository', () => {
     id: '93ea2794-e805-4f60-b14f-2005d2c61804',
     displayName: 'Артём',
     email: 'artem@example.com',
+    passwordHash: 'test-password-hash',
     createdAt: new Date('2026-09-04T08:00:00.000Z'),
     updatedAt: new Date('2026-09-04T08:00:00.000Z'),
   };
@@ -42,6 +43,7 @@ describe('UsersRepository', () => {
     const data: NewUser = {
       displayName: 'Артём',
       email: '  ARTEM@Example.com  ',
+      passwordHash: user.passwordHash,
     };
 
     await expect(repository.create(data)).resolves.toBe(user);
@@ -49,6 +51,7 @@ describe('UsersRepository', () => {
     expect(values).toHaveBeenCalledWith({
       displayName: 'Артём',
       email: 'artem@example.com',
+      passwordHash: user.passwordHash,
     });
   });
 
@@ -59,7 +62,11 @@ describe('UsersRepository', () => {
     const repository = new UsersRepository({ db: { insert } } as unknown as DatabaseService);
 
     await expect(
-      repository.create({ displayName: 'Артём', email: 'artem@example.com' }),
+      repository.create({
+        displayName: 'Артём',
+        email: 'artem@example.com',
+        passwordHash: user.passwordHash,
+      }),
     ).rejects.toThrow('Не удалось создать пользователя');
   });
 
