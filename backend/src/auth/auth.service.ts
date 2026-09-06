@@ -8,12 +8,14 @@ import { DatabaseError } from 'pg';
 import { AuthRepository } from './auth.repository';
 import { generateSessionToken, hashSessionToken, isSessionToken } from './session-token';
 import { LoginDto } from './dto/login.dto';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly usersService: UsersService,
     private readonly authRepository: AuthRepository,
+    private readonly configService: ConfigService,
   ) {}
 
   async register(dto: RegisterDto): Promise<{ user: AuthUserDto }> {
@@ -70,7 +72,8 @@ export class AuthService {
     }
 
     const token = generateSessionToken();
-    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    const ttlDays = this.configService.getOrThrow<number>('SESSION_TTL_DAYS');
+    const expiresAt = new Date(Date.now() + ttlDays * 24 * 60 * 60 * 1000);
 
     await this.authRepository.create({
       tokenHash: hashSessionToken(token),

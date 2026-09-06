@@ -5,6 +5,7 @@ import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 import { ApiResponseInterceptor } from './platform/http/api-response/api-response.interceptor';
 import { ApiExceptionFilter } from './platform/http/api-error/api-exception/api-exception.filter';
+import type { NextFunction, Response, Request } from 'express';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -12,10 +13,16 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api/v1');
 
+  app.use('/api/v1/auth', (_request: Request, response: Response, next: NextFunction) => {
+    response.setHeader('Cache-Control', 'no-store');
+    next();
+  });
+
   app.use(cookieParser());
 
   app.enableCors({
-    origin: 'http://localhost:5173',
+    origin: configService.getOrThrow<string>('FRONTEND_ORIGIN'),
+    credentials: true,
   });
 
   app.useGlobalFilters(app.get(ApiExceptionFilter));
