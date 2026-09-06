@@ -6,7 +6,7 @@ import { DUMMY_PASSWORD_HASH, hashPassword, verifyPassword } from './password';
 import { DrizzleQueryError } from 'drizzle-orm';
 import { DatabaseError } from 'pg';
 import { AuthRepository } from './auth.repository';
-import { generateSessionToken, hashSessionToken } from './session-token';
+import { generateSessionToken, hashSessionToken, isSessionToken } from './session-token';
 import { LoginDto } from './dto/login.dto';
 
 @Injectable()
@@ -88,5 +88,13 @@ export class AuthService {
       token,
       expiresAt,
     };
+  }
+
+  async logout(token: unknown): Promise<void> {
+    if (!isSessionToken(token)) {
+      return;
+    }
+
+    await this.authRepository.deleteByTokenHash(hashSessionToken(token));
   }
 }
