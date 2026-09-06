@@ -1,10 +1,13 @@
-import { Body, Controller, Header, HttpCode, Post, Res } from '@nestjs/common';
+import { Body, Controller, Get, Header, HttpCode, Post, Res, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { ConfigService } from '@nestjs/config';
 import { LoginDto } from './dto/login.dto';
 import type { Response } from 'express';
 import { getSessionCookieOptions, SESSION_COOKIE_NAME } from './session-cookie';
+import { SessionGuard } from './guards/session.guard';
+import { CurrentUser } from './decorators/current-user.decorator';
+import { AuthUserDto } from './dto/auth-user.dto';
 
 @Controller('auth')
 export class AuthController {
@@ -32,6 +35,13 @@ export class AuthController {
       expires: expiresAt,
     });
 
+    return { user };
+  }
+
+  @Get('me')
+  @UseGuards(SessionGuard)
+  @Header('Cache-Control', 'no-store')
+  me(@CurrentUser() user: AuthUserDto): { user: AuthUserDto } {
     return { user };
   }
 }
