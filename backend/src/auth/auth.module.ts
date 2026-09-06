@@ -5,10 +5,11 @@ import { UsersModule } from '../users/users.module';
 import { DatabaseModule } from '../database/database.module';
 import { AuthRepository } from './auth.repository';
 import { AppConfigModule } from '../config/config.module';
+import { SessionGuard } from './guards/session.guard';
 
 @Module({
   imports: [UsersModule, DatabaseModule, AppConfigModule],
   controllers: [AuthController],
-  providers: [AuthService, AuthRepository],
+  providers: [AuthService, AuthRepository, SessionGuard],
 })
 export class AuthModule {}

@@ -7,3 +7,7 @@ export function generateSessionToken(): string {
 export function hashSessionToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
+
+export function isSessionToken(token: unknown): token is string {
+  return typeof token === 'string' && token.length === 43 && /^[A-Za-z0-9_-]{43}$/.test(token);
+}
