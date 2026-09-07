@@ -8,6 +8,7 @@ import { AppConfigModule } from '../config/config.module';
 import { SessionGuard } from './guards/session.guard';
 import { CsrfGuard } from './guards/csrf.guard';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { MailModule } from '../mail/mail.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
     UsersModule,
     DatabaseModule,
     AppConfigModule,
+    MailModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, AuthRepository, SessionGuard, CsrfGuard, ThrottlerGuard],

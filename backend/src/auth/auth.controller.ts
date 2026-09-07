@@ -10,7 +10,9 @@ import { AuthUserDto } from './dto/auth-user.dto';
 import { CsrfGuard } from './guards/csrf.guard';
 import type { Response } from 'express';
 import type { AuthRequest } from './auth-request';
-import { ThrottlerGuard } from '@nestjs/throttler';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import { VerifyEmailDto } from './dto/verify-email.dto';
+import { ResendVerificationDto } from './dto/resend-verification.dto';
 
 @Controller('auth')
 @UseGuards(CsrfGuard)
@@ -61,5 +63,20 @@ export class AuthController {
     response.clearCookie(SESSION_COOKIE_NAME, getSessionCookieOptions(isProduction));
 
     return { success: true };
+  }
+
+  @Post('verify-email')
+  @HttpCode(200)
+  @UseGuards(ThrottlerGuard)
+  verifyEmail(@Body() dto: VerifyEmailDto) {
+    return this.authService.verifyEmail(dto.token);
+  }
+
+  @Post('resend-verification')
+  @HttpCode(200)
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
+  resendVerification(@Body() dto: ResendVerificationDto) {
+    return this.authService.resendVerification(dto.email);
   }
 }

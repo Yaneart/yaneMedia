@@ -7,7 +7,7 @@ import {
 import type { AuthRequest } from '../auth-request';
 import { AuthRepository } from '../auth.repository';
 import { SESSION_COOKIE_NAME } from '../session-cookie';
-import { hashSessionToken, isSessionToken } from '../session-token';
+import { hashToken, isToken } from '../token';
 
 @Injectable()
 export class SessionGuard implements CanActivate {
@@ -17,11 +17,11 @@ export class SessionGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<AuthRequest>();
     const token = request.cookies?.[SESSION_COOKIE_NAME];
 
-    if (!isSessionToken(token)) {
+    if (!isToken(token)) {
       throw new UnauthorizedException('Необходим вход в аккаунт');
     }
 
-    const tokenHash = hashSessionToken(token);
+    const tokenHash = hashToken(token);
     const now = new Date();
     const user = await this.authRepository.findUserBySessionHash(tokenHash, now);
 

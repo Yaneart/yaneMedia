@@ -18,6 +18,8 @@ services:
 
   backend:
     build: ./backend
+    env_file:
+        - ./backend/.env
     environment:
       DATABASE_URL: postgresql://yanemedia:yanemedia@postgres:5432/yanemedia
       FRONTEND_ORIGIN: http://localhost:5173

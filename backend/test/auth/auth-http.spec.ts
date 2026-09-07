@@ -6,7 +6,7 @@ import { AuthController } from '../../src/auth/auth.controller';
 import { AuthService } from '../../src/auth/auth.service';
 import { AuthRepository } from '../../src/auth/auth.repository';
 import { hashPassword, verifyPassword } from '../../src/auth/password';
-import { hashSessionToken } from '../../src/auth/session-token';
+import { hashToken } from '../../src/auth/token';
 import { ApiExceptionFilter } from '../../src/platform/http/api-error/api-exception/api-exception.filter';
 import { ApiResponseInterceptor } from '../../src/platform/http/api-response/api-response.interceptor';
 import type { AppLogger } from '../../src/platform/logging/app-logger';
@@ -169,7 +169,7 @@ describe('auth HTTP contract', () => {
       expect(createSession).toHaveBeenCalledTimes(1);
       const [session] = createSession.mock.calls[0];
       expect(cookie).toContain(`; Expires=${session.expiresAt.toUTCString()}`);
-      expect(session.tokenHash).toBe(hashSessionToken(token));
+      expect(session.tokenHash).toBe(hashToken(token));
       expect(session.userId).toBe(id);
       expect(findByEmail).toHaveBeenCalledWith('artem@example.com');
     },

@@ -4,7 +4,7 @@ import { DatabaseError } from 'pg';
 import { AuthService } from '../../src/auth/auth.service';
 import type { AuthRepository } from '../../src/auth/auth.repository';
 import * as password from '../../src/auth/password';
-import { hashSessionToken } from '../../src/auth/session-token';
+import { hashToken } from '../../src/auth/token';
 import type { User } from '../../src/users/entities/user.entity';
 import type { UsersService } from '../../src/users/users.service';
 
@@ -128,7 +128,7 @@ describe('AuthService', () => {
       expect(createSession).toHaveBeenCalledTimes(2);
       for (const [index, result] of [first, second].entries()) {
         expect(createSession).toHaveBeenNthCalledWith(index + 1, {
-          tokenHash: hashSessionToken(result.token),
+          tokenHash: hashToken(result.token),
           userId: user.id,
           expiresAt: result.expiresAt,
         });

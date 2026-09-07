@@ -6,7 +6,7 @@ import { Client } from 'pg';
 import { AuthModule } from '../../src/auth/auth.module';
 import { AuthRepository } from '../../src/auth/auth.repository';
 import { verifyPassword } from '../../src/auth/password';
-import { hashSessionToken } from '../../src/auth/session-token';
+import { hashToken } from '../../src/auth/token';
 import { DatabaseService } from '../../src/database/database.service';
 import { ApiExceptionFilter } from '../../src/platform/http/api-error/api-exception/api-exception.filter';
 import { ApiResponseInterceptor } from '../../src/platform/http/api-response/api-response.interceptor';
@@ -127,8 +127,8 @@ describePostgres('auth with PostgreSQL', () => {
     });
     const now = new Date('2026-09-05T10:00:00.000Z');
     const expiresAt = new Date(now.getTime() + 1000);
-    const tokenHash = hashSessionToken(randomUUID());
-    const otherHash = hashSessionToken(randomUUID());
+    const tokenHash = hashToken(randomUUID());
+    const otherHash = hashToken(randomUUID());
     await authRepository.create({ tokenHash, userId: user.id, expiresAt });
     await authRepository.create({ tokenHash: otherHash, userId: user.id, expiresAt });
     await authRepository.deleteExpiredByTokenHash(tokenHash, now);
@@ -187,7 +187,7 @@ describePostgres('auth with PostgreSQL', () => {
       tokens.push(token);
       const stored = await client.query<{ token_hash: string; user_id: string; expires_at: Date }>(
         'SELECT token_hash, user_id, expires_at FROM sessions WHERE token_hash = $1',
-        [hashSessionToken(token)],
+        [hashToken(token)],
       );
       expect(stored.rows).toHaveLength(1);
       const session = stored.rows[0];
