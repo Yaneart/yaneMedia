@@ -9,3 +9,5 @@ export type {
   AuthUserResponse,
   AuthSuccessResponse,
 } from './model/auth';
+
+export type { AuthState, AuthContextValue } from './model/authContext';

@@ -21,7 +21,7 @@ export type RegisterFormFields = {
 export type LoginFormErrors = Partial<Record<keyof LoginFormFields, string>>;
 export type RegisterFormErrors = Partial<Record<keyof RegisterFormFields, string>>;
 
-function validateEmail(value: string): string | undefined {
+export function validateEmail(value: string): string | undefined {
   const email = value.trim();
 
   if (!email) {

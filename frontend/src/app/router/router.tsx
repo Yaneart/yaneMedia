@@ -13,6 +13,7 @@ import { HistoryPage } from '@/pages/history';
 import { RegisterPage } from '@/pages/register';
 import { LoginPage } from '@/pages/login';
 import { NotFoundPage } from '@/pages/not-found';
+import { VerifyEmailPage } from '@/pages/verify-email';
 
 export const router = createBrowserRouter([
   {
@@ -22,6 +23,10 @@ export const router = createBrowserRouter([
   {
     path: routePaths.register,
     element: <RegisterPage homePath={routePaths.home} loginPath={routePaths.login} />,
+  },
+  {
+    path: routePaths.verifyEmail,
+    element: <VerifyEmailPage homePath={routePaths.home} loginPath={routePaths.login} />,
   },
   {
     element: <AppShell />,

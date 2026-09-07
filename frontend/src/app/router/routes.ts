@@ -10,5 +10,6 @@ export const routePaths = {
   history: '/history',
   login: '/login',
   register: '/register',
+  verifyEmail: '/verify-email',
   notFound: '*',
 } as const;

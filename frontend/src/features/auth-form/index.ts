@@ -6,6 +6,7 @@ export {
   PASSWORD_MIN_LENGTH,
   validateLoginForm,
   validateRegisterForm,
+  validateEmail,
 } from './model/authFormValidation';
 export type {
   LoginFormErrors,
@@ -15,3 +16,5 @@ export type {
 } from './model/authFormValidation';
 
 export { focusFirstInvalidField } from './lib/focusFirstInvalidField';
+
+export { ResendVerification } from './ui/ResendVerification';
