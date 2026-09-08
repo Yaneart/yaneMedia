@@ -76,6 +76,13 @@ describe('MediaService', () => {
       width: 1920,
       height: 1080,
     });
+    expect(getDetails).toHaveBeenCalledWith({
+      ids: {
+        aniList: '154587',
+        shikimori: '52991',
+        myAnimeList: '52991',
+      },
+    });
   });
 
   it('omits known provider artwork placeholders and keeps real artwork', async () => {
@@ -391,13 +398,18 @@ describe('MediaService', () => {
       limit: 10,
     });
     expect(getAvailability).toHaveBeenCalledWith(
-      {
+      expect.objectContaining({
         type: 'anime',
-        ids: { aniList: '154587', kinopoisk: '5401195' },
+        ids: {
+          aniList: '154587',
+          shikimori: '52991',
+          myAnimeList: '52991',
+          kinopoisk: '5401195',
+        },
         title: 'Frieren: Beyond Journey’s End',
         year: 2023,
         absoluteEpisodeNumber: 2,
-      },
+      }),
       { playbackUserAgent: 'browser-user-agent' },
     );
   });
@@ -438,7 +450,11 @@ describe('MediaService', () => {
     );
     expect(getAvailability).toHaveBeenCalledWith(
       expect.objectContaining({
-        ids: { aniList: '154587' },
+        ids: {
+          aniList: '154587',
+          shikimori: '52991',
+          myAnimeList: '52991',
+        },
         absoluteEpisodeNumber: 1,
       }),
       { playbackUserAgent: 'browser-user-agent' },

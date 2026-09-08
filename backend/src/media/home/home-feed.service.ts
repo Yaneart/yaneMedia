@@ -6,11 +6,7 @@ import {
 } from '../catalog/editorial-catalog';
 import { MediaCatalogService } from '../catalog/media-catalog.service';
 import type { HomeFeedDto } from './dto/home-feed.dto';
-import {
-  HOME_COLLECTION_ITEM_LIMIT,
-  HOME_FEATURED_COLLECTION_ID,
-  homeCollectionDefinitions,
-} from './home-feed.config';
+import { HOME_FEATURED_COLLECTION_ID, homeCollectionDefinitions } from './home-feed.config';
 import { selectHourlyFeatured } from './home-featured-rotation';
 
 @Injectable()
@@ -18,12 +14,11 @@ export class HomeFeedService {
   constructor(private readonly mediaCatalogService: MediaCatalogService) {}
 
   async getHomeFeed(timestamp = Date.now()): Promise<HomeFeedDto> {
-    const collectionDefinition = homeCollectionDefinitions[0];
-    const catalog = await this.mediaCatalogService.getCollection(
-      collectionDefinition.sourceCollectionId,
-      0,
-      HOME_COLLECTION_ITEM_LIMIT,
+    const requestedMediaRefs = homeCollectionDefinitions.flatMap(
+      (collection) => collection.mediaRefs,
     );
+    const catalog = await this.mediaCatalogService.resolveMediaRefs(requestedMediaRefs);
+    const itemsByMediaRef = new Map(catalog.items.map((item) => [item.mediaRef, item]));
     const featuredMediaRefs = new Set<string>(
       editorialCatalog
         .filter((entry) => this.isInCollection(entry, HOME_FEATURED_COLLECTION_ID))
@@ -39,17 +34,18 @@ export class HomeFeedService {
 
     const featuredSelection = selectHourlyFeatured(featuredCandidates, timestamp);
 
-    const collections =
-      catalog.items.length > 0
-        ? [
-            {
-              id: collectionDefinition.id,
-              title: collectionDefinition.title,
-              items: catalog.items,
-              total: catalog.total,
-            },
-          ]
-        : [];
+    const collections = homeCollectionDefinitions
+      .map((collection) => ({
+        id: collection.id,
+        title: collection.title,
+        items: collection.mediaRefs.flatMap((mediaRef) => {
+          const item = itemsByMediaRef.get(mediaRef);
+
+          return item ? [item] : [];
+        }),
+        total: collection.mediaRefs.length,
+      }))
+      .filter((collection) => collection.items.length > 0);
 
     return {
       featured: featuredSelection.featured,

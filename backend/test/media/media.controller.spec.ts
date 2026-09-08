@@ -63,6 +63,7 @@ describe('MediaController catalog', () => {
   it('returns the requested catalog produced by the catalog service', async () => {
     const catalog: MediaCatalogResponseDto = {
       items: [],
+      collections: [],
       partial: false,
       degraded: false,
       stale: false,

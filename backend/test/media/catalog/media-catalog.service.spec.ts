@@ -89,6 +89,14 @@ describe('MediaCatalogService', () => {
     expect(first).toEqual(
       expect.objectContaining({ partial: false, degraded: false, stale: false }),
     );
+    expect(first.collections).toHaveLength(5);
+    expect(first.collections.map(({ title, mediaRefs }) => [title, mediaRefs.length])).toEqual([
+      ['Выбор редакции', 10],
+      ['Авторское кино', 10],
+      ['Классика вне времени', 10],
+      ['Триллеры и расследования', 10],
+      ['Сильные драмы', 10],
+    ]);
     expect(second).toEqual(first);
     expect(getDetailsByRef).toHaveBeenCalledTimes(movieEntries.length);
   });
@@ -114,7 +122,7 @@ describe('MediaCatalogService', () => {
     );
     expect(catalog).toEqual(
       expect.objectContaining({
-        total: 50,
+        total: 150,
         offset: 10,
         limit: 20,
         partial: false,
@@ -182,12 +190,20 @@ describe('MediaCatalogService', () => {
     ) as jest.MockedFunction<MediaService['getDetailsByRef']>;
     const service = createService(getDetailsByRef);
 
-    await expect(service.getCatalog('movie')).resolves.toEqual({
-      items: [expect.objectContaining({ mediaRef: 'imdb:tt15239678' })],
-      partial: true,
-      degraded: true,
-      stale: false,
-    });
+    await expect(service.getCatalog('movie')).resolves.toEqual(
+      expect.objectContaining({
+        items: [expect.objectContaining({ mediaRef: 'imdb:tt15239678' })],
+        collections: [
+          expect.objectContaining({
+            id: 'editorial-picks',
+            mediaRefs: ['imdb:tt15239678'],
+          }),
+        ],
+        partial: true,
+        degraded: true,
+        stale: false,
+      }),
+    );
   });
 
   it('uses cached summaries as stale fallback during a provider outage', async () => {

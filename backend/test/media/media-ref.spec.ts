@@ -1,4 +1,8 @@
-import { createMediaRef, resolveMediaRef } from '../../src/media/media-ref';
+import {
+  createMediaRef,
+  resolveMediaRef,
+  resolveMediaRefWithAliases,
+} from '../../src/media/media-ref';
 
 describe('mediaRef', () => {
   it('keeps IMDb and Kinopoisk priority for movies and series', () => {
@@ -44,4 +48,22 @@ describe('mediaRef', () => {
       expect(resolveMediaRef(mediaRef)).toBeUndefined();
     },
   );
+
+  it('expands known anime references into IDs supported by both metadata providers', () => {
+    const expectedIds = {
+      aniList: '154587',
+      shikimori: '52991',
+      myAnimeList: '52991',
+    };
+
+    expect(resolveMediaRefWithAliases('anilist:154587')).toEqual(expectedIds);
+    expect(resolveMediaRefWithAliases('shikimori:52991')).toEqual(expectedIds);
+    expect(resolveMediaRefWithAliases('myanimelist:52991')).toEqual(expectedIds);
+  });
+
+  it('keeps unknown and non-anime references unchanged', () => {
+    expect(resolveMediaRefWithAliases('anilist:999999')).toEqual({ aniList: '999999' });
+    expect(resolveMediaRefWithAliases('imdb:tt1160419')).toEqual({ imdb: 'tt1160419' });
+    expect(resolveMediaRefWithAliases('invalid:ref')).toBeUndefined();
+  });
 });

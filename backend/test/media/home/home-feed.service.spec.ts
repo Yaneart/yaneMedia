@@ -1,8 +1,9 @@
 import { ServiceUnavailableException } from '@nestjs/common';
 import { editorialCatalog } from '../../../src/media/catalog/editorial-catalog';
-import type { MediaCatalogResponseDto } from '../../../src/media/catalog/dto/media-catalog-response.dto';
 import type { MediaCatalogService } from '../../../src/media/catalog/media-catalog.service';
 import type { MediaSummaryDto } from '../../../src/media/dto/media-summary.dto';
+import type { MediaSummaryResolutionResponseDto } from '../../../src/media/summary-resolution/dto/media-summary-resolution-response.dto';
+import { homeCollectionDefinitions } from '../../../src/media/home/home-feed.config';
 import { HomeFeedService } from '../../../src/media/home/home-feed.service';
 
 describe('HomeFeedService', () => {
@@ -13,24 +14,27 @@ describe('HomeFeedService', () => {
     backdrop: { url: `https://images.example.com/${encodeURIComponent(entry.mediaRef)}.jpg` },
     genres: [],
   }));
-  const homeSummaries = summaries.slice(0, 10);
+  const summariesByRef = new Map(summaries.map((summary) => [summary.mediaRef, summary]));
+  const homeMediaRefs = homeCollectionDefinitions.flatMap((collection) => collection.mediaRefs);
+  const homeSummaries = homeMediaRefs.flatMap((mediaRef) => {
+    const summary = summariesByRef.get(mediaRef);
 
-  function createService(catalog: MediaCatalogResponseDto) {
-    const getCollection = jest.fn().mockResolvedValue({
-      ...catalog,
-      total: 50,
-      offset: 0,
-      limit: 10,
-    }) as jest.MockedFunction<MediaCatalogService['getCollection']>;
+    return summary ? [summary] : [];
+  });
+
+  function createService(catalog: MediaSummaryResolutionResponseDto) {
+    const resolveMediaRefs = jest.fn().mockResolvedValue(catalog) as jest.MockedFunction<
+      MediaCatalogService['resolveMediaRefs']
+    >;
 
     return {
-      service: new HomeFeedService({ getCollection } as unknown as MediaCatalogService),
-      getCollection,
+      service: new HomeFeedService({ resolveMediaRefs } as unknown as MediaCatalogService),
+      resolveMediaRefs,
     };
   }
 
-  it('requests only the first ten editorial summaries for the home feed', async () => {
-    const { service, getCollection } = createService({
+  it('requests every configured home title once', async () => {
+    const { service, resolveMediaRefs } = createService({
       items: homeSummaries,
       partial: false,
       degraded: false,
@@ -39,11 +43,11 @@ describe('HomeFeedService', () => {
 
     await service.getHomeFeed(0);
 
-    expect(getCollection).toHaveBeenCalledWith('editorial-picks', 0, 10);
+    expect(resolveMediaRefs).toHaveBeenCalledWith(homeMediaRefs);
   });
 
-  it('builds featured and editorial collections from hydrated catalog summaries', async () => {
-    const { service, getCollection } = createService({
+  it('builds featured media and configured collections from hydrated summaries', async () => {
+    const { service, resolveMediaRefs } = createService({
       items: homeSummaries,
       partial: false,
       degraded: false,
@@ -56,19 +60,17 @@ describe('HomeFeedService', () => {
       featured: homeSummaries[0],
       featuredExpiresAt: '1970-01-01T01:00:00.000Z',
       continueWatching: [],
-      collections: [
-        {
-          id: 'editorial-picks',
-          title: 'Выбор редакции',
-          items: homeSummaries,
-          total: 50,
-        },
-      ],
+      collections: homeCollectionDefinitions.map((collection) => ({
+        id: collection.id,
+        title: collection.title,
+        items: collection.mediaRefs.map((mediaRef) => summariesByRef.get(mediaRef)),
+        total: collection.mediaRefs.length,
+      })),
       partial: false,
       degraded: false,
       stale: false,
     });
-    expect(getCollection).toHaveBeenCalledTimes(1);
+    expect(resolveMediaRefs).toHaveBeenCalledTimes(1);
   });
 
   it('keeps a partial feed useful and falls forward to the next available featured item', async () => {
@@ -81,9 +83,12 @@ describe('HomeFeedService', () => {
     });
 
     const feed = await service.getHomeFeed(0);
+    const firstCollectionMediaRefs = new Set<string>(homeCollectionDefinitions[0].mediaRefs);
 
     expect(feed.featured.mediaRef).toBe('imdb:tt11280740');
-    expect(feed.collections[0].items).toEqual(items);
+    expect(feed.collections[0].items).toEqual(
+      items.filter(({ mediaRef }) => firstCollectionMediaRefs.has(mediaRef)),
+    );
     expect(feed.continueWatching).toEqual([]);
     expect(feed).toEqual(expect.objectContaining({ partial: true, degraded: true, stale: true }));
   });

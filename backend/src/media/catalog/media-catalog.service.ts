@@ -7,6 +7,7 @@ import { INCOMPLETE_ARTWORK_CACHE_TTL_MS } from '../media-engine-cache';
 import { MediaService } from '../media.service';
 import {
   editorialCatalog,
+  mediaCatalogCollectionDefinitions,
   type EditorialCatalogEntry,
   type EditorialCollectionId,
 } from './editorial-catalog';
@@ -48,8 +49,19 @@ export class MediaCatalogService {
     const entries = editorialCatalog
       .filter((entry) => entry.type === type)
       .sort((left, right) => left.catalogOrder - right.catalogOrder);
+    const catalog = await this.hydrateEntries(entries);
+    const itemsByMediaRef = new Map(catalog.items.map((item) => [item.mediaRef, item]));
 
-    return this.hydrateEntries(entries);
+    return {
+      ...catalog,
+      collections: mediaCatalogCollectionDefinitions[type]
+        .map((collection) => ({
+          id: collection.id,
+          title: collection.title,
+          mediaRefs: collection.mediaRefs.filter((mediaRef) => itemsByMediaRef.has(mediaRef)),
+        }))
+        .filter((collection) => collection.mediaRefs.length > 0),
+    };
   }
 
   async resolveMediaRefs(mediaRefs: readonly string[]): Promise<MediaSummaryResolutionResponseDto> {

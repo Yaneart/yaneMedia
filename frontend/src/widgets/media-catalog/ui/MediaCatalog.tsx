@@ -17,7 +17,6 @@ import { useFavorites } from '@/features/favorite';
 import { filterMedia } from '../model/filterMedia';
 import { useMediaCatalog } from '../model/useMediaCatalog';
 import { useMediaSearch } from '../model/useMediaSearch';
-import { createMediaCollections } from '../model/createMediaCollections';
 import { MediaCatalogSkeleton } from './MediaCatalogSkeleton';
 
 export type MediaCatalogProps = {
@@ -76,8 +75,6 @@ export function MediaCatalog({ type, title, filters, onOpen }: MediaCatalogProps
   }
 
   const media = isSearchMode ? searchItems : catalog.items;
-
-  const collections = createMediaCollections(type, catalog.items);
 
   const catalogNotice = isPaused
     ? 'Обновление ожидает подключения к сети. Показана сохранённая версия.'
@@ -328,7 +325,7 @@ export function MediaCatalog({ type, title, filters, onOpen }: MediaCatalogProps
         />
       ) : (
         <div className="space-y-10">
-          {collections.map((collection) => (
+          {catalog.collections.map((collection) => (
             <section key={collection.id} aria-labelledby={`collection-${collection.id}`}>
               <h2
                 id={`collection-${collection.id}`}

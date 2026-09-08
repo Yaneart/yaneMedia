@@ -24,7 +24,7 @@ import {
   Injectable,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { createMediaRef, type MediaRefType, resolveMediaRef } from './media-ref';
+import { createMediaRef, type MediaRefType, resolveMediaRefWithAliases } from './media-ref';
 import { mapMediaAvailability, selectMediaAvailabilityEpisode } from './media-availability.mapper';
 
 export const MEDIA_ENGINE = Symbol('MEDIA_ENGINE');
@@ -422,7 +422,7 @@ export class MediaService {
   }
 
   private resolveMediaRefOrThrow(mediaRef: string) {
-    const ids = resolveMediaRef(mediaRef);
+    const ids = resolveMediaRefWithAliases(mediaRef);
 
     if (!ids) {
       throw new BadRequestException('Invalid media reference');
