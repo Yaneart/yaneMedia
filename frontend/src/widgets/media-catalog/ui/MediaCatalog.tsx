@@ -18,6 +18,7 @@ import { filterMedia } from '../model/filterMedia';
 import { useMediaCatalog } from '../model/useMediaCatalog';
 import { useMediaSearch } from '../model/useMediaSearch';
 import { createMediaCollections } from '../model/createMediaCollections';
+import { MediaCatalogSkeleton } from './MediaCatalogSkeleton';
 
 export type MediaCatalogProps = {
   type: MediaType;
@@ -33,7 +34,7 @@ const ratingOptions = [
 ] as const;
 
 export function MediaCatalog({ type, title, filters, onOpen }: MediaCatalogProps) {
-  const { catalog, status, retry } = useMediaCatalog(type);
+  const { catalog, isError, isFetching, isPaused, retry } = useMediaCatalog(type);
   const { isFavorite, toggleFavorite } = useFavorites();
   const filtersPanelId = useId();
 
@@ -46,48 +47,51 @@ export function MediaCatalog({ type, title, filters, onOpen }: MediaCatalogProps
   const { items: searchItems, status: searchStatus } = useMediaSearch(searchValue, type);
   const isSearchMode = searchValue.trim().length > 0;
 
-  if (status === 'error') {
-    return (
-      <ErrorState
-        variant="page"
-        eyebrow="Каталог yaneMedia"
-        title={`Не удалось загрузить ${title.toLocaleLowerCase('ru')}`}
-        description="Медиатека временно не отвечает. Проверьте подключение и попробуйте ещё раз."
-        visualLabel="Каталог недоступен"
-        retryLabel="Попробовать снова"
-        onRetry={retry}
-      />
-    );
-  }
-
-  if (status === 'empty') {
-    return (
-      <EmptyState
-        title="Каталог пока пуст"
-        description={`В разделе «${title}» пока нет доступных произведений.`}
-        action={
-          <Button variant="secondary" onClick={retry}>
-            Обновить каталог
-          </Button>
-        }
-        className="min-h-[60vh]"
-      />
-    );
-  }
-
   if (!catalog) {
-    return <LoadingState variant="page" label={`Загружаем каталог «${title}»`} />;
+    if (isPaused) {
+      return (
+        <EmptyState
+          title="Нет подключения к сети"
+          description="Загрузим каталог, когда соединение восстановится."
+          className="min-h-[60vh]"
+        />
+      );
+    }
+
+    if (isError) {
+      return (
+        <ErrorState
+          variant="page"
+          eyebrow="Каталог yaneMedia"
+          title={`Не удалось загрузить ${title.toLocaleLowerCase('ru')}`}
+          description="Проверьте подключение и попробуйте ещё раз."
+          visualLabel="Каталог недоступен"
+          retryLabel="Попробовать снова"
+          onRetry={retry}
+        />
+      );
+    }
+
+    return <MediaCatalogSkeleton title={title} />;
   }
 
   const media = isSearchMode ? searchItems : catalog.items;
 
   const collections = createMediaCollections(type, catalog.items);
 
-  const catalogNotice = catalog.partial
-    ? 'Часть каталога временно недоступна. Показаны доступные произведения.'
-    : catalog.stale
-      ? 'Показана сохранённая версия каталога. Данные могут обновиться позже.'
-      : null;
+  const catalogNotice = isPaused
+    ? 'Обновление ожидает подключения к сети. Показана сохранённая версия.'
+    : isFetching
+      ? 'Обновляем каталог…'
+      : isError
+        ? 'Не удалось обновить каталог. Показана сохранённая версия.'
+        : catalog.partial
+          ? 'Часть каталога временно недоступна. Показаны доступные произведения.'
+          : catalog.stale
+            ? 'Показана сохранённая версия каталога. Данные могут обновиться позже.'
+            : catalog.degraded
+              ? 'Некоторые сведения временно недоступны.'
+              : null;
 
   const availableGenres = [...new Set(media.flatMap((item) => item.genres))].sort((first, second) =>
     first.localeCompare(second, 'ru'),
@@ -248,8 +252,8 @@ export function MediaCatalog({ type, title, filters, onOpen }: MediaCatalogProps
         >
           <p className="text-caption text-text-secondary">{catalogNotice}</p>
 
-          <Button size="small" variant="ghost" onClick={retry}>
-            Обновить
+          <Button size="small" variant="ghost" disabled={isFetching || isPaused} onClick={retry}>
+            {isFetching ? 'Обновляем…' : 'Обновить'}
           </Button>
         </div>
       )}
@@ -311,6 +315,17 @@ export function MediaCatalog({ type, title, filters, onOpen }: MediaCatalogProps
             }
           />
         )
+      ) : catalog.items.length === 0 ? (
+        <EmptyState
+          title="Каталог пока пуст"
+          description={`В разделе «${title}» пока нет доступных произведений.`}
+          action={
+            <Button variant="secondary" disabled={isFetching || isPaused} onClick={retry}>
+              Обновить каталог
+            </Button>
+          }
+          className="min-h-[60vh]"
+        />
       ) : (
         <div className="space-y-10">
           {collections.map((collection) => (
