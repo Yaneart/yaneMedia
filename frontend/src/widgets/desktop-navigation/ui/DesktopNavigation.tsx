@@ -1,5 +1,6 @@
+import { AccountControl } from '@/features/account';
 import { ThemeToggle } from '@/features/theme';
-import { Logo, ProfileIcon, type IconProps } from '@/shared';
+import { Logo, type IconProps } from '@/shared';
 import type { ComponentType } from 'react';
 import { NavLink } from 'react-router';
 
@@ -98,20 +99,7 @@ export function DesktopNavigation({
       <div className="mt-auto flex items-center gap-2 px-2 pt-6">
         <ThemeToggle />
 
-        <NavLink
-          to={profilePath}
-          aria-label="Войти"
-          className={[
-            'flex size-10 shrink-0 items-center justify-center rounded-control',
-            'border border-navigation-border bg-background text-text-primary hover:bg-interactive-hover',
-            'transition-[background-color,border-color,color,transform] duration-200 ease-out',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/20',
-            'active:scale-[0.96] active:duration-75',
-            'motion-reduce:transform-none motion-reduce:transition-none',
-          ].join(' ')}
-        >
-          <ProfileIcon className="size-5" />
-        </NavLink>
+        <AccountControl loginPath={profilePath} placement="top" />
       </div>
     </aside>
   );

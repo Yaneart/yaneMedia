@@ -11,3 +11,5 @@ export type {
 } from './model/auth';
 
 export type { AuthState, AuthContextValue } from './model/authContext';
+
+export { AuthContext, useAuth } from './model/authContext';

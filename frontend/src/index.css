@@ -248,8 +248,8 @@
   background-image: linear-gradient(
     to right,
     var(--theme-hero-overlay-start) 0%,
-    var(--theme-hero-overlay-start) 35%,
-    var(--theme-hero-overlay-middle) 55%,
+    var(--theme-hero-overlay-start) 20%,
+    var(--theme-hero-overlay-middle) 40%,
     transparent 70%
   );
 }

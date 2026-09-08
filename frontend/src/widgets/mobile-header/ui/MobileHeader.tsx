@@ -1,3 +1,4 @@
+import { AccountControl } from '@/features/account';
 import { ThemeToggle } from '@/features/theme';
 import {
   FavoriteFilledIcon,
@@ -7,7 +8,6 @@ import {
   Logo,
   MoreIcon,
   Popover,
-  ProfileIcon,
 } from '@/shared';
 import { NavLink, useLocation } from 'react-router';
 
@@ -121,20 +121,7 @@ export function MobileHeader({
             )}
           </Popover>
 
-          <NavLink
-            to={profilePath}
-            aria-label="Войти"
-            className={[
-              'flex size-10 shrink-0 items-center justify-center rounded-control',
-              'border border-navigation-border bg-background text-text-primary',
-              'transition-[background-color,border-color,color,transform] duration-200 ease-out',
-              'hover:bg-interactive-hover active:scale-[0.97] active:duration-75',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/20',
-              'motion-reduce:transform-none motion-reduce:transition-none',
-            ].join(' ')}
-          >
-            <ProfileIcon className="size-5 shrink-0" />
-          </NavLink>
+          <AccountControl loginPath={profilePath} />
         </div>
       </div>
     </header>

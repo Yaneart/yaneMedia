@@ -21,7 +21,7 @@ export function AppShell() {
   const isActiveMediaPage = activeMediaPath === normalizedPathname;
   return (
     <div className="relative isolate flex h-dvh overflow-hidden bg-background">
-      <div className="relative hidden md:block">
+      <div className="relative z-20 hidden md:block">
         <AppShellWatermarks />
         <div className="relative z-10">
           <DesktopNavigation

@@ -1,13 +1,16 @@
+import { login, useAuth } from '@/entities/auth';
 import {
   focusFirstInvalidField,
+  ResendVerification,
   validateLoginForm,
   type LoginFormErrors,
   type LoginFormFields,
 } from '@/features/auth-form';
 import { Button, Input } from '@/shared';
-import { AuthDemoNotice, AuthFormLayout } from '@/widgets/auth-form-layout';
+import { ApiClientError } from '@/shared/api';
+import { AuthFormLayout } from '@/widgets/auth-form-layout';
 import { useState, type ChangeEvent, type SubmitEvent } from 'react';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 
 type LoginPageProps = {
   homePath: string;
@@ -27,16 +30,25 @@ function readLoginFormFields(form: HTMLFormElement): LoginFormFields {
 
 export function LoginPage({ homePath, registerPath }: LoginPageProps) {
   const [formErrors, setFormErrors] = useState<LoginFormErrors>({});
-  const [isDemoNoticeVisible, setIsDemoNoticeVisible] = useState(false);
+  const { setAuthenticated } = useAuth();
+  const navigate = useNavigate();
 
-  const handleSubmit = (event: SubmitEvent<HTMLFormElement>) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [verificationEmail, setVerificationEmail] = useState<string | null>(null);
+
+  const handleSubmit = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
 
+    if (isSubmitting) return;
+
     const form = event.currentTarget;
-    const nextFormErrors = validateLoginForm(readLoginFormFields(form));
+    const fields = readLoginFormFields(form);
+    const nextFormErrors = validateLoginForm(fields);
 
     setFormErrors(nextFormErrors);
-    setIsDemoNoticeVisible(false);
+    setSubmitError(null);
+    setVerificationEmail(null);
 
     const invalidFieldNames = Object.keys(nextFormErrors);
 
@@ -45,14 +57,51 @@ export function LoginPage({ homePath, registerPath }: LoginPageProps) {
       return;
     }
 
-    setIsDemoNoticeVisible(true);
+    const email = fields.email.trim().toLowerCase();
+
+    setIsSubmitting(true);
+
+    try {
+      const { user } = await login({
+        email,
+        password: fields.password,
+      });
+
+      setAuthenticated(user);
+      navigate(homePath, { replace: true });
+    } catch (error: unknown) {
+      if (!(error instanceof ApiClientError)) {
+        setSubmitError('Не удалось получить ответ сервера. Проверьте соединение.');
+      } else {
+        switch (error.status) {
+          case 400:
+            setSubmitError('Проверьте правильность заполнения полей.');
+            break;
+          case 401:
+            setSubmitError('Неверный email или пароль.');
+            break;
+          case 403:
+            setSubmitError('Подтвердите email перед входом.');
+            setVerificationEmail(email);
+            break;
+          case 429:
+            setSubmitError('Слишком много попыток. Подождите минуту и попробуйте снова.');
+            break;
+          default:
+            setSubmitError('Не удалось войти. Попробуйте позже.');
+        }
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleFieldChange = (
     fieldName: keyof LoginFormFields,
     event: ChangeEvent<HTMLInputElement>,
   ) => {
-    setIsDemoNoticeVisible(false);
+    setSubmitError(null);
+    setVerificationEmail(null);
 
     if (!formErrors[fieldName] || !event.currentTarget.form) {
       return;
@@ -107,6 +156,7 @@ export function LoginPage({ homePath, registerPath }: LoginPageProps) {
           reserveMessageSpace
           required
           onChange={(event) => handleFieldChange('email', event)}
+          disabled={isSubmitting}
         />
 
         <Input
@@ -119,13 +169,22 @@ export function LoginPage({ homePath, registerPath }: LoginPageProps) {
           reserveMessageSpace
           required
           onChange={(event) => handleFieldChange('password', event)}
+          disabled={isSubmitting}
         />
 
-        <Button type="submit" size="large" className="w-full">
-          Войти
+        <Button type="submit" size="large" className="w-full" disabled={isSubmitting}>
+          {isSubmitting ? 'Входим…' : 'Войти'}
         </Button>
 
-        {isDemoNoticeVisible && <AuthDemoNotice />}
+        {submitError && (
+          <p role="alert" className="text-caption text-error">
+            {submitError}
+          </p>
+        )}
+
+        {verificationEmail && (
+          <ResendVerification key={verificationEmail} email={verificationEmail} />
+        )}
       </form>
     </AuthFormLayout>
   );
