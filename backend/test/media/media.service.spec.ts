@@ -46,6 +46,7 @@ describe('MediaService', () => {
       service.searchMedia({ title: 'Fullmetal Alchemist', type: 'anime' }),
     ).resolves.toEqual([expect.objectContaining({ mediaRef: 'shikimori:5114', type: 'anime' })]);
     expect(search).toHaveBeenCalledWith({
+      language: 'ru',
       title: 'Fullmetal Alchemist',
       type: 'anime',
     });
@@ -64,6 +65,7 @@ describe('MediaService', () => {
       }),
     ).resolves.toEqual([]);
     expect(search).toHaveBeenCalledWith({
+      language: 'ru',
       type: 'movie',
       genre: 'Horror',
       year: 2024,
@@ -80,6 +82,7 @@ describe('MediaService', () => {
       service.searchMedia({ type: 'series', genre: 'Mystery', offset: 48, limit: 49 }),
     ).resolves.toEqual([]);
     expect(search).toHaveBeenCalledWith({
+      language: 'ru',
       type: 'series',
       genre: 'Mystery',
       offset: 48,
@@ -94,6 +97,7 @@ describe('MediaService', () => {
     await service.searchMedia({ type: 'movie', genre: 'Drama', offset: 240, limit: 49 });
 
     expect(search).toHaveBeenCalledWith({
+      language: 'ru',
       type: 'movie',
       genre: 'Drama',
       offset: 240,
@@ -132,6 +136,30 @@ describe('MediaService', () => {
         shikimori: '52991',
         myAnimeList: '52991',
       },
+      language: 'ru',
+    });
+  });
+
+  it('uses a Russian short description before a foreign full fallback', async () => {
+    const getDetails = jest.fn().mockResolvedValue({
+      details: {
+        id: 'dark',
+        type: 'series',
+        title: 'Тьма',
+        ids: { imdb: 'tt5753856' },
+        description: 'English full description.',
+        shortDescription: 'Русское краткое описание.',
+      },
+      meta: { providers: { succeeded: [], failed: [] } },
+    });
+    const service = new MediaService({ getDetails } as unknown as MediaEngine);
+
+    const response = await service.getDetailsByRef('imdb:tt5753856');
+
+    expect(response.details?.description).toBe('Русское краткое описание.');
+    expect(getDetails).toHaveBeenCalledWith({
+      ids: { imdb: 'tt5753856' },
+      language: 'ru',
     });
   });
 

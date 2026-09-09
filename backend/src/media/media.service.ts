@@ -28,6 +28,7 @@ import {
 import { createMediaRef, resolveMediaRefWithAliases } from './media-ref';
 import { mapMediaAvailability, selectMediaAvailabilityEpisode } from './media-availability.mapper';
 import { normalizeMediaGenres } from './media-genres';
+import { selectMediaDescription, selectMediaShortDescription } from './media-descriptions';
 
 export const MEDIA_ENGINE = Symbol('MEDIA_ENGINE');
 
@@ -70,6 +71,7 @@ export class MediaService {
       options.limit ?? (options.offset !== undefined || hasFilters ? 50 : undefined);
     const limit = requestedLimit === undefined ? undefined : Math.min(requestedLimit, 250 - offset);
     const query: SearchQuery = {
+      language: 'ru',
       ...(options.title ? { title: options.title } : {}),
       ...(options.type ? { type: options.type } : {}),
       ...(options.genre ? { genre: options.genre } : {}),
@@ -93,7 +95,9 @@ export class MediaService {
   }> {
     const ids = this.resolveMediaRefOrThrow(mediaRef);
 
-    const response = await this.runMediaEngine(() => this.mediaEngine.getDetails({ ids }));
+    const response = await this.runMediaEngine(() =>
+      this.mediaEngine.getDetails({ ids, language: 'ru' }),
+    );
 
     return {
       details: response.details ? this.toMediaDetails(mediaRef, response.details) : null,
@@ -322,7 +326,7 @@ export class MediaService {
         details.genres?.map(({ name }) => name),
         details.type,
       ),
-      description: details.description,
+      description: selectMediaDescription(details.description, details.shortDescription),
       releaseDate: details.releaseDate,
       status: details.status,
       runtimeMinutes: details.runtimeMinutes,
@@ -379,7 +383,7 @@ export class MediaService {
       title: item.title,
       originalTitle: item.originalTitle,
       year: item.year,
-      shortDescription: item.shortDescription,
+      shortDescription: selectMediaShortDescription(item.shortDescription, item.description),
       poster: this.toArtwork(item.poster),
       backdrop: this.toArtwork(item.backdrop),
       genres: this.normalizeStrings(item.genres?.map(({ name }) => name)),
