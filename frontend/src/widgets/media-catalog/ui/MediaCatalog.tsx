@@ -17,6 +17,7 @@ import { useFavorites } from '@/features/favorite';
 import { getGenreOptions } from '../model/genreOptions';
 import { useMediaCatalog } from '../model/useMediaCatalog';
 import { useMediaSearch } from '../model/useMediaSearch';
+import { getYearOptions } from '../model/yearOptions';
 import { MediaCatalogSkeleton } from './MediaCatalogSkeleton';
 
 export type MediaCatalogProps = {
@@ -104,16 +105,7 @@ export function MediaCatalog({ type, title, filters, onOpen }: MediaCatalogProps
   const genreOptions = getGenreOptions(type);
   const selectedGenreLabel = genreOptions.find((option) => option.value === selectedGenre)?.label;
 
-  const availableYears = [
-    ...new Set(
-      catalog.items.map((item) => item.year).filter((year): year is number => year !== undefined),
-    ),
-  ].sort((first, second) => second - first);
-
-  const yearOptions = availableYears.map((year) => ({
-    value: String(year),
-    label: String(year),
-  }));
+  const yearOptions = getYearOptions(type);
 
   const activeSelectFiltersCount = [selectedGenre, selectedYear, minimumRating].filter(
     (value) => value !== null,
