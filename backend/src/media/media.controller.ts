@@ -46,6 +46,8 @@ export class MediaController {
       genre: query.genre,
       year: query.year,
       minimumRating: query.minimumRating,
+      offset: query.offset,
+      limit: query.limit,
     });
   }
 

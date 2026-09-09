@@ -11,12 +11,16 @@ export async function searchMedia(
     genre,
     year,
     minimumRating,
+    offset,
+    limit,
     signal,
   }: {
     type?: MediaType;
     genre?: string;
     year?: number;
     minimumRating?: number;
+    offset?: number;
+    limit?: number;
     signal?: AbortSignal;
   } = {},
 ): Promise<MediaSummary[]> {
@@ -41,6 +45,14 @@ export async function searchMedia(
 
   if (minimumRating !== undefined) {
     searchParams.set('minimumRating', String(minimumRating));
+  }
+
+  if (offset !== undefined) {
+    searchParams.set('offset', String(offset));
+  }
+
+  if (limit !== undefined) {
+    searchParams.set('limit', String(limit));
   }
 
   const media = await apiRequest<MediaSummaryDto[]>(`/media/search?${searchParams.toString()}`, {

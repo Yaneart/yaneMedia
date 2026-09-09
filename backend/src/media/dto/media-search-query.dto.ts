@@ -31,4 +31,18 @@ export class MediaSearchQueryDto {
   @Min(0)
   @Max(10)
   minimumRating?: number;
+
+  @Type(() => Number)
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(250)
+  offset?: number;
+
+  @Type(() => Number)
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit?: number;
 }

@@ -72,6 +72,35 @@ describe('MediaService', () => {
     });
   });
 
+  it('forwards a stable bounded search page to the media engine', async () => {
+    const search = jest.fn().mockResolvedValue({ results: [] });
+    const service = new MediaService({ search } as unknown as MediaEngine);
+
+    await expect(
+      service.searchMedia({ type: 'series', genre: 'Mystery', offset: 48, limit: 49 }),
+    ).resolves.toEqual([]);
+    expect(search).toHaveBeenCalledWith({
+      type: 'series',
+      genre: 'Mystery',
+      offset: 48,
+      limit: 49,
+    });
+  });
+
+  it('keeps the final search page inside the engine window', async () => {
+    const search = jest.fn().mockResolvedValue({ results: [] });
+    const service = new MediaService({ search } as unknown as MediaEngine);
+
+    await service.searchMedia({ type: 'movie', genre: 'Drama', offset: 240, limit: 49 });
+
+    expect(search).toHaveBeenCalledWith({
+      type: 'movie',
+      genre: 'Drama',
+      offset: 240,
+      limit: 10,
+    });
+  });
+
   it('preserves a normalized anime backdrop in media details', async () => {
     const getDetails = jest.fn().mockResolvedValue({
       details: {

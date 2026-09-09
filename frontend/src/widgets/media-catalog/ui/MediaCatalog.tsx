@@ -46,7 +46,14 @@ export function MediaCatalog({ type, title, filters, onOpen }: MediaCatalogProps
   const hasSelectedFilters =
     selectedGenre !== null || selectedYear !== null || minimumRating !== null;
   const isResultsMode = searchValue.trim().length > 0 || hasSelectedFilters;
-  const { items: searchItems, status: searchStatus } = useMediaSearch({
+  const {
+    items: searchItems,
+    status: searchStatus,
+    hasMore,
+    isLoadingMore,
+    loadMoreError,
+    loadMore,
+  } = useMediaSearch({
     query: searchValue,
     type,
     genre: selectedGenre,
@@ -241,7 +248,7 @@ export function MediaCatalog({ type, title, filters, onOpen }: MediaCatalogProps
       {isResultsMode && (
         <div className="mt-6 mb-5 flex min-h-8 flex-wrap items-center justify-between gap-3">
           <p className="text-caption text-text-secondary">
-            Найдено: <span className="font-semibold text-text-primary">{searchItems.length}</span>
+            Показано: <span className="font-semibold text-text-primary">{searchItems.length}</span>
           </p>
 
           <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
@@ -269,17 +276,36 @@ export function MediaCatalog({ type, title, filters, onOpen }: MediaCatalogProps
             description="Попробуйте изменить запрос или повторить немного позже."
           />
         ) : searchItems.length > 0 ? (
-          <MediaGrid>
-            {searchItems.map((item) => (
-              <MediaCard
-                key={item.mediaRef}
-                media={item}
-                onOpen={() => onOpen(item.mediaRef)}
-                isFavorite={isFavorite(item.mediaRef)}
-                onFavoriteChange={() => toggleFavorite(item.mediaRef)}
-              />
-            ))}
-          </MediaGrid>
+          <div>
+            <MediaGrid>
+              {searchItems.map((item) => (
+                <MediaCard
+                  key={item.mediaRef}
+                  media={item}
+                  onOpen={() => onOpen(item.mediaRef)}
+                  isFavorite={isFavorite(item.mediaRef)}
+                  onFavoriteChange={() => toggleFavorite(item.mediaRef)}
+                />
+              ))}
+            </MediaGrid>
+
+            {(hasMore || loadMoreError) && (
+              <div className="mt-8 flex flex-col items-center gap-3">
+                {loadMoreError && (
+                  <p role="alert" className="text-caption text-danger">
+                    Не удалось загрузить следующую страницу.
+                  </p>
+                )}
+                <Button disabled={isLoadingMore} onClick={() => void loadMore()}>
+                  {isLoadingMore
+                    ? 'Загружаем…'
+                    : loadMoreError
+                      ? 'Попробовать снова'
+                      : 'Показать ещё'}
+                </Button>
+              </div>
+            )}
+          </div>
         ) : (
           <EmptyState
             title="Ничего не найдено"

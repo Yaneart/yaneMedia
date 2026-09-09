@@ -44,7 +44,7 @@ interface AvailabilityRequest {
 
 export type MediaSearchOptions = Pick<
   SearchQuery,
-  'title' | 'type' | 'genre' | 'year' | 'minimumRating'
+  'title' | 'type' | 'genre' | 'year' | 'minimumRating' | 'offset' | 'limit'
 >;
 
 function isPlaceholderArtworkUrl(url: string): boolean {
@@ -62,15 +62,20 @@ export class MediaService {
   constructor(@Inject(MEDIA_ENGINE) private readonly mediaEngine: MediaEngine) {}
 
   async searchMedia(options: MediaSearchOptions): Promise<MediaSummaryDto[]> {
+    const offset = options.offset ?? 0;
+    const hasFilters =
+      Boolean(options.genre) || options.year !== undefined || options.minimumRating !== undefined;
+    const requestedLimit =
+      options.limit ?? (options.offset !== undefined || hasFilters ? 50 : undefined);
+    const limit = requestedLimit === undefined ? undefined : Math.min(requestedLimit, 250 - offset);
     const query: SearchQuery = {
       ...(options.title ? { title: options.title } : {}),
       ...(options.type ? { type: options.type } : {}),
       ...(options.genre ? { genre: options.genre } : {}),
       ...(options.year === undefined ? {} : { year: options.year }),
       ...(options.minimumRating === undefined ? {} : { minimumRating: options.minimumRating }),
-      ...(options.genre || options.year !== undefined || options.minimumRating !== undefined
-        ? { limit: 50 }
-        : {}),
+      ...(limit === undefined ? {} : { limit }),
+      ...(offset === 0 ? {} : { offset }),
     };
     const response = await this.runMediaEngine(() => this.mediaEngine.search(query));
 

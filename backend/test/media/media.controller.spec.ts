@@ -30,6 +30,8 @@ describe('MediaController search', () => {
         genre: 'Horror',
         year: 2024,
         minimumRating: 7,
+        offset: 48,
+        limit: 49,
       }),
     ).resolves.toBe(results);
     expect(searchMedia).toHaveBeenCalledWith({
@@ -38,6 +40,8 @@ describe('MediaController search', () => {
       genre: 'Horror',
       year: 2024,
       minimumRating: 7,
+      offset: 48,
+      limit: 49,
     });
   });
 });
