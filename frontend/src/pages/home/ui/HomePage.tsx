@@ -1,11 +1,12 @@
 import { useNavigate } from 'react-router';
 
 import {
-  LandscapeMediaCard,
   MediaLandscapeArtwork,
+  MediaCard,
   useMediaSummaryResolution,
   type MediaRef,
 } from '@/entities/media';
+import { useFavorites } from '@/features/favorite';
 import { usePlaybackSession } from '@/features/playback-session';
 import { FeaturedMedia } from '@/widgets/featured-media';
 import { ContinueWatchingCard } from '@/widgets/continue-watching-card';
@@ -17,6 +18,7 @@ const CONTINUE_WATCHING_LIMIT = 5;
 export function HomePage() {
   const navigate = useNavigate();
   const { feed, status, retry } = useHomeFeed();
+  const { isFavorite, toggleFavorite } = useFavorites();
   const { continueWatchingEntries, restoreSession } = usePlaybackSession();
   const visibleContinueWatchingEntries = continueWatchingEntries.slice(0, CONTINUE_WATCHING_LIMIT);
   const {
@@ -141,20 +143,22 @@ export function HomePage() {
 
             <ContentRow variant="collection">
               {collection.items.map((media) => (
-                <LandscapeMediaCard
+                <MediaCard
                   key={media.mediaRef}
                   media={media}
                   onOpen={() => openMedia(media.mediaRef)}
+                  isFavorite={isFavorite(media.mediaRef)}
+                  onFavoriteChange={() => toggleFavorite(media.mediaRef)}
                 />
               ))}
 
-              {collection.id === 'editorial-picks' &&
+              {collection.id === 'home-editorial-picks' &&
                 collection.total > collection.items.length && (
                   <button
                     type="button"
                     aria-label={`Открыть все ${collection.total} произведений из выбора редакции`}
                     className={[
-                      'group relative aspect-video w-full overflow-hidden rounded-card',
+                      'group relative aspect-2/3 w-full overflow-hidden rounded-card',
                       'border border-context-border bg-linear-to-br',
                       'from-watermark/35 via-watermark/15 to-surface-elevated text-left',
                       'transition-[transform,border-color] duration-200 ease-out',

@@ -8,6 +8,7 @@ import type {
   MediaEngine,
   MediaItem,
   Rating,
+  SearchQuery,
   Season,
   StreamQuery,
 } from '@media-engine/core';
@@ -24,7 +25,7 @@ import {
   Injectable,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { createMediaRef, type MediaRefType, resolveMediaRefWithAliases } from './media-ref';
+import { createMediaRef, resolveMediaRefWithAliases } from './media-ref';
 import { mapMediaAvailability, selectMediaAvailabilityEpisode } from './media-availability.mapper';
 
 export const MEDIA_ENGINE = Symbol('MEDIA_ENGINE');
@@ -41,6 +42,11 @@ interface AvailabilityRequest {
   signal?: AbortSignal;
 }
 
+export type MediaSearchOptions = Pick<
+  SearchQuery,
+  'title' | 'type' | 'genre' | 'year' | 'minimumRating'
+>;
+
 function isPlaceholderArtworkUrl(url: string): boolean {
   try {
     const pathname = new URL(url).pathname.toLowerCase();
@@ -55,8 +61,18 @@ function isPlaceholderArtworkUrl(url: string): boolean {
 export class MediaService {
   constructor(@Inject(MEDIA_ENGINE) private readonly mediaEngine: MediaEngine) {}
 
-  async searchByTitle(title: string, type?: MediaRefType): Promise<MediaSummaryDto[]> {
-    const response = await this.runMediaEngine(() => this.mediaEngine.search({ title, type }));
+  async searchMedia(options: MediaSearchOptions): Promise<MediaSummaryDto[]> {
+    const query: SearchQuery = {
+      ...(options.title ? { title: options.title } : {}),
+      ...(options.type ? { type: options.type } : {}),
+      ...(options.genre ? { genre: options.genre } : {}),
+      ...(options.year === undefined ? {} : { year: options.year }),
+      ...(options.minimumRating === undefined ? {} : { minimumRating: options.minimumRating }),
+      ...(options.genre || options.year !== undefined || options.minimumRating !== undefined
+        ? { limit: 50 }
+        : {}),
+    };
+    const response = await this.runMediaEngine(() => this.mediaEngine.search(query));
 
     return response.results.flatMap(({ item }) => {
       const summary = this.toMediaSummary(item);

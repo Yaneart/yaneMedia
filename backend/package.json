@@ -23,8 +23,8 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
-    "@media-engine/core": "1.4.0",
-    "@media-engine/providers": "1.4.0",
+    "@media-engine/core": "1.6.0",
+    "@media-engine/providers": "1.6.0",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.4",
     "@nestjs/core": "^11.0.1",

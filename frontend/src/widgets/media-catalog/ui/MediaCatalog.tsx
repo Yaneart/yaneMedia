@@ -14,7 +14,7 @@ import {
 } from '@/shared';
 import { MediaCard, type MediaRef, type MediaType } from '@/entities/media';
 import { useFavorites } from '@/features/favorite';
-import { filterMedia } from '../model/filterMedia';
+import { getGenreOptions } from '../model/genreOptions';
 import { useMediaCatalog } from '../model/useMediaCatalog';
 import { useMediaSearch } from '../model/useMediaSearch';
 import { MediaCatalogSkeleton } from './MediaCatalogSkeleton';
@@ -43,8 +43,16 @@ export function MediaCatalog({ type, title, filters, onOpen }: MediaCatalogProps
   const [minimumRating, setMinimumRating] = useState<number | null>(null);
   const [areMobileFiltersOpen, setAreMobileFiltersOpen] = useState(false);
 
-  const { items: searchItems, status: searchStatus } = useMediaSearch(searchValue, type);
-  const isSearchMode = searchValue.trim().length > 0;
+  const hasSelectedFilters =
+    selectedGenre !== null || selectedYear !== null || minimumRating !== null;
+  const isResultsMode = searchValue.trim().length > 0 || hasSelectedFilters;
+  const { items: searchItems, status: searchStatus } = useMediaSearch({
+    query: searchValue,
+    type,
+    genre: selectedGenre,
+    year: selectedYear,
+    minimumRating,
+  });
 
   if (!catalog) {
     if (isPaused) {
@@ -74,8 +82,6 @@ export function MediaCatalog({ type, title, filters, onOpen }: MediaCatalogProps
     return <MediaCatalogSkeleton title={title} />;
   }
 
-  const media = isSearchMode ? searchItems : catalog.items;
-
   const catalogNotice = isPaused
     ? 'Обновление ожидает подключения к сети. Показана сохранённая версия.'
     : isFetching
@@ -86,21 +92,15 @@ export function MediaCatalog({ type, title, filters, onOpen }: MediaCatalogProps
           ? 'Часть каталога временно недоступна. Показаны доступные произведения.'
           : catalog.stale
             ? 'Показана сохранённая версия каталога. Данные могут обновиться позже.'
-            : catalog.degraded
-              ? 'Некоторые сведения временно недоступны.'
-              : null;
+            : null;
 
-  const availableGenres = [...new Set(media.flatMap((item) => item.genres))].sort((first, second) =>
-    first.localeCompare(second, 'ru'),
-  );
-
-  const genreOptions = availableGenres.map((genre) => ({
-    value: genre,
-    label: genre,
-  }));
+  const genreOptions = getGenreOptions(type);
+  const selectedGenreLabel = genreOptions.find((option) => option.value === selectedGenre)?.label;
 
   const availableYears = [
-    ...new Set(media.map((item) => item.year).filter((year): year is number => year !== undefined)),
+    ...new Set(
+      catalog.items.map((item) => item.year).filter((year): year is number => year !== undefined),
+    ),
   ].sort((first, second) => second - first);
 
   const yearOptions = availableYears.map((year) => ({
@@ -108,25 +108,12 @@ export function MediaCatalog({ type, title, filters, onOpen }: MediaCatalogProps
     label: String(year),
   }));
 
-  const filteredMedia = filterMedia({
-    media,
-    searchValue: '',
-    selectedGenre,
-    selectedYear,
-    minimumRating,
-  });
-
-  const hasActiveFilters =
-    searchValue.trim().length > 0 ||
-    selectedGenre !== null ||
-    selectedYear !== null ||
-    minimumRating !== null;
   const activeSelectFiltersCount = [selectedGenre, selectedYear, minimumRating].filter(
     (value) => value !== null,
   ).length;
   const activeFilterLabels = [
     searchValue.trim() ? `Поиск: «${searchValue.trim()}»` : null,
-    selectedGenre,
+    selectedGenreLabel,
     selectedYear?.toString(),
     minimumRating === null ? null : `Рейтинг ${minimumRating}+`,
   ].filter((label): label is string => label !== null);
@@ -179,66 +166,62 @@ export function MediaCatalog({ type, title, filters, onOpen }: MediaCatalogProps
             placeholder="Поиск по каталогу"
             onChange={(event) => setSearchValue(event.currentTarget.value)}
           />
-          {isSearchMode && (
-            <>
-              <Button
-                variant="secondary"
-                className="mt-3 w-full justify-between sm:hidden"
-                aria-expanded={areMobileFiltersOpen}
-                aria-controls={filtersPanelId}
-                onClick={() => setAreMobileFiltersOpen((current) => !current)}
-              >
-                <span className="flex items-center gap-2">
-                  Фильтры
-                  {activeSelectFiltersCount > 0 && (
-                    <span className="flex size-5 items-center justify-center rounded-full bg-action text-xs text-action-text">
-                      {activeSelectFiltersCount}
-                    </span>
-                  )}
+          <Button
+            variant="secondary"
+            className="mt-3 w-full justify-between sm:hidden"
+            aria-expanded={areMobileFiltersOpen}
+            aria-controls={filtersPanelId}
+            onClick={() => setAreMobileFiltersOpen((current) => !current)}
+          >
+            <span className="flex items-center gap-2">
+              Фильтры
+              {activeSelectFiltersCount > 0 && (
+                <span className="flex size-5 items-center justify-center rounded-full bg-action text-xs text-action-text">
+                  {activeSelectFiltersCount}
                 </span>
-                <DownIcon
-                  aria-hidden="true"
-                  className={[
-                    'size-4 transition-transform duration-200',
-                    areMobileFiltersOpen ? 'rotate-180' : '',
-                  ].join(' ')}
-                />
-              </Button>
+              )}
+            </span>
+            <DownIcon
+              aria-hidden="true"
+              className={[
+                'size-4 transition-transform duration-200',
+                areMobileFiltersOpen ? 'rotate-180' : '',
+              ].join(' ')}
+            />
+          </Button>
 
-              <div
-                id={filtersPanelId}
-                className={[
-                  'mt-3 grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-center',
-                  'xl:flex-nowrap',
-                  areMobileFiltersOpen ? 'grid' : 'hidden sm:flex',
-                ].join(' ')}
-              >
-                <Select
-                  aria-label="Жанр"
-                  value={selectedGenre}
-                  options={genreOptions}
-                  placeholder="Все жанры"
-                  onChange={setSelectedGenre}
-                />
-                <Select
-                  aria-label="Год"
-                  value={selectedYear === null ? null : String(selectedYear)}
-                  options={yearOptions}
-                  placeholder="Все годы"
-                  onChange={(value) => setSelectedYear(value === null ? null : Number(value))}
-                />
-                <Select
-                  aria-label="Минимальный рейтинг"
-                  value={minimumRating === null ? null : String(minimumRating)}
-                  options={ratingOptions}
-                  placeholder="Любой рейтинг"
-                  onChange={(value) => setMinimumRating(value === null ? null : Number(value))}
-                  className="col-span-2 sm:col-span-1"
-                />
-                {filters}
-              </div>
-            </>
-          )}
+          <div
+            id={filtersPanelId}
+            className={[
+              'mt-3 grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-center',
+              'xl:flex-nowrap',
+              areMobileFiltersOpen ? 'grid' : 'hidden sm:flex',
+            ].join(' ')}
+          >
+            <Select
+              aria-label="Жанр"
+              value={selectedGenre}
+              options={genreOptions}
+              placeholder="Все жанры"
+              onChange={setSelectedGenre}
+            />
+            <Select
+              aria-label="Год"
+              value={selectedYear === null ? null : String(selectedYear)}
+              options={yearOptions}
+              placeholder="Все годы"
+              onChange={(value) => setSelectedYear(value === null ? null : Number(value))}
+            />
+            <Select
+              aria-label="Минимальный рейтинг"
+              value={minimumRating === null ? null : String(minimumRating)}
+              options={ratingOptions}
+              placeholder="Любой рейтинг"
+              onChange={(value) => setMinimumRating(value === null ? null : Number(value))}
+              className="col-span-2 sm:col-span-1"
+            />
+            {filters}
+          </div>
         </div>
       </header>
 
@@ -255,33 +238,29 @@ export function MediaCatalog({ type, title, filters, onOpen }: MediaCatalogProps
         </div>
       )}
 
-      {isSearchMode && (
+      {isResultsMode && (
         <div className="mt-6 mb-5 flex min-h-8 flex-wrap items-center justify-between gap-3">
           <p className="text-caption text-text-secondary">
-            Показано:{' '}
-            <span className="font-semibold text-text-primary">{filteredMedia.length}</span> из{' '}
-            {media.length}
+            Найдено: <span className="font-semibold text-text-primary">{searchItems.length}</span>
           </p>
 
-          {hasActiveFilters && (
-            <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
-              {activeFilterLabels.map((label) => (
-                <span
-                  key={label}
-                  className="max-w-full truncate rounded-full bg-watermark/10 px-3 py-1 text-caption text-text-secondary"
-                >
-                  {label}
-                </span>
-              ))}
-              <Button size="small" variant="ghost" onClick={resetFilters}>
-                Сбросить
-              </Button>
-            </div>
-          )}
+          <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">
+            {activeFilterLabels.map((label) => (
+              <span
+                key={label}
+                className="max-w-full truncate rounded-full bg-watermark/10 px-3 py-1 text-caption text-text-secondary"
+              >
+                {label}
+              </span>
+            ))}
+            <Button size="small" variant="ghost" onClick={resetFilters}>
+              Сбросить
+            </Button>
+          </div>
         </div>
       )}
 
-      {isSearchMode ? (
+      {isResultsMode ? (
         searchStatus === 'idle' || searchStatus === 'loading' ? (
           <LoadingState label={`Ищем в разделе «${title}»`} />
         ) : searchStatus === 'error' ? (
@@ -289,9 +268,9 @@ export function MediaCatalog({ type, title, filters, onOpen }: MediaCatalogProps
             title="Не удалось выполнить поиск"
             description="Попробуйте изменить запрос или повторить немного позже."
           />
-        ) : filteredMedia.length > 0 ? (
+        ) : searchItems.length > 0 ? (
           <MediaGrid>
-            {filteredMedia.map((item) => (
+            {searchItems.map((item) => (
               <MediaCard
                 key={item.mediaRef}
                 media={item}
@@ -324,7 +303,7 @@ export function MediaCatalog({ type, title, filters, onOpen }: MediaCatalogProps
           className="min-h-[60vh]"
         />
       ) : (
-        <div className="space-y-10">
+        <div className="mt-8 space-y-10 md:mt-10">
           {catalog.collections.map((collection) => (
             <section key={collection.id} aria-labelledby={`collection-${collection.id}`}>
               <h2

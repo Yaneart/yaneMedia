@@ -18,7 +18,7 @@ export function MediaCatalogSkeleton({ title }: { title: string }) {
           <Skeleton className="mb-4 h-7 w-48" />
 
           <ContentRow>
-            {[0, 1, 2, 3].map((card) => (
+            {[0, 1, 2, 3, 4, 5].map((card) => (
               <div key={card}>
                 <Skeleton className="aspect-2/3 rounded-card" />
                 <Skeleton className="mt-2 h-5 w-3/4" />

@@ -3,16 +3,25 @@ import { useEffect, useState } from 'react';
 
 export type MediaSearchStatus = 'idle' | 'loading' | 'success' | 'empty' | 'error';
 
-export function useMediaSearch(query: string, type: MediaType) {
+export type MediaSearchFilters = {
+  query: string;
+  type: MediaType;
+  genre: string | null;
+  year: number | null;
+  minimumRating: number | null;
+};
+
+export function useMediaSearch({ query, type, genre, year, minimumRating }: MediaSearchFilters) {
   const [items, setItems] = useState<MediaSummary[]>([]);
   const [status, setStatus] = useState<MediaSearchStatus>('idle');
 
   useEffect(() => {
     const searchQuery = query.trim();
+    const hasFilters = genre !== null || year !== null || minimumRating !== null;
 
     setItems([]);
 
-    if (!searchQuery) {
+    if (!searchQuery && !hasFilters) {
       setStatus('idle');
       return;
     }
@@ -25,6 +34,9 @@ export function useMediaSearch(query: string, type: MediaType) {
       try {
         const nextItems = await searchMedia(searchQuery, {
           type,
+          genre: genre ?? undefined,
+          year: year ?? undefined,
+          minimumRating: minimumRating ?? undefined,
           signal: controller.signal,
         });
 
@@ -50,7 +62,7 @@ export function useMediaSearch(query: string, type: MediaType) {
       window.clearTimeout(timeoutId);
       controller.abort();
     };
-  }, [query, type]);
+  }, [genre, minimumRating, query, type, year]);
 
   return {
     items,

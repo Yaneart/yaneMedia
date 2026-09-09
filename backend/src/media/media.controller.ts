@@ -40,7 +40,13 @@ export class MediaController {
 
   @Get('search')
   search(@Query() query: MediaSearchQueryDto): Promise<MediaSummaryDto[]> {
-    return this.mediaService.searchByTitle(query.query, query.type);
+    return this.mediaService.searchMedia({
+      title: query.query,
+      type: query.type,
+      genre: query.genre,
+      year: query.year,
+      minimumRating: query.minimumRating,
+    });
   }
 
   @Get('home')

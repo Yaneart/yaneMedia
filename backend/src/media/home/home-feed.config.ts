@@ -6,12 +6,14 @@ export interface HomeCollectionDefinition {
   id: string;
   title: string;
   mediaRefs: readonly string[];
+  fullCollectionId?: EditorialCollectionId;
 }
 
 export const homeCollectionDefinitions: readonly HomeCollectionDefinition[] = [
   {
     id: 'home-editorial-picks',
     title: 'Выбор редакции',
+    fullCollectionId: 'editorial-picks',
     mediaRefs: [
       'imdb:tt15239678',
       'imdb:tt11280740',

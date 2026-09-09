@@ -35,16 +35,24 @@ export class HomeFeedService {
     const featuredSelection = selectHourlyFeatured(featuredCandidates, timestamp);
 
     const collections = homeCollectionDefinitions
-      .map((collection) => ({
-        id: collection.id,
-        title: collection.title,
-        items: collection.mediaRefs.flatMap((mediaRef) => {
-          const item = itemsByMediaRef.get(mediaRef);
+      .map((collection) => {
+        const fullCollectionId = collection.fullCollectionId;
 
-          return item ? [item] : [];
-        }),
-        total: collection.mediaRefs.length,
-      }))
+        return {
+          id: collection.id,
+          title: collection.title,
+          items: collection.mediaRefs.flatMap((mediaRef) => {
+            const item = itemsByMediaRef.get(mediaRef);
+
+            return item ? [item] : [];
+          }),
+          total:
+            fullCollectionId === undefined
+              ? collection.mediaRefs.length
+              : editorialCatalog.filter((entry) => this.isInCollection(entry, fullCollectionId))
+                  .length,
+        };
+      })
       .filter((collection) => collection.items.length > 0);
 
     return {

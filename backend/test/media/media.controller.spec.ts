@@ -13,19 +13,32 @@ import type { MediaService } from '../../src/media/media.service';
 import type { MediaSummaryResolutionResponseDto } from '../../src/media/summary-resolution/dto/media-summary-resolution-response.dto';
 
 describe('MediaController search', () => {
-  it('forwards the title and media type to the media service', async () => {
+  it('forwards title-independent filters to the media service', async () => {
     const results = [];
-    const searchByTitle = jest.fn().mockResolvedValue(results) as jest.MockedFunction<
-      MediaService['searchByTitle']
+    const searchMedia = jest.fn().mockResolvedValue(results) as jest.MockedFunction<
+      MediaService['searchMedia']
     >;
     const controller = new MediaController(
-      { searchByTitle } as unknown as MediaService,
+      { searchMedia } as unknown as MediaService,
       {} as MediaCatalogService,
       {} as HomeFeedService,
     );
 
-    await expect(controller.search({ query: 'Dune', type: 'movie' })).resolves.toBe(results);
-    expect(searchByTitle).toHaveBeenCalledWith('Dune', 'movie');
+    await expect(
+      controller.search({
+        type: 'movie',
+        genre: 'Horror',
+        year: 2024,
+        minimumRating: 7,
+      }),
+    ).resolves.toBe(results);
+    expect(searchMedia).toHaveBeenCalledWith({
+      title: undefined,
+      type: 'movie',
+      genre: 'Horror',
+      year: 2024,
+      minimumRating: 7,
+    });
   });
 });
 

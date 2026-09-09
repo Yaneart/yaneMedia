@@ -42,12 +42,33 @@ describe('MediaService', () => {
     } as unknown as MediaEngine;
     const service = new MediaService(mediaEngine);
 
-    await expect(service.searchByTitle('Fullmetal Alchemist', 'anime')).resolves.toEqual([
-      expect.objectContaining({ mediaRef: 'shikimori:5114', type: 'anime' }),
-    ]);
+    await expect(
+      service.searchMedia({ title: 'Fullmetal Alchemist', type: 'anime' }),
+    ).resolves.toEqual([expect.objectContaining({ mediaRef: 'shikimori:5114', type: 'anime' })]);
     expect(search).toHaveBeenCalledWith({
       title: 'Fullmetal Alchemist',
       type: 'anime',
+    });
+  });
+
+  it('forwards title-independent catalog filters with a wider bounded limit', async () => {
+    const search = jest.fn().mockResolvedValue({ results: [] });
+    const service = new MediaService({ search } as unknown as MediaEngine);
+
+    await expect(
+      service.searchMedia({
+        type: 'movie',
+        genre: 'Horror',
+        year: 2024,
+        minimumRating: 7,
+      }),
+    ).resolves.toEqual([]);
+    expect(search).toHaveBeenCalledWith({
+      type: 'movie',
+      genre: 'Horror',
+      year: 2024,
+      minimumRating: 7,
+      limit: 50,
     });
   });
 
@@ -133,7 +154,7 @@ describe('MediaService', () => {
     } as unknown as MediaEngine;
     const service = new MediaService(mediaEngine);
 
-    const results = await service.searchByTitle('Poster');
+    const results = await service.searchMedia({ title: 'Poster' });
 
     expect(results.map(({ poster }) => poster)).toEqual([
       undefined,
@@ -537,7 +558,7 @@ describe('MediaService', () => {
   it('maps a complete provider failure from every engine call to service unavailable', async () => {
     await expectServiceUnavailable(
       { search: jest.fn().mockRejectedValue(createProviderFailure()) },
-      (service) => service.searchByTitle('Interstellar'),
+      (service) => service.searchMedia({ title: 'Interstellar' }),
     );
 
     await expectServiceUnavailable(
@@ -573,6 +594,6 @@ describe('MediaService', () => {
     } as unknown as MediaEngine;
     const service = new MediaService(mediaEngine);
 
-    await expect(service.searchByTitle('Interstellar')).rejects.toBe(unexpectedError);
+    await expect(service.searchMedia({ title: 'Interstellar' })).rejects.toBe(unexpectedError);
   });
 });
