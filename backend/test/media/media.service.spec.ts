@@ -135,6 +135,31 @@ describe('MediaService', () => {
     });
   });
 
+  it('returns Russian-only deduplicated genres in media details', async () => {
+    const getDetails = jest.fn().mockResolvedValue({
+      details: {
+        id: 'dune',
+        type: 'movie',
+        title: 'Дюна',
+        ids: { imdb: 'tt1160419' },
+        genres: [
+          { name: 'драма' },
+          { name: 'боевик' },
+          { name: 'фантастика' },
+          { name: 'Action' },
+          { name: 'Adventure' },
+          { name: 'Drama' },
+        ],
+      },
+      meta: { providers: { succeeded: [], failed: [] } },
+    });
+    const service = new MediaService({ getDetails } as unknown as MediaEngine);
+
+    const response = await service.getDetailsByRef('imdb:tt1160419');
+
+    expect(response.details?.genres).toEqual(['драма', 'боевик', 'фантастика', 'приключения']);
+  });
+
   it('omits known provider artwork placeholders and keeps real artwork', async () => {
     const mediaEngine = {
       search: jest.fn().mockResolvedValue({

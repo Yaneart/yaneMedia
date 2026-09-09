@@ -27,6 +27,7 @@ import {
 } from '@nestjs/common';
 import { createMediaRef, resolveMediaRefWithAliases } from './media-ref';
 import { mapMediaAvailability, selectMediaAvailabilityEpisode } from './media-availability.mapper';
+import { normalizeMediaGenres } from './media-genres';
 
 export const MEDIA_ENGINE = Symbol('MEDIA_ENGINE');
 
@@ -317,6 +318,10 @@ export class MediaService {
   private toMediaDetails(mediaRef: string, details: MediaDetails): MediaDetailsDto {
     const base = {
       ...this.buildMediaSummary(details, mediaRef),
+      genres: normalizeMediaGenres(
+        details.genres?.map(({ name }) => name),
+        details.type,
+      ),
       description: details.description,
       releaseDate: details.releaseDate,
       status: details.status,
