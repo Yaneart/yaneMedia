@@ -1,10 +1,11 @@
 import { useOpeningHistory } from '@/features/opening-history';
-import { ErrorState, LoadingState } from '@/shared';
+import { EmptyState, ErrorState } from '@/shared';
 import { useEffect } from 'react';
 import { useParams } from 'react-router';
 
 import { useMediaDetails } from '../model/useMediaDetails';
 import { useMediaAvailability } from '../model/useMediaAvailability';
+import { MediaPageSkeleton } from './MediaPageSkeleton';
 import { MediaView } from './MediaView';
 
 export function MediaPage() {
@@ -58,8 +59,18 @@ export function MediaPage() {
     );
   }
 
+  if (detailsStatus === 'offline') {
+    return (
+      <EmptyState
+        title="Нет подключения к сети"
+        description="Загрузим информацию о произведении, когда соединение восстановится."
+        className="min-h-[60vh]"
+      />
+    );
+  }
+
   if (!media) {
-    return <LoadingState variant="page" label="Загружаем произведение" />;
+    return <MediaPageSkeleton />;
   }
 
   return (

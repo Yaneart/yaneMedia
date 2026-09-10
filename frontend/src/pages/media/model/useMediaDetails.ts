@@ -1,89 +1,38 @@
-import { getMediaDetails, type MediaDetailsResult } from '@/entities/media';
+import { useQuery } from '@tanstack/react-query';
+
+import { getMediaDetails } from '@/entities/media';
 import { ApiClientError } from '@/shared/api';
-import { useEffect, useState } from 'react';
 
-type MediaDetailsStatus = 'loading' | 'success' | 'not-found' | 'error';
+type MediaDetailsStatus = 'loading' | 'success' | 'not-found' | 'offline' | 'error';
 
-interface MediaDetailsState {
-  mediaRef: string | undefined;
-  result: MediaDetailsResult | null;
-  status: MediaDetailsStatus;
-}
+const detailsStaleTimeMs = 15 * 60_000;
 
 export function useMediaDetails(mediaRef: string | undefined) {
-  const [state, setState] = useState<MediaDetailsState>(() => ({
-    mediaRef,
-    result: null,
-    status: mediaRef ? 'loading' : 'not-found',
-  }));
-  const [reloadKey, setReloadKey] = useState(0);
+  const query = useQuery({
+    queryKey: ['media', 'details', mediaRef],
+    queryFn: ({ signal }) => getMediaDetails(mediaRef ?? '', signal),
+    enabled: Boolean(mediaRef),
+    staleTime: detailsStaleTimeMs,
+  });
 
-  useEffect(() => {
-    if (!mediaRef) {
-      setState({
-        mediaRef,
-        result: null,
-        status: 'not-found',
-      });
+  let status: MediaDetailsStatus = 'loading';
 
-      return;
-    }
-
-    const controller = new AbortController();
-
-    setState({
-      mediaRef,
-      result: null,
-      status: 'loading',
-    });
-
-    const loadDetails = async () => {
-      try {
-        const result = await getMediaDetails(mediaRef, controller.signal);
-
-        if (controller.signal.aborted) {
-          return;
-        }
-
-        setState({
-          mediaRef,
-          result,
-          status: 'success',
-        });
-      } catch (error) {
-        if (controller.signal.aborted) {
-          return;
-        }
-
-        setState({
-          mediaRef,
-          result: null,
-          status: error instanceof ApiClientError && error.status === 404 ? 'not-found' : 'error',
-        });
-      }
-    };
-
-    void loadDetails();
-
-    return () => {
-      controller.abort();
-    };
-  }, [mediaRef, reloadKey]);
-
-  const retry = () => {
-    setState({
-      mediaRef,
-      result: null,
-      status: mediaRef ? 'loading' : 'not-found',
-    });
-    setReloadKey((currentKey) => currentKey + 1);
-  };
-
-  const isCurrentResult = state.mediaRef === mediaRef;
+  if (!mediaRef) {
+    status = 'not-found';
+  } else if (query.data !== undefined) {
+    status = 'success';
+  } else if (query.isPaused) {
+    status = 'offline';
+  } else if (query.isError) {
+    status =
+      query.error instanceof ApiClientError && query.error.status === 404 ? 'not-found' : 'error';
+  }
 
   return {
-    result: isCurrentResult ? state.result : null,
-    status: isCurrentResult ? state.status : 'loading',
-    retry,
+    result: query.data ?? null,
+    status,
+    retry: () => {
+      void query.refetch({ cancelRefetch: false });
+    },
   };
 }
