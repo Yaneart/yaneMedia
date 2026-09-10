@@ -12,11 +12,10 @@ import {
   Select,
   YaneMark,
 } from '@/shared';
-import { MediaCard, type MediaRef, type MediaType } from '@/entities/media';
+import { MediaCard, useMediaSearch, type MediaRef, type MediaType } from '@/entities/media';
 import { useFavorites } from '@/features/favorite';
 import { getGenreOptions } from '../model/genreOptions';
 import { useMediaCatalog } from '../model/useMediaCatalog';
-import { useMediaSearch } from '../model/useMediaSearch';
 import { getYearOptions } from '../model/yearOptions';
 import { MediaCatalogSkeleton } from './MediaCatalogSkeleton';
 
@@ -49,10 +48,15 @@ export function MediaCatalog({ type, title, filters, onOpen }: MediaCatalogProps
   const isResultsMode = searchValue.trim().length > 0 || hasSelectedFilters;
   const {
     items: searchItems,
+    resultFilters,
     status: searchStatus,
+    isPreviousResult,
+    isUpdating: isSearchUpdating,
+    hasRefreshError: hasSearchRefreshError,
     hasMore,
     isLoadingMore,
     loadMoreError,
+    retry: retrySearch,
     loadMore,
   } = useMediaSearch({
     query: searchValue,
@@ -62,45 +66,31 @@ export function MediaCatalog({ type, title, filters, onOpen }: MediaCatalogProps
     minimumRating,
   });
 
-  if (!catalog) {
-    if (isPaused) {
-      return (
-        <EmptyState
-          title="Нет подключения к сети"
-          description="Загрузим каталог, когда соединение восстановится."
-          className="min-h-[60vh]"
-        />
-      );
-    }
-
-    if (isError) {
-      return (
-        <ErrorState
-          variant="page"
-          eyebrow="Каталог yaneMedia"
-          title={`Не удалось загрузить ${title.toLocaleLowerCase('ru')}`}
-          description="Проверьте подключение и попробуйте ещё раз."
-          visualLabel="Каталог недоступен"
-          retryLabel="Попробовать снова"
-          onRetry={retry}
-        />
-      );
-    }
-
+  if (!catalog && !isResultsMode && !isError && !isPaused) {
     return <MediaCatalogSkeleton title={title} />;
   }
 
-  const catalogNotice = isPaused
-    ? 'Обновление ожидает подключения к сети. Показана сохранённая версия.'
-    : isFetching
-      ? 'Обновляем каталог…'
-      : isError
-        ? 'Не удалось обновить каталог. Показана сохранённая версия.'
-        : catalog.partial
-          ? 'Часть каталога временно недоступна. Показаны доступные произведения.'
-          : catalog.stale
-            ? 'Показана сохранённая версия каталога. Данные могут обновиться позже.'
-            : null;
+  const catalogNotice = catalog
+    ? isPaused
+      ? 'Обновление ожидает подключения к сети. Показана сохранённая версия.'
+      : isFetching
+        ? 'Обновляем каталог…'
+        : isError
+          ? 'Не удалось обновить каталог. Показана сохранённая версия.'
+          : catalog.partial
+            ? 'Часть каталога временно недоступна. Показаны доступные произведения.'
+            : catalog.stale
+              ? 'Показана сохранённая версия каталога. Данные могут обновиться позже.'
+              : null
+    : null;
+
+  const searchNotice = hasSearchRefreshError
+    ? 'Не удалось обновить результаты. Показана сохранённая выдача.'
+    : isSearchUpdating && resultFilters
+      ? isPreviousResult
+        ? 'Ищем новые результаты. Пока показана предыдущая выдача.'
+        : 'Обновляем результаты поиска…'
+      : null;
 
   const genreOptions = getGenreOptions(type);
   const selectedGenreLabel = genreOptions.find((option) => option.value === selectedGenre)?.label;
@@ -125,7 +115,7 @@ export function MediaCatalog({ type, title, filters, onOpen }: MediaCatalogProps
   };
 
   return (
-    <section>
+    <section aria-busy={isResultsMode && (searchStatus === 'loading' || isSearchUpdating)}>
       <header
         className={[
           'relative rounded-card',
@@ -224,7 +214,7 @@ export function MediaCatalog({ type, title, filters, onOpen }: MediaCatalogProps
         </div>
       </header>
 
-      {catalogNotice && (
+      {!isResultsMode && catalogNotice && (
         <div
           role="status"
           className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-card border border-context-border bg-surface-elevated px-4 py-3"
@@ -259,13 +249,39 @@ export function MediaCatalog({ type, title, filters, onOpen }: MediaCatalogProps
         </div>
       )}
 
+      {isResultsMode && searchNotice && (
+        <div
+          role={hasSearchRefreshError ? 'alert' : 'status'}
+          className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-card border border-context-border bg-surface-elevated px-4 py-3"
+        >
+          <p className="text-caption text-text-secondary">{searchNotice}</p>
+
+          {hasSearchRefreshError && (
+            <Button size="small" variant="ghost" onClick={retrySearch}>
+              Повторить
+            </Button>
+          )}
+        </div>
+      )}
+
       {isResultsMode ? (
         searchStatus === 'idle' || searchStatus === 'loading' ? (
           <LoadingState label={`Ищем в разделе «${title}»`} />
+        ) : searchStatus === 'paused' ? (
+          <EmptyState
+            title="Нет подключения к сети"
+            description="Поиск начнётся, когда соединение восстановится."
+            action={
+              <Button variant="secondary" onClick={resetFilters}>
+                Сбросить фильтры
+              </Button>
+            }
+          />
         ) : searchStatus === 'error' ? (
           <ErrorState
             title="Не удалось выполнить поиск"
             description="Попробуйте изменить запрос или повторить немного позже."
+            onRetry={retrySearch}
           />
         ) : searchItems.length > 0 ? (
           <div>
@@ -288,7 +304,7 @@ export function MediaCatalog({ type, title, filters, onOpen }: MediaCatalogProps
                     Не удалось загрузить следующую страницу.
                   </p>
                 )}
-                <Button disabled={isLoadingMore} onClick={() => void loadMore()}>
+                <Button disabled={isLoadingMore || isSearchUpdating} onClick={loadMore}>
                   {isLoadingMore
                     ? 'Загружаем…'
                     : loadMoreError
@@ -307,6 +323,24 @@ export function MediaCatalog({ type, title, filters, onOpen }: MediaCatalogProps
                 Сбросить фильтры
               </Button>
             }
+          />
+        )
+      ) : !catalog ? (
+        isPaused ? (
+          <EmptyState
+            title="Нет подключения к сети"
+            description="Загрузим каталог, когда соединение восстановится. Поиск по названию уже доступен."
+            className="mt-6 min-h-[60vh]"
+          />
+        ) : (
+          <ErrorState
+            variant="page"
+            eyebrow="Каталог yaneMedia"
+            title={`Не удалось загрузить ${title.toLocaleLowerCase('ru')}`}
+            description="Подборки недоступны, но вы можете воспользоваться поиском по названию."
+            visualLabel="Каталог недоступен"
+            retryLabel="Попробовать снова"
+            onRetry={retry}
           />
         )
       ) : catalog.items.length === 0 ? (

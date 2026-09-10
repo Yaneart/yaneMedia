@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState, type SubmitEvent } from 'react';
+import { useState, type SubmitEvent } from 'react';
 import { useNavigate } from 'react-router';
 
-import { MediaCard, searchMedia, type MediaRef, type MediaSummary } from '@/entities/media';
+import { MediaCard, useMediaSearch, type MediaRef } from '@/entities/media';
 import { useFavorites } from '@/features/favorite';
 import {
   Button,
@@ -13,8 +13,6 @@ import {
   YaneMark,
 } from '@/shared';
 
-type SearchStatus = 'idle' | 'loading' | 'success' | 'error';
-
 const searchSuggestions = ['Дюна', 'Игра престолов', 'Фрирен'] as const;
 
 export function SearchPage() {
@@ -23,51 +21,19 @@ export function SearchPage() {
 
   const [query, setQuery] = useState('');
   const [submittedQuery, setSubmittedQuery] = useState('');
-  const [results, setResults] = useState<MediaSummary[]>([]);
-  const [status, setStatus] = useState<SearchStatus>('idle');
-  const activeSearchControllerRef = useRef<AbortController | null>(null);
-
-  useEffect(() => {
-    return () => {
-      activeSearchControllerRef.current?.abort();
-    };
-  }, []);
-
-  const runSearch = async (searchQuery: string) => {
-    activeSearchControllerRef.current?.abort();
-
-    const controller = new AbortController();
-
-    activeSearchControllerRef.current = controller;
-
-    setSubmittedQuery(searchQuery);
-    setStatus('loading');
-
-    try {
-      const nextResult = await searchMedia(searchQuery, { signal: controller.signal });
-
-      if (controller.signal.aborted) {
-        return;
-      }
-
-      setResults(nextResult);
-      setStatus('success');
-    } catch {
-      if (controller.signal.aborted) {
-        return;
-      }
-      setResults([]);
-      setStatus('error');
-    } finally {
-      if (activeSearchControllerRef.current === controller) {
-        activeSearchControllerRef.current = null;
-      }
-    }
-  };
+  const {
+    items: results,
+    resultFilters,
+    status,
+    isPreviousResult,
+    isUpdating,
+    hasRefreshError,
+    retry,
+  } = useMediaSearch({ query: submittedQuery }, 0);
 
   const startSearch = (searchQuery: string) => {
     setQuery(searchQuery);
-    void runSearch(searchQuery);
+    setSubmittedQuery(searchQuery);
   };
 
   const handleSubmit = (event: SubmitEvent<HTMLFormElement>) => {
@@ -76,24 +42,33 @@ export function SearchPage() {
     const normalizedQuery = query.trim();
 
     if (!normalizedQuery) {
-      activeSearchControllerRef.current?.abort();
-      activeSearchControllerRef.current = null;
-
       setSubmittedQuery('');
-      setResults([]);
-      setStatus('idle');
       return;
     }
 
-    void runSearch(normalizedQuery);
+    if (normalizedQuery === submittedQuery) {
+      retry();
+      return;
+    }
+
+    setSubmittedQuery(normalizedQuery);
   };
 
   const openMedia = (mediaRef: MediaRef) => {
     navigate(`/media/${encodeURIComponent(mediaRef)}`);
   };
 
+  const displayedQuery = resultFilters?.query ?? submittedQuery;
+  const searchNotice = hasRefreshError
+    ? 'Не удалось обновить результаты. Показана сохранённая выдача.'
+    : isUpdating && resultFilters
+      ? isPreviousResult
+        ? `Ищем «${submittedQuery}». Пока показаны результаты по запросу «${resultFilters.query}».`
+        : 'Обновляем результаты поиска…'
+      : null;
+
   return (
-    <section className="space-y-6" aria-busy={status === 'loading'}>
+    <section className="space-y-6" aria-busy={status === 'loading' || isUpdating}>
       <header
         className={[
           'relative overflow-hidden rounded-card',
@@ -163,21 +138,44 @@ export function SearchPage() {
 
       {status === 'loading' && <LoadingState label={`Поиск: ${submittedQuery}`} />}
 
+      {status === 'paused' && (
+        <EmptyState
+          title="Нет подключения к сети"
+          description="Поиск начнётся, когда соединение восстановится."
+          className="min-h-64 rounded-card bg-surface-elevated"
+        />
+      )}
+
       {status === 'error' && (
         <ErrorState
           variant="section"
           title="Не удалось выполнить поиск"
           description="Проверьте подключение и попробуйте ещё раз."
-          onRetry={() => void runSearch(submittedQuery)}
+          onRetry={retry}
           visualLabel="Поиск недоступен"
           className="min-h-64 rounded-card bg-surface-elevated"
         />
       )}
 
-      {status === 'success' && results.length === 0 && (
+      {searchNotice && (
+        <div
+          role={hasRefreshError ? 'alert' : 'status'}
+          className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-context-border bg-surface-elevated px-4 py-3"
+        >
+          <p className="text-caption text-text-secondary">{searchNotice}</p>
+
+          {hasRefreshError && (
+            <Button size="small" variant="ghost" onClick={retry}>
+              Повторить
+            </Button>
+          )}
+        </div>
+      )}
+
+      {status === 'empty' && (
         <EmptyState
           title="Ничего не найдено"
-          description={`По запросу «${submittedQuery}» результатов нет.`}
+          description={`По запросу «${displayedQuery}» результатов нет.`}
           className="min-h-64 rounded-card bg-surface-elevated"
         />
       )}
@@ -190,7 +188,7 @@ export function SearchPage() {
                 Результаты поиска
               </p>
 
-              <h2 className="mt-1 text-heading text-text-primary">«{submittedQuery}»</h2>
+              <h2 className="mt-1 text-heading text-text-primary">«{displayedQuery}»</h2>
             </div>
 
             <p className="w-fit rounded-full bg-watermark/10 px-3 py-1.5 text-caption text-text-secondary">
