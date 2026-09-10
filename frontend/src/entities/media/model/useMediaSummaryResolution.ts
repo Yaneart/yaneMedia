@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 
 import {
   resolveMediaSummaries,
@@ -15,58 +15,34 @@ const emptyResolution: MediaSummaryResolutionResult = {
   stale: false,
 };
 
+const summaryStaleTimeMs = 15 * 60_000;
+
 export function useMediaSummaryResolution(mediaRefs: readonly MediaRef[]) {
-  const serializedMediaRefs = JSON.stringify(mediaRefs);
-  const [resolution, setResolution] = useState<MediaSummaryResolutionResult | null>(() =>
-    mediaRefs.length === 0 ? emptyResolution : null,
-  );
-  const [status, setStatus] = useState<MediaSummaryResolutionStatus>(() =>
-    mediaRefs.length === 0 ? 'empty' : 'loading',
-  );
-  const [retryVersion, setRetryVersion] = useState(0);
+  const requestedMediaRefs = Array.from(mediaRefs);
+  const query = useQuery({
+    queryKey: ['media', 'summaries', requestedMediaRefs],
+    queryFn: ({ signal }) => resolveMediaSummaries(requestedMediaRefs, signal),
+    enabled: requestedMediaRefs.length > 0,
+    staleTime: summaryStaleTimeMs,
+  });
+  const resolution = requestedMediaRefs.length === 0 ? emptyResolution : (query.data ?? null);
 
-  useEffect(() => {
-    const requestedMediaRefs = JSON.parse(serializedMediaRefs) as MediaRef[];
+  let status: MediaSummaryResolutionStatus = 'loading';
 
-    if (requestedMediaRefs.length === 0) {
-      setResolution(emptyResolution);
-      setStatus('empty');
-      return;
-    }
-
-    const controller = new AbortController();
-
-    const loadResolution = async () => {
-      setStatus('loading');
-
-      try {
-        const nextResolution = await resolveMediaSummaries(requestedMediaRefs, controller.signal);
-
-        if (controller.signal.aborted) {
-          return;
-        }
-
-        setResolution(nextResolution);
-        setStatus(nextResolution.items.length > 0 ? 'success' : 'empty');
-      } catch {
-        if (!controller.signal.aborted) {
-          setStatus('error');
-        }
-      }
-    };
-
-    void loadResolution();
-
-    return () => controller.abort();
-  }, [retryVersion, serializedMediaRefs]);
-
-  const retry = useCallback(() => {
-    setRetryVersion((currentVersion) => currentVersion + 1);
-  }, []);
+  if (requestedMediaRefs.length === 0) {
+    status = 'empty';
+  } else if (resolution) {
+    status = resolution.items.length > 0 ? 'success' : 'empty';
+  } else if (query.isError || query.isPaused) {
+    status = 'error';
+  }
 
   return {
     resolution,
     status,
-    retry,
+    hasRefreshError: query.isError && resolution !== null,
+    retry: () => {
+      void query.refetch({ cancelRefetch: false });
+    },
   };
 }

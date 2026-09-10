@@ -7,7 +7,9 @@ import { useNavigate } from 'react-router';
 export function FavoritesPage() {
   const navigate = useNavigate();
   const { favoriteMediaRefs, isFavorite, toggleFavorite } = useFavorites();
-  const { resolution, status, retry } = useMediaSummaryResolution(Array.from(favoriteMediaRefs));
+  const { resolution, status, hasRefreshError, retry } = useMediaSummaryResolution(
+    Array.from(favoriteMediaRefs),
+  );
   const favoriteMedia =
     resolution?.items.filter((media) => favoriteMediaRefs.has(media.mediaRef)) ?? [];
   const hasStoredFavorites = favoriteMediaRefs.size > 0;
@@ -33,7 +35,12 @@ export function FavoritesPage() {
       />
 
       {resolution && (
-        <LibraryDataNotice partial={resolution.partial} stale={resolution.stale} onRetry={retry} />
+        <LibraryDataNotice
+          partial={resolution.partial}
+          stale={resolution.stale}
+          refreshFailed={hasRefreshError}
+          onRetry={retry}
+        />
       )}
 
       {!hasStoredFavorites ? (

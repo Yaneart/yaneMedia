@@ -11,6 +11,7 @@ import { usePlaybackSession } from '@/features/playback-session';
 import { RestorableContentRow } from '@/features/scroll-restoration';
 import { FeaturedMedia } from '@/widgets/featured-media';
 import { ContinueWatchingCard } from '@/widgets/continue-watching-card';
+import { LibraryDataNotice } from '@/widgets/library-page';
 import { EmptyState, ErrorState, LoadingState, Skeleton, YaneMark } from '@/shared';
 import { useHomeFeed } from '../model/useHomeFeed';
 
@@ -25,6 +26,7 @@ export function HomePage() {
   const {
     resolution: continueWatchingResolution,
     status: continueWatchingResolutionStatus,
+    hasRefreshError: continueWatchingRefreshFailed,
     retry: retryContinueWatchingResolution,
   } = useMediaSummaryResolution(visibleContinueWatchingEntries.map((entry) => entry.mediaRef));
 
@@ -104,6 +106,15 @@ export function HomePage() {
             <h2 className="mb-4 text-heading font-semibold text-text-primary">
               Продолжить просмотр
             </h2>
+
+            {continueWatchingResolution && (
+              <LibraryDataNotice
+                partial={continueWatchingResolution.partial}
+                stale={continueWatchingResolution.stale}
+                refreshFailed={continueWatchingRefreshFailed}
+                onRetry={retryContinueWatchingResolution}
+              />
+            )}
 
             {continueWatchingResolutionStatus === 'loading' ? (
               <RestorableContentRow

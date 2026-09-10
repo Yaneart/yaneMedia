@@ -43,7 +43,7 @@ export function HistoryPage() {
   const navigate = useNavigate();
   const { openingHistoryEntries, clearHistory } = useOpeningHistory();
   const { isFavorite, toggleFavorite } = useFavorites();
-  const { resolution, status, retry } = useMediaSummaryResolution(
+  const { resolution, status, hasRefreshError, retry } = useMediaSummaryResolution(
     openingHistoryEntries.map((entry) => entry.mediaRef),
   );
   const openedAtByMediaRef = new Map(
@@ -82,7 +82,12 @@ export function HistoryPage() {
       />
 
       {resolution && (
-        <LibraryDataNotice partial={resolution.partial} stale={resolution.stale} onRetry={retry} />
+        <LibraryDataNotice
+          partial={resolution.partial}
+          stale={resolution.stale}
+          refreshFailed={hasRefreshError}
+          onRetry={retry}
+        />
       )}
 
       {!hasStoredHistory ? (
