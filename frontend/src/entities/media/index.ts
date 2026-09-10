@@ -19,6 +19,7 @@ export type {
 export { searchMedia } from './api/searchMedia';
 export { useMediaSearch } from './model/useMediaSearch';
 export type { MediaSearchFilters, MediaSearchStatus } from './model/useMediaSearch';
+export { maximumMediaSearchQueryLength, normalizeMediaSearchQuery } from './model/mediaSearchQuery';
 
 export { resolveMediaSummaries } from './api/resolveMediaSummaries';
 export type { MediaSummaryResolutionResult } from './api/resolveMediaSummaries';

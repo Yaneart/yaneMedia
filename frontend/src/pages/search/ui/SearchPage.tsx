@@ -1,7 +1,13 @@
-import { useState, type SubmitEvent } from 'react';
-import { useNavigate } from 'react-router';
+import { useEffect, useState, type SubmitEvent } from 'react';
+import { useNavigate, useSearchParams } from 'react-router';
 
-import { MediaCard, useMediaSearch, type MediaRef } from '@/entities/media';
+import {
+  maximumMediaSearchQueryLength,
+  MediaCard,
+  normalizeMediaSearchQuery,
+  useMediaSearch,
+  type MediaRef,
+} from '@/entities/media';
 import { useFavorites } from '@/features/favorite';
 import {
   Button,
@@ -17,10 +23,11 @@ const searchSuggestions = ['Дюна', 'Игра престолов', 'Фрир�
 
 export function SearchPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { isFavorite, toggleFavorite } = useFavorites();
 
-  const [query, setQuery] = useState('');
-  const [submittedQuery, setSubmittedQuery] = useState('');
+  const submittedQuery = normalizeMediaSearchQuery(searchParams.get('q'));
+  const [query, setQuery] = useState(submittedQuery);
   const {
     items: results,
     resultFilters,
@@ -31,9 +38,23 @@ export function SearchPage() {
     retry,
   } = useMediaSearch({ query: submittedQuery }, 0);
 
+  useEffect(() => {
+    const canonicalParams = new URLSearchParams();
+
+    if (submittedQuery) canonicalParams.set('q', submittedQuery);
+
+    if (canonicalParams.toString() !== searchParams.toString()) {
+      setSearchParams(canonicalParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams, submittedQuery]);
+
+  useEffect(() => {
+    setQuery(submittedQuery);
+  }, [submittedQuery]);
+
   const startSearch = (searchQuery: string) => {
     setQuery(searchQuery);
-    setSubmittedQuery(searchQuery);
+    setSearchParams({ q: searchQuery });
   };
 
   const handleSubmit = (event: SubmitEvent<HTMLFormElement>) => {
@@ -42,7 +63,7 @@ export function SearchPage() {
     const normalizedQuery = query.trim();
 
     if (!normalizedQuery) {
-      setSubmittedQuery('');
+      setSearchParams({});
       return;
     }
 
@@ -51,7 +72,7 @@ export function SearchPage() {
       return;
     }
 
-    setSubmittedQuery(normalizedQuery);
+    setSearchParams({ q: normalizedQuery });
   };
 
   const openMedia = (mediaRef: MediaRef) => {
@@ -104,7 +125,7 @@ export function SearchPage() {
             <SearchInput
               aria-label="Название произведения"
               value={query}
-              maxLength={100}
+              maxLength={maximumMediaSearchQueryLength}
               placeholder="Введите название"
               onChange={(event) => setQuery(event.currentTarget.value)}
             />

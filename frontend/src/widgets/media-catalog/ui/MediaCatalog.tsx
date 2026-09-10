@@ -1,4 +1,5 @@
-import { useId, useState, type ReactNode } from 'react';
+import { useEffect, useId, useMemo, useState, type ReactNode } from 'react';
+import { useSearchParams } from 'react-router';
 
 import {
   Button,
@@ -12,8 +13,21 @@ import {
   Select,
   YaneMark,
 } from '@/shared';
-import { MediaCard, useMediaSearch, type MediaRef, type MediaType } from '@/entities/media';
+import {
+  maximumMediaSearchQueryLength,
+  MediaCard,
+  normalizeMediaSearchQuery,
+  useMediaSearch,
+  type MediaRef,
+  type MediaType,
+} from '@/entities/media';
 import { useFavorites } from '@/features/favorite';
+import {
+  createCatalogSearchParams,
+  ratingOptions,
+  readCatalogSearchParams,
+  type CatalogSearchFilters,
+} from '../model/catalogSearchParams';
 import { getGenreOptions } from '../model/genreOptions';
 import { useMediaCatalog } from '../model/useMediaCatalog';
 import { getYearOptions } from '../model/yearOptions';
@@ -26,45 +40,78 @@ export type MediaCatalogProps = {
   filters?: ReactNode;
 };
 
-const ratingOptions = [
-  { value: '7', label: '7+' },
-  { value: '8', label: '8+' },
-  { value: '9', label: '9+' },
-] as const;
-
 export function MediaCatalog({ type, title, filters, onOpen }: MediaCatalogProps) {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { catalog, isError, isFetching, isPaused, retry } = useMediaCatalog(type);
   const { isFavorite, toggleFavorite } = useFavorites();
   const filtersPanelId = useId();
 
-  const [searchValue, setSearchValue] = useState('');
-  const [selectedGenre, setSelectedGenre] = useState<string | null>(null);
-  const [selectedYear, setSelectedYear] = useState<number | null>(null);
-  const [minimumRating, setMinimumRating] = useState<number | null>(null);
+  const urlFilters = useMemo(
+    () => readCatalogSearchParams(searchParams, type),
+    [searchParams, type],
+  );
+  const [searchValue, setSearchValue] = useState(urlFilters.query);
   const [areMobileFiltersOpen, setAreMobileFiltersOpen] = useState(false);
+  const { genre: selectedGenre, year: selectedYear, minimumRating } = urlFilters;
+  const normalizedSearchValue = normalizeMediaSearchQuery(searchValue);
+
+  useEffect(() => {
+    const canonicalParams = createCatalogSearchParams(urlFilters);
+
+    if (canonicalParams.toString() !== searchParams.toString()) {
+      setSearchParams(canonicalParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams, urlFilters]);
+
+  useEffect(() => {
+    setSearchValue(urlFilters.query);
+  }, [urlFilters.query]);
+
+  useEffect(() => {
+    if (normalizedSearchValue === urlFilters.query) return;
+
+    const timeoutId = window.setTimeout(() => {
+      setSearchParams(createCatalogSearchParams({ ...urlFilters, query: normalizedSearchValue }), {
+        replace: true,
+      });
+    }, 300);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [normalizedSearchValue, setSearchParams, urlFilters]);
+
+  const updateUrlFilters = (updates: Partial<CatalogSearchFilters>) => {
+    setSearchParams(createCatalogSearchParams({ ...urlFilters, ...updates }));
+  };
 
   const hasSelectedFilters =
     selectedGenre !== null || selectedYear !== null || minimumRating !== null;
-  const isResultsMode = searchValue.trim().length > 0 || hasSelectedFilters;
+  const isResultsMode = normalizedSearchValue.length > 0 || hasSelectedFilters;
+  const isSearchDraftPending = normalizedSearchValue !== urlFilters.query;
   const {
     items: searchItems,
     resultFilters,
     status: searchStatus,
-    isPreviousResult,
-    isUpdating: isSearchUpdating,
+    isPreviousResult: isPreviousQueryResult,
+    isUpdating: isQueryUpdating,
     hasRefreshError: hasSearchRefreshError,
     hasMore,
     isLoadingMore,
     loadMoreError,
     retry: retrySearch,
     loadMore,
-  } = useMediaSearch({
-    query: searchValue,
-    type,
-    genre: selectedGenre,
-    year: selectedYear,
-    minimumRating,
-  });
+  } = useMediaSearch(
+    {
+      query: urlFilters.query,
+      type,
+      genre: selectedGenre,
+      year: selectedYear,
+      minimumRating,
+    },
+    0,
+  );
+
+  const isPreviousResult = isPreviousQueryResult || isSearchDraftPending;
+  const isSearchUpdating = isQueryUpdating || isSearchDraftPending;
 
   if (!catalog && !isResultsMode && !isError && !isPaused) {
     return <MediaCatalogSkeleton title={title} />;
@@ -101,17 +148,15 @@ export function MediaCatalog({ type, title, filters, onOpen }: MediaCatalogProps
     (value) => value !== null,
   ).length;
   const activeFilterLabels = [
-    searchValue.trim() ? `Поиск: «${searchValue.trim()}»` : null,
+    normalizedSearchValue ? `Поиск: «${normalizedSearchValue}»` : null,
     selectedGenreLabel,
     selectedYear?.toString(),
     minimumRating === null ? null : `Рейтинг ${minimumRating}+`,
-  ].filter((label): label is string => label !== null);
+  ].filter((label): label is string => label != null);
 
   const resetFilters = () => {
     setSearchValue('');
-    setSelectedGenre(null);
-    setSelectedYear(null);
-    setMinimumRating(null);
+    setSearchParams({});
   };
 
   return (
@@ -144,7 +189,7 @@ export function MediaCatalog({ type, title, filters, onOpen }: MediaCatalogProps
           </h1>
 
           <p className="mt-2 max-w-md text-body text-text-secondary">
-            Смотрите тематические подборки или найдите нужное произведение по названию.
+            Подборки, поиск и фильтры относятся только к разделу «{title}».
           </p>
         </div>
 
@@ -152,6 +197,7 @@ export function MediaCatalog({ type, title, filters, onOpen }: MediaCatalogProps
           <SearchInput
             aria-label={`Поиск: ${title}`}
             value={searchValue}
+            maxLength={maximumMediaSearchQueryLength}
             placeholder="Поиск по каталогу"
             onChange={(event) => setSearchValue(event.currentTarget.value)}
           />
@@ -192,21 +238,25 @@ export function MediaCatalog({ type, title, filters, onOpen }: MediaCatalogProps
               value={selectedGenre}
               options={genreOptions}
               placeholder="Все жанры"
-              onChange={setSelectedGenre}
+              onChange={(genre) => updateUrlFilters({ genre })}
             />
             <Select
               aria-label="Год"
               value={selectedYear === null ? null : String(selectedYear)}
               options={yearOptions}
               placeholder="Все годы"
-              onChange={(value) => setSelectedYear(value === null ? null : Number(value))}
+              onChange={(value) =>
+                updateUrlFilters({ year: value === null ? null : Number(value) })
+              }
             />
             <Select
               aria-label="Минимальный рейтинг"
               value={minimumRating === null ? null : String(minimumRating)}
               options={ratingOptions}
               placeholder="Любой рейтинг"
-              onChange={(value) => setMinimumRating(value === null ? null : Number(value))}
+              onChange={(value) =>
+                updateUrlFilters({ minimumRating: value === null ? null : Number(value) })
+              }
               className="col-span-2 sm:col-span-1"
             />
             {filters}
