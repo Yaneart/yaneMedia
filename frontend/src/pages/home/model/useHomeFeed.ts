@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef } from 'react';
+import { useQuery } from '@tanstack/react-query';
 
 import { getHomeFeed } from '../api/getHomeFeed';
 import type { HomeFeed } from './homeFeed';
 
-type HomeFeedStatus = 'loading' | 'success' | 'error';
-
+const homeStaleTimeMs = 5 * 60_000;
 const backgroundRetryDelayMs = 60_000;
 const degradedArtworkRetryDelayMs = 15_000;
 
@@ -14,73 +14,95 @@ function hasIncompleteLandscapeArtwork(feed: HomeFeed): boolean {
   );
 }
 
+function shouldRetryArtwork(feed: HomeFeed | undefined): boolean {
+  return feed !== undefined && feed.degraded && hasIncompleteLandscapeArtwork(feed);
+}
+
+function getFeaturedRefreshDelay(feed: HomeFeed | undefined, now: number): number | null {
+  if (!feed) {
+    return null;
+  }
+
+  const featuredExpiresAt = Date.parse(feed.featuredExpiresAt);
+
+  return Number.isFinite(featuredExpiresAt) ? Math.max(0, featuredExpiresAt - now) : null;
+}
+
+function getHomeStaleTime(feed: HomeFeed | undefined, dataUpdatedAt: number): number {
+  let staleTime = homeStaleTimeMs;
+
+  if (shouldRetryArtwork(feed)) {
+    staleTime = Math.min(staleTime, degradedArtworkRetryDelayMs);
+  }
+
+  const featuredRefreshDelay = getFeaturedRefreshDelay(feed, dataUpdatedAt);
+
+  if (featuredRefreshDelay !== null) {
+    staleTime = Math.min(staleTime, featuredRefreshDelay);
+  }
+
+  return staleTime;
+}
+
 export function useHomeFeed() {
-  const [feed, setFeed] = useState<HomeFeed | null>(null);
-  const [status, setStatus] = useState<HomeFeedStatus>('loading');
-  const [reloadKey, setReloadKey] = useState(0);
+  const hasRetriedArtworkRef = useRef(false);
+
+  const query = useQuery({
+    queryKey: ['media', 'home'],
+    queryFn: ({ signal }) => getHomeFeed(signal),
+
+    staleTime: (query) => getHomeStaleTime(query.state.data, query.state.dataUpdatedAt),
+
+    refetchInterval: (query) => {
+      if (query.state.data === undefined) {
+        return false;
+      }
+
+      if (query.state.status === 'error') {
+        return backgroundRetryDelayMs;
+      }
+
+      const refreshDelay = getFeaturedRefreshDelay(query.state.data, Date.now());
+
+      return refreshDelay !== null && refreshDelay > 0 ? refreshDelay : false;
+    },
+
+    refetchOnWindowFocus: (query) => {
+      if (query.state.status === 'error') {
+        return false;
+      }
+
+      return getFeaturedRefreshDelay(query.state.data, Date.now()) === 0;
+    },
+  });
+  const { refetch } = query;
+
+  const needsArtworkRetry = shouldRetryArtwork(query.data);
 
   useEffect(() => {
-    const controller = new AbortController();
-    let refreshTimerId: number | undefined;
+    if (!needsArtworkRetry) {
+      hasRetriedArtworkRef.current = false;
+      return;
+    }
 
-    const loadFeed = async (showError: boolean) => {
-      try {
-        const nextFeed = await getHomeFeed(controller.signal);
+    if (hasRetriedArtworkRef.current) {
+      return;
+    }
 
-        if (controller.signal.aborted) {
-          return;
-        }
+    const timerId = window.setTimeout(() => {
+      hasRetriedArtworkRef.current = true;
+      void refetch({ cancelRefetch: false });
+    }, degradedArtworkRetryDelayMs);
 
-        setFeed(nextFeed);
-        setStatus('success');
-
-        const expiresAt = Date.parse(nextFeed.featuredExpiresAt);
-        const featuredRefreshDelay = expiresAt - Date.now();
-        const shouldRetryArtwork = nextFeed.degraded && hasIncompleteLandscapeArtwork(nextFeed);
-        const refreshDelay = shouldRetryArtwork
-          ? degradedArtworkRetryDelayMs
-          : featuredRefreshDelay;
-
-        if (refreshDelay > 0 && (shouldRetryArtwork || Number.isFinite(expiresAt))) {
-          refreshTimerId = window.setTimeout(() => {
-            void loadFeed(false);
-          }, refreshDelay);
-        }
-      } catch {
-        if (controller.signal.aborted) {
-          return;
-        }
-
-        if (showError) {
-          setStatus('error');
-          return;
-        }
-
-        refreshTimerId = window.setTimeout(() => {
-          void loadFeed(false);
-        }, backgroundRetryDelayMs);
-      }
-    };
-
-    void loadFeed(true);
-
-    return () => {
-      controller.abort();
-
-      if (refreshTimerId !== undefined) {
-        window.clearTimeout(refreshTimerId);
-      }
-    };
-  }, [reloadKey]);
-
-  const retry = () => {
-    setStatus('loading');
-    setReloadKey((currentKey) => currentKey + 1);
-  };
+    return () => window.clearTimeout(timerId);
+  }, [needsArtworkRetry, refetch]);
 
   return {
-    feed,
-    status,
-    retry,
+    feed: query.data,
+    isError: query.isError,
+    isPaused: query.isPaused,
+    retry: () => {
+      void refetch({ cancelRefetch: false });
+    },
   };
 }
