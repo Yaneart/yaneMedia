@@ -8,9 +8,10 @@ import {
 } from '@/entities/media';
 import { useFavorites } from '@/features/favorite';
 import { usePlaybackSession } from '@/features/playback-session';
+import { RestorableContentRow } from '@/features/scroll-restoration';
 import { FeaturedMedia } from '@/widgets/featured-media';
 import { ContinueWatchingCard } from '@/widgets/continue-watching-card';
-import { ContentRow, EmptyState, ErrorState, LoadingState, Skeleton, YaneMark } from '@/shared';
+import { EmptyState, ErrorState, LoadingState, Skeleton, YaneMark } from '@/shared';
 import { useHomeFeed } from '../model/useHomeFeed';
 
 const CONTINUE_WATCHING_LIMIT = 5;
@@ -105,13 +106,17 @@ export function HomePage() {
             </h2>
 
             {continueWatchingResolutionStatus === 'loading' ? (
-              <ContentRow variant="continuation" aria-label="Загружаем продолжение просмотра">
+              <RestorableContentRow
+                scrollKey="continue-watching"
+                variant="continuation"
+                aria-label="Загружаем продолжение просмотра"
+              >
                 {visibleContinueWatchingEntries.map((entry) => (
                   <Skeleton key={entry.mediaRef} className="aspect-[2.35/1] w-full rounded-card" />
                 ))}
-              </ContentRow>
+              </RestorableContentRow>
             ) : resolvedContinueWatchingEntries.length > 0 ? (
-              <ContentRow variant="continuation">
+              <RestorableContentRow scrollKey="continue-watching" variant="continuation">
                 {resolvedContinueWatchingEntries.map(({ entry, media }) => (
                   <ContinueWatchingCard
                     key={entry.mediaRef}
@@ -125,7 +130,7 @@ export function HomePage() {
                     onOpen={() => continueWatching(entry.mediaRef)}
                   />
                 ))}
-              </ContentRow>
+              </RestorableContentRow>
             ) : (
               <ErrorState
                 title="Не удалось восстановить продолжение просмотра"
@@ -141,7 +146,7 @@ export function HomePage() {
           <section key={collection.id}>
             <h2 className="mb-4 text-heading font-semibold">{collection.title}</h2>
 
-            <ContentRow variant="collection">
+            <RestorableContentRow scrollKey={collection.id} variant="collection">
               {collection.items.map((media) => (
                 <MediaCard
                   key={media.mediaRef}
@@ -183,7 +188,7 @@ export function HomePage() {
                     </div>
                   </button>
                 )}
-            </ContentRow>
+            </RestorableContentRow>
           </section>
         ))}
       </div>

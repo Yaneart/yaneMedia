@@ -6,6 +6,7 @@ import { MobileNavigation } from '@/widgets/mobile-navigation';
 import { MobileHeader } from '@/widgets/mobile-header';
 import { AppShellWatermarks } from './AppShellWatermarks';
 import { usePlaybackSession } from '@/features/playback-session';
+import { ScrollRestorationProvider, useAppScrollRestoration } from '@/features/scroll-restoration';
 import { WatchDock } from '@/widgets/watch-dock';
 
 export function AppShell() {
@@ -13,6 +14,8 @@ export function AppShell() {
   const navigate = useNavigate();
 
   const { session, endSession } = usePlaybackSession();
+  const { cancelPendingRestoration, contentRef, mainRef, rowScrollRestoration, saveMainPosition } =
+    useAppScrollRestoration();
 
   const isHomePage = pathname === routePaths.home;
 
@@ -47,8 +50,20 @@ export function AppShell() {
             overlay={isHomePage}
           />
         </div>
-        <main className="relative z-10 min-h-0 flex-1 overflow-y-auto bg-surface p-page [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:m-4 md:ml-0 md:rounded-card md:shadow-surface">
-          <Outlet />
+        <main
+          ref={mainRef}
+          className="relative z-10 min-h-0 flex-1 overflow-y-auto bg-surface p-page [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:m-4 md:ml-0 md:rounded-card md:shadow-surface"
+          onKeyDownCapture={cancelPendingRestoration}
+          onPointerDownCapture={cancelPendingRestoration}
+          onScroll={saveMainPosition}
+          onTouchStartCapture={cancelPendingRestoration}
+          onWheelCapture={cancelPendingRestoration}
+        >
+          <ScrollRestorationProvider value={rowScrollRestoration}>
+            <div ref={contentRef}>
+              <Outlet />
+            </div>
+          </ScrollRestorationProvider>
         </main>
         {session && activeMediaPath && !isActiveMediaPage && (
           <div className="relative z-20 shrink-0 bg-surface px-1 pb-1 md:mr-4 md:mb-4 md:bg-transparent md:px-0 md:pb-0">

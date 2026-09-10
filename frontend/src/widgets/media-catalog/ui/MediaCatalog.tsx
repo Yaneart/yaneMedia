@@ -3,7 +3,6 @@ import { useSearchParams } from 'react-router';
 
 import {
   Button,
-  ContentRow,
   DownIcon,
   EmptyState,
   ErrorState,
@@ -22,6 +21,7 @@ import {
   type MediaType,
 } from '@/entities/media';
 import { useFavorites } from '@/features/favorite';
+import { RestorableContentRow } from '@/features/scroll-restoration';
 import {
   createCatalogSearchParams,
   ratingOptions,
@@ -415,7 +415,7 @@ export function MediaCatalog({ type, title, filters, onOpen }: MediaCatalogProps
                 {collection.title}
               </h2>
 
-              <ContentRow className="mt-4">
+              <RestorableContentRow scrollKey={collection.id} className="mt-4">
                 {collection.items.map((item) => (
                   <MediaCard
                     key={item.mediaRef}
@@ -425,7 +425,7 @@ export function MediaCatalog({ type, title, filters, onOpen }: MediaCatalogProps
                     onFavoriteChange={() => toggleFavorite(item.mediaRef)}
                   />
                 ))}
-              </ContentRow>
+              </RestorableContentRow>
             </section>
           ))}
         </div>
