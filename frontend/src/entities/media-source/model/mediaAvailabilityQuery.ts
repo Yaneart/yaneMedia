@@ -1,0 +1,115 @@
+import { ApiClientError } from '@/shared/api';
+import { queryOptions, type QueryClient } from '@tanstack/react-query';
+
+import { streamMediaAvailability } from '../api/streamMediaAvailability';
+import type { MediaAvailability } from './mediaSource';
+import {
+  mergeProgressiveAvailability,
+  selectSettledAvailability,
+} from './mediaAvailabilityProgress';
+import { getMediaAvailabilityExpirationDelay } from './mediaSourcePlayback';
+
+export type MediaAvailabilityQueryData = {
+  availability: MediaAvailability;
+  settled: boolean;
+};
+
+const availabilityFreshTimeMs = 15 * 60_000;
+const backgroundRetryDelaysMs = [35_000, 60_000, 120_000] as const;
+
+export function mediaAvailabilityQueryKey(mediaRef: string) {
+  return ['media', 'availability', mediaRef] as const;
+}
+
+function needsBackgroundRefresh(availability: MediaAvailability) {
+  return availability.degraded || availability.hasExpiredSources;
+}
+
+function getAvailabilityStaleTime(
+  data: MediaAvailabilityQueryData | undefined,
+  dataUpdatedAt: number,
+) {
+  if (!data?.settled || needsBackgroundRefresh(data.availability)) {
+    return 0;
+  }
+
+  const expirationDelay = getMediaAvailabilityExpirationDelay(data.availability, dataUpdatedAt);
+
+  return expirationDelay === null
+    ? availabilityFreshTimeMs
+    : Math.min(availabilityFreshTimeMs, expirationDelay);
+}
+
+function getRefreshInterval(data: MediaAvailabilityQueryData | undefined) {
+  if (!data?.settled || needsBackgroundRefresh(data.availability)) {
+    return backgroundRetryDelaysMs[0];
+  }
+
+  const expirationDelay = getMediaAvailabilityExpirationDelay(data.availability);
+
+  return expirationDelay === null ? false : Math.max(expirationDelay, 1_000);
+}
+
+function createEmptyAvailability(): MediaAvailability {
+  return {
+    sources: [],
+    episodes: [],
+    checkedAt: new Date().toISOString(),
+    degraded: false,
+    hasExpiredSources: false,
+  };
+}
+
+async function loadMediaAvailability(
+  queryClient: QueryClient,
+  mediaRef: string,
+  signal: AbortSignal,
+) {
+  const queryKey = mediaAvailabilityQueryKey(mediaRef);
+  let current =
+    queryClient.getQueryData<MediaAvailabilityQueryData>(queryKey)?.availability ?? null;
+
+  await streamMediaAvailability(mediaRef, { signal }, (snapshot) => {
+    if (snapshot.availability) {
+      current =
+        snapshot.state === 'pending'
+          ? mergeProgressiveAvailability(current, snapshot.availability)
+          : selectSettledAvailability(current, snapshot.availability);
+    }
+
+    if (snapshot.state === 'complete') {
+      current ??= createEmptyAvailability();
+      queryClient.setQueryData(queryKey, { availability: current, settled: true });
+    } else if (current) {
+      queryClient.setQueryData(queryKey, { availability: current, settled: false });
+    }
+  });
+
+  const result = queryClient.getQueryData<MediaAvailabilityQueryData>(queryKey);
+
+  if (!result?.settled) {
+    throw new Error('Availability stream completed without a final snapshot.');
+  }
+
+  return result;
+}
+
+export function mediaAvailabilityQueryOptions(queryClient: QueryClient, mediaRef: string) {
+  return queryOptions({
+    queryKey: mediaAvailabilityQueryKey(mediaRef),
+    queryFn: ({ signal }) => loadMediaAvailability(queryClient, mediaRef, signal),
+    staleTime: ({ state }) => getAvailabilityStaleTime(state.data, state.dataUpdatedAt),
+    refetchInterval: ({ state }) =>
+      state.status === 'error' ? backgroundRetryDelaysMs.at(-1) : getRefreshInterval(state.data),
+    refetchOnWindowFocus: ({ state }) =>
+      state.status === 'error' ||
+      !state.data?.settled ||
+      needsBackgroundRefresh(state.data.availability) ||
+      getMediaAvailabilityExpirationDelay(state.data.availability) === 0,
+    retry: (failureCount, error) =>
+      !(error instanceof ApiClientError && error.status === 404) &&
+      failureCount < backgroundRetryDelaysMs.length,
+    retryDelay: (attemptIndex) =>
+      backgroundRetryDelaysMs[Math.min(attemptIndex, backgroundRetryDelaysMs.length - 1)],
+  });
+}

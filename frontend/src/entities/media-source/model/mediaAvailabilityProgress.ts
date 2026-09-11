@@ -1,9 +1,5 @@
-import type {
-  MediaAvailability,
-  MediaAvailabilityEpisode,
-  MediaSourceOption,
-} from '@/entities/media-source';
-import { getMediaAvailabilityExpirationDelay } from '@/entities/media-source';
+import type { MediaAvailability, MediaAvailabilityEpisode, MediaSourceOption } from './mediaSource';
+import { getMediaAvailabilityExpirationDelay } from './mediaSourcePlayback';
 
 function mergeSources(current: readonly MediaSourceOption[], next: readonly MediaSourceOption[]) {
   const sources = new Map(current.map((source) => [source.sourceRef, source]));
@@ -83,4 +79,38 @@ export function selectSettledAvailability(
   }
 
   return next;
+}
+
+function isExpired(source: MediaSourceOption, now: number) {
+  if (!source.expiresAt) {
+    return false;
+  }
+
+  const expirationTime = Date.parse(source.expiresAt);
+
+  return Number.isFinite(expirationTime) && expirationTime <= now;
+}
+
+export function selectUsableAvailability(availability: MediaAvailability, now = Date.now()) {
+  let removedExpiredSource = false;
+  const selectUsableSources = (sources: readonly MediaSourceOption[]) =>
+    sources.filter((source) => {
+      const expired = isExpired(source, now);
+      removedExpiredSource ||= expired;
+      return !expired;
+    });
+  const sources = selectUsableSources(availability.sources);
+  const episodes = availability.episodes
+    .map((episode) => ({
+      ...episode,
+      sources: selectUsableSources(episode.sources),
+    }))
+    .filter((episode) => episode.sources.length > 0);
+
+  return {
+    ...availability,
+    sources,
+    episodes,
+    hasExpiredSources: availability.hasExpiredSources || removedExpiredSource,
+  };
 }

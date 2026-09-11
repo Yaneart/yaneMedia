@@ -1,15 +1,12 @@
 import {
   getMediaAvailabilityExpirationDelay,
+  mergeProgressiveAvailability,
+  selectSettledAvailability,
   streamMediaAvailability,
   type MediaAvailability,
   type MediaSourceEpisodeRef,
 } from '@/entities/media-source';
 import { useEffect, useState } from 'react';
-
-import {
-  mergeProgressiveAvailability,
-  selectSettledAvailability,
-} from './mediaAvailabilityProgress';
 
 const backgroundRetryDelaysMs = [35_000, 60_000, 120_000] as const;
 

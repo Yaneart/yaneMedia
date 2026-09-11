@@ -25,3 +25,15 @@ export {
   getMediaSourcePlaybackIssue,
 } from './model/mediaSourcePlayback';
 export type { MediaSourcePlaybackIssue } from './model/mediaSourcePlayback';
+
+export {
+  mediaAvailabilityQueryKey,
+  mediaAvailabilityQueryOptions,
+} from './model/mediaAvailabilityQuery';
+export type { MediaAvailabilityQueryData } from './model/mediaAvailabilityQuery';
+
+export {
+  mergeProgressiveAvailability,
+  selectSettledAvailability,
+  selectUsableAvailability,
+} from './model/mediaAvailabilityProgress';
