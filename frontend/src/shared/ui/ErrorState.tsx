@@ -152,7 +152,11 @@ export function ErrorState({
               {eyebrow}
             </p>
 
-            <h1 className="mt-2 text-3xl font-semibold tracking-[-0.03em] text-text-primary sm:text-4xl">
+            <h1
+              data-page-heading
+              tabIndex={-1}
+              className="mt-2 text-3xl font-semibold tracking-[-0.03em] text-text-primary sm:text-4xl"
+            >
               {title}
             </h1>
 

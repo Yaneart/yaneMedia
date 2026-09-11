@@ -11,6 +11,7 @@ import { WatchDock } from '@/widgets/watch-dock';
 import { mediaCatalogQueryOptions } from '@/widgets/media-catalog';
 import { useQueryClient } from '@tanstack/react-query';
 import type { MediaType } from '@/entities/media';
+import { mainContentId } from '@/shared';
 
 const catalogTypeByPath: Partial<Record<string, MediaType>> = {
   [routePaths.movies]: 'movie',
@@ -73,7 +74,9 @@ export function AppShell() {
           />
         </div>
         <main
+          id={mainContentId}
           ref={mainRef}
+          tabIndex={-1}
           className="relative z-10 min-h-0 flex-1 overflow-y-auto bg-surface p-page [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:m-4 md:ml-0 md:rounded-card md:shadow-surface"
           onKeyDownCapture={cancelPendingRestoration}
           onPointerDownCapture={cancelPendingRestoration}

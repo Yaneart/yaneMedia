@@ -49,7 +49,11 @@ export function FeaturedMedia({ media }: FeaturedMediaProps) {
         ))}
       </div>
 
-      <h1 className="mt-3 max-w-xl text-[clamp(2.25rem,4vw,4.5rem)] leading-[0.98] font-extrabold tracking-[-0.035em] text-hero-text">
+      <h1
+        data-page-heading
+        tabIndex={-1}
+        className="mt-3 max-w-xl text-[clamp(2.25rem,4vw,4.5rem)] leading-[0.98] font-extrabold tracking-[-0.035em] text-hero-text"
+      >
         {media.title}
       </h1>
 

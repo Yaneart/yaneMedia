@@ -46,6 +46,7 @@ export type { InputProps, InputVariant } from './ui/Input';
 
 export { SearchInput } from './ui/SearchInput';
 export type { SearchInputProps } from './ui/SearchInput';
+export { mainContentId } from './lib/accessibility';
 
 export { Spinner } from './ui/Spinner';
 export type { SpinnerProps, SpinnerSize } from './ui/Spinner';

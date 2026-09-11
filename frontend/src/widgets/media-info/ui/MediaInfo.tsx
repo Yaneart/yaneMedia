@@ -180,6 +180,8 @@ export function MediaInfo({ media, actions, variant = 'default' }: MediaInfoProp
         </div>
 
         <h1
+          data-page-heading
+          tabIndex={-1}
           className={[
             'order-1 text-heading text-text-primary md:order-2 md:mt-3',
             isWatchLayout ? 'xl:text-title' : 'md:text-title',

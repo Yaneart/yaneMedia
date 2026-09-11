@@ -1,5 +1,5 @@
 import { ThemeToggle } from '@/features/theme';
-import { Logo, YaneMark } from '@/shared';
+import { Logo, mainContentId, YaneMark } from '@/shared';
 import { useId, type ReactNode } from 'react';
 import { Link } from 'react-router';
 
@@ -106,6 +106,8 @@ export function AuthFormLayout({
       </header>
 
       <main
+        id={mainContentId}
+        tabIndex={-1}
         className={[
           'relative z-10 flex min-h-0 flex-1 overflow-y-auto px-page',
           compactMobile
@@ -163,7 +165,12 @@ export function AuthFormLayout({
           >
             <div className="mx-auto w-full max-w-sm">
               <header className={compactMobile ? 'mb-6 sm:mb-8' : 'mb-8'}>
-                <h1 id={titleId} className="text-title text-text-primary">
+                <h1
+                  id={titleId}
+                  data-page-heading
+                  tabIndex={-1}
+                  className="text-title text-text-primary"
+                >
                   {title}
                 </h1>
 

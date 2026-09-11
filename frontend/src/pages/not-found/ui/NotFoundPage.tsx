@@ -177,7 +177,9 @@ export function NotFoundPage() {
               Ошибка 404
             </p>
 
-            <h1 className="text-heading text-text-primary">Этой страницы нет в медиатеке</h1>
+            <h1 data-page-heading tabIndex={-1} className="text-heading text-text-primary">
+              Этой страницы нет в медиатеке
+            </h1>
 
             <p className="mt-2 text-body text-text-secondary">
               Возможно, ссылка устарела или была указана неверно.

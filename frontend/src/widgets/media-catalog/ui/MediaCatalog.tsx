@@ -151,6 +151,14 @@ export function MediaCatalog({ type, title, filters }: MediaCatalogProps) {
     selectedYear?.toString(),
     minimumRating === null ? null : `Рейтинг ${minimumRating}+`,
   ].filter((label): label is string => label != null);
+  const searchResultsAnnouncement =
+    isResultsMode && !isSearchUpdating && !isPreviousResult
+      ? searchStatus === 'success'
+        ? `В разделе «${title}» показано результатов: ${searchItems.length}.`
+        : searchStatus === 'empty'
+          ? `В разделе «${title}» по выбранным условиям ничего не найдено.`
+          : ''
+      : '';
 
   const resetFilters = () => {
     setSearchValue('');
@@ -159,6 +167,10 @@ export function MediaCatalog({ type, title, filters }: MediaCatalogProps) {
 
   return (
     <section aria-busy={isResultsMode && (searchStatus === 'loading' || isSearchUpdating)}>
+      <p role="status" aria-atomic="true" className="sr-only">
+        {searchResultsAnnouncement}
+      </p>
+
       <header
         className={[
           'relative rounded-card',
@@ -182,7 +194,11 @@ export function MediaCatalog({ type, title, filters }: MediaCatalogProps) {
             Каталог yaneMedia
           </p>
 
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-text-primary sm:text-3xl">
+          <h1
+            data-page-heading
+            tabIndex={-1}
+            className="mt-2 text-2xl font-semibold tracking-tight text-text-primary sm:text-3xl"
+          >
             {title}
           </h1>
 

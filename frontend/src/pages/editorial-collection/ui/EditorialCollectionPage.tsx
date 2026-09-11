@@ -49,7 +49,11 @@ export function EditorialCollectionPage() {
             Кураторская коллекция yaneMedia
           </p>
 
-          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-text-primary sm:text-5xl lg:text-6xl">
+          <h1
+            data-page-heading
+            tabIndex={-1}
+            className="mt-3 text-3xl font-semibold tracking-tight text-text-primary sm:text-5xl lg:text-6xl"
+          >
             Выбор редакции
           </h1>
 

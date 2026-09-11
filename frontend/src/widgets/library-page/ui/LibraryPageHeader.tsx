@@ -53,7 +53,11 @@ export function LibraryPageHeader({
             </div>
           </div>
 
-          <h1 className="mt-3 text-4xl font-semibold tracking-[-0.03em] text-text-primary sm:text-5xl">
+          <h1
+            data-page-heading
+            tabIndex={-1}
+            className="mt-3 text-4xl font-semibold tracking-[-0.03em] text-text-primary sm:text-5xl"
+          >
             {title}
           </h1>
           <p className="mt-2 max-w-xl text-body text-text-secondary">{description}</p>

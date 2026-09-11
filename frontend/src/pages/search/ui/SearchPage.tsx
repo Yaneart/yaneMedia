@@ -81,9 +81,21 @@ export function SearchPage() {
         ? `Ищем «${submittedQuery}». Пока показаны результаты по запросу «${resultFilters.query}».`
         : 'Обновляем результаты поиска…'
       : null;
+  const searchResultsAnnouncement =
+    !isUpdating && !isPreviousResult
+      ? status === 'success'
+        ? `По запросу «${displayedQuery}» найдено результатов: ${results.length}.`
+        : status === 'empty'
+          ? `По запросу «${displayedQuery}» ничего не найдено.`
+          : ''
+      : '';
 
   return (
     <section className="space-y-6" aria-busy={status === 'loading' || isUpdating}>
+      <p role="status" aria-atomic="true" className="sr-only">
+        {searchResultsAnnouncement}
+      </p>
+
       <header
         className={[
           'relative overflow-hidden rounded-card',
@@ -105,7 +117,11 @@ export function SearchPage() {
             Поиск по каталогу
           </p>
 
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-text-primary sm:text-3xl">
+          <h1
+            data-page-heading
+            tabIndex={-1}
+            className="mt-2 text-2xl font-semibold tracking-tight text-text-primary sm:text-3xl"
+          >
             Что будем смотреть?
           </h1>
 
