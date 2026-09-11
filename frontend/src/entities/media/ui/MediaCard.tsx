@@ -38,6 +38,8 @@ export function MediaCard({ media, isFavorite, onFavoriteChange }: MediaCardProp
               alt=""
               width={poster.width}
               height={poster.height}
+              loading="lazy"
+              decoding="async"
               className={[
                 'size-full object-cover transition-transform duration-300 ease-out',
                 'group-hover/card:scale-[1.015] group-active/card:scale-[1.005]',

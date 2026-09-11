@@ -109,6 +109,9 @@ export function MediaInfo({ media, actions, variant = 'default' }: MediaInfoProp
                 alt={`Постер: ${media.title}`}
                 width={media.poster.width}
                 height={media.poster.height}
+                loading="eager"
+                fetchPriority="high"
+                decoding="async"
                 className="absolute inset-0 size-full object-cover"
                 onError={(event) => {
                   event.currentTarget.hidden = true;
@@ -129,6 +132,9 @@ export function MediaInfo({ media, actions, variant = 'default' }: MediaInfoProp
           alt={`Постер: ${media.title}`}
           width={media.poster.width}
           height={media.poster.height}
+          loading="eager"
+          fetchPriority="high"
+          decoding="async"
           className={[
             'aspect-2/3 w-full object-cover shadow-surface',
             'rounded-overlay md:row-span-3 md:max-w-60 md:rounded-card',

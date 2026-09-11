@@ -90,6 +90,7 @@ export function MediaBackdropArtwork({
         <img
           src={artwork.url}
           alt=""
+          decoding="async"
           className="absolute inset-0 size-full scale-110 object-cover opacity-65 blur-2xl saturate-125"
         />
       )}
@@ -102,6 +103,7 @@ export function MediaBackdropArtwork({
         height={artwork.height}
         loading={loading}
         fetchPriority={fetchPriority}
+        decoding="async"
         className={[
           'absolute inset-0 size-full',
           isPanoramic ? 'scale-[1.06] object-contain' : 'object-cover',

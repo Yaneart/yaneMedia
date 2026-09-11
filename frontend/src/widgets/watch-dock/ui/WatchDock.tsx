@@ -70,6 +70,7 @@ export function WatchDock({ mediaTitle, artwork, session, onExpand, onClose }: W
             <img
               src={artwork.url}
               alt=""
+              decoding="async"
               className="absolute inset-0 hidden size-full scale-105 object-cover object-center opacity-20 blur-md saturate-75 md:block"
             />
             <div
@@ -102,6 +103,7 @@ export function WatchDock({ mediaTitle, artwork, session, onExpand, onClose }: W
           alt=""
           width={artwork.width}
           height={artwork.height}
+          decoding="async"
           className="relative z-10 h-full w-16 shrink-0 rounded-l-card object-cover md:w-32"
         />
       )}

@@ -1,32 +1,44 @@
+import { Suspense, type ReactNode } from 'react';
 import { createBrowserRouter } from 'react-router';
 import { AppShell } from '../layout/AppShell';
+import {
+  AnimePage,
+  EditorialCollectionPage,
+  FavoritesPage,
+  HistoryPage,
+  LoginPage,
+  MediaPage,
+  MoviesPage,
+  NotFoundPage,
+  RegisterPage,
+  SearchPage,
+  SeriesPage,
+  VerifyEmailPage,
+} from './lazyPages';
 import { routePaths } from './routes';
+import { LoadingState } from '@/shared';
 import { HomePage } from '@/pages/home';
-import { SearchPage } from '@/pages/search';
-import { MoviesPage } from '@/pages/movies';
-import { SeriesPage } from '@/pages/series';
-import { AnimePage } from '@/pages/anime';
-import { EditorialCollectionPage } from '@/pages/editorial-collection';
-import { MediaPage } from '@/pages/media';
-import { FavoritesPage } from '@/pages/favorites';
-import { HistoryPage } from '@/pages/history';
-import { RegisterPage } from '@/pages/register';
-import { LoginPage } from '@/pages/login';
-import { NotFoundPage } from '@/pages/not-found';
-import { VerifyEmailPage } from '@/pages/verify-email';
+
+function lazyRoute(page: ReactNode) {
+  return (
+    <Suspense fallback={<LoadingState label="Загружаем страницу" variant="page" />}>
+      {page}
+    </Suspense>
+  );
+}
 
 export const router = createBrowserRouter([
   {
     path: routePaths.login,
-    element: <LoginPage homePath={routePaths.home} registerPath={routePaths.register} />,
+    element: lazyRoute(<LoginPage homePath={routePaths.home} registerPath={routePaths.register} />),
   },
   {
     path: routePaths.register,
-    element: <RegisterPage homePath={routePaths.home} loginPath={routePaths.login} />,
+    element: lazyRoute(<RegisterPage homePath={routePaths.home} loginPath={routePaths.login} />),
   },
   {
     path: routePaths.verifyEmail,
-    element: <VerifyEmailPage homePath={routePaths.home} loginPath={routePaths.login} />,
+    element: lazyRoute(<VerifyEmailPage homePath={routePaths.home} loginPath={routePaths.login} />),
   },
   {
     element: <AppShell />,
@@ -37,39 +49,39 @@ export const router = createBrowserRouter([
       },
       {
         path: routePaths.search,
-        element: <SearchPage />,
+        element: lazyRoute(<SearchPage />),
       },
       {
         path: routePaths.movies,
-        element: <MoviesPage />,
+        element: lazyRoute(<MoviesPage />),
       },
       {
         path: routePaths.series,
-        element: <SeriesPage />,
+        element: lazyRoute(<SeriesPage />),
       },
       {
         path: routePaths.anime,
-        element: <AnimePage />,
+        element: lazyRoute(<AnimePage />),
       },
       {
         path: routePaths.editorialPicks,
-        element: <EditorialCollectionPage />,
+        element: lazyRoute(<EditorialCollectionPage />),
       },
       {
         path: routePaths.media,
-        element: <MediaPage />,
+        element: lazyRoute(<MediaPage />),
       },
       {
         path: routePaths.favorites,
-        element: <FavoritesPage />,
+        element: lazyRoute(<FavoritesPage />),
       },
       {
         path: routePaths.history,
-        element: <HistoryPage />,
+        element: lazyRoute(<HistoryPage />),
       },
       {
         path: routePaths.notFound,
-        element: <NotFoundPage />,
+        element: lazyRoute(<NotFoundPage />),
       },
     ],
   },

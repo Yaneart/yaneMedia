@@ -19,6 +19,8 @@ type PosterCompositionProps = {
 };
 
 function PosterComposition({ onError, poster, variant }: PosterCompositionProps) {
+  const isHero = variant === 'hero';
+
   return (
     <div aria-hidden="true" className="relative isolate size-full overflow-hidden bg-black">
       <img
@@ -26,6 +28,9 @@ function PosterComposition({ onError, poster, variant }: PosterCompositionProps)
         alt=""
         width={poster.width}
         height={poster.height}
+        loading={isHero ? 'eager' : 'lazy'}
+        fetchPriority={isHero ? 'high' : 'auto'}
+        decoding="async"
         className="absolute inset-0 size-full scale-115 object-cover opacity-80 blur-2xl saturate-125"
         onError={onError}
       />
@@ -39,6 +44,9 @@ function PosterComposition({ onError, poster, variant }: PosterCompositionProps)
           alt=""
           width={poster.width}
           height={poster.height}
+          loading="eager"
+          fetchPriority="high"
+          decoding="async"
           className="absolute inset-y-[-8%] right-[5%] h-[116%] w-[52%] object-contain drop-shadow-[0_16px_30px_rgb(0_0_0/0.5)] md:right-[8%] md:w-[46%]"
           onError={onError}
         />
@@ -55,6 +63,8 @@ function PosterComposition({ onError, poster, variant }: PosterCompositionProps)
             alt=""
             width={poster.width}
             height={poster.height}
+            loading="lazy"
+            decoding="async"
             className="size-full object-cover object-center saturate-110"
             onError={onError}
           />

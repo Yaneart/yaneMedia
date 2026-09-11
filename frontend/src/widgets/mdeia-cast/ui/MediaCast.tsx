@@ -46,6 +46,8 @@ export function MediaCast({ persons, className }: MediaCastProps) {
                   alt={`Фото: ${actor.name}`}
                   width={actor.photo.width}
                   height={actor.photo.height}
+                  loading="lazy"
+                  decoding="async"
                   className="absolute inset-0 size-full object-cover"
                   onError={(event) => {
                     event.currentTarget.hidden = true;
