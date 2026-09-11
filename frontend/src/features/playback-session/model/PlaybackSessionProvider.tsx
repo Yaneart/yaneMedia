@@ -1,6 +1,7 @@
 import type { ContinueWatchingEntry, PlaybackSession } from '@/entities/playback';
 import { useEffect, useState, type ReactNode } from 'react';
 import {
+  CONTINUE_WATCHING_ENTRY_LIMIT,
   loadContinueWatchingEntries,
   removeContinueWatchingEntries,
   saveContinueWatchingEntries,
@@ -15,8 +16,6 @@ import {
 type PlaybackSessionProviderProps = {
   children: ReactNode;
 };
-
-const CONTINUE_WATCHING_ENTRY_LIMIT = 100;
 
 function getUpdatedAt() {
   return new Date().toISOString();
@@ -133,10 +132,15 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
 
     setSession((currentSession) => ({
       ...entry,
-      state: 'paused',
+      state: 'playing',
       volume: currentSession?.volume ?? 1,
       updatedAt: getUpdatedAt(),
     }));
+  };
+
+  const removeContinueWatchingEntry = (mediaRef: string) => {
+    setContinueWatchingEntries((entries) => entries.filter((entry) => entry.mediaRef !== mediaRef));
+    setSession((currentSession) => (currentSession?.mediaRef === mediaRef ? null : currentSession));
   };
 
   const pauseSession = () => {
@@ -202,6 +206,7 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
         continueWatchingEntries,
         startSession,
         restoreSession,
+        removeContinueWatchingEntry,
         pauseSession,
         resumeSession,
         updateProgress,

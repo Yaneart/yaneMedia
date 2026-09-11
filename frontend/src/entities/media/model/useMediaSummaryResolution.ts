@@ -17,12 +17,17 @@ const emptyResolution: MediaSummaryResolutionResult = {
 
 const summaryStaleTimeMs = 15 * 60_000;
 
+export function mediaSummaryResolutionQueryKey(mediaRefs: readonly MediaRef[]) {
+  return ['media', 'summaries', Array.from(mediaRefs)] as const;
+}
+
 export function useMediaSummaryResolution(mediaRefs: readonly MediaRef[]) {
   const requestedMediaRefs = Array.from(mediaRefs);
   const query = useQuery({
-    queryKey: ['media', 'summaries', requestedMediaRefs],
+    queryKey: mediaSummaryResolutionQueryKey(requestedMediaRefs),
     queryFn: ({ signal }) => resolveMediaSummaries(requestedMediaRefs, signal),
     enabled: requestedMediaRefs.length > 0,
+    placeholderData: (previousResolution) => previousResolution,
     staleTime: summaryStaleTimeMs,
   });
   const resolution = requestedMediaRefs.length === 0 ? emptyResolution : (query.data ?? null);

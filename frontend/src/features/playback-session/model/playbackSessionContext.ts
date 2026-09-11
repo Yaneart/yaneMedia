@@ -20,6 +20,7 @@ export type PlaybackSessionContextValue = {
   continueWatchingEntries: readonly ContinueWatchingEntry[];
   startSession: (input: StartPlaybackSessionInput) => void;
   restoreSession: (mediaRef: string) => void;
+  removeContinueWatchingEntry: (mediaRef: string) => void;
   pauseSession: () => void;
   resumeSession: () => void;
   updateProgress: (positionSeconds: number, durationSeconds?: number | null) => void;

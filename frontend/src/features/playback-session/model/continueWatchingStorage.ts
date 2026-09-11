@@ -2,7 +2,7 @@ import type { ContinueWatchingEntry } from '@/entities/playback';
 
 const CONTINUE_WATCHING_STORAGE_KEY = 'yanemedia-continue-watching';
 const CONTINUE_WATCHING_STORAGE_VERSION = 1;
-const CONTINUE_WATCHING_STORAGE_LIMIT = 100;
+export const CONTINUE_WATCHING_ENTRY_LIMIT = 5;
 
 type StoredContinueWatching = {
   version: typeof CONTINUE_WATCHING_STORAGE_VERSION;
@@ -130,7 +130,7 @@ function normalizeEntries(entries: readonly ContinueWatchingEntry[]) {
     });
   }
 
-  return Array.from(uniqueEntries.values()).slice(0, CONTINUE_WATCHING_STORAGE_LIMIT);
+  return Array.from(uniqueEntries.values()).slice(0, CONTINUE_WATCHING_ENTRY_LIMIT);
 }
 
 export function loadContinueWatchingEntries(): ContinueWatchingEntry[] {

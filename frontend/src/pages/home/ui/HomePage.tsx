@@ -1,8 +1,11 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router';
+import { useState } from 'react';
 
 import {
   MediaLandscapeArtwork,
   MediaCard,
+  mediaSummaryResolutionQueryKey,
   useMediaSummaryResolution,
   type MediaRef,
 } from '@/entities/media';
@@ -11,14 +14,12 @@ import { usePlaybackSession } from '@/features/playback-session';
 import { RestorableContentRow } from '@/features/scroll-restoration';
 import { FeaturedMedia } from '@/widgets/featured-media';
 import { ContinueWatchingCard } from '@/widgets/continue-watching-card';
-import { LibraryDataNotice } from '@/widgets/library-page';
-import { Button, EmptyState, ErrorState, LoadingState, Skeleton, YaneMark } from '@/shared';
+import { EmptyState, ErrorState, LoadingState, Skeleton, YaneMark } from '@/shared';
 import { useHomeFeed } from '../model/useHomeFeed';
 import { HomeCollectionsSkeleton } from './HomeCollectionsSkeleton';
 
-const CONTINUE_WATCHING_LIMIT = 5;
-
 export function HomePage() {
+  const queryClient = useQueryClient();
   const {
     featured,
     isFeaturedError,
@@ -29,30 +30,50 @@ export function HomePage() {
     areCollectionsPaused,
     areMoreCollectionsLoading,
     isCollectionsError,
-    isMoreCollectionsError,
     retryCollections,
   } = useHomeFeed();
+  const [continueWatchingAnnouncement, setContinueWatchingAnnouncement] = useState('');
   const { isFavorite, toggleFavorite } = useFavorites();
-  const { continueWatchingEntries, restoreSession } = usePlaybackSession();
-  const visibleContinueWatchingEntries = continueWatchingEntries.slice(0, CONTINUE_WATCHING_LIMIT);
+  const { continueWatchingEntries, restoreSession, removeContinueWatchingEntry } =
+    usePlaybackSession();
   const {
     resolution: continueWatchingResolution,
     status: continueWatchingResolutionStatus,
-    hasRefreshError: continueWatchingRefreshFailed,
     retry: retryContinueWatchingResolution,
-  } = useMediaSummaryResolution(visibleContinueWatchingEntries.map((entry) => entry.mediaRef));
+  } = useMediaSummaryResolution(continueWatchingEntries.map((entry) => entry.mediaRef));
 
   const continueWatchingMediaByRef = new Map(
     continueWatchingResolution?.items.map((media) => [media.mediaRef, media]),
   );
-  const resolvedContinueWatchingEntries = visibleContinueWatchingEntries.flatMap((entry) => {
+  const resolvedContinueWatchingEntries = continueWatchingEntries.flatMap((entry) => {
     const media = continueWatchingMediaByRef.get(entry.mediaRef);
 
     return media ? [{ entry, media }] : [];
   });
 
-  const continueWatching = (mediaRef: MediaRef) => {
-    restoreSession(mediaRef);
+  const removeFromContinueWatching = (mediaRef: MediaRef, title: string) => {
+    const remainingMediaRefs = continueWatchingEntries
+      .filter((entry) => entry.mediaRef !== mediaRef)
+      .map((entry) => entry.mediaRef);
+    const remainingMedia = remainingMediaRefs.flatMap((remainingMediaRef) => {
+      const media = continueWatchingMediaByRef.get(remainingMediaRef);
+
+      return media ? [media] : [];
+    });
+
+    if (
+      continueWatchingResolution &&
+      remainingMediaRefs.length > 0 &&
+      remainingMedia.length === remainingMediaRefs.length
+    ) {
+      queryClient.setQueryData(mediaSummaryResolutionQueryKey(remainingMediaRefs), {
+        ...continueWatchingResolution,
+        items: remainingMedia,
+      });
+    }
+
+    removeContinueWatchingEntry(mediaRef);
+    setContinueWatchingAnnouncement(`«${title}» убрано из продолжения просмотра.`);
   };
 
   return (
@@ -108,20 +129,15 @@ export function HomePage() {
       )}
 
       <div className="space-y-10 px-page py-8 md:space-y-12 md:py-10">
-        {visibleContinueWatchingEntries.length > 0 && (
+        <p role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+          {continueWatchingAnnouncement}
+        </p>
+
+        {continueWatchingEntries.length > 0 && (
           <section>
             <h2 className="mb-4 text-heading font-semibold text-text-primary">
               Продолжить просмотр
             </h2>
-
-            {continueWatchingResolution && (
-              <LibraryDataNotice
-                partial={continueWatchingResolution.partial}
-                stale={continueWatchingResolution.stale}
-                refreshFailed={continueWatchingRefreshFailed}
-                onRetry={retryContinueWatchingResolution}
-              />
-            )}
 
             {continueWatchingResolutionStatus === 'loading' ? (
               <RestorableContentRow
@@ -129,7 +145,7 @@ export function HomePage() {
                 variant="continuation"
                 aria-label="Загружаем продолжение просмотра"
               >
-                {visibleContinueWatchingEntries.map((entry) => (
+                {continueWatchingEntries.map((entry) => (
                   <Skeleton key={entry.mediaRef} className="aspect-[2.35/1] w-full rounded-card" />
                 ))}
               </RestorableContentRow>
@@ -145,7 +161,8 @@ export function HomePage() {
                       updatedAt: entry.updatedAt,
                     }}
                     episode={entry.episode}
-                    onOpen={() => continueWatching(entry.mediaRef)}
+                    onContinue={() => restoreSession(entry.mediaRef)}
+                    onRemove={() => removeFromContinueWatching(entry.mediaRef, media.title)}
                   />
                 ))}
               </RestorableContentRow>
@@ -231,20 +248,6 @@ export function HomePage() {
         )}
 
         {areMoreCollectionsLoading && collections.length > 0 && <HomeCollectionsSkeleton />}
-
-        {isMoreCollectionsError && (
-          <div
-            role="alert"
-            className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-context-border bg-surface-elevated px-4 py-3"
-          >
-            <p className="text-caption text-text-secondary">
-              Следующие подборки пока не загрузились. Уже полученные карточки сохранены.
-            </p>
-            <Button size="small" variant="ghost" onClick={retryCollections}>
-              Повторить
-            </Button>
-          </div>
-        )}
       </div>
     </div>
   );

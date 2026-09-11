@@ -23,7 +23,10 @@ export { maximumMediaSearchQueryLength, normalizeMediaSearchQuery } from './mode
 
 export { resolveMediaSummaries } from './api/resolveMediaSummaries';
 export type { MediaSummaryResolutionResult } from './api/resolveMediaSummaries';
-export { useMediaSummaryResolution } from './model/useMediaSummaryResolution';
+export {
+  mediaSummaryResolutionQueryKey,
+  useMediaSummaryResolution,
+} from './model/useMediaSummaryResolution';
 export type { MediaSummaryResolutionStatus } from './model/useMediaSummaryResolution';
 
 export { mapMediaSummary } from './api/mapMediaSummary';
