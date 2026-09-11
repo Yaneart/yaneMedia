@@ -16,6 +16,7 @@ type DesktopNavigationProps = {
   profilePath: string;
   primaryItems: readonly DesktopNavigationItem[];
   secondaryItems: readonly DesktopNavigationItem[];
+  onItemIntent?: (path: string) => void;
 };
 
 function getLinkClassName({ isActive }: { isActive: boolean }) {
@@ -35,6 +36,7 @@ export function DesktopNavigation({
   primaryItems,
   secondaryItems,
   profilePath,
+  onItemIntent,
 }: DesktopNavigationProps) {
   return (
     <aside className="flex h-dvh w-64 shrink-0 flex-col px-5 py-6">
@@ -55,7 +57,13 @@ export function DesktopNavigation({
           {primaryItems.map((item) => {
             return (
               <li key={item.path}>
-                <NavLink to={item.path} end={item.path === homePath} className={getLinkClassName}>
+                <NavLink
+                  to={item.path}
+                  end={item.path === homePath}
+                  className={getLinkClassName}
+                  onFocus={() => onItemIntent?.(item.path)}
+                  onPointerEnter={() => onItemIntent?.(item.path)}
+                >
                   {({ isActive }) => {
                     const Icon = isActive ? item.activeIcon : item.icon;
 
@@ -78,7 +86,12 @@ export function DesktopNavigation({
           {secondaryItems.map((item) => {
             return (
               <li key={item.path}>
-                <NavLink to={item.path} className={getLinkClassName}>
+                <NavLink
+                  to={item.path}
+                  className={getLinkClassName}
+                  onFocus={() => onItemIntent?.(item.path)}
+                  onPointerEnter={() => onItemIntent?.(item.path)}
+                >
                   {({ isActive }) => {
                     const Icon = isActive ? item.activeIcon : item.icon;
 

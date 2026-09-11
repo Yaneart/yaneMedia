@@ -1,4 +1,4 @@
-import { MediaCard, useMediaSummaryResolution, type MediaRef } from '@/entities/media';
+import { MediaCard, useMediaSummaryResolution } from '@/entities/media';
 import { useFavorites } from '@/features/favorite';
 import { useOpeningHistory } from '@/features/opening-history';
 import { Button, ErrorState, HistoryIcon, LoadingState, MediaGrid, SearchIcon } from '@/shared';
@@ -55,10 +55,6 @@ export function HistoryPage() {
     return openedAt ? [{ media, openedAt }] : [];
   });
   const hasStoredHistory = openingHistoryEntries.length > 0;
-
-  const openMedia = (mediaRef: MediaRef) => {
-    navigate(`/media/${encodeURIComponent(mediaRef)}`);
-  };
 
   return (
     <section>
@@ -119,7 +115,6 @@ export function HistoryPage() {
               <MediaCard
                 media={media}
                 isFavorite={isFavorite(media.mediaRef)}
-                onOpen={() => openMedia(media.mediaRef)}
                 onFavoriteChange={() => toggleFavorite(media.mediaRef)}
               />
 

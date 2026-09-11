@@ -1,12 +1,11 @@
 import { useEffect, useState, type SubmitEvent } from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
+import { useSearchParams } from 'react-router';
 
 import {
   maximumMediaSearchQueryLength,
   MediaCard,
   normalizeMediaSearchQuery,
   useMediaSearch,
-  type MediaRef,
 } from '@/entities/media';
 import { useFavorites } from '@/features/favorite';
 import {
@@ -22,7 +21,6 @@ import {
 const searchSuggestions = ['Дюна', 'Игра престолов', 'Фрирен'] as const;
 
 export function SearchPage() {
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { isFavorite, toggleFavorite } = useFavorites();
 
@@ -73,10 +71,6 @@ export function SearchPage() {
     }
 
     setSearchParams({ q: normalizedQuery });
-  };
-
-  const openMedia = (mediaRef: MediaRef) => {
-    navigate(`/media/${encodeURIComponent(mediaRef)}`);
   };
 
   const displayedQuery = resultFilters?.query ?? submittedQuery;
@@ -223,7 +217,6 @@ export function SearchPage() {
                 key={media.mediaRef}
                 media={media}
                 isFavorite={isFavorite(media.mediaRef)}
-                onOpen={() => openMedia(media.mediaRef)}
                 onFavoriteChange={() => toggleFavorite(media.mediaRef)}
               />
             ))}

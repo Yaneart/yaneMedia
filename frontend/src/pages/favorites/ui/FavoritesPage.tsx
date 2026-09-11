@@ -1,4 +1,4 @@
-import { MediaCard, useMediaSummaryResolution, type MediaRef } from '@/entities/media';
+import { MediaCard, useMediaSummaryResolution } from '@/entities/media';
 import { useFavorites } from '@/features/favorite';
 import { Button, ErrorState, FavoriteIcon, LoadingState, MediaGrid, SearchIcon } from '@/shared';
 import { LibraryDataNotice, LibraryEmptyState, LibraryPageHeader } from '@/widgets/library-page';
@@ -13,10 +13,6 @@ export function FavoritesPage() {
   const favoriteMedia =
     resolution?.items.filter((media) => favoriteMediaRefs.has(media.mediaRef)) ?? [];
   const hasStoredFavorites = favoriteMediaRefs.size > 0;
-
-  const openMedia = (mediaRef: MediaRef) => {
-    navigate(`/media/${encodeURIComponent(mediaRef)}`);
-  };
 
   return (
     <section>
@@ -72,7 +68,6 @@ export function FavoritesPage() {
               key={media.mediaRef}
               media={media}
               isFavorite={isFavorite(media.mediaRef)}
-              onOpen={() => openMedia(media.mediaRef)}
               onFavoriteChange={() => toggleFavorite(media.mediaRef)}
             />
           ))}

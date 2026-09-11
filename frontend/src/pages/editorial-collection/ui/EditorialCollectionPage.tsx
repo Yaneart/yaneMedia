@@ -1,12 +1,9 @@
-import { useNavigate } from 'react-router';
-
-import { LandscapeMediaCard, type MediaRef } from '@/entities/media';
+import { LandscapeMediaCard } from '@/entities/media';
 import { Button, ErrorState, LoadingState, YaneMark } from '@/shared';
 
 import { useEditorialCollection } from '../model/useEditorialCollection';
 
 export function EditorialCollectionPage() {
-  const navigate = useNavigate();
   const { collection, status, isLoadingMore, loadMoreFailed, loadMore, retry } =
     useEditorialCollection();
 
@@ -28,9 +25,6 @@ export function EditorialCollectionPage() {
     return <LoadingState variant="page" label="Собираем выбор редакции" />;
   }
 
-  const openMedia = (mediaRef: MediaRef) => {
-    navigate(`/media/${encodeURIComponent(mediaRef)}`);
-  };
   const hasMore = collection.nextOffset < collection.total;
 
   return (
@@ -92,11 +86,7 @@ export function EditorialCollectionPage() {
 
       <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
         {collection.items.map((media) => (
-          <LandscapeMediaCard
-            key={media.mediaRef}
-            media={media}
-            onOpen={() => openMedia(media.mediaRef)}
-          />
+          <LandscapeMediaCard key={media.mediaRef} media={media} />
         ))}
       </div>
 

@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router';
+import { Link } from 'react-router';
 
 import {
   MediaLandscapeArtwork,
@@ -18,7 +18,6 @@ import { useHomeFeed } from '../model/useHomeFeed';
 const CONTINUE_WATCHING_LIMIT = 5;
 
 export function HomePage() {
-  const navigate = useNavigate();
   const { feed, isError, isPaused, retry } = useHomeFeed();
   const { isFavorite, toggleFavorite } = useFavorites();
   const { continueWatchingEntries, restoreSession } = usePlaybackSession();
@@ -39,13 +38,8 @@ export function HomePage() {
     return media ? [{ entry, media }] : [];
   });
 
-  const openMedia = (mediaRef: MediaRef) => {
-    navigate(`/media/${encodeURIComponent(mediaRef)}`);
-  };
-
   const continueWatching = (mediaRef: MediaRef) => {
     restoreSession(mediaRef);
-    openMedia(mediaRef);
   };
 
   return (
@@ -71,7 +65,7 @@ export function HomePage() {
           />
 
           <div className="relative flex min-h-[500px] items-end px-5 pt-28 pb-14 md:min-h-[clamp(32rem,62vh,43rem)] md:px-page md:pt-32 md:pb-20">
-            <FeaturedMedia media={feed.featured} onOpen={() => openMedia(feed.featured.mediaRef)} />
+            <FeaturedMedia media={feed.featured} />
           </div>
         </section>
       ) : isPaused ? (
@@ -162,7 +156,6 @@ export function HomePage() {
                 <MediaCard
                   key={media.mediaRef}
                   media={media}
-                  onOpen={() => openMedia(media.mediaRef)}
                   isFavorite={isFavorite(media.mediaRef)}
                   onFavoriteChange={() => toggleFavorite(media.mediaRef)}
                 />
@@ -170,8 +163,8 @@ export function HomePage() {
 
               {collection.id === 'home-editorial-picks' &&
                 collection.total > collection.items.length && (
-                  <button
-                    type="button"
+                  <Link
+                    to="/collections/editorial-picks"
                     aria-label={`Открыть все ${collection.total} произведений из выбора редакции`}
                     className={[
                       'group relative aspect-2/3 w-full overflow-hidden rounded-card',
@@ -181,7 +174,6 @@ export function HomePage() {
                       'hover:border-watermark/60 active:scale-[0.992]',
                       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action',
                     ].join(' ')}
-                    onClick={() => navigate('/collections/editorial-picks')}
                   >
                     <YaneMark
                       aria-hidden="true"
@@ -197,7 +189,7 @@ export function HomePage() {
                         Показать подборку →
                       </span>
                     </div>
-                  </button>
+                  </Link>
                 )}
             </RestorableContentRow>
           </section>

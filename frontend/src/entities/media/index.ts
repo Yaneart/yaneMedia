@@ -34,9 +34,13 @@ export type { MediaDetailsDto, MediaDetailsResponseDto } from './api/mediaDetail
 
 export { getMediaDetails } from './api/getMediaDetails';
 export type { MediaDetailsResult } from './api/getMediaDetails';
+export { mediaDetailsQueryOptions } from './model/mediaDetailsQuery';
 
 export { MediaCard } from './ui/MediaCard';
 export type { MediaCardProps } from './ui/MediaCard';
+
+export { MediaLink } from './ui/MediaLink';
+export type { MediaLinkProps } from './ui/MediaLink';
 
 export { LandscapeMediaCard } from './ui/LandscapeMediaCard';
 export type { LandscapeMediaCardProps } from './ui/LandscapeMediaCard';

@@ -1,16 +1,16 @@
 import { FavoriteFilledIcon, FavoriteIcon, IconButton } from '@/shared';
 import { MediaPosterFallback } from './MediaPosterFallback';
+import { MediaLink } from './MediaLink';
 import type { MediaSummary } from '../model/media';
 import { useState } from 'react';
 
 export type MediaCardProps = {
   media: MediaSummary;
   isFavorite: boolean;
-  onOpen: () => void;
   onFavoriteChange: () => void;
 };
 
-export function MediaCard({ media, onOpen, isFavorite, onFavoriteChange }: MediaCardProps) {
+export function MediaCard({ media, isFavorite, onFavoriteChange }: MediaCardProps) {
   const [failedPosterUrl, setFailedPosterUrl] = useState<string | null>(null);
 
   const poster = media.poster;
@@ -21,15 +21,15 @@ export function MediaCard({ media, onOpen, isFavorite, onFavoriteChange }: Media
 
   return (
     <article className="relative min-w-0">
-      <button
-        type="button"
+      <MediaLink
+        mediaRef={media.mediaRef}
+        aria-label={`Открыть ${media.title}`}
         className={[
           'group/card block w-full min-w-0 text-left',
           'transition-transform duration-200 ease-out',
           'active:scale-[0.99] active:duration-75',
           'motion-reduce:transform-none motion-reduce:transition-none',
         ].join(' ')}
-        onClick={onOpen}
       >
         <div className="aspect-2/3 overflow-hidden rounded-card border border-context-border bg-elevated">
           {canShowPoster ? (
@@ -55,7 +55,7 @@ export function MediaCard({ media, onOpen, isFavorite, onFavoriteChange }: Media
         {metadata.length > 0 && (
           <p className="mt-1 text-caption text-text-secondary">{metadata.join(' · ')}</p>
         )}
-      </button>
+      </MediaLink>
 
       <IconButton
         variant="bare"

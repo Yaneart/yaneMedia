@@ -1,6 +1,7 @@
-import { MediaLandscapeArtwork, type MediaSummary } from '@/entities/media';
+import { MediaLandscapeArtwork, MediaLink, type MediaSummary } from '@/entities/media';
 import type { PlaybackEpisodeSelection, PlaybackProgress } from '@/entities/playback';
 import { PlayIcon } from '@/shared';
+import type { MouseEvent } from 'react';
 
 export type ContinueWatchingCardProps = {
   media: MediaSummary;
@@ -59,9 +60,21 @@ export function ContinueWatchingCard({
       ? resumeLabel
       : `${formatDuration(positionSeconds)} из ${formatDuration(durationSeconds)}`;
 
+  const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (
+      event.button === 0 &&
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.shiftKey &&
+      !event.altKey
+    ) {
+      onOpen();
+    }
+  };
+
   return (
-    <button
-      type="button"
+    <MediaLink
+      mediaRef={media.mediaRef}
       aria-label={`Продолжить просмотр: ${media.title}`}
       className={[
         'group relative block aspect-[2.35/1] w-full overflow-hidden rounded-card border border-context-border bg-elevated text-left',
@@ -70,7 +83,7 @@ export function ContinueWatchingCard({
         'motion-reduce:transform-none motion-reduce:transition-none',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action',
       ].join(' ')}
-      onClick={onOpen}
+      onClick={handleClick}
     >
       <div
         className={[
@@ -117,6 +130,6 @@ export function ContinueWatchingCard({
           />
         )}
       </div>
-    </button>
+    </MediaLink>
   );
 }

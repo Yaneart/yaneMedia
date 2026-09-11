@@ -1,18 +1,14 @@
 import { useQuery } from '@tanstack/react-query';
 
-import { getMediaDetails } from '@/entities/media';
+import { mediaDetailsQueryOptions } from '@/entities/media';
 import { ApiClientError } from '@/shared/api';
 
 type MediaDetailsStatus = 'loading' | 'success' | 'not-found' | 'offline' | 'error';
 
-const detailsStaleTimeMs = 15 * 60_000;
-
 export function useMediaDetails(mediaRef: string | undefined) {
   const query = useQuery({
-    queryKey: ['media', 'details', mediaRef],
-    queryFn: ({ signal }) => getMediaDetails(mediaRef ?? '', signal),
+    ...mediaDetailsQueryOptions(mediaRef ?? ''),
     enabled: Boolean(mediaRef),
-    staleTime: detailsStaleTimeMs,
   });
 
   let status: MediaDetailsStatus = 'loading';

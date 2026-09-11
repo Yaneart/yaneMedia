@@ -1,9 +1,8 @@
-import type { MediaSummary } from '@/entities/media';
-import { Button, PlayIcon } from '@/shared';
+import { MediaLink, type MediaSummary } from '@/entities/media';
+import { PlayIcon } from '@/shared';
 
 export type FeaturedMediaProps = {
   media: MediaSummary;
-  onOpen: () => void;
 };
 
 const mediaTypeLabels = {
@@ -12,7 +11,7 @@ const mediaTypeLabels = {
   anime: 'Аниме',
 } satisfies Record<MediaSummary['type'], string>;
 
-export function FeaturedMedia({ media, onOpen }: FeaturedMediaProps) {
+export function FeaturedMedia({ media }: FeaturedMediaProps) {
   const metadata: string[] = [];
 
   if (media.year !== undefined) {
@@ -61,17 +60,24 @@ export function FeaturedMedia({ media, onOpen }: FeaturedMediaProps) {
       )}
 
       <div className="mt-7">
-        <Button
-          variant="bare"
-          size="large"
-          className="rounded-pill bg-hero-button pr-5 pl-2 text-hero-button-text shadow-[0_10px_28px_rgb(0_0_0/22%)] hover:-translate-y-0.5 hover:bg-hero-button-hover hover:shadow-[0_14px_34px_rgb(0_0_0/28%)] focus-visible:ring-watermark/50"
-          onClick={onOpen}
+        <MediaLink
+          mediaRef={media.mediaRef}
+          className={[
+            'inline-flex min-h-12 items-center justify-center gap-2 rounded-pill',
+            'bg-hero-button pr-5 pl-2 text-base font-semibold text-hero-button-text',
+            'shadow-[0_10px_28px_rgb(0_0_0/22%)]',
+            'transition-[background-color,color,opacity,transform,box-shadow] duration-200 ease-out',
+            'hover:-translate-y-0.5 hover:bg-hero-button-hover hover:shadow-[0_14px_34px_rgb(0_0_0/28%)]',
+            'active:scale-[0.985] active:duration-75',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-watermark/50',
+            'motion-reduce:transform-none motion-reduce:transition-none',
+          ].join(' ')}
         >
           <span className="flex size-7 items-center justify-center rounded-full bg-hero-button-text/10">
             <PlayIcon className="size-4" />
           </span>
           Смотреть
-        </Button>
+        </MediaLink>
       </div>
     </div>
   );

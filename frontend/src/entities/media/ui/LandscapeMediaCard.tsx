@@ -1,9 +1,9 @@
 import type { MediaSummary } from '../model/media';
 import { MediaLandscapeArtwork } from './MediaLandscapeArtwork';
+import { MediaLink } from './MediaLink';
 
 export type LandscapeMediaCardProps = {
   media: MediaSummary;
-  onOpen: () => void;
 };
 
 const mediaTypeLabels = {
@@ -12,14 +12,14 @@ const mediaTypeLabels = {
   anime: 'Аниме',
 } satisfies Record<MediaSummary['type'], string>;
 
-export function LandscapeMediaCard({ media, onOpen }: LandscapeMediaCardProps) {
+export function LandscapeMediaCard({ media }: LandscapeMediaCardProps) {
   const metadata = [mediaTypeLabels[media.type], media.year, media.rating?.value].filter(
     (value) => value !== undefined,
   );
 
   return (
-    <button
-      type="button"
+    <MediaLink
+      mediaRef={media.mediaRef}
       aria-label={`Открыть ${media.title}`}
       className={[
         'group relative block aspect-video w-full overflow-hidden',
@@ -29,7 +29,6 @@ export function LandscapeMediaCard({ media, onOpen }: LandscapeMediaCardProps) {
         'motion-reduce:transform-none motion-reduce:transition-none',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action',
       ].join(' ')}
-      onClick={onOpen}
     >
       <div
         className={[
@@ -50,6 +49,6 @@ export function LandscapeMediaCard({ media, onOpen }: LandscapeMediaCardProps) {
           <p className="mt-1.5 text-caption text-white/60">{metadata.join(' · ')}</p>
         )}
       </div>
-    </button>
+    </MediaLink>
   );
 }

@@ -12,6 +12,7 @@ type MobileNavigationItem = {
 type MobileNavigationProps = {
   homePath: string;
   items: readonly MobileNavigationItem[];
+  onItemIntent?: (path: string) => void;
 };
 
 function getLinkClassName({ isActive }: { isActive: boolean }) {
@@ -25,7 +26,7 @@ function getLinkClassName({ isActive }: { isActive: boolean }) {
   ].join(' ');
 }
 
-export function MobileNavigation({ homePath, items }: MobileNavigationProps) {
+export function MobileNavigation({ homePath, items, onItemIntent }: MobileNavigationProps) {
   return (
     <nav
       aria-label="Основная навигация"
@@ -35,7 +36,13 @@ export function MobileNavigation({ homePath, items }: MobileNavigationProps) {
         {items.map((item) => {
           return (
             <li key={item.path} className="flex min-w-0 flex-1">
-              <NavLink to={item.path} end={item.path === homePath} className={getLinkClassName}>
+              <NavLink
+                to={item.path}
+                end={item.path === homePath}
+                className={getLinkClassName}
+                onFocus={() => onItemIntent?.(item.path)}
+                onPointerEnter={() => onItemIntent?.(item.path)}
+              >
                 {({ isActive }) => {
                   const Icon = isActive ? item.activeIcon : item.icon;
 

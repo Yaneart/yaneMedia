@@ -17,7 +17,6 @@ import {
   MediaCard,
   normalizeMediaSearchQuery,
   useMediaSearch,
-  type MediaRef,
   type MediaType,
 } from '@/entities/media';
 import { useFavorites } from '@/features/favorite';
@@ -36,11 +35,10 @@ import { MediaCatalogSkeleton } from './MediaCatalogSkeleton';
 export type MediaCatalogProps = {
   type: MediaType;
   title: string;
-  onOpen: (mediaRef: MediaRef) => void;
   filters?: ReactNode;
 };
 
-export function MediaCatalog({ type, title, filters, onOpen }: MediaCatalogProps) {
+export function MediaCatalog({ type, title, filters }: MediaCatalogProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const { catalog, isError, isFetching, isPaused, retry } = useMediaCatalog(type);
   const { isFavorite, toggleFavorite } = useFavorites();
@@ -340,7 +338,6 @@ export function MediaCatalog({ type, title, filters, onOpen }: MediaCatalogProps
                 <MediaCard
                   key={item.mediaRef}
                   media={item}
-                  onOpen={() => onOpen(item.mediaRef)}
                   isFavorite={isFavorite(item.mediaRef)}
                   onFavoriteChange={() => toggleFavorite(item.mediaRef)}
                 />
@@ -420,7 +417,6 @@ export function MediaCatalog({ type, title, filters, onOpen }: MediaCatalogProps
                   <MediaCard
                     key={item.mediaRef}
                     media={item}
-                    onOpen={() => onOpen(item.mediaRef)}
                     isFavorite={isFavorite(item.mediaRef)}
                     onFavoriteChange={() => toggleFavorite(item.mediaRef)}
                   />

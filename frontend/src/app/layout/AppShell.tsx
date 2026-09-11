@@ -8,10 +8,20 @@ import { AppShellWatermarks } from './AppShellWatermarks';
 import { usePlaybackSession } from '@/features/playback-session';
 import { ScrollRestorationProvider, useAppScrollRestoration } from '@/features/scroll-restoration';
 import { WatchDock } from '@/widgets/watch-dock';
+import { mediaCatalogQueryOptions } from '@/widgets/media-catalog';
+import { useQueryClient } from '@tanstack/react-query';
+import type { MediaType } from '@/entities/media';
+
+const catalogTypeByPath: Partial<Record<string, MediaType>> = {
+  [routePaths.movies]: 'movie',
+  [routePaths.series]: 'series',
+  [routePaths.anime]: 'anime',
+};
 
 export function AppShell() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const { session, endSession } = usePlaybackSession();
   const { cancelPendingRestoration, contentRef, mainRef, rowScrollRestoration, saveMainPosition } =
@@ -22,6 +32,17 @@ export function AppShell() {
   const activeMediaPath = session ? `/media/${encodeURIComponent(session.mediaRef)}` : null;
   const normalizedPathname = pathname.replace(/\/+$/, '') || routePaths.home;
   const isActiveMediaPage = activeMediaPath === normalizedPathname;
+  const prefetchCatalog = (path: string) => {
+    const type = catalogTypeByPath[path];
+
+    if (type) {
+      void queryClient.prefetchQuery({
+        ...mediaCatalogQueryOptions(type),
+        retry: false,
+      });
+    }
+  };
+
   return (
     <div className="relative isolate flex h-dvh overflow-hidden bg-background">
       <div className="relative z-20 hidden md:block">
@@ -32,6 +53,7 @@ export function AppShell() {
             profilePath={routePaths.login}
             primaryItems={primaryNavigationItems}
             secondaryItems={secondaryNavigationItems}
+            onItemIntent={prefetchCatalog}
           />
         </div>
       </div>
@@ -77,7 +99,11 @@ export function AppShell() {
           </div>
         )}
         <div className="shrink-0 bg-surface md:hidden pl-1 pr-1">
-          <MobileNavigation homePath={routePaths.home} items={primaryNavigationItems} />
+          <MobileNavigation
+            homePath={routePaths.home}
+            items={primaryNavigationItems}
+            onItemIntent={prefetchCatalog}
+          />
         </div>
       </div>
     </div>
