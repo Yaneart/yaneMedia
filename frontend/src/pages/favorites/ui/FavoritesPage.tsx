@@ -1,10 +1,27 @@
 import { MediaCard, useMediaSummaryResolution } from '@/entities/media';
 import { useFavorites } from '@/features/favorite';
-import { Button, ErrorState, FavoriteIcon, LoadingState, MediaGrid, SearchIcon } from '@/shared';
-import { LibraryDataNotice, LibraryEmptyState, LibraryPageHeader } from '@/widgets/library-page';
+import {
+  Button,
+  EmptyState,
+  ErrorState,
+  FavoriteIcon,
+  LoadingState,
+  MediaGrid,
+  SearchIcon,
+} from '@/shared';
+import {
+  LibraryDataNotice,
+  LibraryEmptyState,
+  LibraryPageHeader,
+  LibrarySearch,
+  LibraryStorageNotice,
+  matchesLibraryQuery,
+} from '@/widgets/library-page';
+import { useState } from 'react';
 import { useNavigate } from 'react-router';
 
 export function FavoritesPage() {
+  const [query, setQuery] = useState('');
   const navigate = useNavigate();
   const { favoriteMediaRefs, isFavorite, toggleFavorite } = useFavorites();
   const { resolution, status, hasRefreshError, retry } = useMediaSummaryResolution(
@@ -12,6 +29,7 @@ export function FavoritesPage() {
   );
   const favoriteMedia =
     resolution?.items.filter((media) => favoriteMediaRefs.has(media.mediaRef)) ?? [];
+  const visibleFavoriteMedia = favoriteMedia.filter((media) => matchesLibraryQuery(media, query));
   const hasStoredFavorites = favoriteMediaRefs.size > 0;
 
   return (
@@ -29,6 +47,18 @@ export function FavoritesPage() {
           ) : undefined
         }
       />
+
+      <LibraryStorageNotice />
+
+      {favoriteMedia.length > 0 && (
+        <LibrarySearch
+          label="Поиск в избранном"
+          query={query}
+          visibleCount={visibleFavoriteMedia.length}
+          totalCount={favoriteMedia.length}
+          onQueryChange={setQuery}
+        />
+      )}
 
       {resolution && (
         <LibraryDataNotice
@@ -61,9 +91,9 @@ export function FavoritesPage() {
           retryLabel="Повторить"
           onRetry={retry}
         />
-      ) : favoriteMedia.length > 0 ? (
+      ) : visibleFavoriteMedia.length > 0 ? (
         <MediaGrid>
-          {favoriteMedia.map((media) => (
+          {visibleFavoriteMedia.map((media) => (
             <MediaCard
               key={media.mediaRef}
               media={media}
@@ -72,6 +102,17 @@ export function FavoritesPage() {
             />
           ))}
         </MediaGrid>
+      ) : favoriteMedia.length > 0 ? (
+        <EmptyState
+          title="В избранном ничего не найдено"
+          description={`По запросу «${query.trim()}» совпадений нет.`}
+          action={
+            <Button variant="secondary" onClick={() => setQuery('')}>
+              Сбросить поиск
+            </Button>
+          }
+          className="min-h-64 rounded-card bg-surface-elevated"
+        />
       ) : (
         <LibraryEmptyState
           eyebrow="Коллекция сохранена"

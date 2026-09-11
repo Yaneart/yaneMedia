@@ -8,6 +8,8 @@ export {
   AnimeFilledIcon,
   CheckIcon,
   CloseIcon,
+  DeleteIcon,
+  DeviceIcon,
   DownIcon,
   FavoriteIcon,
   FavoriteFilledIcon,

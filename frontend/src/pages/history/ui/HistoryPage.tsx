@@ -1,8 +1,25 @@
 import { MediaCard, useMediaSummaryResolution } from '@/entities/media';
 import { useFavorites } from '@/features/favorite';
 import { useOpeningHistory } from '@/features/opening-history';
-import { Button, ErrorState, HistoryIcon, LoadingState, MediaGrid, SearchIcon } from '@/shared';
-import { LibraryDataNotice, LibraryEmptyState, LibraryPageHeader } from '@/widgets/library-page';
+import {
+  Button,
+  DeleteIcon,
+  EmptyState,
+  ErrorState,
+  HistoryIcon,
+  LoadingState,
+  MediaGrid,
+  SearchIcon,
+} from '@/shared';
+import {
+  LibraryDataNotice,
+  LibraryEmptyState,
+  LibraryPageHeader,
+  LibrarySearch,
+  LibraryStorageNotice,
+  matchesLibraryQuery,
+} from '@/widgets/library-page';
+import { useState } from 'react';
 import { useNavigate } from 'react-router';
 
 const openingDateFormatter = new Intl.DateTimeFormat('ru-RU', {
@@ -40,8 +57,16 @@ function formatOpeningDate(openedAt: string) {
 }
 
 export function HistoryPage() {
+  const [query, setQuery] = useState('');
+  const [removalAnnouncement, setRemovalAnnouncement] = useState('');
   const navigate = useNavigate();
-  const { openingHistoryEntries, clearHistory } = useOpeningHistory();
+  const {
+    openingHistoryEntries,
+    canUndoClearHistory,
+    removeOpening,
+    clearHistory,
+    undoClearHistory,
+  } = useOpeningHistory();
   const { isFavorite, toggleFavorite } = useFavorites();
   const { resolution, status, hasRefreshError, retry } = useMediaSummaryResolution(
     openingHistoryEntries.map((entry) => entry.mediaRef),
@@ -54,7 +79,13 @@ export function HistoryPage() {
 
     return openedAt ? [{ media, openedAt }] : [];
   });
+  const visibleHistoryMedia = historyMedia.filter(({ media }) => matchesLibraryQuery(media, query));
   const hasStoredHistory = openingHistoryEntries.length > 0;
+
+  const handleRemoveOpening = (mediaRef: string, title: string) => {
+    removeOpening(mediaRef);
+    setRemovalAnnouncement(`«${title}» удалено из истории.`);
+  };
 
   return (
     <section>
@@ -64,10 +95,10 @@ export function HistoryPage() {
         description="Недавно открытые фильмы, сериалы и аниме"
         icon={<HistoryIcon className="size-6" />}
         actions={
-          historyMedia.length > 0 ? (
+          hasStoredHistory ? (
             <div className="flex flex-wrap items-center gap-2 sm:justify-end">
               <p className="rounded-full bg-watermark/10 px-3 py-1.5 text-caption text-text-secondary">
-                Открыто: {historyMedia.length}
+                Открыто: {openingHistoryEntries.length}
               </p>
               <Button size="small" variant="secondary" onClick={clearHistory}>
                 Очистить
@@ -76,6 +107,34 @@ export function HistoryPage() {
           ) : undefined
         }
       />
+
+      <p role="status" aria-live="polite" aria-atomic="true" className="sr-only">
+        {removalAnnouncement}
+      </p>
+
+      <LibraryStorageNotice />
+
+      {canUndoClearHistory && (
+        <div
+          role="status"
+          className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-card border border-context-border bg-surface-elevated px-4 py-3"
+        >
+          <p className="text-caption text-text-secondary">История очищена.</p>
+          <Button size="small" variant="secondary" onClick={undoClearHistory}>
+            Отменить
+          </Button>
+        </div>
+      )}
+
+      {historyMedia.length > 0 && (
+        <LibrarySearch
+          label="Поиск в истории"
+          query={query}
+          visibleCount={visibleHistoryMedia.length}
+          totalCount={historyMedia.length}
+          onQueryChange={setQuery}
+        />
+      )}
 
       {resolution && (
         <LibraryDataNotice
@@ -108,9 +167,9 @@ export function HistoryPage() {
           retryLabel="Повторить"
           onRetry={retry}
         />
-      ) : historyMedia.length > 0 ? (
+      ) : visibleHistoryMedia.length > 0 ? (
         <MediaGrid>
-          {historyMedia.map(({ media, openedAt }) => (
+          {visibleHistoryMedia.map(({ media, openedAt }) => (
             <div key={media.mediaRef} className="min-w-0">
               <MediaCard
                 media={media}
@@ -118,10 +177,35 @@ export function HistoryPage() {
                 onFavoriteChange={() => toggleFavorite(media.mediaRef)}
               />
 
-              <p className="mt-1 text-caption text-text-secondary">{formatOpeningDate(openedAt)}</p>
+              <div className="mt-1 flex min-h-9 items-center justify-between gap-2">
+                <p className="min-w-0 truncate text-caption text-text-secondary">
+                  {formatOpeningDate(openedAt)}
+                </p>
+                <Button
+                  size="small"
+                  variant="ghost"
+                  className="min-h-8 shrink-0 px-2 text-text-secondary"
+                  aria-label={`Удалить «${media.title}» из истории`}
+                  onClick={() => handleRemoveOpening(media.mediaRef, media.title)}
+                >
+                  <DeleteIcon aria-hidden="true" className="size-4" />
+                  <span className="hidden sm:inline">Удалить</span>
+                </Button>
+              </div>
             </div>
           ))}
         </MediaGrid>
+      ) : historyMedia.length > 0 ? (
+        <EmptyState
+          title="В истории ничего не найдено"
+          description={`По запросу «${query.trim()}» совпадений нет.`}
+          action={
+            <Button variant="secondary" onClick={() => setQuery('')}>
+              Сбросить поиск
+            </Button>
+          }
+          className="min-h-64 rounded-card bg-surface-elevated"
+        />
       ) : (
         <LibraryEmptyState
           eyebrow="История сохранена"

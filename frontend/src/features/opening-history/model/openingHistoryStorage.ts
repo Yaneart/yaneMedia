@@ -56,6 +56,24 @@ function normalizeOpeningHistory(entries: readonly OpeningHistoryEntry[]): Openi
   return Array.from(uniqueEntries.values()).slice(0, OPENING_HISTORY_LIMIT);
 }
 
+export function restoreOpeningHistory(
+  currentEntries: readonly OpeningHistoryEntry[],
+  clearedEntries: readonly OpeningHistoryEntry[],
+): OpeningHistoryEntry[] {
+  const seenMediaRefs = new Set<string>();
+
+  return [...currentEntries, ...clearedEntries]
+    .filter((entry) => {
+      if (seenMediaRefs.has(entry.mediaRef)) {
+        return false;
+      }
+
+      seenMediaRefs.add(entry.mediaRef);
+      return true;
+    })
+    .slice(0, OPENING_HISTORY_LIMIT);
+}
+
 export function loadOpeningHistory(): OpeningHistoryEntry[] {
   try {
     const serializedHistory = window.localStorage.getItem(OPENING_HISTORY_STORAGE_KEY);

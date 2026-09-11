@@ -4,6 +4,7 @@ import {
   OPENING_HISTORY_LIMIT,
   loadOpeningHistory,
   removeOpeningHistory,
+  restoreOpeningHistory,
   saveOpeningHistory,
 } from './openingHistoryStorage';
 import type { MediaRef } from '@/entities/media';
@@ -15,6 +16,7 @@ type OpeningHistoryProviderProps = {
 export function OpeningHistoryProvider({ children }: OpeningHistoryProviderProps) {
   const [openingHistoryEntries, setOpeningHistoryEntries] =
     useState<OpeningHistoryEntry[]>(loadOpeningHistory);
+  const [clearedEntries, setClearedEntries] = useState<readonly OpeningHistoryEntry[] | null>(null);
 
   useEffect(() => {
     if (openingHistoryEntries.length === 0) {
@@ -45,18 +47,43 @@ export function OpeningHistoryProvider({ children }: OpeningHistoryProviderProps
     });
   }, []);
 
-  const clearHistory = useCallback(() => {
+  const removeOpening = useCallback((mediaRef: MediaRef) => {
     setOpeningHistoryEntries((currentEntries) =>
-      currentEntries.length === 0 ? currentEntries : [],
+      currentEntries.some((entry) => entry.mediaRef === mediaRef)
+        ? currentEntries.filter((entry) => entry.mediaRef !== mediaRef)
+        : currentEntries,
     );
   }, []);
+
+  const clearHistory = useCallback(() => {
+    if (openingHistoryEntries.length === 0) {
+      return;
+    }
+
+    setClearedEntries(openingHistoryEntries);
+    setOpeningHistoryEntries([]);
+  }, [openingHistoryEntries]);
+
+  const undoClearHistory = useCallback(() => {
+    if (!clearedEntries) {
+      return;
+    }
+
+    setOpeningHistoryEntries((currentEntries) =>
+      restoreOpeningHistory(currentEntries, clearedEntries),
+    );
+    setClearedEntries(null);
+  }, [clearedEntries]);
 
   return (
     <OpeningHistoryContext
       value={{
         openingHistoryEntries,
+        canUndoClearHistory: clearedEntries !== null,
         recordOpening,
+        removeOpening,
         clearHistory,
+        undoClearHistory,
       }}
     >
       {children}

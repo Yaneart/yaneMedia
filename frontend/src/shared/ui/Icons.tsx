@@ -27,5 +27,7 @@ export { default as SunIcon } from '@mingcute/react/core-regular/sun';
 export { default as SystemThemeIcon } from '@mingcute/react/core-regular/computer';
 export { default as CheckIcon } from '@mingcute/react/core-regular/check';
 export { default as DownIcon } from '@mingcute/react/core-regular/down-small';
+export { default as DeleteIcon } from '@mingcute/react/core-regular/delete-2';
+export { default as DeviceIcon } from '@mingcute/react/core-regular/device';
 
 export type { IconProps } from '@mingcute/react';

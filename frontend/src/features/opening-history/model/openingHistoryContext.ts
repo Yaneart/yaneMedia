@@ -8,8 +8,11 @@ export type OpeningHistoryEntry = {
 
 export type OpeningHistoryContextValue = {
   openingHistoryEntries: readonly OpeningHistoryEntry[];
+  canUndoClearHistory: boolean;
   recordOpening: (mediaRef: MediaRef) => void;
+  removeOpening: (mediaRef: MediaRef) => void;
   clearHistory: () => void;
+  undoClearHistory: () => void;
 };
 
 export const OpeningHistoryContext = createContext<OpeningHistoryContextValue | null>(null);
