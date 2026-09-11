@@ -34,7 +34,7 @@ import {
   type MediaPlayerStatus,
 } from '@/widgets/media-player';
 import { Spinner } from '@/shared';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import type { MediaAvailabilityStatus } from '../model/useMediaAvailability';
 import { useMediaEpisodeAvailability } from '../model/useMediaEpisodeAvailability';
@@ -284,7 +284,8 @@ export function MediaView({
     ? (initialDirectEpisode?.sources ?? [])
     : catalog.directSources;
 
-  const [playbackMode, setPlaybackMode] = useState<PlaybackMode>(initialMode);
+  const [selectedPlaybackMode, setSelectedPlaybackMode] = useState<PlaybackMode>(initialMode);
+  const [isPlaybackModeInitialized, setIsPlaybackModeInitialized] = useState(hasPlaybackSources);
   const [selectedEmbedSourceRef, setSelectedEmbedSourceRef] = useState<string | null>(
     sessionEmbedSource?.sourceRef ?? getPreferredSource(catalog.embedSources)?.sourceRef ?? null,
   );
@@ -299,13 +300,38 @@ export function MediaView({
   );
   const [playerStatus, setPlayerStatus] = useState<MediaPlayerStatus>('ready');
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
+  const playbackMode = isPlaybackModeInitialized ? selectedPlaybackMode : initialMode;
+
+  useEffect(() => {
+    if (!hasPlaybackSources) return;
+
+    if (!isPlaybackModeInitialized) {
+      setSelectedPlaybackMode(initialMode);
+      setIsPlaybackModeInitialized(true);
+      return;
+    }
+
+    if (playbackMode === 'embed' && !hasEmbedMode && hasDirectMode) {
+      setSelectedPlaybackMode('direct');
+    } else if (playbackMode === 'direct' && !hasDirectMode && hasEmbedMode) {
+      setSelectedPlaybackMode('embed');
+    }
+  }, [
+    hasDirectMode,
+    hasEmbedMode,
+    hasPlaybackSources,
+    initialMode,
+    isPlaybackModeInitialized,
+    playbackMode,
+  ]);
 
   const selectedEmbedSource =
     catalog.embedSources.find((source) => source.sourceRef === selectedEmbedSourceRef) ??
+    sessionEmbedSource ??
     getPreferredSource(catalog.embedSources);
   const selectedDirectEpisode = usesDirectEpisodes
     ? (catalog.directEpisodes.find((episode) => episode.key === selectedDirectEpisodeKey) ??
-      catalog.directEpisodes[0])
+      initialDirectEpisode)
     : undefined;
   const availabilityEpisode = getAvailabilityEpisode(media, selectedDirectEpisode);
   const { availability: episodeAvailability, isPending: episodeAvailabilityPending } =
@@ -319,7 +345,30 @@ export function MediaView({
     : catalog.directSources;
   const selectedDirectSource =
     currentDirectSources.find((source) => source.sourceRef === selectedDirectSourceRef) ??
+    currentDirectSources.find((source) => source.sourceRef === mediaSession?.sourceRef) ??
     getPreferredSource(currentDirectSources);
+
+  useEffect(() => {
+    if (selectedEmbedSourceRef === null && selectedEmbedSource) {
+      setSelectedEmbedSourceRef(selectedEmbedSource.sourceRef);
+    }
+
+    if (selectedDirectEpisodeKey === null && selectedDirectEpisode) {
+      setSelectedDirectEpisodeKey(selectedDirectEpisode.key);
+    }
+
+    if (selectedDirectSourceRef === null && selectedDirectSource) {
+      setSelectedDirectSourceRef(selectedDirectSource.sourceRef);
+    }
+  }, [
+    selectedDirectEpisode,
+    selectedDirectEpisodeKey,
+    selectedDirectSource,
+    selectedDirectSourceRef,
+    selectedEmbedSource,
+    selectedEmbedSourceRef,
+  ]);
+
   const selectedSource = playbackMode === 'embed' ? selectedEmbedSource : selectedDirectSource;
   const selectedSourceRef = selectedSource?.sourceRef ?? null;
 
@@ -372,7 +421,8 @@ export function MediaView({
   const selectPlaybackMode = (mode: PlaybackMode) => {
     if (mode === playbackMode) return;
 
-    setPlaybackMode(mode);
+    setSelectedPlaybackMode(mode);
+    setIsPlaybackModeInitialized(true);
     resetPlayer();
   };
 

@@ -75,7 +75,7 @@ export function MediaPage() {
 
   return (
     <MediaView
-      key={`${media.mediaRef}:${availability ? 'ready' : 'pending'}`}
+      key={media.mediaRef}
       media={media}
       availability={availability}
       availabilityPending={availabilityPending}

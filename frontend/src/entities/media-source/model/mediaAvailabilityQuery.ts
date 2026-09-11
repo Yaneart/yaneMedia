@@ -1,8 +1,8 @@
 import { ApiClientError } from '@/shared/api';
-import { queryOptions, type QueryClient } from '@tanstack/react-query';
+import { queryOptions, type QueryClient, type QueryKey } from '@tanstack/react-query';
 
 import { streamMediaAvailability } from '../api/streamMediaAvailability';
-import type { MediaAvailability } from './mediaSource';
+import type { MediaAvailability, MediaSourceEpisodeRef } from './mediaSource';
 import {
   mergeProgressiveAvailability,
   selectSettledAvailability,
@@ -19,6 +19,18 @@ const backgroundRetryDelaysMs = [35_000, 60_000, 120_000] as const;
 
 export function mediaAvailabilityQueryKey(mediaRef: string) {
   return ['media', 'availability', mediaRef] as const;
+}
+
+export function mediaEpisodeAvailabilityQueryKey(mediaRef: string, episode: MediaSourceEpisodeRef) {
+  return [
+    ...mediaAvailabilityQueryKey(mediaRef),
+    'episode',
+    {
+      seasonNumber: episode.seasonNumber ?? null,
+      episodeNumber: episode.episodeNumber ?? null,
+      absoluteEpisodeNumber: episode.absoluteEpisodeNumber ?? null,
+    },
+  ] as const;
 }
 
 function needsBackgroundRefresh(availability: MediaAvailability) {
@@ -62,14 +74,15 @@ function createEmptyAvailability(): MediaAvailability {
 
 async function loadMediaAvailability(
   queryClient: QueryClient,
+  queryKey: QueryKey,
   mediaRef: string,
+  episode: MediaSourceEpisodeRef,
   signal: AbortSignal,
 ) {
-  const queryKey = mediaAvailabilityQueryKey(mediaRef);
   let current =
     queryClient.getQueryData<MediaAvailabilityQueryData>(queryKey)?.availability ?? null;
 
-  await streamMediaAvailability(mediaRef, { signal }, (snapshot) => {
+  await streamMediaAvailability(mediaRef, { ...episode, signal }, (snapshot) => {
     if (snapshot.availability) {
       current =
         snapshot.state === 'pending'
@@ -94,10 +107,16 @@ async function loadMediaAvailability(
   return result;
 }
 
-export function mediaAvailabilityQueryOptions(queryClient: QueryClient, mediaRef: string) {
+function createMediaAvailabilityQueryOptions(
+  queryClient: QueryClient,
+  queryKey: QueryKey,
+  mediaRef: string,
+  episode: MediaSourceEpisodeRef,
+) {
   return queryOptions({
-    queryKey: mediaAvailabilityQueryKey(mediaRef),
-    queryFn: ({ signal }) => loadMediaAvailability(queryClient, mediaRef, signal),
+    queryKey,
+    queryFn: ({ signal }) =>
+      loadMediaAvailability(queryClient, queryKey, mediaRef, episode, signal),
     staleTime: ({ state }) => getAvailabilityStaleTime(state.data, state.dataUpdatedAt),
     refetchInterval: ({ state }) =>
       state.status === 'error' ? backgroundRetryDelaysMs.at(-1) : getRefreshInterval(state.data),
@@ -112,4 +131,26 @@ export function mediaAvailabilityQueryOptions(queryClient: QueryClient, mediaRef
     retryDelay: (attemptIndex) =>
       backgroundRetryDelaysMs[Math.min(attemptIndex, backgroundRetryDelaysMs.length - 1)],
   });
+}
+
+export function mediaAvailabilityQueryOptions(queryClient: QueryClient, mediaRef: string) {
+  return createMediaAvailabilityQueryOptions(
+    queryClient,
+    mediaAvailabilityQueryKey(mediaRef),
+    mediaRef,
+    {},
+  );
+}
+
+export function mediaEpisodeAvailabilityQueryOptions(
+  queryClient: QueryClient,
+  mediaRef: string,
+  episode: MediaSourceEpisodeRef,
+) {
+  return createMediaAvailabilityQueryOptions(
+    queryClient,
+    mediaEpisodeAvailabilityQueryKey(mediaRef, episode),
+    mediaRef,
+    episode,
+  );
 }

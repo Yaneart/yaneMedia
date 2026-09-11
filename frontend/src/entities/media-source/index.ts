@@ -29,6 +29,8 @@ export type { MediaSourcePlaybackIssue } from './model/mediaSourcePlayback';
 export {
   mediaAvailabilityQueryKey,
   mediaAvailabilityQueryOptions,
+  mediaEpisodeAvailabilityQueryKey,
+  mediaEpisodeAvailabilityQueryOptions,
 } from './model/mediaAvailabilityQuery';
 export type { MediaAvailabilityQueryData } from './model/mediaAvailabilityQuery';
 
