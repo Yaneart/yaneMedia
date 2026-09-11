@@ -1,58 +1,34 @@
-import { useEffect, useRef } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useEffect } from 'react';
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 
-import { getHomeFeed } from '../api/getHomeFeed';
-import type { HomeFeed } from './homeFeed';
+import { getHomeCollectionsPage, getHomeFeatured } from '../api/getHomeFeed';
+import type { HomeFeatured } from './homeFeed';
 
 const homeStaleTimeMs = 5 * 60_000;
 const backgroundRetryDelayMs = 60_000;
-const degradedArtworkRetryDelayMs = 15_000;
+const initialHomeCollectionsPageSize = 2;
 
-function hasIncompleteLandscapeArtwork(feed: HomeFeed): boolean {
-  return feed.collections.some((collection) =>
-    collection.items.some((media) => media.type !== 'anime' && media.backdrop === undefined),
-  );
-}
-
-function shouldRetryArtwork(feed: HomeFeed | undefined): boolean {
-  return feed !== undefined && feed.degraded && hasIncompleteLandscapeArtwork(feed);
-}
-
-function getFeaturedRefreshDelay(feed: HomeFeed | undefined, now: number): number | null {
-  if (!feed) {
+function getFeaturedRefreshDelay(featured: HomeFeatured | undefined, now: number): number | null {
+  if (!featured) {
     return null;
   }
 
-  const featuredExpiresAt = Date.parse(feed.featuredExpiresAt);
+  const featuredExpiresAt = Date.parse(featured.featuredExpiresAt);
 
   return Number.isFinite(featuredExpiresAt) ? Math.max(0, featuredExpiresAt - now) : null;
 }
 
-function getHomeStaleTime(feed: HomeFeed | undefined, dataUpdatedAt: number): number {
-  let staleTime = homeStaleTimeMs;
+function getFeaturedStaleTime(featured: HomeFeatured | undefined, dataUpdatedAt: number): number {
+  const refreshDelay = getFeaturedRefreshDelay(featured, dataUpdatedAt);
 
-  if (shouldRetryArtwork(feed)) {
-    staleTime = Math.min(staleTime, degradedArtworkRetryDelayMs);
-  }
-
-  const featuredRefreshDelay = getFeaturedRefreshDelay(feed, dataUpdatedAt);
-
-  if (featuredRefreshDelay !== null) {
-    staleTime = Math.min(staleTime, featuredRefreshDelay);
-  }
-
-  return staleTime;
+  return refreshDelay === null ? homeStaleTimeMs : Math.min(homeStaleTimeMs, refreshDelay);
 }
 
 export function useHomeFeed() {
-  const hasRetriedArtworkRef = useRef(false);
-
-  const query = useQuery({
-    queryKey: ['media', 'home'],
-    queryFn: ({ signal }) => getHomeFeed(signal),
-
-    staleTime: (query) => getHomeStaleTime(query.state.data, query.state.dataUpdatedAt),
-
+  const featuredQuery = useQuery({
+    queryKey: ['media', 'home', 'featured'],
+    queryFn: ({ signal }) => getHomeFeatured(signal),
+    staleTime: (query) => getFeaturedStaleTime(query.state.data, query.state.dataUpdatedAt),
     refetchInterval: (query) => {
       if (query.state.data === undefined) {
         return false;
@@ -66,43 +42,62 @@ export function useHomeFeed() {
 
       return refreshDelay !== null && refreshDelay > 0 ? refreshDelay : false;
     },
-
-    refetchOnWindowFocus: (query) => {
-      if (query.state.status === 'error') {
-        return false;
-      }
-
-      return getFeaturedRefreshDelay(query.state.data, Date.now()) === 0;
-    },
+    refetchOnWindowFocus: (query) =>
+      query.state.status !== 'error' && getFeaturedRefreshDelay(query.state.data, Date.now()) === 0,
   });
-  const { refetch } = query;
+  const collectionsQuery = useInfiniteQuery({
+    queryKey: ['media', 'home', 'collections', { initialLimit: initialHomeCollectionsPageSize }],
+    queryFn: ({ pageParam, signal }) =>
+      getHomeCollectionsPage(pageParam.offset, pageParam.limit, signal),
+    initialPageParam: { offset: 0, limit: initialHomeCollectionsPageSize },
+    getNextPageParam: (lastPage) => {
+      const nextOffset = lastPage.offset + lastPage.limit;
 
-  const needsArtworkRetry = shouldRetryArtwork(query.data);
+      return nextOffset < lastPage.total
+        ? { offset: nextOffset, limit: lastPage.total - nextOffset }
+        : undefined;
+    },
+    staleTime: homeStaleTimeMs,
+  });
+  const {
+    fetchNextPage,
+    hasNextPage,
+    isError: hasCollectionsError,
+    isFetchNextPageError,
+    isFetchingNextPage,
+  } = collectionsQuery;
 
   useEffect(() => {
-    if (!needsArtworkRetry) {
-      hasRetriedArtworkRef.current = false;
+    if (!hasNextPage || isFetchingNextPage || hasCollectionsError || isFetchNextPageError) {
       return;
     }
 
-    if (hasRetriedArtworkRef.current) {
-      return;
-    }
+    void fetchNextPage({ cancelRefetch: false });
+  }, [fetchNextPage, hasCollectionsError, hasNextPage, isFetchNextPageError, isFetchingNextPage]);
 
-    const timerId = window.setTimeout(() => {
-      hasRetriedArtworkRef.current = true;
-      void refetch({ cancelRefetch: false });
-    }, degradedArtworkRetryDelayMs);
-
-    return () => window.clearTimeout(timerId);
-  }, [needsArtworkRetry, refetch]);
+  const collectionPages = collectionsQuery.data?.pages ?? [];
+  const collections = collectionPages.flatMap((page) => page.collections);
 
   return {
-    feed: query.data,
-    isError: query.isError,
-    isPaused: query.isPaused,
-    retry: () => {
-      void refetch({ cancelRefetch: false });
+    featured: featuredQuery.data?.featured,
+    isFeaturedError: featuredQuery.isError,
+    isFeaturedPaused: featuredQuery.isPaused,
+    retryFeatured: () => {
+      void featuredQuery.refetch({ cancelRefetch: false });
+    },
+    collections,
+    areCollectionsLoading: collectionsQuery.isPending && !collectionsQuery.isPaused,
+    areCollectionsPaused: collectionsQuery.isPaused && collectionPages.length === 0,
+    areMoreCollectionsLoading: isFetchingNextPage,
+    isCollectionsError: hasCollectionsError && collectionPages.length === 0,
+    isMoreCollectionsError: isFetchNextPageError && collectionPages.length > 0,
+    retryCollections: () => {
+      if (collectionPages.length > 0) {
+        void fetchNextPage({ cancelRefetch: false });
+        return;
+      }
+
+      void collectionsQuery.refetch({ cancelRefetch: false });
     },
   };
 }

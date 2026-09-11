@@ -156,6 +156,30 @@ describe('MediaCatalogService', () => {
     );
   });
 
+  it('coalesces simultaneous resolutions of the same media reference', async () => {
+    const mediaRef = 'imdb:tt15239678';
+    let completeRequest:
+      ((value: Awaited<ReturnType<MediaService['getDetailsByRef']>>) => void) | undefined;
+    const getDetailsByRef = jest.fn(
+      () =>
+        new Promise<Awaited<ReturnType<MediaService['getDetailsByRef']>>>((resolve) => {
+          completeRequest = resolve;
+        }),
+    ) as jest.MockedFunction<MediaService['getDetailsByRef']>;
+    const service = createService(getDetailsByRef);
+
+    const first = service.resolveMediaRefs([mediaRef]);
+    const second = service.resolveMediaRefs([mediaRef]);
+
+    expect(getDetailsByRef).toHaveBeenCalledTimes(1);
+    completeRequest?.({ details: createMovie(mediaRef, 'Dune: Part Two'), meta: healthyMeta });
+
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      expect.objectContaining({ items: [expect.objectContaining({ mediaRef })] }),
+      expect.objectContaining({ items: [expect.objectContaining({ mediaRef })] }),
+    ]);
+  });
+
   it('skips missing media references and marks the result as partial', async () => {
     const mediaRefs = ['imdb:tt15239678', 'imdb:tt0000000', 'anilist:154587'];
     const getDetailsByRef = jest.fn((mediaRef: string) =>

@@ -16,16 +16,29 @@ describe('HomeFeedService', () => {
   }));
   const summariesByRef = new Map(summaries.map((summary) => [summary.mediaRef, summary]));
   const homeMediaRefs = homeCollectionDefinitions.flatMap((collection) => collection.mediaRefs);
-  const homeSummaries = homeMediaRefs.flatMap((mediaRef) => {
-    const summary = summariesByRef.get(mediaRef);
+  const featuredMediaRefs = editorialCatalog
+    .filter(({ collections }) => (collections as readonly string[]).includes('featured'))
+    .map(({ mediaRef }) => mediaRef);
 
-    return summary ? [summary] : [];
-  });
+  function createService(
+    availableItems: readonly MediaSummaryDto[] = summaries,
+    metadata: Omit<MediaSummaryResolutionResponseDto, 'items'> = {
+      partial: false,
+      degraded: false,
+      stale: false,
+    },
+  ) {
+    const itemsByRef = new Map(availableItems.map((item) => [item.mediaRef, item]));
+    const resolveMediaRefs = jest.fn((mediaRefs: readonly string[]) =>
+      Promise.resolve({
+        items: mediaRefs.flatMap((mediaRef) => {
+          const item = itemsByRef.get(mediaRef);
 
-  function createService(catalog: MediaSummaryResolutionResponseDto) {
-    const resolveMediaRefs = jest.fn().mockResolvedValue(catalog) as jest.MockedFunction<
-      MediaCatalogService['resolveMediaRefs']
-    >;
+          return item ? [item] : [];
+        }),
+        ...metadata,
+      }),
+    ) as jest.MockedFunction<MediaCatalogService['resolveMediaRefs']>;
 
     return {
       service: new HomeFeedService({ resolveMediaRefs } as unknown as MediaCatalogService),
@@ -33,100 +46,99 @@ describe('HomeFeedService', () => {
     };
   }
 
-  it('requests every configured home title once', async () => {
-    const { service, resolveMediaRefs } = createService({
-      items: homeSummaries,
+  it('resolves featured media independently from the collection pages', async () => {
+    const { service, resolveMediaRefs } = createService();
+
+    const featured = await service.getFeatured(0);
+
+    expect(featured).toEqual({
+      featured: summariesByRef.get(featuredMediaRefs[0]),
+      featuredExpiresAt: '1970-01-01T01:00:00.000Z',
       partial: false,
       degraded: false,
       stale: false,
     });
-
-    await service.getHomeFeed(0);
-
-    expect(resolveMediaRefs).toHaveBeenCalledWith(homeMediaRefs);
+    expect(resolveMediaRefs).toHaveBeenCalledWith([featuredMediaRefs[0]]);
+    expect(resolveMediaRefs).toHaveBeenCalledTimes(1);
   });
 
-  it('builds featured media and configured collections from hydrated summaries', async () => {
-    const { service, resolveMediaRefs } = createService({
-      items: homeSummaries,
-      partial: false,
-      degraded: false,
-      stale: false,
-    });
+  it('hydrates only the requested page of home collections', async () => {
+    const { service, resolveMediaRefs } = createService();
 
-    const feed = await service.getHomeFeed(0);
+    const page = await service.getCollections(2, 2);
+    const definitions = homeCollectionDefinitions.slice(2, 4);
 
-    expect(feed).toEqual({
-      featured: homeSummaries[0],
-      featuredExpiresAt: '1970-01-01T01:00:00.000Z',
-      continueWatching: [],
-      collections: homeCollectionDefinitions.map((collection) => ({
+    expect(page.collections).toEqual(
+      definitions.map((collection) => ({
         id: collection.id,
         title: collection.title,
         items: collection.mediaRefs.map((mediaRef) => summariesByRef.get(mediaRef)),
         total: collection.mediaRefs.length,
       })),
-      partial: false,
-      degraded: false,
-      stale: false,
-    });
-    expect(resolveMediaRefs).toHaveBeenCalledTimes(1);
+    );
+    expect(page).toEqual(
+      expect.objectContaining({ offset: 2, limit: 2, total: 5, partial: false }),
+    );
+    expect(resolveMediaRefs).toHaveBeenCalledWith(
+      definitions.flatMap((collection) => collection.mediaRefs),
+    );
   });
 
-  it('keeps a partial feed useful and falls forward to the next available featured item', async () => {
-    const items = homeSummaries.filter(({ mediaRef }) => mediaRef !== 'imdb:tt15239678');
-    const { service } = createService({
-      items,
-      partial: true,
-      degraded: true,
-      stale: true,
-    });
+  it('keeps the legacy feed contract while resolving featured media separately', async () => {
+    const { service, resolveMediaRefs } = createService();
 
     const feed = await service.getHomeFeed(0);
-    const firstCollectionMediaRefs = new Set<string>(homeCollectionDefinitions[0].mediaRefs);
 
-    expect(feed.featured.mediaRef).toBe('imdb:tt11280740');
-    expect(feed.collections[0].items).toEqual(
-      items.filter(({ mediaRef }) => firstCollectionMediaRefs.has(mediaRef)),
-    );
+    expect(feed.featured).toBe(summariesByRef.get(featuredMediaRefs[0]));
+    expect(feed.featuredExpiresAt).toBe('1970-01-01T01:00:00.000Z');
     expect(feed.continueWatching).toEqual([]);
-    expect(feed).toEqual(expect.objectContaining({ partial: true, degraded: true, stale: true }));
-  });
-
-  it('excludes anime and summaries without backdrops from featured rotation', async () => {
-    const items = homeSummaries.map((summary) =>
-      summary.mediaRef === 'imdb:tt15239678'
-        ? {
-            mediaRef: summary.mediaRef,
-            type: summary.type,
-            title: summary.title,
-            genres: summary.genres,
-          }
-        : summary,
+    expect(feed.collections).toHaveLength(homeCollectionDefinitions.length);
+    expect(feed.collections[0].total).toBe(150);
+    expect(feed).toEqual(
+      expect.objectContaining({ partial: false, degraded: false, stale: false }),
     );
-    const { service } = createService({
-      items,
-      partial: false,
-      degraded: false,
-      stale: false,
-    });
-
-    const feed = await service.getHomeFeed(0);
-
-    expect(feed.featured.mediaRef).toBe('imdb:tt11280740');
-    expect(feed.featured.type).toBe('series');
-    expect(feed.featured.backdrop).toBeDefined();
+    expect(resolveMediaRefs).toHaveBeenCalledWith([featuredMediaRefs[0]]);
+    expect(resolveMediaRefs).toHaveBeenCalledWith(homeMediaRefs);
+    expect(resolveMediaRefs).toHaveBeenCalledTimes(2);
   });
 
-  it('returns service unavailable when no configured featured item can be resolved', async () => {
-    const { service } = createService({
-      items: homeSummaries.filter(({ type }) => type === 'anime'),
+  it('falls forward when the hourly featured title is unavailable', async () => {
+    const availableItems = summaries.filter(({ mediaRef }) => mediaRef !== featuredMediaRefs[0]);
+    const { service, resolveMediaRefs } = createService(availableItems, {
       partial: true,
       degraded: true,
       stale: false,
     });
 
-    await expect(service.getHomeFeed(0)).rejects.toThrow(
+    const featured = await service.getFeatured(0);
+
+    expect(featured.featured.mediaRef).toBe(featuredMediaRefs[1]);
+    expect(featured).toEqual(expect.objectContaining({ partial: true, degraded: true }));
+    expect(resolveMediaRefs.mock.calls).toEqual([
+      [[featuredMediaRefs[0]]],
+      [[featuredMediaRefs[1]]],
+    ]);
+  });
+
+  it('skips summaries without a usable featured backdrop', async () => {
+    const availableItems = summaries.map((summary) =>
+      summary.mediaRef === featuredMediaRefs[0] ? { ...summary, backdrop: undefined } : summary,
+    );
+    const { service } = createService(availableItems);
+
+    const featured = await service.getFeatured(0);
+
+    expect(featured.featured.mediaRef).toBe(featuredMediaRefs[1]);
+    expect(featured.degraded).toBe(true);
+  });
+
+  it('returns service unavailable when no featured title can be resolved', async () => {
+    const { service } = createService(
+      summaries.filter(({ mediaRef }) => !featuredMediaRefs.includes(mediaRef)),
+      { partial: true, degraded: true, stale: false },
+    );
+
+    await expect(service.getFeatured(0)).rejects.toThrow(
       new ServiceUnavailableException('Home feed is temporarily unavailable'),
     );
   });

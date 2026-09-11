@@ -6,7 +6,11 @@ import type { MediaAvailabilityDto } from '../../src/media/dto/media-availabilit
 import type { MediaCatalogResponseDto } from '../../src/media/catalog/dto/media-catalog-response.dto';
 import type { MediaCollectionResponseDto } from '../../src/media/catalog/dto/media-collection-response.dto';
 import type { MediaCatalogService } from '../../src/media/catalog/media-catalog.service';
-import type { HomeFeedDto } from '../../src/media/home/dto/home-feed.dto';
+import type {
+  HomeCollectionsPageDto,
+  HomeFeaturedDto,
+  HomeFeedDto,
+} from '../../src/media/home/dto/home-feed.dto';
 import type { HomeFeedService } from '../../src/media/home/home-feed.service';
 import { MediaController } from '../../src/media/media.controller';
 import type { MediaService } from '../../src/media/media.service';
@@ -73,6 +77,55 @@ describe('MediaController home feed', () => {
 
     await expect(controller.getHome()).resolves.toBe(homeFeed);
     expect(getHomeFeed).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns featured media independently', async () => {
+    const featured: HomeFeaturedDto = {
+      featured: {
+        mediaRef: 'imdb:tt15239678',
+        type: 'movie',
+        title: 'Dune: Part Two',
+        genres: [],
+      },
+      featuredExpiresAt: '2026-08-26T11:00:00.000Z',
+      partial: false,
+      degraded: false,
+      stale: false,
+    };
+    const getFeatured = jest.fn().mockResolvedValue(featured) as jest.MockedFunction<
+      HomeFeedService['getFeatured']
+    >;
+    const controller = new MediaController(
+      {} as MediaService,
+      {} as MediaCatalogService,
+      { getFeatured } as unknown as HomeFeedService,
+    );
+
+    await expect(controller.getHomeFeatured()).resolves.toBe(featured);
+    expect(getFeatured).toHaveBeenCalledTimes(1);
+  });
+
+  it('forwards pagination for progressively loaded home collections', async () => {
+    const page: HomeCollectionsPageDto = {
+      collections: [],
+      offset: 2,
+      limit: 2,
+      total: 5,
+      partial: false,
+      degraded: false,
+      stale: false,
+    };
+    const getCollections = jest.fn().mockResolvedValue(page) as jest.MockedFunction<
+      HomeFeedService['getCollections']
+    >;
+    const controller = new MediaController(
+      {} as MediaService,
+      {} as MediaCatalogService,
+      { getCollections } as unknown as HomeFeedService,
+    );
+
+    await expect(controller.getHomeCollections({ offset: 2, limit: 2 })).resolves.toBe(page);
+    expect(getCollections).toHaveBeenCalledWith(2, 2);
   });
 });
 

@@ -15,3 +15,21 @@ export interface HomeFeed {
   degraded: boolean;
   stale: boolean;
 }
+
+export interface HomeFeatured {
+  featured: MediaSummary;
+  featuredExpiresAt: string;
+  partial: boolean;
+  degraded: boolean;
+  stale: boolean;
+}
+
+export interface HomeCollectionsPage {
+  collections: HomeCollection[];
+  offset: number;
+  limit: number;
+  total: number;
+  partial: boolean;
+  degraded: boolean;
+  stale: boolean;
+}

@@ -42,6 +42,7 @@ interface MediaSummaryResolutionEntry {
 @Injectable()
 export class MediaCatalogService {
   private readonly cache = new Map<string, CatalogCacheEntry>();
+  private readonly pendingResolutions = new Map<string, Promise<CatalogEntryResolution>>();
 
   constructor(private readonly mediaService: MediaService) {}
 
@@ -132,6 +133,26 @@ export class MediaCatalogService {
   }
 
   private async resolveEntry(entry: MediaSummaryResolutionEntry): Promise<CatalogEntryResolution> {
+    const pendingKey = `${entry.mediaRef}:${entry.type ?? '*'}`;
+    const pending = this.pendingResolutions.get(pendingKey);
+
+    if (pending) {
+      return pending;
+    }
+
+    const resolution = this.resolveEntryUncached(entry).finally(() => {
+      if (this.pendingResolutions.get(pendingKey) === resolution) {
+        this.pendingResolutions.delete(pendingKey);
+      }
+    });
+
+    this.pendingResolutions.set(pendingKey, resolution);
+    return resolution;
+  }
+
+  private async resolveEntryUncached(
+    entry: MediaSummaryResolutionEntry,
+  ): Promise<CatalogEntryResolution> {
     const now = Date.now();
     const stored = this.cache.get(entry.mediaRef);
     const cached =

@@ -18,6 +18,24 @@ export class HomeCollectionDto {
   total!: number;
 }
 
+export class HomeFeaturedDto {
+  featured!: MediaSummaryDto;
+  featuredExpiresAt!: string;
+  partial!: boolean;
+  degraded!: boolean;
+  stale!: boolean;
+}
+
+export class HomeCollectionsPageDto {
+  collections!: HomeCollectionDto[];
+  offset!: number;
+  limit!: number;
+  total!: number;
+  partial!: boolean;
+  degraded!: boolean;
+  stale!: boolean;
+}
+
 export class HomeFeedDto {
   featured!: MediaSummaryDto;
   featuredExpiresAt!: string;

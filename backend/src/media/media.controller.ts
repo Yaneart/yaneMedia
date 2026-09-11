@@ -25,7 +25,11 @@ import { MediaCatalogQueryDto } from './catalog/dto/media-catalog-query.dto';
 import type { MediaCatalogResponseDto } from './catalog/dto/media-catalog-response.dto';
 import { MediaCollectionQueryDto } from './catalog/dto/media-collection-query.dto';
 import type { MediaCollectionResponseDto } from './catalog/dto/media-collection-response.dto';
-import type { HomeFeedDto } from './home/dto/home-feed.dto';
+import type {
+  HomeCollectionsPageDto,
+  HomeFeaturedDto,
+  HomeFeedDto,
+} from './home/dto/home-feed.dto';
 import { HomeFeedService } from './home/home-feed.service';
 import { MediaSummaryResolutionRequestDto } from './summary-resolution/dto/media-summary-resolution-request.dto';
 import type { MediaSummaryResolutionResponseDto } from './summary-resolution/dto/media-summary-resolution-response.dto';
@@ -54,6 +58,16 @@ export class MediaController {
   @Get('home')
   getHome(): Promise<HomeFeedDto> {
     return this.homeFeedService.getHomeFeed();
+  }
+
+  @Get('home/featured')
+  getHomeFeatured(): Promise<HomeFeaturedDto> {
+    return this.homeFeedService.getFeatured();
+  }
+
+  @Get('home/collections')
+  getHomeCollections(@Query() query: MediaCollectionQueryDto): Promise<HomeCollectionsPageDto> {
+    return this.homeFeedService.getCollections(query.offset, query.limit);
   }
 
   @Get('catalog')
