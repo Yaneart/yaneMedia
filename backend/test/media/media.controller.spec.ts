@@ -48,6 +48,20 @@ describe('MediaController search', () => {
       limit: 49,
     });
   });
+
+  it('rejects a search without a title or discovery filter', () => {
+    const searchMedia = jest.fn();
+    const controller = new MediaController(
+      { searchMedia } as unknown as MediaService,
+      {} as MediaCatalogService,
+      {} as HomeFeedService,
+    );
+
+    expect(() => controller.search({ type: 'movie', offset: 0, limit: 49 })).toThrow(
+      BadRequestException,
+    );
+    expect(searchMedia).not.toHaveBeenCalled();
+  });
 });
 
 describe('MediaController home feed', () => {

@@ -44,6 +44,15 @@ export class MediaController {
 
   @Get('search')
   search(@Query() query: MediaSearchQueryDto): Promise<MediaSummaryDto[]> {
+    if (
+      !query.query &&
+      !query.genre &&
+      query.year === undefined &&
+      query.minimumRating === undefined
+    ) {
+      throw new BadRequestException('Search requires a title or catalog filter');
+    }
+
     return this.mediaService.searchMedia({
       title: query.query,
       type: query.type,
