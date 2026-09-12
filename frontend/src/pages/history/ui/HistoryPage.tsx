@@ -62,10 +62,15 @@ export function HistoryPage() {
   const navigate = useNavigate();
   const {
     openingHistoryEntries,
+    status: historyStatus,
+    storageMode,
+    canManageHistory,
+    hasSyncError,
     canUndoClearHistory,
     removeOpening,
     clearHistory,
     undoClearHistory,
+    retry: retryHistory,
   } = useOpeningHistory();
   const { isFavorite, toggleFavorite, canUpdateFavorites } = useFavorites();
   const { resolution, status, hasRefreshError, retry } = useMediaSummaryResolution(
@@ -88,7 +93,7 @@ export function HistoryPage() {
   };
 
   return (
-    <section>
+    <section aria-busy={historyStatus === 'loading'}>
       <LibraryPageHeader
         eyebrow="Недавняя активность"
         title="История"
@@ -100,9 +105,11 @@ export function HistoryPage() {
               <p className="rounded-full bg-watermark/10 px-3 py-1.5 text-caption text-text-secondary">
                 Открыто: {openingHistoryEntries.length}
               </p>
-              <Button size="small" variant="secondary" onClick={clearHistory}>
-                Очистить
-              </Button>
+              {canManageHistory && (
+                <Button size="small" variant="secondary" onClick={clearHistory}>
+                  Очистить
+                </Button>
+              )}
             </div>
           ) : undefined
         }
@@ -112,7 +119,9 @@ export function HistoryPage() {
         {removalAnnouncement}
       </p>
 
-      <LibraryStorageNotice />
+      {storageMode !== 'unavailable' && (
+        <LibraryStorageNotice mode={storageMode} resource="history" />
+      )}
 
       {canUndoClearHistory && (
         <div
@@ -145,7 +154,24 @@ export function HistoryPage() {
         />
       )}
 
-      {!hasStoredHistory ? (
+      {hasSyncError && (
+        <LibraryDataNotice partial={false} stale={false} refreshFailed onRetry={retryHistory} />
+      )}
+
+      {historyStatus === 'loading' ? (
+        <LoadingState label="Загружаем историю" />
+      ) : historyStatus === 'error' ? (
+        <ErrorState
+          title="Не удалось загрузить историю"
+          description={
+            storageMode === 'account'
+              ? 'Серверные данные не заменены локальной копией. Проверьте соединение и повторите запрос.'
+              : 'Не удалось определить состояние аккаунта. Проверьте соединение и повторите запрос.'
+          }
+          retryLabel="Повторить"
+          onRetry={retryHistory}
+        />
+      ) : !hasStoredHistory ? (
         <LibraryEmptyState
           eyebrow="Первый шаг"
           title="История просмотров начнётся здесь"
@@ -163,7 +189,11 @@ export function HistoryPage() {
       ) : status === 'error' ? (
         <ErrorState
           title="Не удалось загрузить историю"
-          description="Локальная история осталась на этом устройстве. Попробуйте загрузить её ещё раз."
+          description={
+            storageMode === 'account'
+              ? 'История сохранена в аккаунте. Попробуйте загрузить сведения о произведениях ещё раз.'
+              : 'Локальная история осталась на этом устройстве. Попробуйте загрузить её ещё раз.'
+          }
           retryLabel="Повторить"
           onRetry={retry}
         />
@@ -182,16 +212,18 @@ export function HistoryPage() {
                 <p className="min-w-0 truncate text-caption text-text-secondary">
                   {formatOpeningDate(openedAt)}
                 </p>
-                <Button
-                  size="small"
-                  variant="ghost"
-                  className="min-h-8 shrink-0 px-2 text-text-secondary"
-                  aria-label={`Удалить «${media.title}» из истории`}
-                  onClick={() => handleRemoveOpening(media.mediaRef, media.title)}
-                >
-                  <DeleteIcon aria-hidden="true" className="size-4" />
-                  <span className="hidden sm:inline">Удалить</span>
-                </Button>
+                {canManageHistory && (
+                  <Button
+                    size="small"
+                    variant="ghost"
+                    className="min-h-8 shrink-0 px-2 text-text-secondary"
+                    aria-label={`Удалить «${media.title}» из истории`}
+                    onClick={() => handleRemoveOpening(media.mediaRef, media.title)}
+                  >
+                    <DeleteIcon aria-hidden="true" className="size-4" />
+                    <span className="hidden sm:inline">Удалить</span>
+                  </Button>
+                )}
               </div>
             </div>
           ))}

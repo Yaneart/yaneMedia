@@ -1,3 +1,5 @@
+import { isMediaRef } from '@/entities/media';
+
 import type { OpeningHistoryEntry } from './openingHistoryContext';
 
 const OPENING_HISTORY_STORAGE_KEY = 'yanemedia-opening-history';
@@ -13,10 +15,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-function isNonEmptyString(value: unknown): value is string {
-  return typeof value === 'string' && value.length > 0;
-}
-
 function isIsoTimestamp(value: unknown): value is string {
   if (typeof value !== 'string') {
     return false;
@@ -28,7 +26,7 @@ function isIsoTimestamp(value: unknown): value is string {
 }
 
 function isOpeningHistoryEntry(value: unknown): value is OpeningHistoryEntry {
-  return isRecord(value) && isNonEmptyString(value.mediaRef) && isIsoTimestamp(value.openedAt);
+  return isRecord(value) && isMediaRef(value.mediaRef) && isIsoTimestamp(value.openedAt);
 }
 
 function isStoredOpeningHistory(value: unknown): value is StoredOpeningHistory {
