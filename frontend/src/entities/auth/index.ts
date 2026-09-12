@@ -13,3 +13,4 @@ export type {
 export type { AuthState, AuthContextValue } from './model/authContext';
 
 export { AuthContext, useAuth } from './model/authContext';
+export { accountQueryKey, clearAccountQueries } from './model/accountQuery';

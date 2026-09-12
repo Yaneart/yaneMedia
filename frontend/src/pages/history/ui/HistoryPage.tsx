@@ -67,7 +67,7 @@ export function HistoryPage() {
     clearHistory,
     undoClearHistory,
   } = useOpeningHistory();
-  const { isFavorite, toggleFavorite } = useFavorites();
+  const { isFavorite, toggleFavorite, canUpdateFavorites } = useFavorites();
   const { resolution, status, hasRefreshError, retry } = useMediaSummaryResolution(
     openingHistoryEntries.map((entry) => entry.mediaRef),
   );
@@ -174,6 +174,7 @@ export function HistoryPage() {
               <MediaCard
                 media={media}
                 isFavorite={isFavorite(media.mediaRef)}
+                favoriteDisabled={!canUpdateFavorites}
                 onFavoriteChange={() => toggleFavorite(media.mediaRef)}
               />
 

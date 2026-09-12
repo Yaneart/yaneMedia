@@ -23,17 +23,29 @@ import { useNavigate } from 'react-router';
 export function FavoritesPage() {
   const [query, setQuery] = useState('');
   const navigate = useNavigate();
-  const { favoriteMediaRefs, isFavorite, toggleFavorite } = useFavorites();
-  const { resolution, status, hasRefreshError, retry } = useMediaSummaryResolution(
-    Array.from(favoriteMediaRefs),
-  );
+  const {
+    favoriteMediaRefs,
+    status: favoritesStatus,
+    storageMode,
+    canUpdateFavorites,
+    hasSyncError,
+    isFavorite,
+    toggleFavorite,
+    retry: retryFavorites,
+  } = useFavorites();
+  const {
+    resolution,
+    status: summaryStatus,
+    hasRefreshError,
+    retry,
+  } = useMediaSummaryResolution(Array.from(favoriteMediaRefs));
   const favoriteMedia =
     resolution?.items.filter((media) => favoriteMediaRefs.has(media.mediaRef)) ?? [];
   const visibleFavoriteMedia = favoriteMedia.filter((media) => matchesLibraryQuery(media, query));
   const hasStoredFavorites = favoriteMediaRefs.size > 0;
 
   return (
-    <section>
+    <section aria-busy={favoritesStatus === 'loading'}>
       <LibraryPageHeader
         eyebrow="Личная медиатека"
         title="Избранное"
@@ -48,7 +60,7 @@ export function FavoritesPage() {
         }
       />
 
-      <LibraryStorageNotice />
+      {storageMode !== 'unavailable' && <LibraryStorageNotice mode={storageMode} />}
 
       {favoriteMedia.length > 0 && (
         <LibrarySearch
@@ -69,7 +81,24 @@ export function FavoritesPage() {
         />
       )}
 
-      {!hasStoredFavorites ? (
+      {hasSyncError && (
+        <LibraryDataNotice partial={false} stale={false} refreshFailed onRetry={retryFavorites} />
+      )}
+
+      {favoritesStatus === 'loading' ? (
+        <LoadingState label="Загружаем избранное" />
+      ) : favoritesStatus === 'error' ? (
+        <ErrorState
+          title="Не удалось загрузить избранное"
+          description={
+            storageMode === 'account'
+              ? 'Серверные данные не заменены локальной копией. Проверьте соединение и повторите запрос.'
+              : 'Не удалось определить состояние аккаунта. Проверьте соединение и повторите запрос.'
+          }
+          retryLabel="Повторить"
+          onRetry={retryFavorites}
+        />
+      ) : !hasStoredFavorites ? (
         <LibraryEmptyState
           eyebrow="Коллекция ждёт"
           title="Здесь появятся ваши любимые истории"
@@ -82,12 +111,16 @@ export function FavoritesPage() {
             </Button>
           }
         />
-      ) : status === 'loading' && favoriteMedia.length === 0 ? (
+      ) : summaryStatus === 'loading' && favoriteMedia.length === 0 ? (
         <LoadingState label="Загружаем избранное" />
-      ) : status === 'error' ? (
+      ) : summaryStatus === 'error' ? (
         <ErrorState
           title="Не удалось загрузить избранное"
-          description="Сохранённые ссылки остались на этом устройстве. Попробуйте загрузить их ещё раз."
+          description={
+            storageMode === 'account'
+              ? 'Список сохранён в аккаунте. Попробуйте загрузить сведения о произведениях ещё раз.'
+              : 'Сохранённые ссылки остались на этом устройстве. Попробуйте загрузить их ещё раз.'
+          }
           retryLabel="Повторить"
           onRetry={retry}
         />
@@ -98,6 +131,7 @@ export function FavoritesPage() {
               key={media.mediaRef}
               media={media}
               isFavorite={isFavorite(media.mediaRef)}
+              favoriteDisabled={!canUpdateFavorites}
               onFavoriteChange={() => toggleFavorite(media.mediaRef)}
             />
           ))}

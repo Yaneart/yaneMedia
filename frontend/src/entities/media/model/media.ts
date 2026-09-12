@@ -1,5 +1,12 @@
 export type MediaRef = string;
 
+const mediaRefPattern =
+  /^(?:imdb:tt\d{7,12}|(?:kinopoisk|shikimori|anilist|myanimelist):\d{1,12})$/;
+
+export function isMediaRef(value: unknown): value is MediaRef {
+  return typeof value === 'string' && mediaRefPattern.test(value);
+}
+
 export type MediaType = 'movie' | 'series' | 'anime';
 
 export interface MediaArtwork {

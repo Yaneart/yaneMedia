@@ -7,10 +7,16 @@ import { useState } from 'react';
 export type MediaCardProps = {
   media: MediaSummary;
   isFavorite: boolean;
+  favoriteDisabled?: boolean;
   onFavoriteChange: () => void;
 };
 
-export function MediaCard({ media, isFavorite, onFavoriteChange }: MediaCardProps) {
+export function MediaCard({
+  media,
+  isFavorite,
+  favoriteDisabled = false,
+  onFavoriteChange,
+}: MediaCardProps) {
   const [failedPosterUrl, setFailedPosterUrl] = useState<string | null>(null);
 
   const poster = media.poster;
@@ -68,6 +74,7 @@ export function MediaCard({ media, isFavorite, onFavoriteChange }: MediaCardProp
             : `Добавить «${media.title}» в избранное`
         }
         aria-pressed={isFavorite}
+        disabled={favoriteDisabled}
         className={[
           'absolute right-2 top-2 rounded-full border border-transparent',
           'bg-transparent text-watermark drop-shadow-md',

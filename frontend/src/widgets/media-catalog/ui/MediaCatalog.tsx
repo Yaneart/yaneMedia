@@ -41,7 +41,7 @@ export type MediaCatalogProps = {
 export function MediaCatalog({ type, title, filters }: MediaCatalogProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const { catalog, isError, isFetching, isPaused, retry } = useMediaCatalog(type);
-  const { isFavorite, toggleFavorite } = useFavorites();
+  const { isFavorite, toggleFavorite, canUpdateFavorites } = useFavorites();
   const filtersPanelId = useId();
 
   const urlFilters = useMemo(
@@ -355,6 +355,7 @@ export function MediaCatalog({ type, title, filters }: MediaCatalogProps) {
                   key={item.mediaRef}
                   media={item}
                   isFavorite={isFavorite(item.mediaRef)}
+                  favoriteDisabled={!canUpdateFavorites}
                   onFavoriteChange={() => toggleFavorite(item.mediaRef)}
                 />
               ))}
@@ -434,6 +435,7 @@ export function MediaCatalog({ type, title, filters }: MediaCatalogProps) {
                     key={item.mediaRef}
                     media={item}
                     isFavorite={isFavorite(item.mediaRef)}
+                    favoriteDisabled={!canUpdateFavorites}
                     onFavoriteChange={() => toggleFavorite(item.mediaRef)}
                   />
                 ))}

@@ -15,6 +15,7 @@ export type {
   MovieDetails,
   SeriesDetails,
 } from './model/media';
+export { isMediaRef } from './model/media';
 
 export { searchMedia } from './api/searchMedia';
 export { useMediaSearch } from './model/useMediaSearch';

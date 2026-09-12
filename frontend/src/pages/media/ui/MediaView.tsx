@@ -247,7 +247,7 @@ export function MediaView({
 }: MediaViewProps) {
   const { session, startSession, pauseSession, resumeSession, updateProgress, endSession } =
     usePlaybackSession();
-  const { isFavorite, addFavorite, removeFavorite } = useFavorites();
+  const { isFavorite, addFavorite, removeFavorite, canUpdateFavorites } = useFavorites();
   const mediaIsFavorite = isFavorite(media.mediaRef);
   const mediaSession = session?.mediaRef === media.mediaRef ? session : null;
 
@@ -750,6 +750,7 @@ export function MediaView({
         actions={
           <FavoriteButton
             isFavorite={mediaIsFavorite}
+            disabled={!canUpdateFavorites}
             onFavoriteChange={(nextIsFavorite) => {
               if (nextIsFavorite) {
                 addFavorite(media.mediaRef);

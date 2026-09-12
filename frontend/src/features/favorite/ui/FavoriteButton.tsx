@@ -3,6 +3,7 @@ import { Button, FavoriteFilledIcon, FavoriteIcon } from '@/shared';
 export type FavoriteButtonProps = {
   isFavorite: boolean;
   onFavoriteChange: (isFavorite: boolean) => void;
+  disabled?: boolean;
   mediaTitle?: string;
   className?: string;
 };
@@ -10,6 +11,7 @@ export type FavoriteButtonProps = {
 export function FavoriteButton({
   isFavorite,
   onFavoriteChange,
+  disabled = false,
   mediaTitle,
   className = '',
 }: FavoriteButtonProps) {
@@ -21,6 +23,7 @@ export function FavoriteButton({
       variant="bare"
       aria-label={mediaTitle ? `${actionLabel}: ${mediaTitle}` : actionLabel}
       aria-pressed={isFavorite}
+      disabled={disabled}
       className={[
         'w-[9.5rem] rounded-pill border text-text-primary shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-watermark/40',
         isFavorite

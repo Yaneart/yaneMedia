@@ -1,4 +1,4 @@
-import type { MediaRef } from '@/entities/media';
+import { isMediaRef, type MediaRef } from '@/entities/media';
 
 const FAVORITES_STORAGE_KEY = 'yanemedia-favorites';
 const FAVORITES_STORAGE_VERSION = 1;
@@ -10,10 +10,6 @@ type StoredFavorites = {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
-}
-
-function isMediaRef(value: unknown): value is MediaRef {
-  return typeof value === 'string' && value.length > 0;
 }
 
 function isStoredFavorites(value: unknown): value is StoredFavorites {

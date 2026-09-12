@@ -33,7 +33,7 @@ export function HomePage() {
     retryCollections,
   } = useHomeFeed();
   const [continueWatchingAnnouncement, setContinueWatchingAnnouncement] = useState('');
-  const { isFavorite, toggleFavorite } = useFavorites();
+  const { isFavorite, toggleFavorite, canUpdateFavorites } = useFavorites();
   const { continueWatchingEntries, restoreSession, removeContinueWatchingEntry } =
     usePlaybackSession();
   const {
@@ -187,6 +187,7 @@ export function HomePage() {
                   key={media.mediaRef}
                   media={media}
                   isFavorite={isFavorite(media.mediaRef)}
+                  favoriteDisabled={!canUpdateFavorites}
                   onFavoriteChange={() => toggleFavorite(media.mediaRef)}
                 />
               ))}
