@@ -6,9 +6,7 @@ import {
   IsString,
   Matches,
 } from 'class-validator';
-
-const MEDIA_REF_PATTERN =
-  /^(?:imdb:tt\d{7,12}|(?:kinopoisk|shikimori|anilist|myanimelist):\d{1,12})$/;
+import { MEDIA_REF_PATTERN } from '../../media-ref';
 
 export const MEDIA_SUMMARY_RESOLUTION_LIMIT = 100;
 

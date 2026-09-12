@@ -8,6 +8,9 @@ export interface MediaExternalIds {
 
 export type MediaRefType = 'movie' | 'series' | 'anime';
 
+export const MEDIA_REF_PATTERN =
+  /^(?:imdb:tt\d{7,12}|(?:kinopoisk|shikimori|anilist|myanimelist):\d{1,12})$/;
+
 const knownAnimeRefGroups = [
   ['anilist:154587', 'shikimori:52991', 'myanimelist:52991'],
   ['anilist:101348', 'shikimori:37521', 'myanimelist:37521'],

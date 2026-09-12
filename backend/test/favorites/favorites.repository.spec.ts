@@ -37,4 +37,42 @@ describe('FavoritesRepository', () => {
       '"favorites"."media_ref" asc',
     ]);
   });
+
+  it('batch-adds favorites idempotently through the composite key', async () => {
+    const onConflictDoNothing = jest.fn().mockResolvedValue(undefined);
+    const values = jest.fn().mockReturnValue({ onConflictDoNothing });
+    const insert = jest.fn().mockReturnValue({ values });
+    const repository = new FavoritesRepository({ db: { insert } } as unknown as DatabaseService);
+    const userId = '93ea2794-e805-4f60-b14f-2005d2c61804';
+    const mediaRefs = ['imdb:tt15239678', 'anilist:154587'];
+
+    await expect(repository.addMediaRefs(userId, mediaRefs)).resolves.toBeUndefined();
+    expect(insert).toHaveBeenCalledWith(favorites);
+    expect(values).toHaveBeenCalledWith(mediaRefs.map((mediaRef) => ({ userId, mediaRef })));
+    expect(onConflictDoNothing).toHaveBeenCalledWith({
+      target: [favorites.userId, favorites.mediaRef],
+    });
+  });
+
+  it('removes only the requested favorite owned by the user', async () => {
+    let condition: SQL | undefined;
+    const where = jest.fn((value: SQL) => {
+      condition = value;
+      return Promise.resolve();
+    });
+    const deleteFrom = jest.fn().mockReturnValue({ where });
+    const repository = new FavoritesRepository({
+      db: { delete: deleteFrom },
+    } as unknown as DatabaseService);
+    const userId = '93ea2794-e805-4f60-b14f-2005d2c61804';
+    const mediaRef = 'imdb:tt15239678';
+
+    await expect(repository.removeMediaRef(userId, mediaRef)).resolves.toBeUndefined();
+    expect(deleteFrom).toHaveBeenCalledWith(favorites);
+    if (!condition) throw new Error('Ожидались условия пользователя и произведения');
+    const query = new PgDialect().sqlToQuery(condition);
+    expect(query.sql).toContain('"favorites"."user_id" = $1');
+    expect(query.sql).toContain('"favorites"."media_ref" = $2');
+    expect(query.params).toEqual([userId, mediaRef]);
+  });
 });
