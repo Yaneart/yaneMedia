@@ -15,6 +15,7 @@ import {
   DirectSourceSelector,
   findDirectEpisodeByRef,
   findDirectEpisodeBySourceRef,
+  getAdjacentDirectEpisodes,
   getAvailableDirectSourceForTrack,
   getDirectEpisodeDisplayNumber,
   getDirectQualityKey,
@@ -41,6 +42,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import type { MediaAvailabilityStatus } from '../model/useMediaAvailability';
 import { useMediaEpisodeAvailability } from '../model/useMediaEpisodeAvailability';
+import { useMediaEpisodePrefetch } from '../model/useMediaEpisodePrefetch';
 
 export type MediaViewProps = {
   media: MediaDetails;
@@ -349,6 +351,26 @@ export function MediaView({
         availabilityEpisode,
       )
     : catalog.directSources;
+  const adjacentAvailabilityEpisodes = getAdjacentDirectEpisodes(
+    catalog.directEpisodes,
+    selectedDirectEpisode,
+  )
+    .map((episode) => getAvailabilityEpisode(media, episode))
+    .filter((episode): episode is MediaSourceEpisodeRef => episode !== null);
+  const canPrefetchEpisodes =
+    playbackMode === 'direct' &&
+    episodeAvailability !== null &&
+    currentDirectSources.some(
+      (source) => source.availability === 'available' && source.browserSupported,
+    );
+
+  useMediaEpisodePrefetch(
+    media.mediaRef,
+    availabilityEpisode,
+    adjacentAvailabilityEpisodes,
+    canPrefetchEpisodes,
+  );
+
   const selectedDirectSource =
     currentDirectSources.find((source) => source.sourceRef === selectedDirectSourceRef) ??
     currentDirectSources.find((source) => source.sourceRef === mediaSession?.sourceRef) ??

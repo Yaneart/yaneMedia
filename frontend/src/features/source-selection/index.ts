@@ -9,7 +9,9 @@ export {
   createPlaybackSourceCatalog,
   findDirectEpisodeByRef,
   findDirectEpisodeBySourceRef,
+  getAdjacentDirectEpisodes,
   getAvailableDirectSourceForTrack,
+  getDirectSourceForTrackPreference,
   getDirectEpisodeDisplayNumber,
   getNextDirectEpisode,
   getDirectQualityKey,
@@ -19,7 +21,6 @@ export {
   getPreferredSource,
   getProviderLabel,
   getSourceLabel,
-  getDirectSourceForTrackPreference,
 } from './model/sourceSelection';
 export type {
   DirectEpisodeOption,

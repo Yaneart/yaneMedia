@@ -265,14 +265,36 @@ function compareDirectEpisodes(first: DirectEpisodeOption, second: DirectEpisode
   );
 }
 
+function orderDirectEpisodes(episodes: readonly DirectEpisodeOption[]) {
+  return [...episodes].sort(compareDirectEpisodes);
+}
+
 export function getNextDirectEpisode(
   episodes: readonly DirectEpisodeOption[],
   currentEpisode: DirectEpisodeOption | undefined,
 ) {
   if (!currentEpisode) return undefined;
 
-  const orderedEpisodes = [...episodes].sort(compareDirectEpisodes);
+  const orderedEpisodes = orderDirectEpisodes(episodes);
   const currentIndex = orderedEpisodes.findIndex((episode) => episode.key === currentEpisode.key);
 
   return currentIndex < 0 ? undefined : orderedEpisodes[currentIndex + 1];
+}
+
+export function getAdjacentDirectEpisodes(
+  episodes: readonly DirectEpisodeOption[],
+  currentEpisode: DirectEpisodeOption | undefined,
+) {
+  if (!currentEpisode) return [];
+
+  const orderedEpisodes = orderDirectEpisodes(episodes);
+  const currentIndex = orderedEpisodes.findIndex((episode) => episode.key === currentEpisode.key);
+
+  if (currentIndex < 0) return [];
+
+  return [
+    orderedEpisodes[currentIndex + 1],
+    orderedEpisodes[currentIndex - 1],
+    orderedEpisodes[currentIndex + 2],
+  ].filter((episode): episode is DirectEpisodeOption => episode !== undefined);
 }
