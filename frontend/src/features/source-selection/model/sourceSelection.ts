@@ -121,6 +121,29 @@ export function getPreferredSource(sources: readonly MediaSourceOption[]) {
   );
 }
 
+export function getAvailableDirectSourceForTrack(
+  sources: readonly MediaSourceOption[],
+  trackKey: string | null,
+) {
+  if (!trackKey) return undefined;
+
+  return sources.find(
+    (source) =>
+      getDirectTrackKey(source) === trackKey &&
+      source.availability === 'available' &&
+      source.browserSupported,
+  );
+}
+
+export function getDirectSourceForTrackPreference(
+  sources: readonly MediaSourceOption[],
+  preferredTrackKey: string | null,
+) {
+  return (
+    getAvailableDirectSourceForTrack(sources, preferredTrackKey) ?? getPreferredSource(sources)
+  );
+}
+
 export function findDirectEpisodeBySourceRef(
   episodes: readonly DirectEpisodeOption[],
   sourceRef: string | undefined,
@@ -225,4 +248,31 @@ export function getDirectQualityOptions(
 
 export function getDirectEpisodeDisplayNumber(episode: DirectEpisodeOption) {
   return episode.episodeNumber ?? episode.absoluteEpisodeNumber;
+}
+
+function compareDirectEpisodes(first: DirectEpisodeOption, second: DirectEpisodeOption) {
+  if (first.seasonNumber !== undefined && second.seasonNumber !== undefined) {
+    const seasonDifference = first.seasonNumber - second.seasonNumber;
+
+    if (seasonDifference !== 0) {
+      return seasonDifference;
+    }
+  }
+
+  return (
+    (getDirectEpisodeDisplayNumber(first) ?? Number.MAX_SAFE_INTEGER) -
+    (getDirectEpisodeDisplayNumber(second) ?? Number.MAX_SAFE_INTEGER)
+  );
+}
+
+export function getNextDirectEpisode(
+  episodes: readonly DirectEpisodeOption[],
+  currentEpisode: DirectEpisodeOption | undefined,
+) {
+  if (!currentEpisode) return undefined;
+
+  const orderedEpisodes = [...episodes].sort(compareDirectEpisodes);
+  const currentIndex = orderedEpisodes.findIndex((episode) => episode.key === currentEpisode.key);
+
+  return currentIndex < 0 ? undefined : orderedEpisodes[currentIndex + 1];
 }

@@ -15,12 +15,15 @@ import {
   DirectSourceSelector,
   findDirectEpisodeByRef,
   findDirectEpisodeBySourceRef,
+  getAvailableDirectSourceForTrack,
   getDirectEpisodeDisplayNumber,
   getDirectQualityKey,
   getDirectQualityOptions,
   getDirectTrackKey,
   getDirectTrackOptions,
+  getNextDirectEpisode,
   getPreferredSource,
+  getDirectSourceForTrackPreference,
   PlaybackModeSelector,
   SourceSelector,
   type DirectEpisodeOption,
@@ -33,7 +36,7 @@ import {
   type MediaPlayerEmptyState,
   type MediaPlayerStatus,
 } from '@/widgets/media-player';
-import { Spinner } from '@/shared';
+import { Button, Spinner } from '@/shared';
 import { useCallback, useEffect, useState } from 'react';
 
 import type { MediaAvailabilityStatus } from '../model/useMediaAvailability';
@@ -298,6 +301,9 @@ export function MediaView({
       getPreferredSource(initialDirectSources)?.sourceRef ??
       null,
   );
+  const [preferredDirectTrackKey, setPreferredDirectTrackKey] = useState<string | null>(
+    sessionDirectSource ? getDirectTrackKey(sessionDirectSource) : null,
+  );
   const [playerStatus, setPlayerStatus] = useState<MediaPlayerStatus>('ready');
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
   const playbackMode = isPlaybackModeInitialized ? selectedPlaybackMode : initialMode;
@@ -348,6 +354,14 @@ export function MediaView({
     currentDirectSources.find((source) => source.sourceRef === mediaSession?.sourceRef) ??
     getPreferredSource(currentDirectSources);
 
+  const selectedDirectTrackKey = selectedDirectSource
+    ? getDirectTrackKey(selectedDirectSource)
+    : null;
+  const availablePreferredDirectSource = getAvailableDirectSourceForTrack(
+    currentDirectSources,
+    preferredDirectTrackKey,
+  );
+
   useEffect(() => {
     if (selectedEmbedSourceRef === null && selectedEmbedSource) {
       setSelectedEmbedSourceRef(selectedEmbedSource.sourceRef);
@@ -360,20 +374,41 @@ export function MediaView({
     if (selectedDirectSourceRef === null && selectedDirectSource) {
       setSelectedDirectSourceRef(selectedDirectSource.sourceRef);
     }
+
+    if (preferredDirectTrackKey === null && selectedDirectTrackKey !== null) {
+      setPreferredDirectTrackKey(selectedDirectTrackKey);
+    }
   }, [
+    preferredDirectTrackKey,
     selectedDirectEpisode,
     selectedDirectEpisodeKey,
     selectedDirectSource,
     selectedDirectSourceRef,
+    selectedDirectTrackKey,
     selectedEmbedSource,
     selectedEmbedSourceRef,
+  ]);
+
+  useEffect(() => {
+    if (
+      !mediaSession &&
+      availablePreferredDirectSource &&
+      selectedDirectTrackKey !== preferredDirectTrackKey
+    ) {
+      setSelectedDirectSourceRef(availablePreferredDirectSource.sourceRef);
+    }
+  }, [
+    availablePreferredDirectSource,
+    mediaSession,
+    preferredDirectTrackKey,
+    selectedDirectTrackKey,
   ]);
 
   const selectedSource = playbackMode === 'embed' ? selectedEmbedSource : selectedDirectSource;
   const selectedSourceRef = selectedSource?.sourceRef ?? null;
 
   const directTracks = getDirectTrackOptions(currentDirectSources);
-  const selectedTrackKey = selectedDirectSource ? getDirectTrackKey(selectedDirectSource) : null;
+  const selectedTrackKey = selectedDirectTrackKey;
   const selectedTrack = directTracks.find((track) => track.key === selectedTrackKey);
   const directQualities = getDirectQualityOptions(selectedTrack?.sources ?? []);
   const selectedQualityKey = selectedDirectSource
@@ -400,6 +435,7 @@ export function MediaView({
   const directEpisodeOptions = episodesForSelectedSeason
     .map(toEpisodeSelectorOption)
     .filter((episode): episode is MediaEpisode => episode !== null);
+  const nextDirectEpisode = getNextDirectEpisode(catalog.directEpisodes, selectedDirectEpisode);
 
   const selectedPlaybackEpisode =
     playbackMode === 'direct' && usesDirectEpisodes
@@ -440,6 +476,15 @@ export function MediaView({
     resetPlayer();
   };
 
+  const selectDirectEpisode = (episode: DirectEpisodeOption) => {
+    setSelectedDirectEpisodeKey(episode.key);
+    setSelectedDirectSourceRef(
+      getDirectSourceForTrackPreference(episode.sources, preferredDirectTrackKey)?.sourceRef ??
+        null,
+    );
+    resetPlayer();
+  };
+
   const selectSeason = (seasonNumber: number) => {
     if (seasonNumber === selectedDirectEpisode?.seasonNumber) return;
 
@@ -449,9 +494,7 @@ export function MediaView({
 
     if (!nextEpisode) return;
 
-    setSelectedDirectEpisodeKey(nextEpisode.key);
-    setSelectedDirectSourceRef(getPreferredSource(nextEpisode.sources)?.sourceRef ?? null);
-    resetPlayer();
+    selectDirectEpisode(nextEpisode);
   };
 
   const selectEpisode = (episodeNumber: number) => {
@@ -461,14 +504,20 @@ export function MediaView({
 
     if (!nextEpisode || nextEpisode.key === selectedDirectEpisode?.key) return;
 
-    setSelectedDirectEpisodeKey(nextEpisode.key);
-    setSelectedDirectSourceRef(getPreferredSource(nextEpisode.sources)?.sourceRef ?? null);
-    resetPlayer();
+    selectDirectEpisode(nextEpisode);
   };
 
   const selectTrack = (trackKey: string) => {
     const track = directTracks.find((option) => option.key === trackKey);
+
+    setPreferredDirectTrackKey(trackKey);
     selectDirectSource(getDirectQualityOptions(track?.sources ?? [])[0]?.source);
+  };
+
+  const selectNextEpisode = () => {
+    if (nextDirectEpisode) {
+      selectDirectEpisode(nextDirectEpisode);
+    }
   };
 
   const selectQuality = (qualityKey: string) => {
@@ -596,6 +645,22 @@ export function MediaView({
                       showQuality={directQualities.length > 1}
                     />
                   </div>
+                )}
+
+                {usesDirectEpisodes && nextDirectEpisode && (
+                  <Button
+                    size="small"
+                    variant="secondary"
+                    className="w-full shrink-0 sm:w-auto"
+                    aria-label={`Перейти к ${getDirectEpisodeDisplayNumber(nextDirectEpisode)} серии${
+                      nextDirectEpisode.seasonNumber === undefined
+                        ? ''
+                        : ` ${nextDirectEpisode.seasonNumber} сезона`
+                    }`}
+                    onClick={selectNextEpisode}
+                  >
+                    Следующая серия
+                  </Button>
                 )}
 
                 {selectedDirectSource && !usesDirectEpisodes && (
