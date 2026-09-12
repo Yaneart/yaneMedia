@@ -6,11 +6,11 @@ import {
   type LoginFormErrors,
   type LoginFormFields,
 } from '@/features/auth-form';
-import { Button, Input } from '@/shared';
+import { Button, createReturnToSearch, Input, parseInternalReturnTo } from '@/shared';
 import { ApiClientError } from '@/shared/api';
 import { AuthFormLayout } from '@/widgets/auth-form-layout';
 import { useState, type ChangeEvent, type SubmitEvent } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 
 type LoginPageProps = {
   homePath: string;
@@ -32,6 +32,12 @@ export function LoginPage({ homePath, registerPath }: LoginPageProps) {
   const [formErrors, setFormErrors] = useState<LoginFormErrors>({});
   const { setAuthenticated } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const returnTo = parseInternalReturnTo(searchParams.get('returnTo'));
+  const destination = returnTo ?? homePath;
+  const registerDestination = returnTo
+    ? { pathname: registerPath, search: createReturnToSearch(returnTo) }
+    : registerPath;
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -68,7 +74,7 @@ export function LoginPage({ homePath, registerPath }: LoginPageProps) {
       });
 
       setAuthenticated(user);
-      navigate(homePath, { replace: true });
+      navigate(destination, { replace: true });
     } catch (error: unknown) {
       if (!(error instanceof ApiClientError)) {
         setSubmitError('Не удалось получить ответ сервера. Проверьте соединение.');
@@ -133,7 +139,7 @@ export function LoginPage({ homePath, registerPath }: LoginPageProps) {
         <p>
           Нет аккаунта?{' '}
           <Link
-            to={registerPath}
+            to={registerDestination}
             className={[
               'font-semibold text-text-primary underline',
               'decoration-border underline-offset-4',

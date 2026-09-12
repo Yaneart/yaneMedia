@@ -10,11 +10,11 @@ import {
   type RegisterFormErrors,
   type RegisterFormFields,
 } from '@/features/auth-form';
-import { Button, Input } from '@/shared';
+import { Button, createReturnToSearch, Input, parseInternalReturnTo } from '@/shared';
 import { ApiClientError } from '@/shared/api';
 import { AuthFormLayout } from '@/widgets/auth-form-layout';
 import { useState, type ChangeEvent, type SubmitEvent } from 'react';
-import { Link } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 
 type RegisterPageProps = {
   homePath: string;
@@ -37,6 +37,11 @@ function readRegisterFormFields(form: HTMLFormElement): RegisterFormFields {
 }
 
 export function RegisterPage({ homePath, loginPath }: RegisterPageProps) {
+  const [searchParams] = useSearchParams();
+  const returnTo = parseInternalReturnTo(searchParams.get('returnTo'));
+  const loginDestination = returnTo
+    ? { pathname: loginPath, search: createReturnToSearch(returnTo) }
+    : loginPath;
   const [formErrors, setFormErrors] = useState<RegisterFormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -164,7 +169,7 @@ export function RegisterPage({ homePath, loginPath }: RegisterPageProps) {
         <p>
           Уже есть аккаунт?{' '}
           <Link
-            to={loginPath}
+            to={loginDestination}
             className={[
               'font-semibold text-text-primary underline',
               'decoration-border underline-offset-4',

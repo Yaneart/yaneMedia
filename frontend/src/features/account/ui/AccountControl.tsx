@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useLocation } from 'react-router';
 
 import { logout, useAuth } from '@/entities/auth';
-import { Button, Popover, ProfileIcon } from '@/shared';
+import { Button, createReturnToSearch, Popover, ProfileIcon } from '@/shared';
 import { ApiClientError } from '@/shared/api';
 
 type AccountControlProps = {
@@ -18,6 +18,7 @@ const triggerClassName = [
 ].join(' ');
 
 export function AccountControl({ loginPath, placement = 'bottom' }: AccountControlProps) {
+  const location = useLocation();
   const { state, setGuest, refresh } = useAuth();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
@@ -57,8 +58,14 @@ export function AccountControl({ loginPath, placement = 'bottom' }: AccountContr
   }
 
   if (state.status === 'guest') {
+    const returnTo = `${location.pathname}${location.search}${location.hash}`;
+
     return (
-      <Link to={loginPath} aria-label="Войти" className={triggerClassName}>
+      <Link
+        to={{ pathname: loginPath, search: createReturnToSearch(returnTo) }}
+        aria-label="Войти"
+        className={triggerClassName}
+      >
         <ProfileIcon className="size-5" />
       </Link>
     );
