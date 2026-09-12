@@ -23,5 +23,6 @@ import { MailModule } from '../mail/mail.module';
   ],
   controllers: [AuthController],
   providers: [AuthService, AuthRepository, SessionGuard, CsrfGuard, ThrottlerGuard],
+  exports: [SessionGuard],
 })
 export class AuthModule {}

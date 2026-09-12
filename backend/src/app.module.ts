@@ -7,9 +7,18 @@ import { MediaModule } from './media/media.module';
 import { DatabaseModule } from './database/database.module';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
+import { FavoritesModule } from './favorites/favorites.module';
 
 @Module({
-  imports: [AppConfigModule, HealthModule, MediaModule, DatabaseModule, UsersModule, AuthModule],
+  imports: [
+    AppConfigModule,
+    HealthModule,
+    MediaModule,
+    DatabaseModule,
+    UsersModule,
+    AuthModule,
+    FavoritesModule,
+  ],
   providers: [AppLogger, ApiExceptionFilter],
 })
 export class AppModule {}

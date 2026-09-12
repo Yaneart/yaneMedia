@@ -13,10 +13,13 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api/v1');
 
-  app.use('/api/v1/auth', (_request: Request, response: Response, next: NextFunction) => {
-    response.setHeader('Cache-Control', 'no-store');
-    next();
-  });
+  app.use(
+    ['/api/v1/auth', '/api/v1/favorites'],
+    (_request: Request, response: Response, next: NextFunction) => {
+      response.setHeader('Cache-Control', 'no-store');
+      next();
+    },
+  );
 
   app.use(cookieParser());
 
