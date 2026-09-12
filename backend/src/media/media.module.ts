@@ -87,5 +87,6 @@ async function createMediaEngine() {
     MediaCatalogService,
     HomeFeedService,
   ],
+  exports: [MediaCatalogService],
 })
 export class MediaModule {}

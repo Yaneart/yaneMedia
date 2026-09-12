@@ -1,4 +1,4 @@
-import { Injectable, ServiceUnavailableException } from '@nestjs/common';
+import { Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import type { DetailsResponse } from '@media-engine/core';
 import type { MediaDetailsDto } from '../dto/media-details.dto';
 import type { MediaSummaryDto } from '../dto/media-summary.dto';
@@ -69,6 +69,18 @@ export class MediaCatalogService {
     const entries = mediaRefs.map((mediaRef) => ({ mediaRef }));
 
     return this.hydrateEntries(entries);
+  }
+
+  async assertMediaRefsExist(mediaRefs: readonly string[]): Promise<void> {
+    const resolutions = await this.resolveEntries(mediaRefs.map((mediaRef) => ({ mediaRef })));
+
+    if (resolutions.some(({ summary, unavailable }) => !summary && !unavailable)) {
+      throw new NotFoundException('Media not found');
+    }
+
+    if (resolutions.some(({ summary }) => !summary)) {
+      throw new ServiceUnavailableException('Media providers are temporarily unavailable');
+    }
   }
 
   async getCollection(

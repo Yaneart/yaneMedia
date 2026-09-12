@@ -1,5 +1,5 @@
 import type { DetailsResponse } from '@media-engine/core';
-import { ServiceUnavailableException } from '@nestjs/common';
+import { NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { editorialCatalog } from '../../../src/media/catalog/editorial-catalog';
 import type { MediaDetailsDto } from '../../../src/media/dto/media-details.dto';
 import { MediaCatalogService } from '../../../src/media/catalog/media-catalog.service';
@@ -202,6 +202,51 @@ describe('MediaCatalogService', () => {
       degraded: true,
       stale: false,
     });
+  });
+
+  it('validates an existing batch and reuses the shared summary cache', async () => {
+    const mediaRefs = ['imdb:tt15239678', 'anilist:154587'];
+    const getDetailsByRef = jest.fn((mediaRef: string) =>
+      Promise.resolve({
+        details: createDetails(mediaRef, mediaRef.startsWith('anilist:') ? 'anime' : 'movie'),
+        meta: healthyMeta,
+      }),
+    ) as jest.MockedFunction<MediaService['getDetailsByRef']>;
+    const service = createService(getDetailsByRef);
+
+    await expect(service.assertMediaRefsExist(mediaRefs)).resolves.toBeUndefined();
+    const resolution = await service.resolveMediaRefs(mediaRefs);
+
+    expect(resolution.items.map(({ mediaRef }) => mediaRef)).toEqual(mediaRefs);
+    expect(getDetailsByRef).toHaveBeenCalledTimes(mediaRefs.length);
+  });
+
+  it('rejects a batch when at least one media reference does not exist', async () => {
+    const missingMediaRef = 'imdb:tt0000000';
+    const getDetailsByRef = jest.fn((mediaRef: string) =>
+      Promise.resolve({
+        details: mediaRef === missingMediaRef ? null : createMovie(mediaRef, mediaRef),
+        meta: healthyMeta,
+      }),
+    ) as jest.MockedFunction<MediaService['getDetailsByRef']>;
+    const service = createService(getDetailsByRef);
+
+    await expect(
+      service.assertMediaRefsExist(['imdb:tt15239678', missingMediaRef]),
+    ).rejects.toThrow(new NotFoundException('Media not found'));
+  });
+
+  it('reports an unverified reference as unavailable instead of missing', async () => {
+    const getDetailsByRef = jest
+      .fn()
+      .mockRejectedValue(
+        new ServiceUnavailableException('Media providers are temporarily unavailable'),
+      ) as jest.MockedFunction<MediaService['getDetailsByRef']>;
+    const service = createService(getDetailsByRef);
+
+    await expect(service.assertMediaRefsExist(['imdb:tt15239678'])).rejects.toThrow(
+      new ServiceUnavailableException('Media providers are temporarily unavailable'),
+    );
   });
 
   it('returns an app-owned partial result when one configured title is missing', async () => {
