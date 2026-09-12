@@ -14,4 +14,9 @@ export class HistoryService {
       openedAt: openedAt.toISOString(),
     }));
   }
+
+  async recordOpening(userId: string, mediaRef: string): Promise<HistoryEntryDto[]> {
+    await this.historyRepository.upsert(userId, mediaRef);
+    return this.listEntries(userId);
+  }
 }

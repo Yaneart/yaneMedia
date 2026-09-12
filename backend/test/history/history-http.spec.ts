@@ -1,8 +1,10 @@
-import { type INestApplication } from '@nestjs/common';
+import { type INestApplication, ValidationPipe } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import type { NextFunction, Request, Response } from 'express';
 import { AuthRepository } from '../../src/auth/auth.repository';
+import { CsrfGuard } from '../../src/auth/guards/csrf.guard';
 import { SessionGuard } from '../../src/auth/guards/session.guard';
 import { SESSION_COOKIE_NAME } from '../../src/auth/session-cookie';
 import { HistoryController } from '../../src/history/history.controller';
@@ -26,6 +28,7 @@ describe('history HTTP contract', () => {
     { mediaRef: 'anilist:154587', openedAt: '2026-09-11T18:00:00.000Z' },
   ];
   const listEntries = jest.fn();
+  const recordOpening = jest.fn();
   const findUserBySessionHash = jest.fn();
   const deleteExpiredByTokenHash = jest.fn();
 
@@ -34,7 +37,12 @@ describe('history HTTP contract', () => {
       controllers: [HistoryController],
       providers: [
         SessionGuard,
-        { provide: HistoryService, useValue: { listEntries } },
+        CsrfGuard,
+        {
+          provide: ConfigService,
+          useValue: new ConfigService({ FRONTEND_ORIGIN: 'http://localhost:5173' }),
+        },
+        { provide: HistoryService, useValue: { listEntries, recordOpening } },
         {
           provide: AuthRepository,
           useValue: { findUserBySessionHash, deleteExpiredByTokenHash },
@@ -49,6 +57,7 @@ describe('history HTTP contract', () => {
       next();
     });
     app.use(cookieParser());
+    app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
     app.useGlobalInterceptors(new ApiResponseInterceptor());
     app.useGlobalFilters(
       new ApiExceptionFilter({ logUnexpectedError: jest.fn() } as unknown as AppLogger),
@@ -59,6 +68,7 @@ describe('history HTTP contract', () => {
 
   beforeEach(() => {
     listEntries.mockReset().mockResolvedValue(entries);
+    recordOpening.mockReset().mockResolvedValue(entries);
     findUserBySessionHash.mockReset().mockResolvedValue(user);
     deleteExpiredByTokenHash.mockReset().mockResolvedValue(undefined);
   });
@@ -87,5 +97,53 @@ describe('history HTTP contract', () => {
     expect(response.headers.get('cache-control')).toBe('no-store');
     expect(await response.json()).toEqual({ data: { entries } });
     expect(listEntries).toHaveBeenCalledWith(user.id);
+  });
+
+  it('requires CSRF protection for mutations', async () => {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Cookie: `${SESSION_COOKIE_NAME}=${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ mediaRef: entries[0].mediaRef }),
+    });
+
+    expect(response.status).toBe(403);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(recordOpening).not.toHaveBeenCalled();
+  });
+
+  it('validates and records an opening for the authenticated user', async () => {
+    const body = { mediaRef: entries[0].mediaRef };
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Cookie: `${SESSION_COOKIE_NAME}=${token}`,
+        'Content-Type': 'application/json',
+        'X-YaneMedia-CSRF': '1',
+      },
+      body: JSON.stringify(body),
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(await response.json()).toEqual({ data: { entries } });
+    expect(recordOpening).toHaveBeenCalledWith(user.id, body.mediaRef);
+  });
+
+  it('rejects a malformed media ref before the service', async () => {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Cookie: `${SESSION_COOKIE_NAME}=${token}`,
+        'Content-Type': 'application/json',
+        'X-YaneMedia-CSRF': '1',
+      },
+      body: JSON.stringify({ mediaRef: 'demo:movie:dune' }),
+    });
+
+    expect(response.status).toBe(400);
+    expect(recordOpening).not.toHaveBeenCalled();
   });
 });

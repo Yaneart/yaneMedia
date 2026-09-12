@@ -41,4 +41,26 @@ describe('HistoryRepository', () => {
       '"history_items"."media_ref" asc',
     ]);
   });
+
+  it('upserts one user history item through the composite key and refreshes its timestamp', async () => {
+    type ConflictOptions = { target: unknown; set: { openedAt: SQL } };
+    let conflict: ConflictOptions | undefined;
+    const onConflictDoUpdate = jest.fn((options: ConflictOptions) => {
+      conflict = options;
+      return Promise.resolve();
+    });
+    const values = jest.fn().mockReturnValue({ onConflictDoUpdate });
+    const insert = jest.fn().mockReturnValue({ values });
+    const repository = new HistoryRepository({ db: { insert } } as unknown as DatabaseService);
+    const userId = '93ea2794-e805-4f60-b14f-2005d2c61804';
+    const mediaRef = 'imdb:tt15239678';
+
+    await expect(repository.upsert(userId, mediaRef)).resolves.toBeUndefined();
+    expect(insert).toHaveBeenCalledWith(historyItems);
+    expect(values).toHaveBeenCalledWith({ userId, mediaRef });
+    expect(onConflictDoUpdate).toHaveBeenCalledTimes(1);
+    if (!conflict) throw new Error('Expected conflict update options');
+    expect(conflict.target).toEqual([historyItems.userId, historyItems.mediaRef]);
+    expect(new PgDialect().sqlToQuery(conflict.set.openedAt).sql).toBe('now()');
+  });
 });
