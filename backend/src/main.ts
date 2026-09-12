@@ -14,7 +14,7 @@ async function bootstrap() {
   app.setGlobalPrefix('api/v1');
 
   app.use(
-    ['/api/v1/auth', '/api/v1/favorites'],
+    ['/api/v1/auth', '/api/v1/favorites', '/api/v1/history'],
     (_request: Request, response: Response, next: NextFunction) => {
       response.setHeader('Cache-Control', 'no-store');
       next();
