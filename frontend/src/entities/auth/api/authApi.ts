@@ -5,7 +5,9 @@ import type {
   AuthUserResponse,
   LoginPayload,
   RegisterPayload,
+  RequestPasswordResetPayload,
   ResendVerificationPayload,
+  ResetPasswordPayload,
   VerifyEmailPayload,
 } from '../model/auth';
 
@@ -48,4 +50,14 @@ export function resendVerification(
   payload: ResendVerificationPayload,
 ): Promise<AuthSuccessResponse> {
   return postAuth<AuthSuccessResponse>('resend-verification', payload);
+}
+
+export function requestPasswordReset(
+  payload: RequestPasswordResetPayload,
+): Promise<AuthSuccessResponse> {
+  return postAuth<AuthSuccessResponse>('request-password-reset', payload);
+}
+
+export function resetPassword(payload: ResetPasswordPayload): Promise<AuthSuccessResponse> {
+  return postAuth<AuthSuccessResponse>('reset-password', payload);
 }

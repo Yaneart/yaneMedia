@@ -24,6 +24,15 @@ export interface ResendVerificationPayload {
   email: string;
 }
 
+export interface RequestPasswordResetPayload {
+  email: string;
+}
+
+export interface ResetPasswordPayload {
+  token: string;
+  password: string;
+}
+
 export interface AuthUserResponse {
   user: AuthUser;
 }

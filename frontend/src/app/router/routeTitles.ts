@@ -12,6 +12,8 @@ const documentTitles: Record<string, string> = {
   [routePaths.login]: 'Вход',
   [routePaths.register]: 'Регистрация',
   [routePaths.verifyEmail]: 'Подтверждение почты',
+  [routePaths.forgotPassword]: 'Восстановление пароля',
+  [routePaths.resetPassword]: 'Новый пароль',
 };
 
 export function getDocumentTitle(pathname: string) {

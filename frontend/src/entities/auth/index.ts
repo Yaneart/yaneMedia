@@ -1,4 +1,13 @@
-export { register, login, me, logout, verifyEmail, resendVerification } from './api/authApi';
+export {
+  register,
+  login,
+  me,
+  logout,
+  verifyEmail,
+  resendVerification,
+  requestPasswordReset,
+  resetPassword,
+} from './api/authApi';
 
 export type {
   AuthUser,
@@ -6,6 +15,8 @@ export type {
   LoginPayload,
   VerifyEmailPayload,
   ResendVerificationPayload,
+  RequestPasswordResetPayload,
+  ResetPasswordPayload,
   AuthUserResponse,
   AuthSuccessResponse,
 } from './model/auth';

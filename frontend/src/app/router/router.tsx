@@ -11,6 +11,8 @@ import {
   MoviesPage,
   NotFoundPage,
   RegisterPage,
+  RequestPasswordResetPage,
+  ResetPasswordPage,
   SearchPage,
   SeriesPage,
   VerifyEmailPage,
@@ -35,7 +37,11 @@ export const router = createBrowserRouter([
       {
         path: routePaths.login,
         element: lazyRoute(
-          <LoginPage homePath={routePaths.home} registerPath={routePaths.register} />,
+          <LoginPage
+            homePath={routePaths.home}
+            registerPath={routePaths.register}
+            forgotPasswordPath={routePaths.forgotPassword}
+          />,
         ),
       },
       {
@@ -48,6 +54,22 @@ export const router = createBrowserRouter([
         path: routePaths.verifyEmail,
         element: lazyRoute(
           <VerifyEmailPage homePath={routePaths.home} loginPath={routePaths.login} />,
+        ),
+      },
+      {
+        path: routePaths.forgotPassword,
+        element: lazyRoute(
+          <RequestPasswordResetPage homePath={routePaths.home} loginPath={routePaths.login} />,
+        ),
+      },
+      {
+        path: routePaths.resetPassword,
+        element: lazyRoute(
+          <ResetPasswordPage
+            homePath={routePaths.home}
+            loginPath={routePaths.login}
+            requestPasswordResetPath={routePaths.forgotPassword}
+          />,
         ),
       },
       {

@@ -20,6 +20,16 @@ export const LoginPage = lazy(() =>
 export const MediaPage = lazy(() =>
   import('@/pages/media').then(({ MediaPage }) => ({ default: MediaPage })),
 );
+export const RequestPasswordResetPage = lazy(() =>
+  import('@/pages/password-reset').then(({ RequestPasswordResetPage }) => ({
+    default: RequestPasswordResetPage,
+  })),
+);
+export const ResetPasswordPage = lazy(() =>
+  import('@/pages/password-reset').then(({ ResetPasswordPage }) => ({
+    default: ResetPasswordPage,
+  })),
+);
 export const MoviesPage = lazy(() =>
   import('@/pages/movies').then(({ MoviesPage }) => ({ default: MoviesPage })),
 );

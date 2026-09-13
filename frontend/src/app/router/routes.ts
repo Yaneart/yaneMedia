@@ -11,5 +11,7 @@ export const routePaths = {
   login: '/login',
   register: '/register',
   verifyEmail: '/verify-email',
+  forgotPassword: '/forgot-password',
+  resetPassword: '/reset-password',
   notFound: '*',
 } as const;

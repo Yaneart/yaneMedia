@@ -18,8 +18,14 @@ export type RegisterFormFields = {
   passwordConfirmation: string;
 };
 
+export type PasswordResetFormFields = {
+  password: string;
+  passwordConfirmation: string;
+};
+
 export type LoginFormErrors = Partial<Record<keyof LoginFormFields, string>>;
 export type RegisterFormErrors = Partial<Record<keyof RegisterFormFields, string>>;
+export type PasswordResetFormErrors = Partial<Record<keyof PasswordResetFormFields, string>>;
 
 export function validateEmail(value: string): string | undefined {
   const email = value.trim();
@@ -87,6 +93,29 @@ export function validateRegisterForm(fields: RegisterFormFields): RegisterFormEr
 
   if (fields.passwordConfirmation.length === 0) {
     errors.passwordConfirmation = 'Повторите пароль';
+  } else if (fields.password !== fields.passwordConfirmation) {
+    errors.passwordConfirmation = 'Пароли не совпадают';
+  }
+
+  return errors;
+}
+
+export function validatePasswordResetForm(
+  fields: PasswordResetFormFields,
+): PasswordResetFormErrors {
+  const errors: PasswordResetFormErrors = {};
+  const passwordLength = getCharacterCount(fields.password);
+
+  if (passwordLength === 0) {
+    errors.password = 'Введите новый пароль';
+  } else if (passwordLength < PASSWORD_MIN_LENGTH) {
+    errors.password = `Пароль должен содержать минимум ${PASSWORD_MIN_LENGTH} символов`;
+  } else if (passwordLength > PASSWORD_MAX_LENGTH) {
+    errors.password = `Пароль не должен быть длиннее ${PASSWORD_MAX_LENGTH} символов`;
+  }
+
+  if (fields.passwordConfirmation.length === 0) {
+    errors.passwordConfirmation = 'Повторите новый пароль';
   } else if (fields.password !== fields.passwordConfirmation) {
     errors.passwordConfirmation = 'Пароли не совпадают';
   }

@@ -15,6 +15,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router';
 type LoginPageProps = {
   homePath: string;
   registerPath: string;
+  forgotPasswordPath: string;
 };
 
 function readLoginFormFields(form: HTMLFormElement): LoginFormFields {
@@ -28,7 +29,7 @@ function readLoginFormFields(form: HTMLFormElement): LoginFormFields {
   };
 }
 
-export function LoginPage({ homePath, registerPath }: LoginPageProps) {
+export function LoginPage({ homePath, registerPath, forgotPasswordPath }: LoginPageProps) {
   const [formErrors, setFormErrors] = useState<LoginFormErrors>({});
   const { setAuthenticated } = useAuth();
   const navigate = useNavigate();
@@ -38,6 +39,9 @@ export function LoginPage({ homePath, registerPath }: LoginPageProps) {
   const registerDestination = returnTo
     ? { pathname: registerPath, search: createReturnToSearch(returnTo) }
     : registerPath;
+  const forgotPasswordDestination = returnTo
+    ? { pathname: forgotPasswordPath, search: createReturnToSearch(returnTo) }
+    : forgotPasswordPath;
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -177,6 +181,13 @@ export function LoginPage({ homePath, registerPath }: LoginPageProps) {
           onChange={(event) => handleFieldChange('password', event)}
           disabled={isSubmitting}
         />
+
+        <Link
+          to={forgotPasswordDestination}
+          className="self-end text-sm font-semibold text-text-secondary underline decoration-border underline-offset-4 transition-colors duration-200 hover:text-text-primary"
+        >
+          Забыли пароль?
+        </Link>
 
         <Button type="submit" size="large" className="w-full" disabled={isSubmitting}>
           {isSubmitting ? 'Входим…' : 'Войти'}
