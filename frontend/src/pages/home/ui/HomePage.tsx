@@ -14,6 +14,7 @@ import { usePlaybackSession } from '@/features/playback-session';
 import { RestorableContentRow } from '@/features/scroll-restoration';
 import { FeaturedMedia } from '@/widgets/featured-media';
 import { ContinueWatchingCard } from '@/widgets/continue-watching-card';
+import { LibraryDataNotice } from '@/widgets/library-page';
 import { EmptyState, ErrorState, LoadingState, Skeleton, YaneMark } from '@/shared';
 import { useHomeFeed } from '../model/useHomeFeed';
 import { HomeCollectionsSkeleton } from './HomeCollectionsSkeleton';
@@ -34,8 +35,15 @@ export function HomePage() {
   } = useHomeFeed();
   const [continueWatchingAnnouncement, setContinueWatchingAnnouncement] = useState('');
   const { isFavorite, toggleFavorite, canUpdateFavorites } = useFavorites();
-  const { continueWatchingEntries, restoreSession, removeContinueWatchingEntry } =
-    usePlaybackSession();
+  const {
+    continueWatchingEntries,
+    status: continueWatchingStatus,
+    storageMode: continueWatchingStorageMode,
+    hasSyncError: hasContinueWatchingSyncError,
+    restoreSession,
+    removeContinueWatchingEntry,
+    retry: retryContinueWatching,
+  } = usePlaybackSession();
   const {
     resolution: continueWatchingResolution,
     status: continueWatchingResolutionStatus,
@@ -133,20 +141,41 @@ export function HomePage() {
           {continueWatchingAnnouncement}
         </p>
 
-        {continueWatchingEntries.length > 0 && (
+        {(continueWatchingEntries.length > 0 || continueWatchingStatus !== 'ready') && (
           <section>
             <h2 className="mb-4 text-heading font-semibold text-text-primary">
               Продолжить просмотр
             </h2>
 
-            {continueWatchingResolutionStatus === 'loading' ? (
+            {hasContinueWatchingSyncError && (
+              <LibraryDataNotice
+                partial={false}
+                stale={false}
+                refreshFailed
+                onRetry={retryContinueWatching}
+              />
+            )}
+
+            {continueWatchingStatus === 'error' ? (
+              <ErrorState
+                title="Не удалось загрузить продолжение просмотра"
+                description={
+                  continueWatchingStorageMode === 'account'
+                    ? 'Серверный прогресс не заменён локальной копией. Проверьте соединение и повторите запрос.'
+                    : 'Не удалось определить состояние аккаунта. Проверьте соединение и повторите запрос.'
+                }
+                retryLabel="Повторить"
+                onRetry={retryContinueWatching}
+              />
+            ) : continueWatchingStatus === 'loading' ||
+              continueWatchingResolutionStatus === 'loading' ? (
               <RestorableContentRow
                 scrollKey="continue-watching"
                 variant="continuation"
                 aria-label="Загружаем продолжение просмотра"
               >
-                {continueWatchingEntries.map((entry) => (
-                  <Skeleton key={entry.mediaRef} className="aspect-[2.35/1] w-full rounded-card" />
+                {Array.from({ length: Math.max(continueWatchingEntries.length, 3) }, (_, index) => (
+                  <Skeleton key={index} className="aspect-[2.35/1] w-full rounded-card" />
                 ))}
               </RestorableContentRow>
             ) : resolvedContinueWatchingEntries.length > 0 ? (
@@ -161,7 +190,12 @@ export function HomePage() {
                       updatedAt: entry.updatedAt,
                     }}
                     episode={entry.episode}
-                    onContinue={() => restoreSession(entry.mediaRef)}
+                    onContinue={() =>
+                      restoreSession(entry.mediaRef, {
+                        title: media.title,
+                        artwork: media.backdrop ?? media.poster,
+                      })
+                    }
                     onRemove={() => removeFromContinueWatching(entry.mediaRef, media.title)}
                   />
                 ))}

@@ -1,6 +1,7 @@
 import { getTableConfig, type PgTable } from 'drizzle-orm/pg-core';
 import { favorites } from '../../src/favorites/entities/favorite.entity';
 import { historyItems } from '../../src/history/entities/history-item.entity';
+import { continueWatchingItems } from '../../src/continue-watching/entities/continue-watching-item.entity';
 
 function expectUserMediaModel(
   table: PgTable,
@@ -55,5 +56,27 @@ describe('user data schema', () => {
       timestampColumn: 'opened_at',
       indexName: 'history_items_user_id_opened_at_index',
     });
+  });
+
+  it('defines unique per-user continue watching progress with cascade cleanup', () => {
+    const config = getTableConfig(continueWatchingItems);
+
+    expect(config.name).toBe('continue_watching_items');
+    expect(config.columns.map(({ name }) => name)).toEqual([
+      'user_id',
+      'media_ref',
+      'source_ref',
+      'season_number',
+      'episode_number',
+      'absolute_episode_number',
+      'position_seconds',
+      'duration_seconds',
+      'updated_at',
+    ]);
+    expect(config.primaryKeys.map(({ columns }) => columns.map(({ name }) => name))).toEqual([
+      ['user_id', 'media_ref'],
+    ]);
+    expect(config.foreignKeys[0]?.onDelete).toBe('cascade');
+    expect(config.indexes[0]?.config.name).toBe('continue_watching_user_id_updated_at_index');
   });
 });

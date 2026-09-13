@@ -10,7 +10,11 @@ type MediaVideoRendererProps = {
   onError: () => void;
   onPlay: () => void;
   onPause: () => void;
-  onProgress: (positionSeconds: number, durationSeconds?: number | null) => void;
+  onProgress: (
+    positionSeconds: number,
+    durationSeconds: number | undefined,
+    reason: 'periodic' | 'metadata' | 'seek' | 'pause' | 'ended',
+  ) => void;
 };
 
 const HLS_MIME_TYPE = 'application/vnd.apple.mpegurl';
@@ -34,7 +38,11 @@ export function MediaVideoRenderer({
 
   sourceUrlRef.current = source.url;
 
-  const reportProgress = (video: HTMLVideoElement, force = false) => {
+  const reportProgress = (
+    video: HTMLVideoElement,
+    reason: 'periodic' | 'metadata' | 'seek' | 'pause' | 'ended' = 'periodic',
+    force = false,
+  ) => {
     const positionSeconds = Number.isFinite(video.currentTime) ? Math.max(0, video.currentTime) : 0;
     const durationSeconds =
       Number.isFinite(video.duration) && video.duration > 0 ? video.duration : undefined;
@@ -45,7 +53,7 @@ export function MediaVideoRenderer({
     }
 
     lastReportedProgressBucketRef.current = progressBucket;
-    onProgress(positionSeconds, durationSeconds);
+    onProgress(positionSeconds, durationSeconds, reason);
   };
 
   const restoreInitialPosition = (video: HTMLVideoElement) => {
@@ -76,7 +84,7 @@ export function MediaVideoRenderer({
     const video = event.currentTarget;
 
     restoreInitialPosition(video);
-    reportProgress(video, true);
+    reportProgress(video, 'metadata', true);
   };
 
   const handleCanPlay = (event: SyntheticEvent<HTMLVideoElement>) => {
@@ -172,13 +180,13 @@ export function MediaVideoRenderer({
       preload="metadata"
       onLoadedMetadata={handleLoadedMetadata}
       onTimeUpdate={(event) => reportProgress(event.currentTarget)}
-      onSeeked={(event) => reportProgress(event.currentTarget, true)}
+      onSeeked={(event) => reportProgress(event.currentTarget, 'seek', true)}
       onPlay={onPlay}
       onPause={(event) => {
-        reportProgress(event.currentTarget, true);
+        reportProgress(event.currentTarget, 'pause', true);
         onPause();
       }}
-      onEnded={(event) => reportProgress(event.currentTarget, true)}
+      onEnded={(event) => reportProgress(event.currentTarget, 'ended', true)}
       onCanPlay={handleCanPlay}
       onError={onError}
     />

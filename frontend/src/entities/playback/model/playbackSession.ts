@@ -30,12 +30,15 @@ export interface PlaybackSession {
   updatedAt: string;
 }
 
-export interface ContinueWatchingEntry {
+export interface ContinueWatchingProgressEntry {
   mediaRef: string;
-  mediaSnapshot: PlaybackMediaSnapshot;
   sourceRef: string;
   episode: PlaybackEpisodeSelection | null;
   positionSeconds: number;
   durationSeconds: number | null;
   updatedAt: string;
+}
+
+export interface ContinueWatchingEntry extends ContinueWatchingProgressEntry {
+  mediaSnapshot: PlaybackMediaSnapshot;
 }

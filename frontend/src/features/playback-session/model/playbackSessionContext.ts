@@ -1,5 +1,5 @@
 import type {
-  ContinueWatchingEntry,
+  ContinueWatchingProgressEntry,
   PlaybackEpisodeSelection,
   PlaybackMediaSnapshot,
   PlaybackSession,
@@ -17,15 +17,24 @@ export type StartPlaybackSessionInput = {
 
 export type PlaybackSessionContextValue = {
   session: PlaybackSession | null;
-  continueWatchingEntries: readonly ContinueWatchingEntry[];
+  continueWatchingEntries: readonly ContinueWatchingProgressEntry[];
+  status: 'loading' | 'ready' | 'error';
+  storageMode: 'guest' | 'account' | 'unavailable';
+  canManageContinueWatching: boolean;
+  hasSyncError: boolean;
   startSession: (input: StartPlaybackSessionInput) => void;
-  restoreSession: (mediaRef: string) => void;
+  restoreSession: (mediaRef: string, mediaSnapshot: PlaybackMediaSnapshot) => void;
   removeContinueWatchingEntry: (mediaRef: string) => void;
   pauseSession: () => void;
   resumeSession: () => void;
-  updateProgress: (positionSeconds: number, durationSeconds?: number | null) => void;
+  updateProgress: (
+    positionSeconds: number,
+    durationSeconds?: number | null,
+    reason?: 'periodic' | 'metadata' | 'seek' | 'pause' | 'ended',
+  ) => void;
   setVolume: (volume: number) => void;
   endSession: () => void;
+  retry: () => void;
 };
 
 export const PlaybackSessionContext = createContext<PlaybackSessionContextValue | null>(null);

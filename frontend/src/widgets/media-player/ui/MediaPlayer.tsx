@@ -30,7 +30,11 @@ export type MediaPlayerProps = {
   onError: () => void;
   onPlay: () => void;
   onPause: () => void;
-  onProgress: (positionSeconds: number, durationSeconds?: number | null) => void;
+  onProgress: (
+    positionSeconds: number,
+    durationSeconds?: number | null,
+    reason?: 'periodic' | 'metadata' | 'seek' | 'pause' | 'ended',
+  ) => void;
   onRetry?: () => void;
   emptyState?: MediaPlayerEmptyState;
   embedded?: boolean;
