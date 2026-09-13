@@ -13,6 +13,7 @@ import Joi from 'joi';
           .uri({ scheme: ['postgres', 'postgresql'] })
           .required(),
         SESSION_TTL_DAYS: Joi.number().integer().min(1).max(365).default(30),
+        PASSWORD_RESET_MIN_RESPONSE_MS: Joi.number().integer().min(0).max(5000).default(500),
         RESEND_API_KEY: Joi.string().trim().required(),
         MAIL_FROM: Joi.string().trim().required(),
         FRONTEND_ORIGIN: Joi.string()

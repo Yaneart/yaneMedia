@@ -4,6 +4,7 @@ import {
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import { RegisterDto } from './dto/register.dto';
@@ -19,6 +20,8 @@ import { MailService } from '../mail/mail.service';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly usersService: UsersService,
     private readonly authRepository: AuthRepository,
@@ -148,6 +151,63 @@ export class AuthService {
 
     if (user && !user.emailVerifiedAt) {
       await this.sendVerificationEmail(user.id, user.email);
+    }
+
+    return { success: true };
+  }
+
+  async requestPasswordReset(email: string): Promise<{ success: true }> {
+    const startedAt = Date.now();
+    const user = await this.usersService.findByEmail(email);
+
+    if (user) {
+      try {
+        const token = generateToken();
+        const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+        const saved = await this.authRepository.savePasswordResetToken({
+          userId: user.id,
+          tokenHash: hashToken(token),
+          expiresAt,
+        });
+
+        if (saved) {
+          const url = new URL(
+            '/reset-password',
+            this.configService.getOrThrow<string>('FRONTEND_ORIGIN'),
+          );
+          url.hash = new URLSearchParams({ token }).toString();
+          await this.mailService.sendPasswordResetEmail(user.email, url.toString());
+        }
+      } catch {
+        // The public result must not reveal whether this email belongs to an account.
+        this.logger.error('Password reset delivery failed');
+      }
+    }
+
+    const minimumResponseMs = this.configService.getOrThrow<number>(
+      'PASSWORD_RESET_MIN_RESPONSE_MS',
+    );
+    const remainingDelayMs = minimumResponseMs - (Date.now() - startedAt);
+    if (remainingDelayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, remainingDelayMs));
+    }
+
+    return { success: true };
+  }
+
+  async resetPassword(token: string, password: string): Promise<{ success: true }> {
+    if (!isToken(token)) {
+      throw new BadRequestException('Ссылка недействительна или срок её действия истёк');
+    }
+
+    const passwordHash = await hashPassword(password);
+    const reset = await this.authRepository.resetPasswordByTokenHash(
+      hashToken(token),
+      passwordHash,
+    );
+
+    if (!reset) {
+      throw new BadRequestException('Ссылка недействительна или срок её действия истёк');
     }
 
     return { success: true };

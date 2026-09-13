@@ -43,6 +43,13 @@
       "when": 1789282723461,
       "tag": "0005_rainy_valkyrie",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789284815872,
+      "tag": "0006_right_odin",
+      "breakpoints": true
     }
   ]
 }

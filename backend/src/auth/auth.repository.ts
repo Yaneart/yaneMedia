@@ -7,6 +7,7 @@ import {
   emailVerificationTokens,
   NewEmailVerificationToken,
 } from './entities/email-verification-token.entity';
+import { NewPasswordResetToken, passwordResetTokens } from './entities/password-reset-token.entity';
 
 @Injectable()
 export class AuthRepository {
@@ -101,6 +102,54 @@ export class AuthRepository {
         .returning({ id: users.id });
 
       return Boolean(user);
+    });
+  }
+
+  async savePasswordResetToken(data: NewPasswordResetToken): Promise<boolean> {
+    const createdAt = new Date();
+    const cooldownBefore = new Date(createdAt.getTime() - 60_000);
+
+    const [saved] = await this.databaseService.db
+      .insert(passwordResetTokens)
+      .values({ ...data, createdAt })
+      .onConflictDoUpdate({
+        target: passwordResetTokens.userId,
+        set: {
+          tokenHash: data.tokenHash,
+          expiresAt: data.expiresAt,
+          createdAt,
+        },
+        setWhere: lte(passwordResetTokens.createdAt, cooldownBefore),
+      })
+      .returning({ userId: passwordResetTokens.userId });
+
+    return Boolean(saved);
+  }
+
+  async resetPasswordByTokenHash(
+    tokenHash: string,
+    passwordHash: string,
+    now = new Date(),
+  ): Promise<boolean> {
+    return this.databaseService.db.transaction(async (tx) => {
+      const [token] = await tx
+        .delete(passwordResetTokens)
+        .where(
+          and(eq(passwordResetTokens.tokenHash, tokenHash), gt(passwordResetTokens.expiresAt, now)),
+        )
+        .returning({ userId: passwordResetTokens.userId });
+
+      if (!token) {
+        return false;
+      }
+
+      await tx
+        .update(users)
+        .set({ passwordHash, updatedAt: now })
+        .where(eq(users.id, token.userId));
+      await tx.delete(sessions).where(eq(sessions.userId, token.userId));
+
+      return true;
     });
   }
 }

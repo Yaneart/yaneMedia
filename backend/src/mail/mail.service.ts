@@ -31,4 +31,24 @@ export class MailService {
       throw new ServiceUnavailableException('Не удалось отправить письмо. Попробуйте позже.');
     }
   }
+
+  async sendPasswordResetEmail(to: string, resetUrl: string): Promise<void> {
+    const { error } = await this.resend.emails.send({
+      from: this.from,
+      to,
+      subject: 'Сброс пароля в yaneMedia',
+      text: [
+        'Чтобы задать новый пароль, перейдите по ссылке:',
+        resetUrl,
+        '',
+        'Ссылка действует один час и может быть использована только один раз.',
+        'Если вы не запрашивали сброс пароля, проигнорируйте письмо.',
+      ].join('\n'),
+    });
+
+    if (error) {
+      this.logger.error(`Resend: ${error.name}`);
+      throw new ServiceUnavailableException('Не удалось отправить письмо. Попробуйте позже.');
+    }
+  }
 }

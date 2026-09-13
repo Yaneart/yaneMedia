@@ -5,13 +5,17 @@ import { DatabaseError } from 'pg';
 import { AuthController } from '../../src/auth/auth.controller';
 import { AuthService } from '../../src/auth/auth.service';
 import { AuthRepository } from '../../src/auth/auth.repository';
+import { CsrfGuard } from '../../src/auth/guards/csrf.guard';
 import { hashPassword, verifyPassword } from '../../src/auth/password';
 import { hashToken } from '../../src/auth/token';
+import { MailService } from '../../src/mail/mail.service';
 import { ApiExceptionFilter } from '../../src/platform/http/api-error/api-exception/api-exception.filter';
 import { ApiResponseInterceptor } from '../../src/platform/http/api-response/api-response.interceptor';
 import type { AppLogger } from '../../src/platform/logging/app-logger';
 import { UsersService } from '../../src/users/users.service';
 import type { NewUser } from '../../src/users/entities/user.entity';
+import { ThrottlerGuard } from '@nestjs/throttler';
+import type { NextFunction, Request, Response } from 'express';
 
 describe('auth HTTP contract', () => {
   let app: INestApplication;
@@ -25,7 +29,12 @@ describe('auth HTTP contract', () => {
     ReturnType<AuthRepository['create']>,
     Parameters<AuthRepository['create']>
   >();
-  const config = new ConfigService({ NODE_ENV: 'test' });
+  const config = new ConfigService({
+    FRONTEND_ORIGIN: 'https://yanemedia.example',
+    NODE_ENV: 'test',
+    PASSWORD_RESET_MIN_RESPONSE_MS: 0,
+    SESSION_TTL_DAYS: 30,
+  });
   let passwordHash: string;
 
   beforeAll(async () => {
@@ -35,11 +44,30 @@ describe('auth HTTP contract', () => {
       providers: [
         AuthService,
         { provide: UsersService, useValue: { findByEmail, create } },
-        { provide: AuthRepository, useValue: { create: createSession } },
+        {
+          provide: AuthRepository,
+          useValue: {
+            create: createSession,
+            saveVerificationToken: jest.fn().mockResolvedValue(true),
+          },
+        },
+        {
+          provide: MailService,
+          useValue: { sendVerificationEmail: jest.fn().mockResolvedValue(undefined) },
+        },
         { provide: ConfigService, useValue: config },
       ],
-    }).compile();
+    })
+      .overrideGuard(CsrfGuard)
+      .useValue({ canActivate: () => true })
+      .overrideGuard(ThrottlerGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
     app = module.createNestApplication();
+    app.use((_request: Request, response: Response, next: NextFunction) => {
+      response.setHeader('Cache-Control', 'no-store');
+      next();
+    });
     app.setGlobalPrefix('api/v1');
     app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
     app.useGlobalInterceptors(new ApiResponseInterceptor());
@@ -144,6 +172,7 @@ describe('auth HTTP contract', () => {
       };
       findByEmail.mockResolvedValue({
         ...publicUser,
+        emailVerifiedAt: createdAt,
         passwordHash,
         createdAt,
         updatedAt: createdAt,
