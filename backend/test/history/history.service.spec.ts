@@ -11,9 +11,16 @@ describe('HistoryService', () => {
   function createService() {
     const findByUserId = jest.fn().mockResolvedValue(storedEntries);
     const upsert = jest.fn().mockResolvedValue(undefined);
-    const service = new HistoryService({ findByUserId, upsert } as unknown as HistoryRepository);
+    const remove = jest.fn().mockResolvedValue(undefined);
+    const clear = jest.fn().mockResolvedValue(undefined);
+    const service = new HistoryService({
+      findByUserId,
+      upsert,
+      remove,
+      clear,
+    } as unknown as HistoryRepository);
 
-    return { service, findByUserId, upsert };
+    return { service, findByUserId, upsert, remove, clear };
   }
 
   it('maps user-scoped history timestamps to the HTTP contract', async () => {
@@ -41,6 +48,27 @@ describe('HistoryService', () => {
     expect(upsert).toHaveBeenCalledWith(userId, mediaRef);
     expect(findByUserId).toHaveBeenCalledWith(userId);
     expect(upsert.mock.invocationCallOrder[0]).toBeLessThan(
+      findByUserId.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('removes one opening before returning the resulting user history', async () => {
+    const { service, findByUserId, remove } = createService();
+    const mediaRef = storedEntries[0].mediaRef;
+
+    await expect(service.removeEntry(userId, mediaRef)).resolves.toHaveLength(2);
+    expect(remove).toHaveBeenCalledWith(userId, mediaRef);
+    expect(remove.mock.invocationCallOrder[0]).toBeLessThan(
+      findByUserId.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('clears one user history before returning its current state', async () => {
+    const { service, findByUserId, clear } = createService();
+
+    await expect(service.clearEntries(userId)).resolves.toHaveLength(2);
+    expect(clear).toHaveBeenCalledWith(userId);
+    expect(clear.mock.invocationCallOrder[0]).toBeLessThan(
       findByUserId.mock.invocationCallOrder[0],
     );
   });

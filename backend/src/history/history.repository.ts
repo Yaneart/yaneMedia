@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { asc, desc, eq, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
 import { historyItems } from './entities/history-item.entity';
 
@@ -23,5 +23,15 @@ export class HistoryRepository {
         target: [historyItems.userId, historyItems.mediaRef],
         set: { openedAt: sql`now()` },
       });
+  }
+
+  async remove(userId: string, mediaRef: string): Promise<void> {
+    await this.databaseService.db
+      .delete(historyItems)
+      .where(and(eq(historyItems.userId, userId), eq(historyItems.mediaRef, mediaRef)));
+  }
+
+  async clear(userId: string): Promise<void> {
+    await this.databaseService.db.delete(historyItems).where(eq(historyItems.userId, userId));
   }
 }

@@ -31,4 +31,22 @@ describe('HistoryController', () => {
     });
     expect(recordOpening).toHaveBeenCalledWith(user.id, entries[0].mediaRef);
   });
+
+  it('removes an opening for the current user', async () => {
+    const removeEntry = jest.fn().mockResolvedValue(entries.slice(1));
+    const controller = new HistoryController({ removeEntry } as unknown as HistoryService);
+
+    await expect(controller.remove(user, { mediaRef: entries[0].mediaRef })).resolves.toEqual({
+      entries: entries.slice(1),
+    });
+    expect(removeEntry).toHaveBeenCalledWith(user.id, entries[0].mediaRef);
+  });
+
+  it('clears history for the current user', async () => {
+    const clearEntries = jest.fn().mockResolvedValue([]);
+    const controller = new HistoryController({ clearEntries } as unknown as HistoryService);
+
+    await expect(controller.clear(user)).resolves.toEqual({ entries: [] });
+    expect(clearEntries).toHaveBeenCalledWith(user.id);
+  });
 });

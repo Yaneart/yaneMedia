@@ -59,3 +59,23 @@ export async function recordAccountOpening(mediaRef: MediaRef): Promise<AccountH
     }),
   );
 }
+
+export async function deleteAccountOpening(mediaRef: MediaRef): Promise<AccountHistory> {
+  return parseAccountHistory(
+    await apiRequest<unknown>(`/history/${encodeURIComponent(mediaRef)}`, {
+      method: 'DELETE',
+      credentials: 'include',
+      headers: { 'X-YaneMedia-CSRF': '1' },
+    }),
+  );
+}
+
+export async function clearAccountHistory(): Promise<AccountHistory> {
+  return parseAccountHistory(
+    await apiRequest<unknown>('/history', {
+      method: 'DELETE',
+      credentials: 'include',
+      headers: { 'X-YaneMedia-CSRF': '1' },
+    }),
+  );
+}

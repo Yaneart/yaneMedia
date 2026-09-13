@@ -71,5 +71,19 @@ describePostgres('history with PostgreSQL', () => {
       .from(historyItems)
       .where(and(eq(historyItems.userId, firstUser.id), eq(historyItems.mediaRef, sharedRef)));
     expect(duplicateRows).toHaveLength(1);
+
+    await repository.remove(firstUser.id, olderRef);
+    await expect(repository.findByUserId(firstUser.id)).resolves.toEqual([
+      expect.objectContaining({ mediaRef: sharedRef }),
+    ]);
+    await expect(repository.findByUserId(secondUser.id)).resolves.toEqual([
+      { mediaRef: sharedRef, openedAt: oldOpenedAt },
+    ]);
+
+    await repository.clear(firstUser.id);
+    await expect(repository.findByUserId(firstUser.id)).resolves.toEqual([]);
+    await expect(repository.findByUserId(secondUser.id)).resolves.toEqual([
+      { mediaRef: sharedRef, openedAt: oldOpenedAt },
+    ]);
   });
 });

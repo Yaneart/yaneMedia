@@ -19,4 +19,14 @@ export class HistoryService {
     await this.historyRepository.upsert(userId, mediaRef);
     return this.listEntries(userId);
   }
+
+  async removeEntry(userId: string, mediaRef: string): Promise<HistoryEntryDto[]> {
+    await this.historyRepository.remove(userId, mediaRef);
+    return this.listEntries(userId);
+  }
+
+  async clearEntries(userId: string): Promise<HistoryEntryDto[]> {
+    await this.historyRepository.clear(userId);
+    return this.listEntries(userId);
+  }
 }

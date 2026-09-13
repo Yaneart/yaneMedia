@@ -29,6 +29,8 @@ describe('history HTTP contract', () => {
   ];
   const listEntries = jest.fn();
   const recordOpening = jest.fn();
+  const removeEntry = jest.fn();
+  const clearEntries = jest.fn();
   const findUserBySessionHash = jest.fn();
   const deleteExpiredByTokenHash = jest.fn();
 
@@ -42,7 +44,10 @@ describe('history HTTP contract', () => {
           provide: ConfigService,
           useValue: new ConfigService({ FRONTEND_ORIGIN: 'http://localhost:5173' }),
         },
-        { provide: HistoryService, useValue: { listEntries, recordOpening } },
+        {
+          provide: HistoryService,
+          useValue: { listEntries, recordOpening, removeEntry, clearEntries },
+        },
         {
           provide: AuthRepository,
           useValue: { findUserBySessionHash, deleteExpiredByTokenHash },
@@ -69,6 +74,8 @@ describe('history HTTP contract', () => {
   beforeEach(() => {
     listEntries.mockReset().mockResolvedValue(entries);
     recordOpening.mockReset().mockResolvedValue(entries);
+    removeEntry.mockReset().mockResolvedValue(entries.slice(1));
+    clearEntries.mockReset().mockResolvedValue([]);
     findUserBySessionHash.mockReset().mockResolvedValue(user);
     deleteExpiredByTokenHash.mockReset().mockResolvedValue(undefined);
   });
@@ -145,5 +152,70 @@ describe('history HTTP contract', () => {
 
     expect(response.status).toBe(400);
     expect(recordOpening).not.toHaveBeenCalled();
+  });
+
+  it('requires CSRF protection when removing one entry', async () => {
+    const response = await fetch(`${url}/${encodeURIComponent(entries[0].mediaRef)}`, {
+      method: 'DELETE',
+      headers: { Cookie: `${SESSION_COOKIE_NAME}=${token}` },
+    });
+
+    expect(response.status).toBe(403);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(removeEntry).not.toHaveBeenCalled();
+  });
+
+  it('removes one validated entry for the authenticated user', async () => {
+    const response = await fetch(`${url}/${encodeURIComponent(entries[0].mediaRef)}`, {
+      method: 'DELETE',
+      headers: {
+        Cookie: `${SESSION_COOKIE_NAME}=${token}`,
+        'X-YaneMedia-CSRF': '1',
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(await response.json()).toEqual({ data: { entries: entries.slice(1) } });
+    expect(removeEntry).toHaveBeenCalledWith(user.id, entries[0].mediaRef);
+  });
+
+  it('rejects a malformed removal ref before the service', async () => {
+    const response = await fetch(`${url}/${encodeURIComponent('demo:movie:dune')}`, {
+      method: 'DELETE',
+      headers: {
+        Cookie: `${SESSION_COOKIE_NAME}=${token}`,
+        'X-YaneMedia-CSRF': '1',
+      },
+    });
+
+    expect(response.status).toBe(400);
+    expect(removeEntry).not.toHaveBeenCalled();
+  });
+
+  it('requires CSRF protection when clearing history', async () => {
+    const response = await fetch(url, {
+      method: 'DELETE',
+      headers: { Cookie: `${SESSION_COOKIE_NAME}=${token}` },
+    });
+
+    expect(response.status).toBe(403);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(clearEntries).not.toHaveBeenCalled();
+  });
+
+  it('clears history only for the authenticated user', async () => {
+    const response = await fetch(url, {
+      method: 'DELETE',
+      headers: {
+        Cookie: `${SESSION_COOKIE_NAME}=${token}`,
+        'X-YaneMedia-CSRF': '1',
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(await response.json()).toEqual({ data: { entries: [] } });
+    expect(clearEntries).toHaveBeenCalledWith(user.id);
   });
 });

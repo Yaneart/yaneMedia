@@ -63,4 +63,46 @@ describe('HistoryRepository', () => {
     expect(conflict.target).toEqual([historyItems.userId, historyItems.mediaRef]);
     expect(new PgDialect().sqlToQuery(conflict.set.openedAt).sql).toBe('now()');
   });
+
+  it('removes an item only for the specified user', async () => {
+    let condition: SQL | undefined;
+    const where = jest.fn((value: SQL) => {
+      condition = value;
+      return Promise.resolve();
+    });
+    const deleteRows = jest.fn().mockReturnValue({ where });
+    const repository = new HistoryRepository({
+      db: { delete: deleteRows },
+    } as unknown as DatabaseService);
+    const userId = '93ea2794-e805-4f60-b14f-2005d2c61804';
+    const mediaRef = 'imdb:tt15239678';
+
+    await expect(repository.remove(userId, mediaRef)).resolves.toBeUndefined();
+    expect(deleteRows).toHaveBeenCalledWith(historyItems);
+    if (!condition) throw new Error('Expected a delete condition');
+    const query = new PgDialect().sqlToQuery(condition);
+    expect(query.sql).toContain('"history_items"."user_id" = $1');
+    expect(query.sql).toContain('"history_items"."media_ref" = $2');
+    expect(query.params).toEqual([userId, mediaRef]);
+  });
+
+  it('clears only the specified user history', async () => {
+    let condition: SQL | undefined;
+    const where = jest.fn((value: SQL) => {
+      condition = value;
+      return Promise.resolve();
+    });
+    const deleteRows = jest.fn().mockReturnValue({ where });
+    const repository = new HistoryRepository({
+      db: { delete: deleteRows },
+    } as unknown as DatabaseService);
+    const userId = '93ea2794-e805-4f60-b14f-2005d2c61804';
+
+    await expect(repository.clear(userId)).resolves.toBeUndefined();
+    expect(deleteRows).toHaveBeenCalledWith(historyItems);
+    if (!condition) throw new Error('Expected a delete condition');
+    const query = new PgDialect().sqlToQuery(condition);
+    expect(query.sql).toContain('"history_items"."user_id" = $1');
+    expect(query.params).toEqual([userId]);
+  });
 });
