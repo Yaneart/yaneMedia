@@ -32,9 +32,12 @@ import {
 } from './continueWatchingStorage';
 import { PlaybackSessionContext, type StartPlaybackSessionInput } from './playbackSessionContext';
 import {
+  getPlaybackSessionForOwner,
   loadPlaybackSession,
+  reconcilePlaybackSessionOwner,
   removePlaybackSession,
   savePlaybackSession,
+  type OwnedPlaybackSession,
 } from './playbackSessionStorage';
 
 type PlaybackSessionProviderProps = {
@@ -118,14 +121,27 @@ async function executeAccountMutation(mutation: AccountMutation) {
 export function PlaybackSessionProvider({ children }: PlaybackSessionProviderProps) {
   const { state: authState, setGuest, refresh: refreshAuth } = useAuth();
   const queryClient = useQueryClient();
-  const [session, setSession] = useState<PlaybackSession | null>(loadPlaybackSession);
+  const [storedSession, setStoredSession] = useState<OwnedPlaybackSession | null>(
+    loadPlaybackSession,
+  );
   const [guestEntries, setGuestEntries] = useState<ContinueWatchingEntry[]>(
     loadContinueWatchingEntries,
   );
   const accountUserId = authState.status === 'authenticated' ? authState.user.id : null;
+  const resolvedOwnerId =
+    authState.status === 'authenticated'
+      ? authState.user.id
+      : authState.status === 'guest'
+        ? null
+        : undefined;
+  const session = getPlaybackSessionForOwner(storedSession, resolvedOwnerId);
   const sessionRef = useRef(session);
+  const sessionOwnerIdRef = useRef<string | null | undefined>(
+    session ? storedSession?.ownerId : undefined,
+  );
   const currentUserIdRef = useRef(accountUserId);
   const renderedUserIdRef = useRef(accountUserId);
+  const resolvedOwnerIdRef = useRef(resolvedOwnerId);
   const mutationActiveRef = useRef(false);
   const mutationPausedRef = useRef(false);
   const mutationQueueRef = useRef<AccountMutation[]>([]);
@@ -138,6 +154,7 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
   const confirmedAccountMediaRefsRef = useRef(new Map<string, Set<string>>());
 
   sessionRef.current = session;
+  sessionOwnerIdRef.current = session ? storedSession?.ownerId : undefined;
   currentUserIdRef.current = accountUserId;
 
   const accountQuery = useQuery({
@@ -370,15 +387,41 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
     [authState.status, syncAccountProgress, updateGuestProgress],
   );
 
-  const storeSession = useCallback((nextSession: PlaybackSession | null) => {
-    sessionRef.current = nextSession;
-    setSession(nextSession);
-  }, []);
+  const storeSession = useCallback(
+    (nextSession: PlaybackSession | null, ownerId?: string | null) => {
+      const nextOwnerId = ownerId === undefined ? sessionOwnerIdRef.current : ownerId;
+
+      if (nextSession && nextOwnerId === undefined) return;
+
+      const nextStoredSession = nextSession
+        ? {
+            ownerId: nextOwnerId!,
+            session: nextSession,
+          }
+        : null;
+
+      sessionOwnerIdRef.current = nextStoredSession?.ownerId;
+      sessionRef.current = nextSession;
+      setStoredSession(nextStoredSession);
+    },
+    [],
+  );
 
   useEffect(() => {
-    if (session) savePlaybackSession(session);
+    if (resolvedOwnerId === undefined) return;
+
+    const previousOwnerId = resolvedOwnerIdRef.current;
+    resolvedOwnerIdRef.current = resolvedOwnerId;
+
+    setStoredSession((current) =>
+      reconcilePlaybackSessionOwner(current, previousOwnerId, resolvedOwnerId),
+    );
+  }, [resolvedOwnerId]);
+
+  useEffect(() => {
+    if (storedSession) savePlaybackSession(storedSession.ownerId, storedSession.session);
     else removePlaybackSession();
-  }, [session]);
+  }, [storedSession]);
 
   useEffect(() => {
     if (guestEntries.length > 0) saveContinueWatchingEntries(guestEntries);
@@ -494,6 +537,8 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
 
   const startSession = useCallback(
     (input: StartPlaybackSessionInput) => {
+      if (resolvedOwnerId === undefined) return;
+
       const durationSeconds = normalizeDuration(input.durationSeconds ?? null);
       const nextSession: PlaybackSession = {
         mediaRef: input.mediaRef,
@@ -507,14 +552,16 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
         updatedAt: getUpdatedAt(),
       };
 
-      storeSession(nextSession);
+      storeSession(nextSession, resolvedOwnerId);
       recordSession(nextSession, true);
     },
-    [recordSession, storeSession],
+    [recordSession, resolvedOwnerId, storeSession],
   );
 
   const restoreSession = useCallback(
     (mediaRef: string, mediaSnapshot: PlaybackMediaSnapshot) => {
+      if (resolvedOwnerId === undefined) return;
+
       const entry = continueWatchingEntries.find((candidate) => candidate.mediaRef === mediaRef);
       if (!entry) return;
 
@@ -525,10 +572,10 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
         volume: sessionRef.current?.volume ?? 1,
         updatedAt: getUpdatedAt(),
       };
-      storeSession(nextSession);
+      storeSession(nextSession, resolvedOwnerId);
       recordSession(nextSession, true);
     },
-    [continueWatchingEntries, recordSession, storeSession],
+    [continueWatchingEntries, recordSession, resolvedOwnerId, storeSession],
   );
 
   const removeContinueWatchingEntry = useCallback(
@@ -547,20 +594,24 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
   );
 
   const pauseSession = useCallback(() => {
+    if (sessionOwnerIdRef.current !== resolvedOwnerId) return;
+
     const current = sessionRef.current;
     if (!current || current.state === 'paused') return;
 
     storeSession({ ...current, state: 'paused', updatedAt: getUpdatedAt() });
-  }, [storeSession]);
+  }, [resolvedOwnerId, storeSession]);
 
   const resumeSession = useCallback(() => {
+    if (sessionOwnerIdRef.current !== resolvedOwnerId) return;
+
     const current = sessionRef.current;
     if (!current || current.state === 'playing') return;
 
     const nextSession = { ...current, state: 'playing' as const, updatedAt: getUpdatedAt() };
     storeSession(nextSession);
     recordSession(nextSession, true);
-  }, [recordSession, storeSession]);
+  }, [recordSession, resolvedOwnerId, storeSession]);
 
   const updateProgress = useCallback(
     (
@@ -568,6 +619,8 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
       durationSeconds?: number | null,
       reason: 'periodic' | 'metadata' | 'seek' | 'pause' | 'ended' = 'periodic',
     ) => {
+      if (sessionOwnerIdRef.current !== resolvedOwnerId) return;
+
       const current = sessionRef.current;
       if (!current) return;
 
@@ -606,11 +659,13 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
 
       recordSession(nextSession, reason === 'seek' || reason === 'pause' || reason === 'ended');
     },
-    [authState.status, recordSession, removeAccountProgress, storeSession],
+    [authState.status, recordSession, removeAccountProgress, resolvedOwnerId, storeSession],
   );
 
   const setVolume = useCallback(
     (volume: number) => {
+      if (sessionOwnerIdRef.current !== resolvedOwnerId) return;
+
       const current = sessionRef.current;
       if (!current) return;
 
@@ -619,7 +674,7 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
 
       storeSession({ ...current, volume: nextVolume, updatedAt: getUpdatedAt() });
     },
-    [storeSession],
+    [resolvedOwnerId, storeSession],
   );
 
   const endSession = useCallback(() => {

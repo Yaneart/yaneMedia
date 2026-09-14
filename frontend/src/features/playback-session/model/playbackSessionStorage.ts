@@ -1,12 +1,41 @@
 import type { PlaybackSession } from '@/entities/playback';
 
 const PLAYBACK_SESSION_STORAGE_KEY = 'yanemedia-playback-session';
-const PLAYBACK_SESSION_STORAGE_VERSION = 1;
+const PLAYBACK_SESSION_STORAGE_VERSION = 2;
 
-type StoredPlaybackSession = {
-  version: typeof PLAYBACK_SESSION_STORAGE_VERSION;
+export type OwnedPlaybackSession = {
+  ownerId: string | null;
   session: PlaybackSession;
 };
+
+type StoredPlaybackSession = OwnedPlaybackSession & {
+  version: typeof PLAYBACK_SESSION_STORAGE_VERSION;
+};
+
+export function getPlaybackSessionForOwner(
+  storedSession: OwnedPlaybackSession | null,
+  ownerId: string | null | undefined,
+): PlaybackSession | null {
+  if (ownerId === undefined || !storedSession) return null;
+
+  return storedSession.ownerId === ownerId || (storedSession.ownerId === null && ownerId !== null)
+    ? storedSession.session
+    : null;
+}
+
+export function reconcilePlaybackSessionOwner(
+  storedSession: OwnedPlaybackSession | null,
+  previousOwnerId: string | null | undefined,
+  ownerId: string | null,
+): OwnedPlaybackSession | null {
+  if (!storedSession || storedSession.ownerId === ownerId) return storedSession;
+
+  return storedSession.ownerId === null &&
+    ownerId !== null &&
+    (previousOwnerId === undefined || previousOwnerId === null)
+    ? { ...storedSession, ownerId }
+    : null;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -111,11 +140,12 @@ function isStoredPlaybackSession(value: unknown): value is StoredPlaybackSession
   return (
     isRecord(value) &&
     value.version === PLAYBACK_SESSION_STORAGE_VERSION &&
+    (value.ownerId === null || isNonEmptyString(value.ownerId)) &&
     isPlaybackSession(value.session)
   );
 }
 
-export function loadPlaybackSession(): PlaybackSession | null {
+export function loadPlaybackSession(): StoredPlaybackSession | null {
   try {
     const serializedSession = window.localStorage.getItem(PLAYBACK_SESSION_STORAGE_KEY);
 
@@ -136,19 +166,23 @@ export function loadPlaybackSession(): PlaybackSession | null {
         : Math.min(session.positionSeconds, session.durationSeconds);
 
     return {
-      ...session,
-      state: 'paused',
-      positionSeconds,
+      ...storedSession,
+      session: {
+        ...session,
+        state: 'paused',
+        positionSeconds,
+      },
     };
   } catch {
     return null;
   }
 }
 
-export function savePlaybackSession(session: PlaybackSession): void {
+export function savePlaybackSession(ownerId: string | null, session: PlaybackSession): void {
   try {
     const storedSession: StoredPlaybackSession = {
       version: PLAYBACK_SESSION_STORAGE_VERSION,
+      ownerId,
       session,
     };
 
