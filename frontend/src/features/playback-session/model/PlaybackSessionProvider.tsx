@@ -147,6 +147,7 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
   const mutationQueueRef = useRef<AccountMutation[]>([]);
   const failedMutationRef = useRef<AccountMutation | null>(null);
   const trailingProgressRef = useRef<ContinueWatchingProgressEntry | null>(null);
+  const progressWaitingForQueryRef = useRef(false);
   const throttleTimerRef = useRef<number | null>(null);
   const lastWriteStartedAtRef = useRef(0);
   const runNextMutationRef = useRef<() => void>(() => undefined);
@@ -298,6 +299,7 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
     const entry = trailingProgressRef.current;
     const userId = currentUserIdRef.current;
     trailingProgressRef.current = null;
+    progressWaitingForQueryRef.current = false;
     throttleTimerRef.current = null;
 
     if (entry && userId) {
@@ -314,12 +316,14 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
       const current = queryClient.getQueryData<AccountContinueWatching>(queryKey);
       if (!current) {
         trailingProgressRef.current = entry;
+        progressWaitingForQueryRef.current = true;
         return;
       }
 
       if (immediate) {
         clearThrottleTimer();
         trailingProgressRef.current = null;
+        progressWaitingForQueryRef.current = false;
         runAccountMutation({ userId, type: 'save', origin: 'playback', entry });
         return;
       }
@@ -348,6 +352,7 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
 
       if (trailingProgressRef.current?.mediaRef === mediaRef) {
         trailingProgressRef.current = null;
+        progressWaitingForQueryRef.current = false;
         clearThrottleTimer();
       }
       mutationQueueRef.current = mutationQueueRef.current.filter(
@@ -438,6 +443,7 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
     if (previousUserId !== accountUserId) {
       clearThrottleTimer();
       trailingProgressRef.current = null;
+      progressWaitingForQueryRef.current = false;
       mutationQueueRef.current = mutationQueueRef.current.filter(
         (queued) => queued.userId === accountUserId,
       );
@@ -455,9 +461,10 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
   useEffect(() => {
     if (!accountUserId || !accountQuery.data) return;
 
-    if (trailingProgressRef.current) {
+    if (trailingProgressRef.current && progressWaitingForQueryRef.current) {
       const pending = trailingProgressRef.current;
       trailingProgressRef.current = null;
+      progressWaitingForQueryRef.current = false;
       syncAccountProgress(pending, true);
     }
 
