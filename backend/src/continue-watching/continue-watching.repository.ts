@@ -5,6 +5,7 @@ import {
   continueWatchingItems,
   type NewContinueWatchingItem,
 } from './entities/continue-watching-item.entity';
+import { users } from '../users/entities/user.entity';
 
 export const CONTINUE_WATCHING_LIMIT = 5;
 
@@ -34,6 +35,10 @@ export class ContinueWatchingRepository {
 
   async upsertAndTrim(item: NewContinueWatchingItem): Promise<void> {
     await this.databaseService.db.transaction(async (transaction) => {
+      await transaction.execute(
+        sql`select 1 from ${users} where ${users.id} = ${item.userId} for update`,
+      );
+
       await transaction
         .insert(continueWatchingItems)
         .values(item)

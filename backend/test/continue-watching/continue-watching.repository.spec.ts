@@ -43,6 +43,7 @@ describe('ContinueWatchingRepository', () => {
   it('upserts with a server timestamp and physically removes overflow entries', async () => {
     type ConflictOptions = { target: unknown; set: Record<string, unknown> };
     let conflict: ConflictOptions | undefined;
+    let lockQuery: SQL | undefined;
     let deleteCondition: SQL | undefined;
     const onConflictDoUpdate = jest.fn((options: ConflictOptions) => {
       conflict = options;
@@ -50,6 +51,10 @@ describe('ContinueWatchingRepository', () => {
     });
     const values = jest.fn().mockReturnValue({ onConflictDoUpdate });
     const insert = jest.fn().mockReturnValue({ values });
+    const execute = jest.fn((query: SQL) => {
+      lockQuery = query;
+      return Promise.resolve();
+    });
     const offset = jest
       .fn()
       .mockResolvedValue([{ mediaRef: 'imdb:tt0000001' }, { mediaRef: 'imdb:tt0000002' }]);
@@ -63,7 +68,7 @@ describe('ContinueWatchingRepository', () => {
     });
     const deleteRows = jest.fn().mockReturnValue({ where: whereDelete });
     const transaction = jest.fn(async (callback: (transaction: unknown) => Promise<void>) =>
-      callback({ insert, select, delete: deleteRows }),
+      callback({ execute, insert, select, delete: deleteRows }),
     );
     const repository = new ContinueWatchingRepository({
       db: { transaction },
@@ -79,11 +84,19 @@ describe('ContinueWatchingRepository', () => {
     await repository.upsertAndTrim(item);
 
     expect(values).toHaveBeenCalledWith(item);
+    expect(execute).toHaveBeenCalledTimes(1);
     expect(offset).toHaveBeenCalledWith(CONTINUE_WATCHING_LIMIT);
     expect(deleteRows).toHaveBeenCalledWith(continueWatchingItems);
-    if (!conflict || !deleteCondition) throw new Error('Expected upsert and trim options');
+    if (!conflict || !lockQuery || !deleteCondition) {
+      throw new Error('Expected user lock, upsert and trim options');
+    }
     expect(conflict.target).toEqual([continueWatchingItems.userId, continueWatchingItems.mediaRef]);
     expect(new PgDialect().sqlToQuery(conflict.set.updatedAt as SQL).sql).toBe('clock_timestamp()');
+    expect(new PgDialect().sqlToQuery(lockQuery)).toEqual({
+      sql: 'select 1 from "users" where "users"."id" = $1 for update',
+      params: [userId],
+      typings: ['none'],
+    });
     expect(new PgDialect().sqlToQuery(deleteCondition).params).toEqual([
       userId,
       'imdb:tt0000001',
