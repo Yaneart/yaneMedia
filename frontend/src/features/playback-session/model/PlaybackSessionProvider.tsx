@@ -135,13 +135,25 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
   const lastWriteStartedAtRef = useRef(0);
   const runNextMutationRef = useRef<() => void>(() => undefined);
   const migrationQueuedRefsRef = useRef(new Set<string>());
+  const confirmedAccountMediaRefsRef = useRef(new Map<string, Set<string>>());
 
   sessionRef.current = session;
   currentUserIdRef.current = accountUserId;
 
   const accountQuery = useQuery({
     queryKey: accountContinueWatchingQueryKey(accountUserId ?? 'inactive'),
-    queryFn: ({ signal }) => getAccountContinueWatching(signal),
+    queryFn: async ({ signal }) => {
+      const result = await getAccountContinueWatching(signal);
+
+      if (accountUserId) {
+        confirmedAccountMediaRefsRef.current.set(
+          accountUserId,
+          new Set(result.entries.map(({ mediaRef }) => mediaRef)),
+        );
+      }
+
+      return result;
+    },
     enabled: accountUserId !== null,
     staleTime: 30_000,
   });
@@ -166,6 +178,10 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
       if (currentUserIdRef.current !== variables.userId) return;
 
       failedMutationRef.current = null;
+      confirmedAccountMediaRefsRef.current.set(
+        variables.userId,
+        new Set(result.entries.map(({ mediaRef }) => mediaRef)),
+      );
       queryClient.setQueryData(
         accountContinueWatchingQueryKey(variables.userId),
         applyOutstandingMutations(result),
@@ -373,6 +389,7 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
     const previousUserId = renderedUserIdRef.current;
     if (previousUserId && previousUserId !== accountUserId) {
       clearAccountQueries(queryClient, previousUserId);
+      confirmedAccountMediaRefsRef.current.delete(previousUserId);
     }
 
     if (previousUserId !== accountUserId) {
@@ -406,12 +423,13 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
     const merged = mergeAccountAndGuestProgress(accountQuery.data.entries, guestEntries);
     const accountMediaRefs = new Set(accountQuery.data.entries.map(({ mediaRef }) => mediaRef));
     const guestToMigrate = merged.filter((entry) => !accountMediaRefs.has(entry.mediaRef));
-    const retainedGuestRefs = new Set(guestToMigrate.map(({ mediaRef }) => mediaRef));
+    const confirmedAccountMediaRefs = confirmedAccountMediaRefsRef.current.get(accountUserId);
 
     setGuestEntries((current) =>
-      current.every(({ mediaRef }) => retainedGuestRefs.has(mediaRef))
+      !confirmedAccountMediaRefs ||
+      current.every(({ mediaRef }) => !confirmedAccountMediaRefs.has(mediaRef))
         ? current
-        : current.filter(({ mediaRef }) => retainedGuestRefs.has(mediaRef)),
+        : current.filter(({ mediaRef }) => !confirmedAccountMediaRefs.has(mediaRef)),
     );
 
     for (const entry of [...guestToMigrate].reverse()) {
