@@ -7,6 +7,7 @@ import { AuthController } from '../../src/auth/auth.controller';
 import { AuthRepository } from '../../src/auth/auth.repository';
 import { AuthService } from '../../src/auth/auth.service';
 import { CsrfGuard } from '../../src/auth/guards/csrf.guard';
+import { SessionGuard } from '../../src/auth/guards/session.guard';
 import { generateToken } from '../../src/auth/token';
 import { ApiExceptionFilter } from '../../src/platform/http/api-error/api-exception/api-exception.filter';
 import { ApiResponseInterceptor } from '../../src/platform/http/api-response/api-response.interceptor';
@@ -32,6 +33,7 @@ describe('password reset HTTP contract', () => {
           },
         },
         CsrfGuard,
+        SessionGuard,
         ThrottlerGuard,
         {
           provide: AuthService,

@@ -17,6 +17,7 @@ export type {
   ResendVerificationPayload,
   RequestPasswordResetPayload,
   ResetPasswordPayload,
+  AuthSessionResponse,
   AuthUserResponse,
   AuthSuccessResponse,
 } from './model/auth';

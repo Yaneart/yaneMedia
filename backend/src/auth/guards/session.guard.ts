@@ -8,17 +8,15 @@ import type { AuthRequest } from '../auth-request';
 import { AuthRepository } from '../auth.repository';
 import { SESSION_COOKIE_NAME } from '../session-cookie';
 import { hashToken, isToken } from '../token';
+import type { AuthUserDto } from '../dto/auth-user.dto';
 
 @Injectable()
 export class SessionGuard implements CanActivate {
   constructor(private readonly authRepository: AuthRepository) {}
 
-  async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest<AuthRequest>();
-    const token = request.cookies?.[SESSION_COOKIE_NAME];
-
+  async findUser(token: unknown): Promise<AuthUserDto | null> {
     if (!isToken(token)) {
-      throw new UnauthorizedException('Необходим вход в аккаунт');
+      return null;
     }
 
     const tokenHash = hashToken(token);
@@ -27,15 +25,26 @@ export class SessionGuard implements CanActivate {
 
     if (!user) {
       await this.authRepository.deleteExpiredByTokenHash(tokenHash, now);
-      throw new UnauthorizedException('Необходим вход в аккаунт');
+      return null;
     }
 
-    request.user = {
+    return {
       id: user.id,
       displayName: user.displayName,
       email: user.email,
       createdAt: user.createdAt.toISOString(),
     };
+  }
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const request = context.switchToHttp().getRequest<AuthRequest>();
+    const user = await this.findUser(request.cookies?.[SESSION_COOKIE_NAME]);
+
+    if (!user) {
+      throw new UnauthorizedException('Необходим вход в аккаунт');
+    }
+
+    request.user = user;
 
     return true;
   }

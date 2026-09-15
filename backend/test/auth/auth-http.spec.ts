@@ -16,6 +16,9 @@ import { UsersService } from '../../src/users/users.service';
 import type { NewUser } from '../../src/users/entities/user.entity';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import type { NextFunction, Request, Response } from 'express';
+import cookieParser from 'cookie-parser';
+import { SessionGuard } from '../../src/auth/guards/session.guard';
+import { generateToken } from '../../src/auth/token';
 
 describe('auth HTTP contract', () => {
   let app: INestApplication;
@@ -28,6 +31,14 @@ describe('auth HTTP contract', () => {
   const createSession = jest.fn<
     ReturnType<AuthRepository['create']>,
     Parameters<AuthRepository['create']>
+  >();
+  const findUserBySessionHash = jest.fn<
+    ReturnType<AuthRepository['findUserBySessionHash']>,
+    Parameters<AuthRepository['findUserBySessionHash']>
+  >();
+  const deleteExpiredByTokenHash = jest.fn<
+    ReturnType<AuthRepository['deleteExpiredByTokenHash']>,
+    Parameters<AuthRepository['deleteExpiredByTokenHash']>
   >();
   const config = new ConfigService({
     FRONTEND_ORIGIN: 'https://yanemedia.example',
@@ -43,11 +54,14 @@ describe('auth HTTP contract', () => {
       controllers: [AuthController],
       providers: [
         AuthService,
+        SessionGuard,
         { provide: UsersService, useValue: { findByEmail, create } },
         {
           provide: AuthRepository,
           useValue: {
             create: createSession,
+            findUserBySessionHash,
+            deleteExpiredByTokenHash,
             saveVerificationToken: jest.fn().mockResolvedValue(true),
           },
         },
@@ -64,6 +78,7 @@ describe('auth HTTP contract', () => {
       .useValue({ canActivate: () => true })
       .compile();
     app = module.createNestApplication();
+    app.use(cookieParser());
     app.use((_request: Request, response: Response, next: NextFunction) => {
       response.setHeader('Cache-Control', 'no-store');
       next();
@@ -81,6 +96,8 @@ describe('auth HTTP contract', () => {
   beforeEach(() => {
     config.set('NODE_ENV', 'test');
     createSession.mockReset().mockImplementation((data) => Promise.resolve({ ...data, createdAt }));
+    findUserBySessionHash.mockReset().mockResolvedValue(undefined);
+    deleteExpiredByTokenHash.mockReset().mockResolvedValue(undefined);
     findByEmail.mockReset().mockResolvedValue(undefined);
     create.mockReset().mockImplementation((data) =>
       Promise.resolve({
@@ -158,6 +175,55 @@ describe('auth HTTP contract', () => {
   it('does not expose the generated CRUD routes', async () => {
     const response = await fetch(url);
     expect(response.status).toBe(404);
+  });
+
+  it('represents a missing session as a public guest result', async () => {
+    const response = await fetch(`${url}/me`);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(await response.json()).toEqual({ data: { user: null } });
+    expect(findUserBySessionHash).not.toHaveBeenCalled();
+  });
+
+  it('returns the current user for a valid session', async () => {
+    const token = generateToken();
+    findUserBySessionHash.mockResolvedValue({
+      id,
+      displayName: 'Artem',
+      email: 'artem@example.com',
+      createdAt,
+    });
+
+    const response = await fetch(`${url}/me`, {
+      headers: { Cookie: `yanemedia_session=${token}` },
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      data: {
+        user: {
+          id,
+          displayName: 'Artem',
+          email: 'artem@example.com',
+          createdAt: createdAt.toISOString(),
+        },
+      },
+    });
+    expect(findUserBySessionHash).toHaveBeenCalledWith(hashToken(token), expect.any(Date));
+    expect(deleteExpiredByTokenHash).not.toHaveBeenCalled();
+  });
+
+  it('represents an invalid or expired session as guest and removes an expired digest', async () => {
+    const token = generateToken();
+
+    const response = await fetch(`${url}/me`, {
+      headers: { Cookie: `yanemedia_session=${token}` },
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ data: { user: null } });
+    expect(deleteExpiredByTokenHash).toHaveBeenCalledWith(hashToken(token), expect.any(Date));
   });
 
   it.each(['test', 'production'])(

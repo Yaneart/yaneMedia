@@ -5,7 +5,6 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { getSessionCookieOptions, SESSION_COOKIE_NAME } from './session-cookie';
 import { SessionGuard } from './guards/session.guard';
-import { CurrentUser } from './decorators/current-user.decorator';
 import { AuthUserDto } from './dto/auth-user.dto';
 import { CsrfGuard } from './guards/csrf.guard';
 import type { Response } from 'express';
@@ -22,6 +21,7 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly configService: ConfigService,
+    private readonly sessionGuard: SessionGuard,
   ) {}
 
   @Post('register')
@@ -47,9 +47,10 @@ export class AuthController {
   }
 
   @Get('me')
-  @UseGuards(SessionGuard)
-  me(@CurrentUser() user: AuthUserDto): { user: AuthUserDto } {
-    return { user };
+  async me(@Req() request: AuthRequest): Promise<{ user: AuthUserDto | null }> {
+    return {
+      user: await this.sessionGuard.findUser(request.cookies?.[SESSION_COOKIE_NAME]),
+    };
   }
 
   @Post('logout')

@@ -2,6 +2,7 @@ import { apiRequest } from '@/shared/api';
 
 import type {
   AuthSuccessResponse,
+  AuthSessionResponse,
   AuthUserResponse,
   LoginPayload,
   RegisterPayload,
@@ -31,8 +32,8 @@ export function login(payload: LoginPayload): Promise<AuthUserResponse> {
   return postAuth<AuthUserResponse>('login', payload);
 }
 
-export function me(signal?: AbortSignal): Promise<AuthUserResponse> {
-  return apiRequest<AuthUserResponse>('/auth/me', {
+export function me(signal?: AbortSignal): Promise<AuthSessionResponse> {
+  return apiRequest<AuthSessionResponse>('/auth/me', {
     credentials: 'include',
     signal,
   });

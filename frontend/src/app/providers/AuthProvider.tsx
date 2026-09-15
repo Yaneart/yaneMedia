@@ -8,7 +8,6 @@ import {
   type AuthState,
   type AuthUser,
 } from '@/entities/auth';
-import { ApiClientError } from '@/shared/api';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
@@ -60,15 +59,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (controller.signal.aborted) return;
 
-      setAuthenticated(user);
-    } catch (error) {
+      if (user) {
+        setAuthenticated(user);
+      } else {
+        setGuest();
+      }
+    } catch {
       if (controller.signal.aborted) return;
 
-      if (error instanceof ApiClientError && error.status === 401) {
-        setGuest();
-      } else {
-        setState({ status: 'error', user: null });
-      }
+      setState({ status: 'error', user: null });
     } finally {
       if (requestRef.current === controller) {
         requestRef.current = null;

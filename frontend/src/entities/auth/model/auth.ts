@@ -37,6 +37,10 @@ export interface AuthUserResponse {
   user: AuthUser;
 }
 
+export interface AuthSessionResponse {
+  user: AuthUser | null;
+}
+
 export interface AuthSuccessResponse {
   success: true;
 }
