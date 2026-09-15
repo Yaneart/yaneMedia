@@ -4,11 +4,22 @@ import type { OpeningHistoryEntry } from './openingHistoryContext';
 
 const OPENING_HISTORY_STORAGE_KEY = 'yanemedia-opening-history';
 const OPENING_HISTORY_STORAGE_VERSION = 1;
+const OPENING_HISTORY_UNDO_STORAGE_KEY = 'yanemedia-opening-history-undo';
+const OPENING_HISTORY_UNDO_STORAGE_VERSION = 1;
 export const OPENING_HISTORY_LIMIT = 100;
 
 type StoredOpeningHistory = {
   version: typeof OPENING_HISTORY_STORAGE_VERSION;
   entries: OpeningHistoryEntry[];
+};
+
+export type OpeningHistoryUndo = {
+  ownerId: string | null;
+  entries: OpeningHistoryEntry[];
+};
+
+type StoredOpeningHistoryUndo = OpeningHistoryUndo & {
+  version: typeof OPENING_HISTORY_UNDO_STORAGE_VERSION;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -34,6 +45,21 @@ function isStoredOpeningHistory(value: unknown): value is StoredOpeningHistory {
     isRecord(value) &&
     value.version === OPENING_HISTORY_STORAGE_VERSION &&
     Array.isArray(value.entries) &&
+    value.entries.every(isOpeningHistoryEntry)
+  );
+}
+
+function isStoredOpeningHistoryUndo(value: unknown): value is StoredOpeningHistoryUndo {
+  return (
+    isRecord(value) &&
+    value.version === OPENING_HISTORY_UNDO_STORAGE_VERSION &&
+    (value.ownerId === null ||
+      (typeof value.ownerId === 'string' &&
+        value.ownerId.length > 0 &&
+        value.ownerId.length <= 128)) &&
+    Array.isArray(value.entries) &&
+    value.entries.length > 0 &&
+    value.entries.length <= OPENING_HISTORY_LIMIT &&
     value.entries.every(isOpeningHistoryEntry)
   );
 }
@@ -117,5 +143,51 @@ export function removeOpeningHistory(): void {
     window.localStorage.removeItem(OPENING_HISTORY_STORAGE_KEY);
   } catch {
     // История уже очищена в памяти приложения.
+  }
+}
+
+export function loadOpeningHistoryUndo(): OpeningHistoryUndo | null {
+  try {
+    const serializedUndo = window.localStorage.getItem(OPENING_HISTORY_UNDO_STORAGE_KEY);
+
+    if (!serializedUndo) return null;
+
+    const storedUndo: unknown = JSON.parse(serializedUndo);
+    if (!isStoredOpeningHistoryUndo(storedUndo)) return null;
+
+    return {
+      ownerId: storedUndo.ownerId,
+      entries: normalizeOpeningHistory(storedUndo.entries),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function saveOpeningHistoryUndo(undo: OpeningHistoryUndo): void {
+  try {
+    const entries = normalizeOpeningHistory(undo.entries);
+    if (entries.length === 0) {
+      removeOpeningHistoryUndo();
+      return;
+    }
+
+    const storedUndo: StoredOpeningHistoryUndo = {
+      version: OPENING_HISTORY_UNDO_STORAGE_VERSION,
+      ownerId: undo.ownerId,
+      entries,
+    };
+
+    window.localStorage.setItem(OPENING_HISTORY_UNDO_STORAGE_KEY, JSON.stringify(storedUndo));
+  } catch {
+    // Undo remains available in memory until the page is reloaded.
+  }
+}
+
+export function removeOpeningHistoryUndo(): void {
+  try {
+    window.localStorage.removeItem(OPENING_HISTORY_UNDO_STORAGE_KEY);
+  } catch {
+    // The in-memory snapshot has already been cleared.
   }
 }

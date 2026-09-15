@@ -16,9 +16,13 @@ import { accountHistoryQueryKey, mergeHistoryEntries } from './accountHistory';
 import { OpeningHistoryContext, type OpeningHistoryEntry } from './openingHistoryContext';
 import {
   loadOpeningHistory,
+  loadOpeningHistoryUndo,
   removeOpeningHistory,
+  removeOpeningHistoryUndo,
   restoreOpeningHistory,
   saveOpeningHistory,
+  saveOpeningHistoryUndo,
+  type OpeningHistoryUndo,
 } from './openingHistoryStorage';
 
 type OpeningHistoryProviderProps = {
@@ -65,10 +69,14 @@ async function executeAccountMutation(mutation: AccountHistoryMutation): Promise
     return clearAccountHistory();
   }
 
-  const entries =
-    mutation.origin === 'undo'
-      ? restoreOpeningHistory((await getAccountHistory()).entries, mutation.entries)
-      : mutation.entries;
+  let entries = mutation.entries;
+  if (mutation.origin === 'undo') {
+    const clearedMediaRefs = new Set(mutation.entries.map(({ mediaRef }) => mediaRef));
+    const entriesOpenedAfterClear = (await getAccountHistory()).entries.filter(
+      ({ mediaRef }) => !clearedMediaRefs.has(mediaRef),
+    );
+    entries = restoreOpeningHistory(entriesOpenedAfterClear, mutation.entries);
+  }
   let result: AccountHistory = { entries: [] };
 
   // The API owns timestamps, so replay oldest first to retain the desired newest-first order.
@@ -83,7 +91,10 @@ export function OpeningHistoryProvider({ children }: OpeningHistoryProviderProps
   const { state: authState, setGuest, refresh: refreshAuth } = useAuth();
   const queryClient = useQueryClient();
   const [guestEntries, setGuestEntries] = useState<OpeningHistoryEntry[]>(loadOpeningHistory);
-  const [clearedEntries, setClearedEntries] = useState<readonly OpeningHistoryEntry[] | null>(null);
+  const [historyUndo, setHistoryUndo] = useState<OpeningHistoryUndo | null>(loadOpeningHistoryUndo);
+  const [undoPendingOwnerId, setUndoPendingOwnerId] = useState<string | null | undefined>();
+  const historyUndoRef = useRef(historyUndo);
+  const undoPendingOwnerIdRef = useRef(undoPendingOwnerId);
   const accountUserId = authState.status === 'authenticated' ? authState.user.id : null;
   const currentUserIdRef = useRef(accountUserId);
   const renderedUserIdRef = useRef(accountUserId);
@@ -94,6 +105,26 @@ export function OpeningHistoryProvider({ children }: OpeningHistoryProviderProps
   const runNextMutationRef = useRef<() => void>(() => undefined);
   const migrationAttemptRef = useRef<string | null>(null);
   const failedMutationRef = useRef<AccountHistoryMutation | null>(null);
+
+  const storeHistoryUndo = useCallback((nextUndo: OpeningHistoryUndo | null) => {
+    if (nextUndo) saveOpeningHistoryUndo(nextUndo);
+    else removeOpeningHistoryUndo();
+    historyUndoRef.current = nextUndo;
+    setHistoryUndo(nextUndo);
+  }, []);
+
+  const clearHistoryUndo = useCallback((ownerId: string | null) => {
+    if (historyUndoRef.current?.ownerId !== ownerId) return;
+    removeOpeningHistoryUndo();
+    historyUndoRef.current = null;
+    setHistoryUndo(null);
+  }, []);
+
+  const finishHistoryUndo = useCallback((ownerId: string | null) => {
+    if (undoPendingOwnerIdRef.current !== ownerId) return;
+    undoPendingOwnerIdRef.current = undefined;
+    setUndoPendingOwnerId(undefined);
+  }, []);
 
   currentUserIdRef.current = accountUserId;
 
@@ -150,7 +181,6 @@ export function OpeningHistoryProvider({ children }: OpeningHistoryProviderProps
           optimisticEntries = [];
         } else if (variables.origin === 'undo') {
           optimisticEntries = restoreOpeningHistory(currentEntries, variables.entries);
-          setClearedEntries(null);
         } else {
           optimisticEntries = mergeHistoryEntries(variables.entries, currentEntries);
         }
@@ -163,14 +193,22 @@ export function OpeningHistoryProvider({ children }: OpeningHistoryProviderProps
       return { previous, queryKey };
     },
     onSuccess: (result, variables, rollback) => {
+      if (variables.type === 'clear') {
+        const clearedAccountEntries = rollback?.previous?.entries;
+        if (clearedAccountEntries?.length) {
+          storeHistoryUndo({ ownerId: variables.userId, entries: clearedAccountEntries });
+        } else {
+          clearHistoryUndo(variables.userId);
+        }
+      } else if (variables.type === 'replay' && variables.origin === 'undo') {
+        clearHistoryUndo(variables.userId);
+        finishHistoryUndo(variables.userId);
+      }
+
       if (currentUserIdRef.current !== variables.userId) return;
 
       queryClient.setQueryData(accountHistoryQueryKey(variables.userId), result);
       failedMutationRef.current = null;
-
-      if (variables.type === 'clear') {
-        setClearedEntries(rollback?.previous?.entries ?? []);
-      }
 
       if (variables.type === 'replay' && variables.origin === 'migration') {
         const migratedMediaRefs = new Set(variables.entries.map(({ mediaRef }) => mediaRef));
@@ -179,10 +217,13 @@ export function OpeningHistoryProvider({ children }: OpeningHistoryProviderProps
             ? current.filter(({ mediaRef }) => !migratedMediaRefs.has(mediaRef))
             : current,
         );
-        setClearedEntries(null);
+        clearHistoryUndo(variables.userId);
       }
     },
     onError: (error, variables, rollback) => {
+      if (variables.type === 'replay' && variables.origin === 'undo') {
+        finishHistoryUndo(variables.userId);
+      }
       if (currentUserIdRef.current !== variables.userId) return;
 
       if (error instanceof ApiClientError && error.status === 401) {
@@ -192,9 +233,6 @@ export function OpeningHistoryProvider({ children }: OpeningHistoryProviderProps
       }
 
       if (rollback) queryClient.setQueryData(rollback.queryKey, rollback.previous);
-      if (variables.type === 'replay' && variables.origin === 'undo') {
-        setClearedEntries(variables.entries);
-      }
       mutationQueuePausedRef.current = true;
       failedMutationRef.current = variables;
 
@@ -219,7 +257,6 @@ export function OpeningHistoryProvider({ children }: OpeningHistoryProviderProps
       migrationAttemptRef.current = null;
       failedMutationRef.current = null;
       mutationStateUserIdRef.current = accountUserId;
-      setClearedEntries(null);
     }
   }, [accountUserId, reset]);
 
@@ -293,6 +330,11 @@ export function OpeningHistoryProvider({ children }: OpeningHistoryProviderProps
       : authState.status === 'authenticated'
         ? 'account'
         : 'unavailable';
+  const historyOwnerId = storageMode === 'guest' ? null : accountUserId;
+  const clearedEntries =
+    storageMode !== 'unavailable' && historyUndo?.ownerId === historyOwnerId
+      ? historyUndo.entries
+      : null;
   const status =
     authState.status === 'loading'
       ? 'loading'
@@ -347,7 +389,7 @@ export function OpeningHistoryProvider({ children }: OpeningHistoryProviderProps
     if (!canManageHistory || openingHistoryEntries.length === 0) return;
 
     if (storageMode === 'guest') {
-      setClearedEntries(guestEntries);
+      storeHistoryUndo({ ownerId: null, entries: guestEntries });
       setGuestEntries([]);
     } else if (accountUserId) {
       runAccountMutation({ userId: accountUserId, type: 'clear' });
@@ -358,24 +400,38 @@ export function OpeningHistoryProvider({ children }: OpeningHistoryProviderProps
     guestEntries,
     openingHistoryEntries.length,
     runAccountMutation,
+    storeHistoryUndo,
     storageMode,
   ]);
 
   const undoClearHistory = useCallback(() => {
-    if (!canManageHistory || !clearedEntries) return;
+    if (!canManageHistory || !clearedEntries || undoPendingOwnerId === historyOwnerId) return;
 
     if (storageMode === 'guest') {
       setGuestEntries((current) => restoreOpeningHistory(current, clearedEntries));
-      setClearedEntries(null);
+      clearHistoryUndo(null);
     } else if (accountUserId) {
-      runAccountMutation({
+      undoPendingOwnerIdRef.current = accountUserId;
+      setUndoPendingOwnerId(accountUserId);
+      const accepted = runAccountMutation({
         userId: accountUserId,
         type: 'replay',
         origin: 'undo',
         entries: clearedEntries,
       });
+      if (!accepted) finishHistoryUndo(accountUserId);
     }
-  }, [accountUserId, canManageHistory, clearedEntries, runAccountMutation, storageMode]);
+  }, [
+    accountUserId,
+    canManageHistory,
+    clearedEntries,
+    runAccountMutation,
+    storageMode,
+    clearHistoryUndo,
+    finishHistoryUndo,
+    historyOwnerId,
+    undoPendingOwnerId,
+  ]);
 
   const retry = useCallback(() => {
     if (authState.status === 'error') {
@@ -403,7 +459,8 @@ export function OpeningHistoryProvider({ children }: OpeningHistoryProviderProps
         storageMode,
         canManageHistory,
         hasSyncError,
-        canUndoClearHistory: canManageHistory && clearedEntries !== null,
+        canUndoClearHistory:
+          canManageHistory && clearedEntries !== null && undoPendingOwnerId !== historyOwnerId,
         recordOpening,
         removeOpening,
         clearHistory,
