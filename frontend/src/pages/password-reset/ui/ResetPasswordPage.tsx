@@ -10,7 +10,7 @@ import {
 import { Button, Input } from '@/shared';
 import { ApiClientError } from '@/shared/api';
 import { AuthFormLayout } from '@/widgets/auth-form-layout';
-import { useEffect, useState, type ChangeEvent, type SubmitEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type SubmitEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
 
 type ResetPasswordPageProps = {
@@ -48,9 +48,19 @@ export function ResetPasswordPage({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
+  const resetAttemptRef = useRef(0);
 
   useEffect(() => {
     if (!location.hash) return;
+
+    const value = new URLSearchParams(location.hash.slice(1)).get('token');
+
+    resetAttemptRef.current += 1;
+    setToken(value && TOKEN_PATTERN.test(value) ? value : null);
+    setFormErrors({});
+    setSubmitError(null);
+    setIsSubmitting(false);
+    setIsComplete(false);
 
     void navigate(
       { pathname: location.pathname, search: location.search, hash: '' },
@@ -77,13 +87,19 @@ export function ResetPasswordPage({
     }
 
     setIsSubmitting(true);
+    const resetAttempt = resetAttemptRef.current;
 
     try {
       await resetPassword({ token, password: fields.password });
+
+      if (resetAttempt !== resetAttemptRef.current) return;
+
       form.reset();
       setToken(null);
       setIsComplete(true);
     } catch (error: unknown) {
+      if (resetAttempt !== resetAttemptRef.current) return;
+
       if (!(error instanceof ApiClientError)) {
         setSubmitError(
           'Не удалось получить ответ сервера. Пароль уже мог измениться — попробуйте войти или запросите новую ссылку.',
@@ -97,7 +113,7 @@ export function ResetPasswordPage({
         setSubmitError('Не удалось изменить пароль. Попробуйте позже.');
       }
     } finally {
-      setIsSubmitting(false);
+      if (resetAttempt === resetAttemptRef.current) setIsSubmitting(false);
     }
   };
 
@@ -150,7 +166,7 @@ export function ResetPasswordPage({
           Новый пароль сохранён. Автоматический вход не выполнялся.
         </p>
       ) : token ? (
-        <form className="flex flex-col gap-2" noValidate onSubmit={handleSubmit}>
+        <form key={token} className="flex flex-col gap-2" noValidate onSubmit={handleSubmit}>
           <Input
             label="Новый пароль"
             name="password"
