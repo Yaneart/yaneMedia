@@ -58,8 +58,8 @@ export function EditorialCollectionPage() {
           </h1>
 
           <p className="mt-4 max-w-xl text-body break-words text-text-secondary sm:text-lg">
-            Пятьдесят фильмов, сериалов и аниме, к которым хочется возвращаться — без рейтинга
-            популярности и случайных рекомендаций.
+            Фильмы, сериалы и аниме, к которым хочется возвращаться — без рейтинга популярности и
+            случайных рекомендаций.
           </p>
 
           <div className="mt-6 flex max-w-full flex-col items-start gap-2 text-caption sm:flex-row sm:flex-wrap">
