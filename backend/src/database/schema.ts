@@ -6,3 +6,15 @@ export { passwordResetTokens } from '../auth/entities/password-reset-token.entit
 export { favorites } from '../favorites/entities/favorite.entity';
 export { historyItems } from '../history/entities/history-item.entity';
 export { continueWatchingItems } from '../continue-watching/entities/continue-watching-item.entity';
+export {
+  catalogRevisionStatus,
+  catalogRevisions,
+  mediaAssetKind,
+  mediaAssets,
+  mediaCatalogItemStatus,
+  mediaCatalogItems,
+  mediaCollectionItems,
+  mediaCollectionScope,
+  mediaCollections,
+  mediaType,
+} from '../media/catalog/editorial-catalog.schema';

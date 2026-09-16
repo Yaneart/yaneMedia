@@ -50,6 +50,13 @@
       "when": 1789284815872,
       "tag": "0006_right_odin",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789542135933,
+      "tag": "0007_organic_peter_parker",
+      "breakpoints": true
     }
   ]
 }
