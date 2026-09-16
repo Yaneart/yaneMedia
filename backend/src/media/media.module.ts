@@ -4,6 +4,7 @@ import { HomeFeedService } from './home/home-feed.service';
 import { MediaController } from './media.controller';
 import { createArtworkAwareCache } from './media-engine-cache';
 import { MEDIA_ENGINE, MediaService } from './media.service';
+import { AppLogger } from '../platform/logging/app-logger';
 
 const MEDIA_ENGINE_PROVIDER_TIMEOUT_MS = 5_000;
 const MEDIA_ENGINE_CINEMETA_TIMEOUT_MS = 15_000;
@@ -88,6 +89,7 @@ async function createMediaEngine() {
     MediaService,
     MediaCatalogService,
     HomeFeedService,
+    AppLogger,
   ],
   exports: [MediaCatalogService],
 })

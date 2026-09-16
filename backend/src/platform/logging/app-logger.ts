@@ -1,8 +1,54 @@
 import { ConsoleLogger, Injectable } from '@nestjs/common';
 
+export interface DiscoveryHttpPerformanceEvent {
+  event: 'discovery.http';
+  method: 'GET';
+  path: string;
+  source: 'media_engine' | 'editorial_manifest_media_engine';
+  status: number;
+  durationMs: number;
+  responseBytes: number;
+  cards: number;
+  collections: number;
+}
+
+export interface DiscoveryCatalogReadPerformanceEvent {
+  event: 'discovery.catalog_read';
+  storage: 'editorial_manifest_memory';
+  durationMs: number;
+  requestedItems: number;
+  returnedItems: number;
+  freshCacheItems: number;
+  refreshedItems: number;
+  staleItems: number;
+  missingItems: number;
+}
+
+export interface DiscoveryMediaEnginePerformanceEvent {
+  event: 'discovery.media_engine_refresh';
+  operation: 'search' | 'details' | 'availability';
+  result: 'success' | 'error';
+  queueWaitMs: number;
+  durationMs: number;
+  cacheOutcome: 'hit' | 'miss' | 'stale' | 'unknown';
+  providersRequested: number;
+  providersSuccessful: number;
+  providersFailed: number;
+  warnings: number;
+}
+
+export type PerformanceEvent =
+  | DiscoveryHttpPerformanceEvent
+  | DiscoveryCatalogReadPerformanceEvent
+  | DiscoveryMediaEnginePerformanceEvent;
+
 @Injectable()
 export class AppLogger {
   private readonly logger = new ConsoleLogger({ json: true });
+
+  logPerformance(event: PerformanceEvent): void {
+    this.logger.log(event);
+  }
 
   logUnexpectedError(context: string): void {
     this.logger.error('Unexpected application error', context);

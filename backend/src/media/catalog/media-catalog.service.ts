@@ -14,6 +14,7 @@ import {
 import type { MediaCollectionResponseDto } from './dto/media-collection-response.dto';
 import type { MediaCatalogResponseDto } from './dto/media-catalog-response.dto';
 import type { MediaSummaryResolutionResponseDto } from '../summary-resolution/dto/media-summary-resolution-response.dto';
+import { AppLogger } from '../../platform/logging/app-logger';
 
 const CATALOG_HYDRATION_CONCURRENCY = 3;
 const CATALOG_CACHE_TTL_MS = 5 * 60_000;
@@ -32,6 +33,7 @@ interface CatalogEntryResolution {
   degraded: boolean;
   stale: boolean;
   unavailable: boolean;
+  refreshed: boolean;
 }
 
 interface MediaSummaryResolutionEntry {
@@ -44,7 +46,10 @@ export class MediaCatalogService {
   private readonly cache = new Map<string, CatalogCacheEntry>();
   private readonly pendingResolutions = new Map<string, Promise<CatalogEntryResolution>>();
 
-  constructor(private readonly mediaService: MediaService) {}
+  constructor(
+    private readonly mediaService: MediaService,
+    private readonly logger?: AppLogger,
+  ) {}
 
   async getCatalog(type: MediaRefType): Promise<MediaCatalogResponseDto> {
     const entries = editorialCatalog
@@ -105,11 +110,24 @@ export class MediaCatalogService {
   private async hydrateEntries(
     entries: readonly MediaSummaryResolutionEntry[],
   ): Promise<MediaSummaryResolutionResponseDto> {
+    const startedAt = performance.now();
     const resolutions = await this.resolveEntries(entries);
     const items = resolutions.flatMap(({ summary }) => (summary ? [summary] : []));
     const partial = items.length !== entries.length;
     const stale = resolutions.some((resolution) => resolution.stale);
     const degraded = partial || stale || resolutions.some((resolution) => resolution.degraded);
+
+    this.logger?.logPerformance({
+      event: 'discovery.catalog_read',
+      storage: 'editorial_manifest_memory',
+      durationMs: Math.round(performance.now() - startedAt),
+      requestedItems: entries.length,
+      returnedItems: items.length,
+      freshCacheItems: resolutions.filter(({ refreshed, stale }) => !refreshed && !stale).length,
+      refreshedItems: resolutions.filter(({ refreshed }) => refreshed).length,
+      staleItems: resolutions.filter(({ stale: isStale }) => isStale).length,
+      missingItems: resolutions.filter(({ summary }) => !summary).length,
+    });
 
     if (items.length === 0 && resolutions.some((resolution) => resolution.unavailable)) {
       throw new ServiceUnavailableException('Media catalog is temporarily unavailable');
@@ -127,13 +145,14 @@ export class MediaCatalogService {
     entries: readonly MediaSummaryResolutionEntry[],
   ): Promise<CatalogEntryResolution[]> {
     const resolutions = new Array<CatalogEntryResolution>(entries.length);
+    const queuedAt = performance.now();
     let nextIndex = 0;
 
     const resolveNext = async () => {
       while (nextIndex < entries.length) {
         const index = nextIndex;
         nextIndex += 1;
-        resolutions[index] = await this.resolveEntry(entries[index]);
+        resolutions[index] = await this.resolveEntry(entries[index], queuedAt);
       }
     };
 
@@ -144,7 +163,10 @@ export class MediaCatalogService {
     return resolutions;
   }
 
-  private async resolveEntry(entry: MediaSummaryResolutionEntry): Promise<CatalogEntryResolution> {
+  private async resolveEntry(
+    entry: MediaSummaryResolutionEntry,
+    queuedAt: number,
+  ): Promise<CatalogEntryResolution> {
     const pendingKey = `${entry.mediaRef}:${entry.type ?? '*'}`;
     const pending = this.pendingResolutions.get(pendingKey);
 
@@ -152,7 +174,7 @@ export class MediaCatalogService {
       return pending;
     }
 
-    const resolution = this.resolveEntryUncached(entry).finally(() => {
+    const resolution = this.resolveEntryUncached(entry, queuedAt).finally(() => {
       if (this.pendingResolutions.get(pendingKey) === resolution) {
         this.pendingResolutions.delete(pendingKey);
       }
@@ -164,6 +186,7 @@ export class MediaCatalogService {
 
   private async resolveEntryUncached(
     entry: MediaSummaryResolutionEntry,
+    queuedAt: number,
   ): Promise<CatalogEntryResolution> {
     const now = Date.now();
     const stored = this.cache.get(entry.mediaRef);
@@ -176,14 +199,18 @@ export class MediaCatalogService {
         degraded: cached.degraded,
         stale: cached.stale,
         unavailable: false,
+        refreshed: false,
       };
     }
 
     try {
-      const { details, meta } = await this.mediaService.getDetailsByRef(entry.mediaRef);
+      const { details, meta } = await this.mediaService.getDetailsByRef(
+        entry.mediaRef,
+        performance.now() - queuedAt,
+      );
 
       if (!details || (entry.type !== undefined && details.type !== entry.type)) {
-        return this.useStaleOrMissing(cached, now);
+        return this.useStaleOrMissing(cached, now, true);
       }
 
       const mappedSummary = this.toMediaSummary(details);
@@ -206,19 +233,21 @@ export class MediaCatalogService {
         degraded,
         stale,
         unavailable: false,
+        refreshed: true,
       };
     } catch (error) {
       if (!(error instanceof ServiceUnavailableException)) {
         throw error;
       }
 
-      return this.useStaleOrUnavailable(cached, now);
+      return this.useStaleOrUnavailable(cached, now, true);
     }
   }
 
   private useStaleOrMissing(
     cached: CatalogCacheEntry | undefined,
     now: number,
+    refreshed: boolean,
   ): CatalogEntryResolution {
     if (cached && now < cached.staleUntil) {
       return {
@@ -226,6 +255,7 @@ export class MediaCatalogService {
         degraded: true,
         stale: true,
         unavailable: false,
+        refreshed,
       };
     }
 
@@ -233,12 +263,14 @@ export class MediaCatalogService {
       degraded: false,
       stale: false,
       unavailable: false,
+      refreshed,
     };
   }
 
   private useStaleOrUnavailable(
     cached: CatalogCacheEntry | undefined,
     now: number,
+    refreshed: boolean,
   ): CatalogEntryResolution {
     if (cached && now < cached.staleUntil) {
       return {
@@ -246,6 +278,7 @@ export class MediaCatalogService {
         degraded: true,
         stale: true,
         unavailable: true,
+        refreshed,
       };
     }
 
@@ -253,6 +286,7 @@ export class MediaCatalogService {
       degraded: true,
       stale: false,
       unavailable: true,
+      refreshed,
     };
   }
 

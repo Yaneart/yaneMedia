@@ -8,6 +8,7 @@ import type {
   MediaEngine,
   MediaItem,
   Rating,
+  ResponseMeta,
   SearchQuery,
   Season,
   StreamQuery,
@@ -29,6 +30,7 @@ import { createMediaRef, resolveMediaRefWithAliases } from './media-ref';
 import { mapMediaAvailability, selectMediaAvailabilityEpisode } from './media-availability.mapper';
 import { normalizeMediaGenres } from './media-genres';
 import { selectMediaDescription, selectMediaShortDescription } from './media-descriptions';
+import { AppLogger } from '../platform/logging/app-logger';
 
 export const MEDIA_ENGINE = Symbol('MEDIA_ENGINE');
 
@@ -61,7 +63,10 @@ function isPlaceholderArtworkUrl(url: string): boolean {
 
 @Injectable()
 export class MediaService {
-  constructor(@Inject(MEDIA_ENGINE) private readonly mediaEngine: MediaEngine) {}
+  constructor(
+    @Inject(MEDIA_ENGINE) private readonly mediaEngine: MediaEngine,
+    private readonly logger?: AppLogger,
+  ) {}
 
   async searchMedia(options: MediaSearchOptions): Promise<MediaSummaryDto[]> {
     const offset = options.offset ?? 0;
@@ -80,7 +85,7 @@ export class MediaService {
       ...(limit === undefined ? {} : { limit }),
       ...(offset === 0 ? {} : { offset }),
     };
-    const response = await this.runMediaEngine(() => this.mediaEngine.search(query));
+    const response = await this.runMediaEngine('search', () => this.mediaEngine.search(query));
 
     return response.results.flatMap(({ item }) => {
       const summary = this.toMediaSummary(item);
@@ -89,14 +94,19 @@ export class MediaService {
     });
   }
 
-  async getDetailsByRef(mediaRef: string): Promise<{
+  async getDetailsByRef(
+    mediaRef: string,
+    queueWaitMs = 0,
+  ): Promise<{
     details: MediaDetailsDto | null;
     meta: DetailsResponse['meta'];
   }> {
     const ids = this.resolveMediaRefOrThrow(mediaRef);
 
-    const response = await this.runMediaEngine(() =>
-      this.mediaEngine.getDetails({ ids, language: 'ru' }),
+    const response = await this.runMediaEngine(
+      'details',
+      () => this.mediaEngine.getDetails({ ids, language: 'ru' }),
+      queueWaitMs,
     );
 
     return {
@@ -120,7 +130,7 @@ export class MediaService {
       return null;
     }
 
-    const availability = await this.runMediaEngine(() =>
+    const availability = await this.runMediaEngine('availability', () =>
       this.mediaEngine.getAvailability(request.query, {
         playbackUserAgent: request.playbackUserAgent,
       }),
@@ -164,7 +174,7 @@ export class MediaService {
     signal?: AbortSignal,
   ): Promise<AvailabilityRequest | null> {
     const ids = this.resolveMediaRefOrThrow(mediaRef);
-    const { details } = await this.runMediaEngine(() =>
+    const { details } = await this.runMediaEngine('details', () =>
       signal
         ? this.mediaEngine.getDetails({ ids }, { signal })
         : this.mediaEngine.getDetails({ ids }),
@@ -461,12 +471,55 @@ export class MediaService {
     return ids;
   }
 
-  private async runMediaEngine<T>(operation: () => Promise<T>): Promise<T> {
+  private async runMediaEngine<T extends { meta?: ResponseMeta }>(
+    operation: 'search' | 'details' | 'availability',
+    execute: () => Promise<T>,
+    queueWaitMs = 0,
+  ): Promise<T> {
+    const startedAt = performance.now();
+
     try {
-      return await operation();
+      const result = await execute();
+
+      this.logMediaEnginePerformance(
+        operation,
+        'success',
+        queueWaitMs,
+        performance.now() - startedAt,
+        result.meta,
+      );
+
+      return result;
     } catch (error) {
+      this.logMediaEnginePerformance(
+        operation,
+        'error',
+        queueWaitMs,
+        performance.now() - startedAt,
+      );
       this.throwMediaEngineError(error);
     }
+  }
+
+  private logMediaEnginePerformance(
+    operation: 'search' | 'details' | 'availability',
+    result: 'success' | 'error',
+    queueWaitMs: number,
+    durationMs: number,
+    meta?: ResponseMeta,
+  ): void {
+    this.logger?.logPerformance({
+      event: 'discovery.media_engine_refresh',
+      operation,
+      result,
+      queueWaitMs: Math.round(queueWaitMs),
+      durationMs: Math.round(durationMs),
+      cacheOutcome: meta ? (meta.stale ? 'stale' : meta.cached ? 'hit' : 'miss') : 'unknown',
+      providersRequested: meta?.providers.requested.length ?? 0,
+      providersSuccessful: meta?.providers.successful.length ?? 0,
+      providersFailed: meta?.providers.failed.length ?? 0,
+      warnings: meta?.warnings?.length ?? 0,
+    });
   }
 
   private throwMediaEngineError(error: unknown): never {

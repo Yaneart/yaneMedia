@@ -6,12 +6,19 @@ import { AppModule } from './app.module';
 import { ApiResponseInterceptor } from './platform/http/api-response/api-response.interceptor';
 import { ApiExceptionFilter } from './platform/http/api-error/api-exception/api-exception.filter';
 import type { NextFunction, Response, Request } from 'express';
+import { AppLogger } from './platform/logging/app-logger';
+import {
+  DiscoveryResponseMetricsInterceptor,
+  discoveryPerformanceMiddleware,
+} from './platform/http/discovery-performance/discovery-performance';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
 
   app.setGlobalPrefix('api/v1');
+
+  app.use(discoveryPerformanceMiddleware(app.get(AppLogger)));
 
   app.use(
     ['/api/v1/auth', '/api/v1/favorites', '/api/v1/history', '/api/v1/continue-watching'],
@@ -30,7 +37,10 @@ async function bootstrap() {
   });
 
   app.useGlobalFilters(app.get(ApiExceptionFilter));
-  app.useGlobalInterceptors(new ApiResponseInterceptor());
+  app.useGlobalInterceptors(
+    new ApiResponseInterceptor(),
+    new DiscoveryResponseMetricsInterceptor(),
+  );
 
   app.useGlobalPipes(
     new ValidationPipe({

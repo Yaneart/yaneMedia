@@ -24,6 +24,9 @@ bun run test -- <test-file-or-pattern>
 bun run db:generate
 bun run db:migrate
 bun run db:check
+bun run probe:discovery
 ```
+
+Discovery probe выполняет только GET-запросы к `http://localhost:3000/api/v1` и печатает JSON-строки со status, TTFB, total time и размером ответа. Другой стенд задаётся через `DISCOVERY_PROBE_BASE_URL`.
 
 Интеграционные PostgreSQL-тесты включаются соответствующими флагами в самих test suites и используют отдельное подключение с откатом.
