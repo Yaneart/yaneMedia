@@ -16,6 +16,7 @@ import Joi from 'joi';
         PASSWORD_RESET_MIN_RESPONSE_MS: Joi.number().integer().min(0).max(5000).default(500),
         RESEND_API_KEY: Joi.string().trim().required(),
         MAIL_FROM: Joi.string().trim().required(),
+        MEDIA_ASSETS_ROOT: Joi.string().trim().min(1).default('./storage/media-assets'),
         FRONTEND_ORIGIN: Joi.string()
           .uri({ scheme: ['http', 'https'] })
           .custom((value: string, helpers) => {

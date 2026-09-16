@@ -7,6 +7,10 @@ import { MediaController } from './media.controller';
 import { createArtworkAwareCache } from './media-engine-cache';
 import { MEDIA_ENGINE, MediaService } from './media.service';
 import { AppLogger } from '../platform/logging/app-logger';
+import { AppConfigModule } from '../config/config.module';
+import { MediaAssetDownloader } from './assets/media-asset-downloader';
+import { MediaAssetStore } from './assets/media-asset-store';
+import { MediaAssetsController } from './assets/media-assets.controller';
 
 const MEDIA_ENGINE_PROVIDER_TIMEOUT_MS = 5_000;
 const MEDIA_ENGINE_CINEMETA_TIMEOUT_MS = 15_000;
@@ -82,8 +86,8 @@ async function createMediaEngine() {
 }
 
 @Module({
-  imports: [DatabaseModule],
-  controllers: [MediaController],
+  imports: [AppConfigModule, DatabaseModule],
+  controllers: [MediaController, MediaAssetsController],
   providers: [
     {
       provide: MEDIA_ENGINE,
@@ -92,9 +96,11 @@ async function createMediaEngine() {
     MediaService,
     MediaCatalogService,
     EditorialCatalogRepository,
+    MediaAssetDownloader,
+    MediaAssetStore,
     HomeFeedService,
     AppLogger,
   ],
-  exports: [MediaCatalogService, EditorialCatalogRepository],
+  exports: [MediaCatalogService, EditorialCatalogRepository, MediaAssetDownloader, MediaAssetStore],
 })
 export class MediaModule {}
