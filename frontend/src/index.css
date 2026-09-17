@@ -64,6 +64,7 @@
 .yane-loader-shimmer::after {
   position: absolute;
   inset: 0;
+  bottom: -0.4em;
   content: attr(data-text);
   color: transparent;
   background-image: linear-gradient(
