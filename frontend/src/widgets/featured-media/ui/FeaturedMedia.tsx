@@ -25,7 +25,7 @@ export function FeaturedMedia({ media }: FeaturedMediaProps) {
   metadata.push(...media.genres.slice(0, 2));
 
   return (
-    <div className="w-full max-w-2xl">
+    <div className="w-full max-w-[38rem]">
       <div className="mb-4 flex items-center gap-3">
         <span className="rounded-pill border border-hero-search-border bg-hero-search px-3 py-1 text-caption font-semibold text-hero-text backdrop-blur-sm">
           {mediaTypeLabels[media.type]}
@@ -58,7 +58,7 @@ export function FeaturedMedia({ media }: FeaturedMediaProps) {
       </h1>
 
       {media.shortDescription && (
-        <p className="mt-4 line-clamp-3 max-w-xl text-body text-hero-text-muted md:text-lg md:leading-relaxed">
+        <p className="mt-4 line-clamp-3 max-w-[30rem] text-body text-hero-text-muted md:text-[1.05rem] md:leading-relaxed">
           {media.shortDescription}
         </p>
       )}

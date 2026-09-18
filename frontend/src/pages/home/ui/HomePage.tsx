@@ -85,7 +85,7 @@ export function HomePage() {
   };
 
   return (
-    <div className="-m-page bg-surface">
+    <div className="-m-page" style={{ background: 'var(--theme-home-background)' }}>
       {featured ? (
         <section className="relative isolate min-h-[500px] overflow-hidden bg-elevated md:min-h-[clamp(32rem,62vh,43rem)]">
           <div className="absolute inset-0 -z-20">
@@ -98,13 +98,6 @@ export function HomePage() {
           </div>
 
           <div className="home-hero-overlay absolute inset-0 -z-10" />
-          <div
-            className={[
-              'absolute inset-x-0 bottom-0 -z-10 h-28',
-              'bg-linear-to-b from-transparent via-surface/45 to-surface',
-              'md:h-36',
-            ].join(' ')}
-          />
 
           <div className="relative flex min-h-[500px] items-end px-5 pt-28 pb-14 md:min-h-[clamp(32rem,62vh,43rem)] md:px-page md:pt-32 md:pb-20">
             <FeaturedMedia media={featured} />
@@ -136,7 +129,7 @@ export function HomePage() {
         />
       )}
 
-      <div className="space-y-10 px-page py-8 md:space-y-12 md:py-10">
+      <div className="relative z-10 -mt-10 space-y-10 px-page pb-8 md:-mt-8 md:space-y-12 md:pb-10">
         <p role="status" aria-live="polite" aria-atomic="true" className="sr-only">
           {continueWatchingAnnouncement}
         </p>

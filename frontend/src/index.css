@@ -190,6 +190,12 @@
   --theme-hero-button-bg: #ffffff;
   --theme-hero-button-bg-hover: rgb(255 255 255 / 90%);
   --theme-hero-button-text: #000000;
+
+  --theme-home-background: #151617;
+
+  --theme-hero-overlay-start: rgb(8 9 10 / 96%);
+  --theme-hero-overlay-middle: rgb(8 9 10 / 62%);
+  --theme-hero-overlay-soft: rgb(8 9 10 / 18%);
 }
 
 [data-theme='light'] {
@@ -210,7 +216,7 @@
   --theme-control-hover: #ebeae5;
   --theme-control-secondary: #b8bbbd;
   --theme-interactive-hover: #b8bbbd;
-  --theme-skeleton: #b8bbbd;
+  --theme-skeleton: #d1d2d2;
   --theme-popover: #ffffff;
 
   --theme-error: #c93f4c;
@@ -249,16 +255,32 @@
   --theme-hero-button-bg: #18191a;
   --theme-hero-button-bg-hover: #292b2d;
   --theme-hero-button-text: #f4f3ef;
+
+  --theme-home-background: #f1f0eb;
+
+  --theme-hero-overlay-start: rgb(241 240 235 / 96%);
+  --theme-hero-overlay-middle: rgb(241 240 235 / 60%);
+  --theme-hero-overlay-soft: rgb(241 240 235 / 8%);
 }
 
 .home-hero-overlay {
-  background-image: linear-gradient(
-    to right,
-    var(--theme-hero-overlay-start) 0%,
-    var(--theme-hero-overlay-start) 20%,
-    var(--theme-hero-overlay-middle) 40%,
-    transparent 70%
-  );
+  background:
+    linear-gradient(
+      to bottom,
+      transparent 0%,
+      transparent 58%,
+      color-mix(in srgb, var(--theme-home-background) 10%, transparent) 70%,
+      color-mix(in srgb, var(--theme-home-background) 42%, transparent) 86%,
+      var(--theme-home-background) 100%
+    ),
+    linear-gradient(
+      to right,
+      var(--theme-hero-overlay-start) 0%,
+      var(--theme-hero-overlay-start) 14%,
+      var(--theme-hero-overlay-middle) 30%,
+      var(--theme-hero-overlay-soft) 46%,
+      transparent 62%
+    );
 }
 
 .home-mobile-header-overlay {
