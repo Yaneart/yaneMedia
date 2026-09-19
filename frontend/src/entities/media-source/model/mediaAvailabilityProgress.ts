@@ -100,12 +100,10 @@ export function selectUsableAvailability(availability: MediaAvailability, now = 
       return !expired;
     });
   const sources = selectUsableSources(availability.sources);
-  const episodes = availability.episodes
-    .map((episode) => ({
-      ...episode,
-      sources: selectUsableSources(episode.sources),
-    }))
-    .filter((episode) => episode.sources.length > 0);
+  const episodes = availability.episodes.map((episode) => ({
+    ...episode,
+    sources: selectUsableSources(episode.sources),
+  }));
 
   return {
     ...availability,

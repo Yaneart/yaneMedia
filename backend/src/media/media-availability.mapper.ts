@@ -37,10 +37,6 @@ export function mapMediaAvailability(
     const mapped = mapSourceOptions(episode.options, now, episodeRef);
     hasExpiredSources ||= mapped.hasExpiredSources;
 
-    if (mapped.sources.length === 0) {
-      continue;
-    }
-
     episodes.push({
       ...episodeRef,
       title: normalizeOptionalString(episode.title),

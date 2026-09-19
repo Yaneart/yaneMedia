@@ -88,7 +88,7 @@ function toDirectEpisodeOption(episode: MediaAvailabilityEpisode): DirectEpisode
   const key = getDirectEpisodeKey(episode);
   const sources = episode.sources.filter((source) => source.kind !== 'embed');
 
-  if (!key || sources.length === 0) {
+  if (!key) {
     return null;
   }
 

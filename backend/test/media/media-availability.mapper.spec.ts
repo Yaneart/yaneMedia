@@ -253,6 +253,44 @@ describe('mapMediaAvailability', () => {
       absoluteEpisodeNumber: 0,
     });
   });
+
+  it('preserves catalog episodes that do not have playable sources yet', () => {
+    const availability = createAvailability({
+      query: { type: 'anime' },
+      episodes: [
+        {
+          seasonNumber: 1,
+          episodeNumber: 1,
+          title: ' Episode 1 ',
+          options: [],
+        },
+        {
+          seasonNumber: 1,
+          episodeNumber: 2,
+          options: [
+            createOption({
+              id: 'unsafe-source',
+              access: { url: 'javascript:alert(1)' },
+            }),
+          ],
+        },
+      ],
+    });
+
+    expect(mapMediaAvailability(availability, NOW).episodes).toEqual([
+      {
+        seasonNumber: 1,
+        episodeNumber: 1,
+        title: 'Episode 1',
+        sources: [],
+      },
+      {
+        seasonNumber: 1,
+        episodeNumber: 2,
+        sources: [],
+      },
+    ]);
+  });
 });
 
 describe('selectMediaAvailabilityEpisode', () => {
