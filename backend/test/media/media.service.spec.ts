@@ -140,6 +140,57 @@ describe('MediaService', () => {
     });
   });
 
+  it('returns and caches a numbered anime season chain in the details DTO', async () => {
+    const details = {
+      id: 'frieren-season-2',
+      type: 'anime' as const,
+      title: 'Frieren Season 2',
+      ids: { shikimori: '59978' },
+      animeKind: 'tv' as const,
+      status: 'ongoing' as const,
+      episodesCount: 10,
+      episodes: [{ episodeNumber: 1 }],
+    };
+    const getDetails = jest.fn().mockResolvedValue({
+      details,
+      meta: { providers: { requested: [], successful: [], failed: [] } },
+    });
+    const getRelatedMedia = jest.fn(({ ids }: { ids?: { shikimori?: string } }) =>
+      Promise.resolve({
+        query: {},
+        relations: [
+          {
+            kind: ids?.shikimori === '59978' ? 'prequel' : 'sequel',
+            item:
+              ids?.shikimori === '59978'
+                ? {
+                    ...details,
+                    id: 'frieren-season-1',
+                    title: 'Frieren',
+                    ids: { shikimori: '52991' },
+                    status: 'released',
+                    episodesCount: 28,
+                  }
+                : details,
+            sources: [],
+          },
+        ],
+        meta: { providers: { requested: [], successful: [], failed: [] } },
+      }),
+    );
+    const service = new MediaService({ getDetails, getRelatedMedia } as unknown as MediaEngine);
+
+    const first = await service.getDetailsByRef('shikimori:59978');
+    const second = await service.getDetailsByRef('shikimori:59978');
+
+    expect(first.animeSeasonChain).toEqual([
+      expect.objectContaining({ number: 1, mediaRef: 'shikimori:52991', episodesCount: 28 }),
+      expect.objectContaining({ number: 2, mediaRef: 'shikimori:59978', episodesCount: 10 }),
+    ]);
+    expect(second.animeSeasonChain).toEqual(first.animeSeasonChain);
+    expect(getRelatedMedia).toHaveBeenCalledTimes(2);
+  });
+
   it('uses a Russian short description before a foreign full fallback', async () => {
     const getDetails = jest.fn().mockResolvedValue({
       details: {

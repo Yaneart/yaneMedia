@@ -68,9 +68,18 @@ export interface AnimeDetailsDto extends BaseMediaDetailsDto {
   ageRating?: string;
 }
 
+export interface AnimeSeasonChainEntryDto {
+  number: number;
+  mediaRef: string;
+  title: string;
+  year?: number;
+  episodesCount: number;
+}
+
 export type MediaDetailsDto = MovieDetailsDto | SeriesDetailsDto | AnimeDetailsDto;
 
 export interface MediaDetailsResponseDto {
   details: MediaDetailsDto;
   degraded: boolean;
+  animeSeasonChain?: AnimeSeasonChainEntryDto[];
 }

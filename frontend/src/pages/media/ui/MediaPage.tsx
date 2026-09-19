@@ -1,15 +1,17 @@
 import { useOpeningHistory } from '@/features/opening-history';
 import { EmptyState, ErrorState } from '@/shared';
 import { useEffect } from 'react';
-import { useParams } from 'react-router';
+import { useNavigate, useParams } from 'react-router';
 
 import { useMediaDetails } from '../model/useMediaDetails';
 import { useMediaAvailability } from '../model/useMediaAvailability';
 import { MediaPageSkeleton } from './MediaPageSkeleton';
 import { MediaView } from './MediaView';
+import { getAnimeSeasonNavigationTarget } from '../model/animeSeasonNavigation';
 
 export function MediaPage() {
   const { mediaRef } = useParams();
+  const navigate = useNavigate();
   const { recordOpening } = useOpeningHistory();
 
   const { result, status: detailsStatus, retry: retryDetails } = useMediaDetails(mediaRef);
@@ -77,6 +79,16 @@ export function MediaPage() {
     <MediaView
       key={media.mediaRef}
       media={media}
+      animeSeasonChain={result?.animeSeasonChain ?? []}
+      onAnimeSeasonChange={(seasonNumber) => {
+        const target = getAnimeSeasonNavigationTarget(
+          result?.animeSeasonChain ?? [],
+          seasonNumber,
+          media.mediaRef,
+        );
+
+        if (target) navigate(`/media/${encodeURIComponent(target)}`);
+      }}
       availability={availability}
       availabilityPending={availabilityPending}
       availabilityStatus={availabilityStatus}

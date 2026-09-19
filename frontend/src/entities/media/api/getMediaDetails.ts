@@ -1,12 +1,13 @@
 import { apiRequest } from '@/shared/api';
 
-import type { MediaDetails } from '../model/media';
+import type { AnimeSeasonChainEntry, MediaDetails } from '../model/media';
 import { mapMediaDetails } from './mapMediaDetails';
 import type { MediaDetailsResponseDto } from './mediaDetailsDto';
 
 export interface MediaDetailsResult {
   details: MediaDetails;
   degraded: boolean;
+  animeSeasonChain: AnimeSeasonChainEntry[];
 }
 
 export async function getMediaDetails(
@@ -20,5 +21,6 @@ export async function getMediaDetails(
   return {
     details: mapMediaDetails(dto.details),
     degraded: dto.degraded,
+    animeSeasonChain: (dto.animeSeasonChain ?? []).map((entry) => ({ ...entry })),
   };
 }

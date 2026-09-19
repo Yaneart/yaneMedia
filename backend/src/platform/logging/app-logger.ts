@@ -26,7 +26,7 @@ export interface DiscoveryCatalogReadPerformanceEvent {
 
 export interface DiscoveryMediaEnginePerformanceEvent {
   event: 'discovery.media_engine_refresh';
-  operation: 'search' | 'details' | 'availability';
+  operation: 'search' | 'details' | 'availability' | 'related';
   result: 'success' | 'error';
   queueWaitMs: number;
   durationMs: number;

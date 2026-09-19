@@ -102,4 +102,12 @@ export interface AnimeDetails extends BaseMediaDetails {
   ageRating?: string;
 }
 
+export interface AnimeSeasonChainEntry {
+  number: number;
+  mediaRef: MediaRef;
+  title: string;
+  year?: number;
+  episodesCount: number;
+}
+
 export type MediaDetails = MovieDetails | SeriesDetails | AnimeDetails;

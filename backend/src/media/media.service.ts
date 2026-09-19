@@ -31,6 +31,7 @@ import { mapMediaAvailability, selectMediaAvailabilityEpisode } from './media-av
 import { normalizeMediaGenres } from './media-genres';
 import { selectMediaDescription, selectMediaShortDescription } from './media-descriptions';
 import { AppLogger } from '../platform/logging/app-logger';
+import { buildAnimeSeasonChain, type AnimeSeasonChainEntry } from './anime-season-chain';
 
 export const MEDIA_ENGINE = Symbol('MEDIA_ENGINE');
 
@@ -39,6 +40,13 @@ const PLACEHOLDER_ARTWORK_PATHS = [
   '/assets/globals/missing_original.jpg',
 ] as const;
 const ANIME_ID_SOURCES = ['shikimori', 'aniList', 'myAnimeList'] as const;
+const ANIME_SEASON_CHAIN_CACHE_TTL_MS = 15 * 60_000;
+const ANIME_SEASON_CHAIN_CACHE_MAX_ENTRIES = 500;
+
+interface AnimeSeasonChainCacheEntry {
+  expiresAt: number;
+  value: Promise<AnimeSeasonChainEntry[]>;
+}
 
 interface AvailabilityRequest {
   query: StreamQuery;
@@ -63,6 +71,8 @@ function isPlaceholderArtworkUrl(url: string): boolean {
 
 @Injectable()
 export class MediaService {
+  private readonly animeSeasonChainCache = new Map<string, AnimeSeasonChainCacheEntry>();
+
   constructor(
     @Inject(MEDIA_ENGINE) private readonly mediaEngine: MediaEngine,
     private readonly logger?: AppLogger,
@@ -100,6 +110,7 @@ export class MediaService {
   ): Promise<{
     details: MediaDetailsDto | null;
     meta: DetailsResponse['meta'];
+    animeSeasonChain?: Array<AnimeSeasonChainEntry & { number: number }>;
   }> {
     const ids = this.resolveMediaRefOrThrow(mediaRef);
 
@@ -109,10 +120,73 @@ export class MediaService {
       queueWaitMs,
     );
 
+    if (!response.details) {
+      return { details: null, meta: response.meta };
+    }
+
+    const animeSeasonChain = await this.getAnimeSeasonChain(mediaRef, response.details, ids);
+
     return {
-      details: response.details ? this.toMediaDetails(mediaRef, response.details) : null,
+      details: this.toMediaDetails(mediaRef, response.details),
       meta: response.meta,
+      ...(animeSeasonChain.length > 1
+        ? {
+            animeSeasonChain: animeSeasonChain.map((entry, index) => ({
+              ...entry,
+              number: index + 1,
+            })),
+          }
+        : {}),
     };
+  }
+
+  private async getAnimeSeasonChain(
+    mediaRef: string,
+    details: MediaDetails,
+    resolvedIds: ExternalIds,
+  ): Promise<AnimeSeasonChainEntry[]> {
+    const now = Date.now();
+    const cached = this.animeSeasonChainCache.get(mediaRef);
+
+    if (cached && cached.expiresAt > now) return cached.value;
+
+    if (cached) this.animeSeasonChainCache.delete(mediaRef);
+
+    const value = buildAnimeSeasonChain(
+      mediaRef,
+      { ...details, ids: { ...details.ids, ...resolvedIds } },
+      (relatedIds) =>
+        this.runMediaEngine('related', () =>
+          this.mediaEngine.getRelatedMedia({
+            ids: relatedIds,
+            type: 'anime',
+            language: 'ru',
+            limit: 100,
+          }),
+        ),
+    ).catch((error: unknown) => {
+      this.animeSeasonChainCache.delete(mediaRef);
+
+      if (error instanceof ServiceUnavailableException || this.isMediaEngineProviderError(error)) {
+        return [];
+      }
+
+      throw error;
+    });
+
+    this.animeSeasonChainCache.set(mediaRef, {
+      expiresAt: now + ANIME_SEASON_CHAIN_CACHE_TTL_MS,
+      value,
+    });
+
+    while (this.animeSeasonChainCache.size > ANIME_SEASON_CHAIN_CACHE_MAX_ENTRIES) {
+      const oldestKey = [...this.animeSeasonChainCache.keys()][0];
+
+      if (oldestKey === undefined) break;
+      this.animeSeasonChainCache.delete(oldestKey);
+    }
+
+    return value;
   }
 
   async getAvailabilityByRef(
@@ -472,7 +546,7 @@ export class MediaService {
   }
 
   private async runMediaEngine<T extends { meta?: ResponseMeta }>(
-    operation: 'search' | 'details' | 'availability',
+    operation: 'search' | 'details' | 'availability' | 'related',
     execute: () => Promise<T>,
     queueWaitMs = 0,
   ): Promise<T> {
@@ -502,7 +576,7 @@ export class MediaService {
   }
 
   private logMediaEnginePerformance(
-    operation: 'search' | 'details' | 'availability',
+    operation: 'search' | 'details' | 'availability' | 'related',
     result: 'success' | 'error',
     queueWaitMs: number,
     durationMs: number,

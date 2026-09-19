@@ -1,6 +1,7 @@
 export type {
   AnimeDetails,
   AnimeKind,
+  AnimeSeasonChainEntry,
   MediaArtwork,
   MediaDetails,
   MediaEpisode,

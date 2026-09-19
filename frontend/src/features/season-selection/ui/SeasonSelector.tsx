@@ -1,16 +1,20 @@
-import type { MediaSeason } from '@/entities/media';
 import { Select } from '@/shared';
 
+export type SeasonSelectorOption = {
+  number: number;
+  label?: string;
+};
+
 export type SeasonSelectorProps = {
-  seasons: readonly MediaSeason[];
+  seasons: readonly SeasonSelectorOption[];
   selectedSeasonNumber: number | null;
   onSeasonChange: (seasonNumber: number) => void;
   variant?: 'section' | 'inline';
   compactDesktop?: boolean;
 };
 
-function getSeasonLabel(season: MediaSeason) {
-  return season.title ?? `${season.number} сезон`;
+function getSeasonLabel(season: SeasonSelectorOption) {
+  return season.label ?? `${season.number} сезон`;
 }
 
 export function SeasonSelector({

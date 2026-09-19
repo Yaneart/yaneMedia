@@ -91,7 +91,7 @@ export class MediaController {
 
   @Get(':mediaRef')
   async getDetails(@Param('mediaRef') mediaRef: string): Promise<MediaDetailsResponseDto> {
-    const { details, meta } = await this.mediaService.getDetailsByRef(mediaRef);
+    const { details, meta, animeSeasonChain } = await this.mediaService.getDetailsByRef(mediaRef);
 
     if (!details) {
       throw new NotFoundException('Media not found');
@@ -99,6 +99,7 @@ export class MediaController {
 
     return {
       details,
+      ...(animeSeasonChain ? { animeSeasonChain } : {}),
       degraded:
         meta.providers.failed.length > 0 || (meta.warnings?.length ?? 0) > 0 || meta.stale === true,
     };

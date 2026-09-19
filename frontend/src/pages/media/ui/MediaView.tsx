@@ -1,4 +1,4 @@
-import type { MediaDetails, MediaEpisode, MediaSeason } from '@/entities/media';
+import type { AnimeSeasonChainEntry, MediaDetails, MediaEpisode } from '@/entities/media';
 import {
   getMediaSourcePlaybackIssue,
   type MediaAvailability,
@@ -43,9 +43,12 @@ import { useCallback, useEffect, useState } from 'react';
 import type { MediaAvailabilityStatus } from '../model/useMediaAvailability';
 import { useMediaEpisodeAvailability } from '../model/useMediaEpisodeAvailability';
 import { useMediaEpisodePrefetch } from '../model/useMediaEpisodePrefetch';
+import { createAnimeSeasonSelectorState } from '../model/animeSeasonNavigation';
 
 export type MediaViewProps = {
   media: MediaDetails;
+  animeSeasonChain: readonly AnimeSeasonChainEntry[];
+  onAnimeSeasonChange: (seasonNumber: number) => void;
   availability: MediaAvailability | null;
   availabilityPending: boolean;
   availabilityStatus: MediaAvailabilityStatus;
@@ -241,6 +244,8 @@ function hasSameEpisode(
 
 export function MediaView({
   media,
+  animeSeasonChain,
+  onAnimeSeasonChange,
   availability,
   availabilityPending,
   availabilityStatus,
@@ -444,10 +449,10 @@ export function MediaView({
       ),
     ),
   ).sort((first, second) => first - second);
-  const directSeasons: readonly MediaSeason[] = directSeasonNumbers.map((seasonNumber) => ({
+  const directSeasons = directSeasonNumbers.map((seasonNumber) => ({
     number: seasonNumber,
-    episodes: [],
   }));
+  const animeSeasonSelector = createAnimeSeasonSelectorState(animeSeasonChain, media.mediaRef);
   const episodesForSelectedSeason =
     directSeasonNumbers.length > 0
       ? catalog.directEpisodes.filter(
@@ -621,9 +626,19 @@ export function MediaView({
 
             {playbackMode === 'direct' && hasDirectMode && (
               <>
+                {animeSeasonSelector && (
+                  <SeasonSelector
+                    seasons={animeSeasonSelector.options}
+                    selectedSeasonNumber={animeSeasonSelector.selectedSeasonNumber}
+                    onSeasonChange={onAnimeSeasonChange}
+                    variant="inline"
+                    compactDesktop
+                  />
+                )}
+
                 {usesDirectEpisodes && (
                   <div className="flex min-w-0 flex-col gap-3 sm:flex-row min-[70rem]:shrink-0 min-[70rem]:gap-3">
-                    {directSeasonNumbers.length > 0 && (
+                    {directSeasonNumbers.length > 0 && !animeSeasonSelector && (
                       <SeasonSelector
                         seasons={directSeasons}
                         selectedSeasonNumber={selectedDirectEpisode?.seasonNumber ?? null}
