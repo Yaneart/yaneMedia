@@ -2,6 +2,7 @@ import {
   editorialCatalog,
   editorialCollectionIds,
   mediaCatalogCollectionDefinitions,
+  parseEditorialCatalogManifest,
 } from '../../../src/media/catalog/editorial-catalog';
 import { resolveMediaRef, resolveMediaRefWithAliases } from '../../../src/media/media-ref';
 
@@ -89,5 +90,17 @@ describe('editorial catalog', () => {
     expect(featuredEntries.length).toBeGreaterThan(0);
     expect(featuredEntries.every(({ type }) => type === 'movie' || type === 'series')).toBe(true);
     expect(featuredEntries.every((entry) => editorialCatalog.indexOf(entry) < 10)).toBe(true);
+  });
+
+  it('rejects a partially invalid manifest instead of exposing partial configuration', () => {
+    expect(() =>
+      parseEditorialCatalogManifest({
+        version: 1,
+        source: 'invalid',
+        featuredMediaRefs: ['imdb:tt0000001'],
+        catalogs: { movie: [], series: [], anime: [] },
+        homeCollections: [],
+      }),
+    ).toThrow('Invalid editorial catalog manifest at $.catalogs.movie');
   });
 });

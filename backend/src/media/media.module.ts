@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { DatabaseModule } from '../database/database.module';
 import { MediaCatalogService } from './catalog/media-catalog.service';
 import { EditorialCatalogRepository } from './catalog/editorial-catalog.repository';
+import { EditorialCatalogSyncService } from './catalog/editorial-catalog-sync.service';
 import { HomeFeedService } from './home/home-feed.service';
 import { MediaController } from './media.controller';
 import { createArtworkAwareCache } from './media-engine-cache';
@@ -96,11 +97,18 @@ async function createMediaEngine() {
     MediaService,
     MediaCatalogService,
     EditorialCatalogRepository,
+    EditorialCatalogSyncService,
     MediaAssetDownloader,
     MediaAssetStore,
     HomeFeedService,
     AppLogger,
   ],
-  exports: [MediaCatalogService, EditorialCatalogRepository, MediaAssetDownloader, MediaAssetStore],
+  exports: [
+    MediaCatalogService,
+    EditorialCatalogRepository,
+    EditorialCatalogSyncService,
+    MediaAssetDownloader,
+    MediaAssetStore,
+  ],
 })
 export class MediaModule {}

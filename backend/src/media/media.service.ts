@@ -140,6 +140,23 @@ export class MediaService {
     };
   }
 
+  async getSummaryByRef(
+    mediaRef: string,
+    queueWaitMs = 0,
+  ): Promise<{ summary: MediaSummaryDto | null; meta: DetailsResponse['meta'] }> {
+    const ids = this.resolveMediaRefOrThrow(mediaRef);
+    const response = await this.runMediaEngine(
+      'details',
+      () => this.mediaEngine.getDetails({ ids, language: 'ru' }),
+      queueWaitMs,
+    );
+
+    return {
+      summary: response.details ? this.buildMediaSummary(response.details, mediaRef) : null,
+      meta: response.meta,
+    };
+  }
+
   private async getAnimeSeasonChain(
     mediaRef: string,
     details: MediaDetails,

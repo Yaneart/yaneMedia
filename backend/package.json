@@ -21,7 +21,8 @@
     "db:migrate": "drizzle-kit migrate",
     "db:check": "drizzle-kit check",
     "db:studio": "drizzle-kit studio",
-    "probe:discovery": "node scripts/probe-discovery.mjs"
+    "probe:discovery": "node scripts/probe-discovery.mjs",
+    "catalog:sync": "node dist/scripts/sync-editorial-catalog.js"
   },
   "dependencies": {
     "@media-engine/core": "1.8.0",

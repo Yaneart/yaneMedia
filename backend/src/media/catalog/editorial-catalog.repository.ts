@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import type { MediaRefType } from '../media-ref';
 import {
@@ -8,6 +8,7 @@ import {
   mediaCatalogItems,
   mediaCollectionItems,
   mediaCollections,
+  type MediaAsset,
   type NewMediaAsset,
   type NewMediaCatalogItem,
   type NewMediaCollection,
@@ -42,10 +43,62 @@ export class EditorialCatalogRepository {
     return revision.id;
   }
 
-  upsertAssets(assets: readonly NewMediaAsset[]) {
-    if (assets.length === 0) return Promise.resolve([]);
+  async findReusableRevision(source: string) {
+    const [revision] = await this.databaseService.db
+      .select({ id: catalogRevisions.id, status: catalogRevisions.status })
+      .from(catalogRevisions)
+      .where(
+        and(
+          eq(catalogRevisions.source, source),
+          inArray(catalogRevisions.status, ['staging', 'published']),
+        ),
+      )
+      .orderBy(desc(catalogRevisions.createdAt))
+      .limit(1);
 
-    return this.databaseService.db
+    return revision;
+  }
+
+  async findAssetsBySourceUrls(
+    sourceUrls: readonly string[],
+  ): Promise<
+    Array<
+      Pick<
+        MediaAsset,
+        | 'kind'
+        | 'objectKey'
+        | 'mimeType'
+        | 'width'
+        | 'height'
+        | 'byteSize'
+        | 'checksum'
+        | 'sourceUrl'
+      >
+    >
+  > {
+    if (sourceUrls.length === 0) return [];
+
+    return await this.databaseService.db
+      .select({
+        kind: mediaAssets.kind,
+        objectKey: mediaAssets.objectKey,
+        mimeType: mediaAssets.mimeType,
+        width: mediaAssets.width,
+        height: mediaAssets.height,
+        byteSize: mediaAssets.byteSize,
+        checksum: mediaAssets.checksum,
+        sourceUrl: mediaAssets.sourceUrl,
+      })
+      .from(mediaAssets)
+      .where(inArray(mediaAssets.sourceUrl, [...new Set(sourceUrls)]));
+  }
+
+  async upsertAssets(
+    assets: readonly NewMediaAsset[],
+  ): Promise<Array<{ id: string; checksum: string }>> {
+    if (assets.length === 0) return [];
+
+    return await this.databaseService.db
       .insert(mediaAssets)
       .values([...assets])
       .onConflictDoUpdate({
