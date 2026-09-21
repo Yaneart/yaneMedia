@@ -1,9 +1,10 @@
+import { API_BASE_URL } from '@/shared/api/apiConfig';
 import type { MediaArtwork, MediaSummary } from '../model/media';
 import type { MediaArtworkDto, MediaSummaryDto } from './mediaSummaryDto';
 
 export function mapMediaArtwork(dto: MediaArtworkDto): MediaArtwork {
   return {
-    url: dto.url,
+    url: dto.url.startsWith('/') ? new URL(dto.url, API_BASE_URL).toString() : dto.url,
     width: dto.width,
     height: dto.height,
   };

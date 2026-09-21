@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import { DatabaseService } from '../../database/database.service';
 import type { MediaRefType } from '../media-ref';
 import {
@@ -13,6 +14,26 @@ import {
   type NewMediaCatalogItem,
   type NewMediaCollection,
 } from './editorial-catalog.schema';
+
+const posterAssets = alias(mediaAssets, 'poster_assets');
+const backdropAssets = alias(mediaAssets, 'backdrop_assets');
+
+const publishedItemSelection = {
+  mediaRef: mediaCatalogItems.mediaRef,
+  type: mediaCatalogItems.type,
+  title: mediaCatalogItems.title,
+  originalTitle: mediaCatalogItems.originalTitle,
+  year: mediaCatalogItems.year,
+  shortDescription: mediaCatalogItems.shortDescription,
+  genres: mediaCatalogItems.genres,
+  rating: mediaCatalogItems.rating,
+  posterObjectKey: posterAssets.objectKey,
+  posterWidth: posterAssets.width,
+  posterHeight: posterAssets.height,
+  backdropObjectKey: backdropAssets.objectKey,
+  backdropWidth: backdropAssets.width,
+  backdropHeight: backdropAssets.height,
+};
 
 export type StagingCatalogItem = Omit<
   NewMediaCatalogItem,
@@ -234,20 +255,11 @@ export class EditorialCatalogRepository {
     if (mediaRefs.length === 0) return [];
 
     const rows = await this.databaseService.db
-      .select({
-        mediaRef: mediaCatalogItems.mediaRef,
-        type: mediaCatalogItems.type,
-        title: mediaCatalogItems.title,
-        originalTitle: mediaCatalogItems.originalTitle,
-        year: mediaCatalogItems.year,
-        shortDescription: mediaCatalogItems.shortDescription,
-        genres: mediaCatalogItems.genres,
-        rating: mediaCatalogItems.rating,
-        posterAssetId: mediaCatalogItems.posterAssetId,
-        backdropAssetId: mediaCatalogItems.backdropAssetId,
-      })
+      .select(publishedItemSelection)
       .from(mediaCatalogItems)
       .innerJoin(catalogRevisions, eq(catalogRevisions.id, mediaCatalogItems.revisionId))
+      .leftJoin(posterAssets, eq(posterAssets.id, mediaCatalogItems.posterAssetId))
+      .leftJoin(backdropAssets, eq(backdropAssets.id, mediaCatalogItems.backdropAssetId))
       .where(
         and(
           eq(catalogRevisions.status, 'published'),
@@ -277,10 +289,8 @@ export class EditorialCatalogRepository {
         collectionId: mediaCollections.stableId,
         collectionTitle: mediaCollections.title,
         collectionPosition: mediaCollections.position,
-        mediaRef: mediaCatalogItems.mediaRef,
         mediaPosition: mediaCollectionItems.position,
-        type: mediaCatalogItems.type,
-        title: mediaCatalogItems.title,
+        ...publishedItemSelection,
       })
       .from(mediaCollections)
       .innerJoin(catalogRevisions, eq(catalogRevisions.id, mediaCollections.revisionId))
@@ -298,6 +308,8 @@ export class EditorialCatalogRepository {
           eq(mediaCatalogItems.mediaRef, mediaCollectionItems.mediaRef),
         ),
       )
+      .leftJoin(posterAssets, eq(posterAssets.id, mediaCatalogItems.posterAssetId))
+      .leftJoin(backdropAssets, eq(backdropAssets.id, mediaCatalogItems.backdropAssetId))
       .where(
         and(
           eq(catalogRevisions.status, 'published'),
@@ -314,5 +326,21 @@ export class EditorialCatalogRepository {
         asc(mediaCollectionItems.position),
         asc(mediaCatalogItems.mediaRef),
       );
+  }
+
+  async countPublishedItems(): Promise<number> {
+    const [result] = await this.databaseService.db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(mediaCatalogItems)
+      .innerJoin(catalogRevisions, eq(catalogRevisions.id, mediaCatalogItems.revisionId))
+      .where(
+        and(
+          eq(catalogRevisions.status, 'published'),
+          eq(mediaCatalogItems.status, 'ready'),
+          eq(mediaCatalogItems.active, true),
+        ),
+      );
+
+    return result?.count ?? 0;
   }
 }

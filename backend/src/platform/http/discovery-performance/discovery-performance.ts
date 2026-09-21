@@ -17,11 +17,11 @@ interface DiscoveryResponseCounts {
 
 const DISCOVERY_SOURCES: Readonly<Record<string, DiscoverySource>> = {
   '/api/v1/media/search': 'media_engine',
-  '/api/v1/media/home': 'editorial_manifest_media_engine',
-  '/api/v1/media/home/featured': 'editorial_manifest_media_engine',
-  '/api/v1/media/home/collections': 'editorial_manifest_media_engine',
-  '/api/v1/media/catalog': 'editorial_manifest_media_engine',
-  '/api/v1/media/collections/editorial-picks': 'editorial_manifest_media_engine',
+  '/api/v1/media/home': 'editorial_catalog',
+  '/api/v1/media/home/featured': 'editorial_catalog',
+  '/api/v1/media/home/collections': 'editorial_catalog',
+  '/api/v1/media/catalog': 'editorial_catalog',
+  '/api/v1/media/collections/editorial-picks': 'editorial_catalog',
 };
 
 function objectValue(value: unknown): Record<string, unknown> | undefined {

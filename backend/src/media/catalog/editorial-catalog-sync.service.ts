@@ -19,6 +19,8 @@ import {
 
 const DEFAULT_CONCURRENCY = 3;
 const DEFAULT_RETRY_DELAYS_MS = [250, 1_000] as const;
+const MIN_BACKDROP_WIDTH = 1_280;
+const MIN_BACKDROP_ASPECT_RATIO = 1.4;
 
 export interface EditorialCatalogSyncOptions {
   concurrency?: number;
@@ -37,7 +39,6 @@ export interface EditorialCatalogSyncReport {
 interface ManifestItem {
   mediaRef: string;
   type: MediaRefType;
-  featured: boolean;
   artworkOverride?: { posterUrl?: string; backdropUrl?: string };
 }
 
@@ -94,6 +95,7 @@ export class EditorialCatalogSyncService {
             reused: false,
           }));
     });
+    for (const { asset } of resolvedAssets) this.assertAssetQuality(asset);
     const assetsByRequest = new Map(
       assetRequests.map((request, index) => [
         `${request.kind}:${request.url}`,
@@ -126,14 +128,11 @@ export class EditorialCatalogSyncService {
   }
 
   private toManifestItems(manifest: EditorialCatalogManifest): ManifestItem[] {
-    const featured = new Set(manifest.featuredMediaRefs);
-
     return (['movie', 'series', 'anime'] as const).flatMap((type) =>
       manifest.catalogs[type].flatMap((collection) =>
         collection.mediaRefs.map((mediaRef) => ({
           mediaRef,
           type,
-          featured: featured.has(mediaRef),
           artworkOverride: manifest.artworkOverrides[mediaRef],
         })),
       ),
@@ -170,9 +169,7 @@ export class EditorialCatalogSyncService {
         throw new Error(`Invalid title for ${item.mediaRef}`);
       }
       if (!resolvedSummary.poster) throw new Error(`Poster is required for ${item.mediaRef}`);
-      if (item.featured && !resolvedSummary.backdrop) {
-        throw new Error(`Backdrop is required for featured item ${item.mediaRef}`);
-      }
+      if (!resolvedSummary.backdrop) throw new Error(`Backdrop is required for ${item.mediaRef}`);
       return { ...item, summary: resolvedSummary };
     }, retryDelaysMs).finally(() => {
       if (this.pendingMetadata.get(item.mediaRef) === resolution) {
@@ -193,6 +190,15 @@ export class EditorialCatalogSyncService {
     return [
       ...new Map(requests.map((request) => [`${request.kind}:${request.url}`, request])).values(),
     ];
+  }
+
+  private assertAssetQuality(asset: StoredMediaAsset): void {
+    if (
+      asset.kind === 'backdrop' &&
+      (asset.width < MIN_BACKDROP_WIDTH || asset.width / asset.height < MIN_BACKDROP_ASPECT_RATIO)
+    ) {
+      throw new Error(`Backdrop does not meet quality requirements: ${asset.sourceUrl}`);
+    }
   }
 
   private async findUsableAssets(requests: readonly { kind: MediaAssetKind; url: string }[]) {
@@ -220,7 +226,7 @@ export class EditorialCatalogSyncService {
       : undefined;
     const posterAssetId = poster && assetIdByChecksum.get(poster.checksum);
     const backdropAssetId = backdrop && assetIdByChecksum.get(backdrop.checksum);
-    if (!posterAssetId || (item.featured && !backdropAssetId)) {
+    if (!posterAssetId || !backdropAssetId) {
       throw new Error(`Failed to persist required artwork for ${item.mediaRef}`);
     }
 

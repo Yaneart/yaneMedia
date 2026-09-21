@@ -3,6 +3,7 @@ import type { DetailsResponse, MediaEngine } from '@media-engine/core';
 import { EventEmitter } from 'node:events';
 import type { NextFunction, Request, Response } from 'express';
 import { lastValueFrom, of } from 'rxjs';
+import type { EditorialCatalogRepository } from '../../../src/media/catalog/editorial-catalog.repository';
 import { MediaCatalogService } from '../../../src/media/catalog/media-catalog.service';
 import type { MediaDetailsDto } from '../../../src/media/dto/media-details.dto';
 import { MediaService } from '../../../src/media/media.service';
@@ -84,23 +85,37 @@ describe('discovery performance instrumentation', () => {
       languages: [],
       persons: [],
     };
-    const mediaService = {
-      getDetailsByRef: jest.fn().mockResolvedValue({ details, meta }),
-    } as unknown as MediaService;
-    const service = new MediaCatalogService(mediaService, logger);
+    const mediaService = { getDetailsByRef: jest.fn() } as unknown as MediaService;
+    const repository = {
+      findPublishedCollectionItems: jest.fn().mockResolvedValue([
+        {
+          collectionId: 'movie-editorial-picks',
+          collectionTitle: 'Secret collection',
+          collectionPosition: 1,
+          mediaPosition: 1,
+          ...details,
+          originalTitle: null,
+          year: null,
+          shortDescription: null,
+          rating: null,
+          posterObjectKey: null,
+          posterWidth: null,
+          posterHeight: null,
+          backdropObjectKey: null,
+          backdropWidth: null,
+          backdropHeight: null,
+        },
+      ]),
+    } as unknown as EditorialCatalogRepository;
+    const service = new MediaCatalogService(mediaService, repository, logger);
 
-    await service.resolveMediaRefs([details.mediaRef]);
+    await service.getCatalog('movie');
 
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({
       event: 'discovery.catalog_read',
-      storage: 'editorial_manifest_memory',
-      requestedItems: 1,
+      storage: 'postgres_editorial_catalog',
       returnedItems: 1,
-      freshCacheItems: 0,
-      refreshedItems: 1,
-      staleItems: 0,
-      missingItems: 0,
     });
     expect(events[0]?.durationMs).toBeGreaterThanOrEqual(0);
     expect(JSON.stringify(events)).not.toMatch(/Secret Movie Title|tt15239678|provider-secret/);
@@ -141,7 +156,7 @@ describe('discovery performance instrumentation', () => {
       event: 'discovery.http',
       method: 'GET',
       path: '/api/v1/media/home/collections',
-      source: 'editorial_manifest_media_engine',
+      source: 'editorial_catalog',
       status: 200,
       responseBytes: 321,
       cards: 3,

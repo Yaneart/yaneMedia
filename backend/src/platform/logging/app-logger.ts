@@ -4,7 +4,7 @@ export interface DiscoveryHttpPerformanceEvent {
   event: 'discovery.http';
   method: 'GET';
   path: string;
-  source: 'media_engine' | 'editorial_manifest_media_engine';
+  source: 'media_engine' | 'editorial_catalog';
   status: number;
   durationMs: number;
   responseBytes: number;
@@ -12,17 +12,24 @@ export interface DiscoveryHttpPerformanceEvent {
   collections: number;
 }
 
-export interface DiscoveryCatalogReadPerformanceEvent {
-  event: 'discovery.catalog_read';
-  storage: 'editorial_manifest_memory';
-  durationMs: number;
-  requestedItems: number;
-  returnedItems: number;
-  freshCacheItems: number;
-  refreshedItems: number;
-  staleItems: number;
-  missingItems: number;
-}
+export type DiscoveryCatalogReadPerformanceEvent =
+  | {
+      event: 'discovery.catalog_read';
+      storage: 'editorial_manifest_memory';
+      durationMs: number;
+      requestedItems: number;
+      returnedItems: number;
+      freshCacheItems: number;
+      refreshedItems: number;
+      staleItems: number;
+      missingItems: number;
+    }
+  | {
+      event: 'discovery.catalog_read';
+      storage: 'postgres_editorial_catalog';
+      durationMs: number;
+      returnedItems: number;
+    };
 
 export interface DiscoveryMediaEnginePerformanceEvent {
   event: 'discovery.media_engine_refresh';

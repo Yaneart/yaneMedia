@@ -64,9 +64,7 @@ function summary(mediaRef: string): MediaSummaryDto {
     title: mediaRef,
     genres: ['Drama'],
     poster: { url: `https://images.example/${mediaRef}/poster.jpg` },
-    ...(mediaRef === 'imdb:tt0000001'
-      ? { backdrop: { url: `https://images.example/${mediaRef}/backdrop.jpg` } }
-      : {}),
+    backdrop: { url: `https://images.example/${mediaRef}/backdrop.jpg` },
   };
 }
 
@@ -78,8 +76,8 @@ function storedAsset(kind: 'poster' | 'backdrop', sourceUrl: string): StoredMedi
     checksum,
     objectKey: `${checksum}.jpg`,
     mimeType: 'image/jpeg',
-    width: 100,
-    height: 150,
+    width: kind === 'backdrop' ? 1920 : 600,
+    height: kind === 'backdrop' ? 1080 : 900,
     byteSize: 1000,
   };
 }
@@ -139,12 +137,12 @@ describe('EditorialCatalogSyncService', () => {
       skipped: false,
       items: 3,
       collections: 5,
-      downloadedAssets: 4,
+      downloadedAssets: 6,
       reusedAssets: 0,
     });
 
     expect(maximumActive).toBe(2);
-    expect(assetImport).toHaveBeenCalledTimes(4);
+    expect(assetImport).toHaveBeenCalledTimes(6);
     expect(repository.upsertStagingItems).toHaveBeenCalledWith(
       'revision-1',
       expect.arrayContaining([
@@ -201,7 +199,7 @@ describe('EditorialCatalogSyncService', () => {
     getPublicAsset.mockResolvedValueOnce({ path: 'poster', byteSize: 1000 });
 
     await expect(service.sync(manifest, noRetry)).resolves.toMatchObject({
-      downloadedAssets: 3,
+      downloadedAssets: 5,
       reusedAssets: 1,
     });
     expect(assetImport).not.toHaveBeenCalledWith('poster', posterUrl);
@@ -226,6 +224,48 @@ describe('EditorialCatalogSyncService', () => {
       'poster',
       'https://images.example/anime/poster-override.jpg',
     );
+  });
+
+  it('requires a backdrop for every catalog item and accepts an explicit override', async () => {
+    const getSummaryByRef = jest.fn((mediaRef: string) => {
+      const resolved = summary(mediaRef);
+      if (mediaRef === 'imdb:tt0000002') delete resolved.backdrop;
+      return Promise.resolve({ summary: resolved, meta: {} });
+    });
+    const failed = setup({ getSummaryByRef });
+
+    await expect(failed.service.sync(manifest, noRetry)).rejects.toThrow(
+      'Backdrop is required for imdb:tt0000002',
+    );
+    expect(failed.repository.publishRevision).not.toHaveBeenCalled();
+
+    const overrideManifest = structuredClone(manifest);
+    overrideManifest.artworkOverrides['imdb:tt0000002'] = {
+      backdropUrl: 'https://images.example/series/backdrop-override.jpg',
+    };
+    const accepted = setup({ getSummaryByRef });
+
+    await expect(accepted.service.sync(overrideManifest, noRetry)).resolves.toMatchObject({
+      skipped: false,
+    });
+    expect(accepted.assetImport).toHaveBeenCalledWith(
+      'backdrop',
+      'https://images.example/series/backdrop-override.jpg',
+    );
+  });
+
+  it('rejects a low-resolution backdrop before publishing the revision', async () => {
+    const { service, assetImport, repository } = setup({});
+    assetImport.mockImplementation((kind: 'poster' | 'backdrop', url: string) => {
+      const asset = storedAsset(kind, url);
+      return Promise.resolve(kind === 'backdrop' ? { ...asset, width: 640, height: 360 } : asset);
+    });
+
+    await expect(service.sync(manifest, noRetry)).rejects.toThrow(
+      'Backdrop does not meet quality requirements',
+    );
+    expect(repository.upsertStagingItems).not.toHaveBeenCalled();
+    expect(repository.publishRevision).not.toHaveBeenCalled();
   });
 
   it('leaves the previous published revision untouched when any item fails', async () => {

@@ -1,11 +1,5 @@
 import { Injectable, ServiceUnavailableException } from '@nestjs/common';
-import {
-  editorialCatalog,
-  type EditorialCatalogEntry,
-  type EditorialCollectionId,
-} from '../catalog/editorial-catalog';
 import { MediaCatalogService } from '../catalog/media-catalog.service';
-import type { MediaSummaryDto } from '../dto/media-summary.dto';
 import type {
   HomeCollectionDto,
   HomeCollectionsPageDto,
@@ -30,40 +24,34 @@ export class HomeFeedService {
       featuredExpiresAt: featuredResult.featuredExpiresAt,
       continueWatching: [],
       collections: collectionsResult.collections,
-      partial: featuredResult.partial || collectionsResult.partial,
-      degraded: featuredResult.degraded || collectionsResult.degraded,
-      stale: featuredResult.stale || collectionsResult.stale,
+      partial: false,
+      degraded: false,
+      stale: false,
     };
   }
 
   async getFeatured(timestamp = Date.now()): Promise<HomeFeaturedDto> {
-    const featuredMediaRefs = editorialCatalog
-      .filter((entry) => this.isInCollection(entry, HOME_FEATURED_COLLECTION_ID))
-      .map((entry) => entry.mediaRef);
+    const collections = await this.mediaCatalogService.getHomeCollections();
+    const featuredCollection = collections.find(({ id }) => id === HOME_FEATURED_COLLECTION_ID);
+    const featuredMediaRefs = featuredCollection?.items.map(({ mediaRef }) => mediaRef) ?? [];
+    if (featuredMediaRefs.length === 0) {
+      throw new ServiceUnavailableException('Home feed is temporarily unavailable');
+    }
+
     const selection = selectHourlyFeatured(featuredMediaRefs, timestamp);
     const selectedIndex = featuredMediaRefs.indexOf(selection.featured);
-    let partial = false;
-    let degraded = false;
-    let stale = false;
-
     for (let offset = 0; offset < featuredMediaRefs.length; offset += 1) {
       const mediaRef = featuredMediaRefs[(selectedIndex + offset) % featuredMediaRefs.length];
-      const result = await this.mediaCatalogService.resolveMediaRefs([mediaRef]);
-      const featured = result.items.find(
+      const featured = featuredCollection?.items.find(
         (media) => media.mediaRef === mediaRef && media.type !== 'anime' && media.backdrop,
       );
-
-      partial ||= result.partial || featured === undefined;
-      degraded ||= result.degraded || featured === undefined;
-      stale ||= result.stale;
-
       if (featured) {
         return {
           featured,
           featuredExpiresAt: selection.featuredExpiresAt,
-          partial,
-          degraded,
-          stale,
+          partial: false,
+          degraded: false,
+          stale: false,
         };
       }
     }
@@ -72,50 +60,35 @@ export class HomeFeedService {
   }
 
   async getCollections(offset: number, limit: number): Promise<HomeCollectionsPageDto> {
-    const definitions = homeCollectionDefinitions.slice(offset, offset + limit);
-    const requestedMediaRefs = definitions.flatMap((collection) => collection.mediaRefs);
-    const catalog = await this.mediaCatalogService.resolveMediaRefs(requestedMediaRefs);
-    const itemsByMediaRef = new Map(catalog.items.map((item) => [item.mediaRef, item]));
-    const collections = definitions
-      .map((collection) => this.buildCollection(collection, itemsByMediaRef))
-      .filter((collection) => collection.items.length > 0);
+    const storedCollections = (await this.mediaCatalogService.getHomeCollections()).filter(
+      ({ id }) => id !== HOME_FEATURED_COLLECTION_ID,
+    );
+    const page = storedCollections.slice(offset, offset + limit);
+    const needsFullCatalogTotal = page.some((collection) =>
+      homeCollectionDefinitions.some(
+        (definition) =>
+          definition.id === collection.id && definition.fullCollectionId !== undefined,
+      ),
+    );
+    const fullCatalogTotal = needsFullCatalogTotal
+      ? await this.mediaCatalogService.countPublishedItems()
+      : 0;
+    const collections: HomeCollectionDto[] = page.map((collection) => {
+      const definition = homeCollectionDefinitions.find(({ id }) => id === collection.id);
+      return {
+        ...collection,
+        total: definition?.fullCollectionId ? fullCatalogTotal : collection.items.length,
+      };
+    });
 
     return {
       collections,
       offset,
       limit,
-      total: homeCollectionDefinitions.length,
-      partial: catalog.partial,
-      degraded: catalog.degraded,
-      stale: catalog.stale,
+      total: storedCollections.length,
+      partial: false,
+      degraded: false,
+      stale: false,
     };
-  }
-
-  private buildCollection(
-    collection: (typeof homeCollectionDefinitions)[number],
-    itemsByMediaRef: ReadonlyMap<string, MediaSummaryDto>,
-  ): HomeCollectionDto {
-    const fullCollectionId = collection.fullCollectionId;
-
-    return {
-      id: collection.id,
-      title: collection.title,
-      items: collection.mediaRefs.flatMap((mediaRef) => {
-        const item = itemsByMediaRef.get(mediaRef);
-
-        return item ? [item] : [];
-      }),
-      total:
-        fullCollectionId === undefined
-          ? collection.mediaRefs.length
-          : editorialCatalog.filter((entry) => this.isInCollection(entry, fullCollectionId)).length,
-    };
-  }
-
-  private isInCollection(
-    entry: EditorialCatalogEntry,
-    collectionId: EditorialCollectionId,
-  ): boolean {
-    return entry.collections.includes(collectionId);
   }
 }

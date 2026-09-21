@@ -1,144 +1,131 @@
 import { ServiceUnavailableException } from '@nestjs/common';
-import { editorialCatalog } from '../../../src/media/catalog/editorial-catalog';
-import type { MediaCatalogService } from '../../../src/media/catalog/media-catalog.service';
+import type {
+  MediaCatalogService,
+  PublishedHomeCollection,
+} from '../../../src/media/catalog/media-catalog.service';
 import type { MediaSummaryDto } from '../../../src/media/dto/media-summary.dto';
-import type { MediaSummaryResolutionResponseDto } from '../../../src/media/summary-resolution/dto/media-summary-resolution-response.dto';
+import { editorialManifest } from '../../../src/media/catalog/editorial-catalog';
 import { homeCollectionDefinitions } from '../../../src/media/home/home-feed.config';
 import { HomeFeedService } from '../../../src/media/home/home-feed.service';
 
 describe('HomeFeedService', () => {
-  const summaries = editorialCatalog.map((entry): MediaSummaryDto => ({
-    mediaRef: entry.mediaRef,
-    type: entry.type,
-    title: entry.mediaRef,
-    backdrop: { url: `https://images.example.com/${encodeURIComponent(entry.mediaRef)}.jpg` },
+  const summary = (mediaRef: string, withBackdrop = true): MediaSummaryDto => ({
+    mediaRef,
+    type: 'movie',
+    title: mediaRef,
+    poster: { url: `/api/v1/media/assets/poster/${'a'.repeat(64)}.jpg` },
+    backdrop: withBackdrop
+      ? { url: `/api/v1/media/assets/backdrop/${'b'.repeat(64)}.webp` }
+      : undefined,
     genres: [],
-  }));
-  const summariesByRef = new Map(summaries.map((summary) => [summary.mediaRef, summary]));
-  const homeMediaRefs = homeCollectionDefinitions.flatMap((collection) => collection.mediaRefs);
-  const featuredMediaRefs = editorialCatalog
-    .filter(({ collections }) => (collections as readonly string[]).includes('featured'))
-    .map(({ mediaRef }) => mediaRef);
-
-  function createService(
-    availableItems: readonly MediaSummaryDto[] = summaries,
-    metadata: Omit<MediaSummaryResolutionResponseDto, 'items'> = {
-      partial: false,
-      degraded: false,
-      stale: false,
+  });
+  const collections: PublishedHomeCollection[] = [
+    {
+      id: 'featured',
+      title: 'Featured',
+      items: editorialManifest.featuredMediaRefs.map((mediaRef) => summary(mediaRef)),
     },
-  ) {
-    const itemsByRef = new Map(availableItems.map((item) => [item.mediaRef, item]));
-    const resolveMediaRefs = jest.fn((mediaRefs: readonly string[]) =>
-      Promise.resolve({
-        items: mediaRefs.flatMap((mediaRef) => {
-          const item = itemsByRef.get(mediaRef);
+    ...homeCollectionDefinitions.map((definition) => ({
+      id: definition.id,
+      title: definition.title,
+      items: definition.mediaRefs.map((mediaRef) => summary(mediaRef)),
+    })),
+  ];
 
-          return item ? [item] : [];
-        }),
-        ...metadata,
-      }),
-    ) as jest.MockedFunction<MediaCatalogService['resolveMediaRefs']>;
-
+  function createService(storedCollections: PublishedHomeCollection[] = collections) {
+    const getHomeCollections = jest.fn().mockResolvedValue(storedCollections);
+    const countPublishedItems = jest.fn().mockResolvedValue(150);
     return {
-      service: new HomeFeedService({ resolveMediaRefs } as unknown as MediaCatalogService),
-      resolveMediaRefs,
+      service: new HomeFeedService({
+        getHomeCollections,
+        countPublishedItems,
+      } as unknown as MediaCatalogService),
+      getHomeCollections,
+      countPublishedItems,
     };
   }
 
-  it('resolves featured media independently from the collection pages', async () => {
-    const { service, resolveMediaRefs } = createService();
+  it('selects featured media directly from the published home collection', async () => {
+    const { service, getHomeCollections } = createService();
 
     const featured = await service.getFeatured(0);
 
     expect(featured).toEqual({
-      featured: summariesByRef.get(featuredMediaRefs[0]),
+      featured: collections[0].items[0],
       featuredExpiresAt: '1970-01-01T01:00:00.000Z',
       partial: false,
       degraded: false,
       stale: false,
     });
-    expect(resolveMediaRefs).toHaveBeenCalledWith([featuredMediaRefs[0]]);
-    expect(resolveMediaRefs).toHaveBeenCalledTimes(1);
+    expect(getHomeCollections).toHaveBeenCalledTimes(1);
   });
 
-  it('hydrates only the requested page of home collections', async () => {
-    const { service, resolveMediaRefs } = createService();
+  it('returns only the requested home collection page in database order', async () => {
+    const { service, countPublishedItems } = createService();
 
-    const page = await service.getCollections(2, 2);
-    const definitions = homeCollectionDefinitions.slice(2, 4);
+    const result = await service.getCollections(2, 2);
 
-    expect(page.collections).toEqual(
-      definitions.map((collection) => ({
-        id: collection.id,
-        title: collection.title,
-        items: collection.mediaRefs.map((mediaRef) => summariesByRef.get(mediaRef)),
-        total: collection.mediaRefs.length,
+    expect(result.collections).toEqual(
+      collections.slice(3, 5).map((collection) => ({
+        ...collection,
+        total: collection.items.length,
       })),
     );
-    expect(page).toEqual(
-      expect.objectContaining({ offset: 2, limit: 2, total: 5, partial: false }),
+    expect(result).toEqual(
+      expect.objectContaining({
+        offset: 2,
+        limit: 2,
+        total: homeCollectionDefinitions.length,
+        partial: false,
+        degraded: false,
+        stale: false,
+      }),
     );
-    expect(resolveMediaRefs).toHaveBeenCalledWith(
-      definitions.flatMap((collection) => collection.mediaRefs),
-    );
+    expect(countPublishedItems).not.toHaveBeenCalled();
   });
 
-  it('keeps the legacy feed contract while resolving featured media separately', async () => {
-    const { service, resolveMediaRefs } = createService();
+  it('uses the published catalog count for an aggregate home collection', async () => {
+    const aggregateIndex = homeCollectionDefinitions.findIndex(
+      ({ fullCollectionId }) => fullCollectionId !== undefined,
+    );
+    const { service, countPublishedItems } = createService();
+
+    const result = await service.getCollections(aggregateIndex, 1);
+
+    expect(result.collections[0].total).toBe(150);
+    expect(countPublishedItems).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the legacy feed contract with local featured and collection data', async () => {
+    const { service } = createService();
 
     const feed = await service.getHomeFeed(0);
 
-    expect(feed.featured).toBe(summariesByRef.get(featuredMediaRefs[0]));
-    expect(feed.featuredExpiresAt).toBe('1970-01-01T01:00:00.000Z');
+    expect(feed.featured).toBe(collections[0].items[0]);
     expect(feed.continueWatching).toEqual([]);
     expect(feed.collections).toHaveLength(homeCollectionDefinitions.length);
-    expect(feed.collections[0].total).toBe(150);
     expect(feed).toEqual(
       expect.objectContaining({ partial: false, degraded: false, stale: false }),
     );
-    expect(resolveMediaRefs).toHaveBeenCalledWith([featuredMediaRefs[0]]);
-    expect(resolveMediaRefs).toHaveBeenCalledWith(homeMediaRefs);
-    expect(resolveMediaRefs).toHaveBeenCalledTimes(2);
   });
 
-  it('falls forward when the hourly featured title is unavailable', async () => {
-    const availableItems = summaries.filter(({ mediaRef }) => mediaRef !== featuredMediaRefs[0]);
-    const { service, resolveMediaRefs } = createService(availableItems, {
-      partial: true,
-      degraded: true,
-      stale: false,
-    });
+  it('falls forward from an unusable featured item and rejects an unusable collection', async () => {
+    const featured = collections[0];
+    const withFirstMissingBackdrop = [
+      {
+        ...featured,
+        items: [summary(featured.items[0].mediaRef, false), ...featured.items.slice(1)],
+      },
+      ...collections.slice(1),
+    ];
+    const fallback = await createService(withFirstMissingBackdrop).service.getFeatured(0);
+    expect(fallback.featured.mediaRef).toBe(featured.items[1].mediaRef);
 
-    const featured = await service.getFeatured(0);
-
-    expect(featured.featured.mediaRef).toBe(featuredMediaRefs[1]);
-    expect(featured).toEqual(expect.objectContaining({ partial: true, degraded: true }));
-    expect(resolveMediaRefs.mock.calls).toEqual([
-      [[featuredMediaRefs[0]]],
-      [[featuredMediaRefs[1]]],
-    ]);
-  });
-
-  it('skips summaries without a usable featured backdrop', async () => {
-    const availableItems = summaries.map((summary) =>
-      summary.mediaRef === featuredMediaRefs[0] ? { ...summary, backdrop: undefined } : summary,
-    );
-    const { service } = createService(availableItems);
-
-    const featured = await service.getFeatured(0);
-
-    expect(featured.featured.mediaRef).toBe(featuredMediaRefs[1]);
-    expect(featured.degraded).toBe(true);
-  });
-
-  it('returns service unavailable when no featured title can be resolved', async () => {
-    const { service } = createService(
-      summaries.filter(({ mediaRef }) => !featuredMediaRefs.includes(mediaRef)),
-      { partial: true, degraded: true, stale: false },
-    );
-
-    await expect(service.getFeatured(0)).rejects.toThrow(
+    const unusable = [
+      { ...featured, items: featured.items.map((item) => summary(item.mediaRef, false)) },
+      ...collections.slice(1),
+    ];
+    await expect(createService(unusable).service.getFeatured(0)).rejects.toThrow(
       new ServiceUnavailableException('Home feed is temporarily unavailable'),
     );
   });

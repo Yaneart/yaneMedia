@@ -1,398 +1,220 @@
 import type { DetailsResponse } from '@media-engine/core';
 import { NotFoundException, ServiceUnavailableException } from '@nestjs/common';
-import { editorialCatalog } from '../../../src/media/catalog/editorial-catalog';
-import type { MediaDetailsDto } from '../../../src/media/dto/media-details.dto';
+import type { EditorialCatalogRepository } from '../../../src/media/catalog/editorial-catalog.repository';
 import { MediaCatalogService } from '../../../src/media/catalog/media-catalog.service';
-import type { MediaRefType } from '../../../src/media/media-ref';
 import type { MediaService } from '../../../src/media/media.service';
 
 describe('MediaCatalogService', () => {
   const healthyMeta = {
-    providers: {
-      requested: ['catalog-provider'],
-      successful: ['catalog-provider'],
-      failed: [],
-    },
+    providers: { requested: ['provider'], successful: ['provider'], failed: [] },
     cached: false,
     tookMs: 1,
   } satisfies DetailsResponse['meta'];
 
-  afterEach(() => {
-    jest.restoreAllMocks();
+  const createRow = (
+    mediaRef: string,
+    type: 'movie' | 'series' | 'anime',
+    overrides: Record<string, unknown> = {},
+  ) => ({
+    mediaRef,
+    type,
+    title: mediaRef,
+    originalTitle: null,
+    year: 2026,
+    shortDescription: null,
+    genres: ['Drama'],
+    rating: 8.1,
+    posterObjectKey: `${'a'.repeat(64)}.jpg`,
+    posterWidth: 600,
+    posterHeight: 900,
+    backdropObjectKey: `${'b'.repeat(64)}.webp`,
+    backdropWidth: 1600,
+    backdropHeight: 900,
+    ...overrides,
   });
 
-  function createMovie(mediaRef: string, title: string, withBackdrop = true): MediaDetailsDto {
+  const createCollectionRow = (
+    mediaRef: string,
+    type: 'movie' | 'series' | 'anime',
+    collectionId: string,
+    collectionPosition: number,
+    mediaPosition: number,
+  ) => ({
+    collectionId,
+    collectionTitle: collectionId,
+    collectionPosition,
+    mediaPosition,
+    ...createRow(mediaRef, type),
+  });
+
+  function createService(options?: {
+    publishedItems?: ReturnType<typeof createRow>[];
+    collectionRows?: ReturnType<typeof createCollectionRow>[];
+    getDetailsByRef?: jest.Mock;
+  }) {
+    const getDetailsByRef = options?.getDetailsByRef ?? jest.fn();
+    const findPublishedCollectionItems = jest.fn().mockResolvedValue(options?.collectionRows ?? []);
+    const repository = {
+      findPublishedItems: jest.fn().mockResolvedValue(options?.publishedItems ?? []),
+      findPublishedCollectionItems,
+      countPublishedItems: jest.fn().mockResolvedValue(150),
+    } as unknown as EditorialCatalogRepository;
     return {
-      mediaRef,
+      service: new MediaCatalogService({ getDetailsByRef } as unknown as MediaService, repository),
+      getDetailsByRef,
+      repository,
+      findPublishedCollectionItems,
+    };
+  }
+
+  it('serves a catalog from the published revision with local artwork URLs', async () => {
+    const rows = [
+      createCollectionRow('imdb:tt0000001', 'movie', 'movie-editorial-picks', 1, 1),
+      createCollectionRow('imdb:tt0000002', 'movie', 'movie-classics', 2, 1),
+    ];
+    const { service, getDetailsByRef, findPublishedCollectionItems } = createService({
+      collectionRows: rows,
+    });
+
+    await expect(service.getCatalog('movie')).resolves.toEqual({
+      items: [
+        expect.objectContaining({
+          mediaRef: 'imdb:tt0000001',
+          poster: {
+            url: `/api/v1/media/assets/poster/${'a'.repeat(64)}.jpg`,
+            width: 600,
+            height: 900,
+          },
+        }),
+        expect.objectContaining({ mediaRef: 'imdb:tt0000002' }),
+      ],
+      collections: [
+        { id: 'editorial-picks', title: 'movie-editorial-picks', mediaRefs: ['imdb:tt0000001'] },
+        { id: 'classics', title: 'movie-classics', mediaRefs: ['imdb:tt0000002'] },
+      ],
+      partial: false,
+      degraded: false,
+      stale: false,
+    });
+    expect(findPublishedCollectionItems).toHaveBeenCalledWith({
+      scope: 'catalog',
       type: 'movie',
-      title,
-      backdrop: withBackdrop
-        ? { url: `https://images.example.com/${encodeURIComponent(mediaRef)}.jpg` }
-        : undefined,
-      genres: ['Drama'],
-      countries: [],
-      languages: [],
-      persons: [],
-    };
-  }
+    });
+    expect(getDetailsByRef).not.toHaveBeenCalled();
+  });
 
-  function createDetails(mediaRef: string, type: MediaRefType): MediaDetailsDto {
-    const base = {
-      mediaRef,
-      title: mediaRef,
-      backdrop:
-        type === 'anime'
-          ? undefined
-          : { url: `https://images.example.com/${encodeURIComponent(mediaRef)}.jpg` },
-      genres: [],
-      countries: [],
-      languages: [],
-      persons: [],
-    };
+  it('builds the combined editorial collection in movie-series-anime order', async () => {
+    const rows = [
+      createCollectionRow('anilist:1', 'anime', 'anime-editorial-picks', 1, 1),
+      createCollectionRow('imdb:movie1', 'movie', 'movie-editorial-picks', 1, 1),
+      createCollectionRow('imdb:series1', 'series', 'series-editorial-picks', 1, 1),
+      createCollectionRow('anilist:2', 'anime', 'anime-modern', 2, 1),
+      createCollectionRow('imdb:movie2', 'movie', 'movie-modern', 2, 1),
+      createCollectionRow('imdb:series2', 'series', 'series-modern', 2, 1),
+    ];
+    const { service, getDetailsByRef } = createService({ collectionRows: rows });
 
-    if (type === 'series') {
-      return { ...base, type, seasons: [] };
-    }
+    const result = await service.getCollection('editorial-picks', 1, 4);
 
-    if (type === 'anime') {
-      return { ...base, type, episodes: [] };
-    }
-
-    return { ...base, type };
-  }
-
-  function createService(
-    getDetailsByRef: jest.MockedFunction<MediaService['getDetailsByRef']>,
-  ): MediaCatalogService {
-    return new MediaCatalogService({ getDetailsByRef } as unknown as MediaService);
-  }
-
-  it('hydrates one media type in editorial order and reuses the fresh cache', async () => {
-    const movieEntries = editorialCatalog.filter(({ type }) => type === 'movie');
-    const detailsByRef = new Map(
-      movieEntries.map(({ mediaRef }) => [mediaRef, createMovie(mediaRef, mediaRef)]),
-    );
-    const getDetailsByRef = jest.fn((mediaRef: string) =>
-      Promise.resolve({
-        details: detailsByRef.get(mediaRef) ?? null,
-        meta: healthyMeta,
-      }),
-    ) as jest.MockedFunction<MediaService['getDetailsByRef']>;
-    const service = createService(getDetailsByRef);
-
-    const first = await service.getCatalog('movie');
-    const second = await service.getCatalog('movie');
-
-    expect(first.items.map(({ mediaRef }) => mediaRef)).toEqual(
-      movieEntries.map(({ mediaRef }) => mediaRef),
-    );
-    expect(first).toEqual(
-      expect.objectContaining({ partial: false, degraded: false, stale: false }),
-    );
-    expect(first.collections).toHaveLength(5);
-    expect(first.collections.map(({ title, mediaRefs }) => [title, mediaRefs.length])).toEqual([
-      ['Выбор редакции', 10],
-      ['Авторское кино', 10],
-      ['Классика вне времени', 10],
-      ['Триллеры и расследования', 10],
-      ['Сильные драмы', 10],
+    expect(result.items.map(({ mediaRef }) => mediaRef)).toEqual([
+      'imdb:series1',
+      'anilist:1',
+      'imdb:movie2',
+      'imdb:series2',
     ]);
-    expect(second).toEqual(first);
-    expect(getDetailsByRef).toHaveBeenCalledTimes(movieEntries.length);
+    expect(result).toEqual(expect.objectContaining({ total: 6, offset: 1, limit: 4 }));
+    expect(getDetailsByRef).not.toHaveBeenCalled();
   });
 
-  it('hydrates only the requested editorial collection page', async () => {
-    const getDetailsByRef = jest.fn((mediaRef: string) => {
-      const entry = editorialCatalog.find((candidate) => candidate.mediaRef === mediaRef);
+  it('resolves known summaries locally and only falls back for unknown refs', async () => {
+    const known = createRow('imdb:tt0000001', 'movie');
+    const getDetailsByRef = jest.fn().mockResolvedValue({
+      details: {
+        mediaRef: 'imdb:tt9999999',
+        type: 'movie',
+        title: 'External title',
+        genres: [],
+        countries: [],
+        languages: [],
+        persons: [],
+      },
+      meta: healthyMeta,
+    });
+    const { service } = createService({ publishedItems: [known], getDetailsByRef });
 
-      return Promise.resolve({
-        details: entry ? createDetails(entry.mediaRef, entry.type) : null,
-        meta: healthyMeta,
-      });
-    }) as jest.MockedFunction<MediaService['getDetailsByRef']>;
-    const service = createService(getDetailsByRef);
+    const result = await service.resolveMediaRefs(['imdb:tt0000001', 'imdb:tt9999999']);
 
-    const collectionEntries = editorialCatalog.filter(({ collections }) =>
-      (collections as readonly string[]).includes('editorial-picks'),
-    );
-    const catalog = await service.getCollection('editorial-picks', 10, 20);
-
-    expect(catalog.items.map(({ mediaRef }) => mediaRef)).toEqual(
-      collectionEntries.slice(10, 30).map(({ mediaRef }) => mediaRef),
-    );
-    expect(catalog).toEqual(
-      expect.objectContaining({
-        total: 150,
-        offset: 10,
-        limit: 20,
-        partial: false,
-        degraded: false,
-        stale: false,
-      }),
-    );
-    expect(getDetailsByRef).toHaveBeenCalledTimes(20);
-  });
-
-  it('resolves mixed media references in input order', async () => {
-    const mediaRefs = ['anilist:154587', 'imdb:tt15239678', 'imdb:tt11280740'];
-    const detailsByRef = new Map<string, MediaDetailsDto>([
-      [mediaRefs[0], createDetails(mediaRefs[0], 'anime')],
-      [mediaRefs[1], createDetails(mediaRefs[1], 'movie')],
-      [mediaRefs[2], createDetails(mediaRefs[2], 'series')],
+    expect(result.items.map(({ mediaRef }) => mediaRef)).toEqual([
+      'imdb:tt0000001',
+      'imdb:tt9999999',
     ]);
-    const getDetailsByRef = jest.fn((mediaRef: string) =>
-      Promise.resolve({
-        details: detailsByRef.get(mediaRef) ?? null,
-        meta: healthyMeta,
-      }),
-    ) as jest.MockedFunction<MediaService['getDetailsByRef']>;
-    const service = createService(getDetailsByRef);
-
-    const resolution = await service.resolveMediaRefs(mediaRefs);
-
-    expect(resolution.items.map(({ mediaRef }) => mediaRef)).toEqual(mediaRefs);
-    expect(resolution).toEqual(
-      expect.objectContaining({ partial: false, degraded: false, stale: false }),
-    );
+    expect(getDetailsByRef).toHaveBeenCalledTimes(1);
+    expect(getDetailsByRef).toHaveBeenCalledWith('imdb:tt9999999');
   });
 
-  it('coalesces simultaneous resolutions of the same media reference', async () => {
-    const mediaRef = 'imdb:tt15239678';
-    let completeRequest:
+  it('reuses one fallback request for simultaneous unknown summary resolutions', async () => {
+    let complete:
       ((value: Awaited<ReturnType<MediaService['getDetailsByRef']>>) => void) | undefined;
     const getDetailsByRef = jest.fn(
       () =>
         new Promise<Awaited<ReturnType<MediaService['getDetailsByRef']>>>((resolve) => {
-          completeRequest = resolve;
+          complete = resolve;
         }),
-    ) as jest.MockedFunction<MediaService['getDetailsByRef']>;
-    const service = createService(getDetailsByRef);
+    );
+    const { service } = createService({ getDetailsByRef });
+    const first = service.resolveMediaRefs(['imdb:tt9999999']);
+    const second = service.resolveMediaRefs(['imdb:tt9999999']);
 
-    const first = service.resolveMediaRefs([mediaRef]);
-    const second = service.resolveMediaRefs([mediaRef]);
-
+    await Promise.resolve();
     expect(getDetailsByRef).toHaveBeenCalledTimes(1);
-    completeRequest?.({ details: createMovie(mediaRef, 'Dune: Part Two'), meta: healthyMeta });
-
-    await expect(Promise.all([first, second])).resolves.toEqual([
-      expect.objectContaining({ items: [expect.objectContaining({ mediaRef })] }),
-      expect.objectContaining({ items: [expect.objectContaining({ mediaRef })] }),
-    ]);
-  });
-
-  it('skips missing media references and marks the result as partial', async () => {
-    const mediaRefs = ['imdb:tt15239678', 'imdb:tt0000000', 'anilist:154587'];
-    const getDetailsByRef = jest.fn((mediaRef: string) =>
-      Promise.resolve({
-        details:
-          mediaRef === 'imdb:tt0000000'
-            ? null
-            : createDetails(mediaRef, mediaRef.startsWith('anilist:') ? 'anime' : 'movie'),
-        meta: healthyMeta,
-      }),
-    ) as jest.MockedFunction<MediaService['getDetailsByRef']>;
-    const service = createService(getDetailsByRef);
-
-    await expect(service.resolveMediaRefs(mediaRefs)).resolves.toEqual({
-      items: [
-        expect.objectContaining({ mediaRef: 'imdb:tt15239678' }),
-        expect.objectContaining({ mediaRef: 'anilist:154587' }),
-      ],
-      partial: true,
-      degraded: true,
-      stale: false,
+    complete?.({
+      details: {
+        mediaRef: 'imdb:tt9999999',
+        type: 'movie',
+        title: 'External title',
+        genres: [],
+        countries: [],
+        languages: [],
+        persons: [],
+      },
+      meta: healthyMeta,
     });
+    await expect(Promise.all([first, second])).resolves.toHaveLength(2);
   });
 
-  it('validates an existing batch and reuses the shared summary cache', async () => {
-    const mediaRefs = ['imdb:tt15239678', 'anilist:154587'];
-    const getDetailsByRef = jest.fn((mediaRef: string) =>
-      Promise.resolve({
-        details: createDetails(mediaRef, mediaRef.startsWith('anilist:') ? 'anime' : 'movie'),
-        meta: healthyMeta,
-      }),
-    ) as jest.MockedFunction<MediaService['getDetailsByRef']>;
-    const service = createService(getDetailsByRef);
+  it('distinguishes missing and temporarily unverifiable unknown refs', async () => {
+    const missing = createService({
+      getDetailsByRef: jest.fn().mockResolvedValue({ details: null, meta: healthyMeta }),
+    }).service;
+    await expect(missing.assertMediaRefsExist(['imdb:tt9999999'])).rejects.toThrow(
+      new NotFoundException('Media not found'),
+    );
 
-    await expect(service.assertMediaRefsExist(mediaRefs)).resolves.toBeUndefined();
-    const resolution = await service.resolveMediaRefs(mediaRefs);
-
-    expect(resolution.items.map(({ mediaRef }) => mediaRef)).toEqual(mediaRefs);
-    expect(getDetailsByRef).toHaveBeenCalledTimes(mediaRefs.length);
-  });
-
-  it('rejects a batch when at least one media reference does not exist', async () => {
-    const missingMediaRef = 'imdb:tt0000000';
-    const getDetailsByRef = jest.fn((mediaRef: string) =>
-      Promise.resolve({
-        details: mediaRef === missingMediaRef ? null : createMovie(mediaRef, mediaRef),
-        meta: healthyMeta,
-      }),
-    ) as jest.MockedFunction<MediaService['getDetailsByRef']>;
-    const service = createService(getDetailsByRef);
-
-    await expect(
-      service.assertMediaRefsExist(['imdb:tt15239678', missingMediaRef]),
-    ).rejects.toThrow(new NotFoundException('Media not found'));
-  });
-
-  it('reports an unverified reference as unavailable instead of missing', async () => {
-    const getDetailsByRef = jest
-      .fn()
-      .mockRejectedValue(
-        new ServiceUnavailableException('Media providers are temporarily unavailable'),
-      ) as jest.MockedFunction<MediaService['getDetailsByRef']>;
-    const service = createService(getDetailsByRef);
-
-    await expect(service.assertMediaRefsExist(['imdb:tt15239678'])).rejects.toThrow(
+    const unavailable = createService({
+      getDetailsByRef: jest
+        .fn()
+        .mockRejectedValue(new ServiceUnavailableException('Provider unavailable')),
+    }).service;
+    await expect(unavailable.assertMediaRefsExist(['imdb:tt9999999'])).rejects.toThrow(
       new ServiceUnavailableException('Media providers are temporarily unavailable'),
     );
   });
 
-  it('returns an app-owned partial result when one configured title is missing', async () => {
-    const getDetailsByRef = jest.fn((mediaRef: string) =>
-      Promise.resolve({
-        details:
-          mediaRef === 'imdb:tt15239678' ? createMovie('imdb:tt15239678', 'Dune: Part Two') : null,
-        meta: healthyMeta,
-      }),
-    ) as jest.MockedFunction<MediaService['getDetailsByRef']>;
-    const service = createService(getDetailsByRef);
-
-    await expect(service.getCatalog('movie')).resolves.toEqual(
-      expect.objectContaining({
-        items: [expect.objectContaining({ mediaRef: 'imdb:tt15239678' })],
-        collections: [
-          expect.objectContaining({
-            id: 'editorial-picks',
-            mediaRefs: ['imdb:tt15239678'],
-          }),
-        ],
-        partial: true,
-        degraded: true,
-        stale: false,
-      }),
-    );
-  });
-
-  it('uses cached summaries as stale fallback during a provider outage', async () => {
-    const now = jest.spyOn(Date, 'now').mockReturnValue(0);
-    const getDetailsByRef = jest.fn((mediaRef: string) =>
-      Promise.resolve({
-        details: createMovie(mediaRef, mediaRef),
-        meta: healthyMeta,
-      }),
-    ) as jest.MockedFunction<MediaService['getDetailsByRef']>;
-    const service = createService(getDetailsByRef);
-
-    await service.getCatalog('movie');
-
-    now.mockReturnValue(5 * 60_000 + 1);
-    getDetailsByRef.mockRejectedValue(
-      new ServiceUnavailableException('Media providers are temporarily unavailable'),
-    );
-
-    const catalog = await service.getCatalog('movie');
-
-    expect(catalog.items).toHaveLength(
-      editorialCatalog.filter(({ type }) => type === 'movie').length,
-    );
-    expect(catalog).toEqual(
-      expect.objectContaining({ partial: false, degraded: true, stale: true }),
-    );
-  });
-
-  it('quickly revalidates movie summaries that are missing a backdrop', async () => {
-    const now = jest.spyOn(Date, 'now').mockReturnValue(0);
-    const getDetailsByRef = jest.fn((mediaRef: string) =>
-      Promise.resolve({
-        details: createMovie(mediaRef, mediaRef, false),
-        meta: healthyMeta,
-      }),
-    ) as jest.MockedFunction<MediaService['getDetailsByRef']>;
-    const service = createService(getDetailsByRef);
-
-    const first = await service.getCollection('editorial-picks', 0, 1);
-
-    expect(first.degraded).toBe(true);
-    expect(getDetailsByRef).toHaveBeenCalledTimes(1);
-
-    now.mockReturnValue(15_001);
-    getDetailsByRef.mockResolvedValue({
-      details: {
-        ...createMovie('imdb:tt15239678', 'Dune: Part Two'),
-        backdrop: { url: 'https://images.example.com/dune-backdrop.jpg' },
-      },
-      meta: healthyMeta,
-    });
-
-    const recovered = await service.getCollection('editorial-picks', 0, 1);
-
-    expect(getDetailsByRef).toHaveBeenCalledTimes(2);
-    expect(recovered.degraded).toBe(false);
-    expect(recovered.items[0].backdrop?.url).toBe('https://images.example.com/dune-backdrop.jpg');
-  });
-
-  it('does not replace a cached backdrop with a temporarily poorer provider response', async () => {
-    const now = jest.spyOn(Date, 'now').mockReturnValue(0);
-    const mediaRef = 'imdb:tt15239678';
-    const getDetailsByRef = jest.fn().mockResolvedValue({
-      details: {
-        ...createMovie(mediaRef, 'Dune: Part Two'),
-        backdrop: { url: 'https://images.example.com/dune-backdrop.jpg' },
-      },
-      meta: healthyMeta,
-    }) as jest.MockedFunction<MediaService['getDetailsByRef']>;
-    const service = createService(getDetailsByRef);
-
-    await service.getCollection('editorial-picks', 0, 1);
-
-    now.mockReturnValue(5 * 60_000 + 1);
-    getDetailsByRef.mockResolvedValue({
-      details: createMovie(mediaRef, 'Dune: Part Two', false),
-      meta: {
-        ...healthyMeta,
-        providers: {
-          requested: ['cinemeta'],
-          successful: [],
-          failed: [
-            {
-              provider: 'cinemeta',
-              code: 'TIMEOUT',
-              message: 'Timed out',
-              retryable: true,
-            },
-          ],
-        },
-      },
-    });
-
-    const degraded = await service.getCollection('editorial-picks', 0, 1);
-
-    expect(degraded.degraded).toBe(true);
-    expect(degraded.items[0].backdrop?.url).toBe('https://images.example.com/dune-backdrop.jpg');
-  });
-
-  it('returns service unavailable when every configured title fails without stale cache', async () => {
-    const getDetailsByRef = jest
+  it('keeps discovery available without providers and rejects a missing published revision', async () => {
+    const providerFailure = jest
       .fn()
-      .mockRejectedValue(
-        new ServiceUnavailableException('Media providers are temporarily unavailable'),
-      ) as jest.MockedFunction<MediaService['getDetailsByRef']>;
-    const service = createService(getDetailsByRef);
+      .mockRejectedValue(new ServiceUnavailableException('Provider unavailable'));
+    const row = createCollectionRow('imdb:tt0000001', 'movie', 'movie-editorial-picks', 1, 1);
+    const available = createService({ collectionRows: [row], getDetailsByRef: providerFailure });
 
-    await expect(service.getCatalog('movie')).rejects.toThrow(
-      new ServiceUnavailableException('Media catalog is temporarily unavailable'),
+    await expect(available.service.getCatalog('movie')).resolves.toEqual(
+      expect.objectContaining({ items: [expect.objectContaining({ mediaRef: 'imdb:tt0000001' })] }),
     );
-  });
+    expect(providerFailure).not.toHaveBeenCalled();
 
-  it('preserves unexpected errors instead of hiding them as partial catalog data', async () => {
-    const unexpectedError = new Error('Unexpected catalog failure');
-    const getDetailsByRef = jest.fn().mockRejectedValue(unexpectedError) as jest.MockedFunction<
-      MediaService['getDetailsByRef']
-    >;
-    const service = createService(getDetailsByRef);
-
-    await expect(service.getCatalog('movie')).rejects.toBe(unexpectedError);
+    const missing = createService();
+    await expect(missing.service.getCatalog('movie')).rejects.toThrow(
+      new ServiceUnavailableException('Published media catalog is unavailable'),
+    );
   });
 });

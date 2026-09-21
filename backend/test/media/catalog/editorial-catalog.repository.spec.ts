@@ -14,8 +14,11 @@ describe('EditorialCatalogRepository', () => {
       condition = value;
       return Promise.resolve(rows);
     });
-    const innerJoin = jest.fn().mockReturnValue({ where });
-    const from = jest.fn().mockReturnValue({ innerJoin });
+    const builder: Record<string, jest.Mock> = {};
+    builder.innerJoin = jest.fn(() => builder);
+    builder.leftJoin = jest.fn(() => builder);
+    builder.where = where;
+    const from = jest.fn().mockReturnValue(builder);
     const select = jest.fn().mockReturnValue({ from });
     const repository = new EditorialCatalogRepository({
       db: { select },
@@ -45,6 +48,7 @@ describe('EditorialCatalogRepository', () => {
     });
     const builder: Record<string, jest.Mock> = {};
     builder.innerJoin = jest.fn(() => builder);
+    builder.leftJoin = jest.fn(() => builder);
     builder.where = jest.fn(() => ({ orderBy }));
     const select = jest.fn().mockReturnValue({ from: jest.fn(() => builder) });
     const repository = new EditorialCatalogRepository({

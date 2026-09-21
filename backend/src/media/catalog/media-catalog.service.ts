@@ -1,26 +1,29 @@
 import { Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import type { DetailsResponse } from '@media-engine/core';
+import { AppLogger } from '../../platform/logging/app-logger';
 import type { MediaDetailsDto } from '../dto/media-details.dto';
 import type { MediaSummaryDto } from '../dto/media-summary.dto';
 import type { MediaRefType } from '../media-ref';
-import { INCOMPLETE_ARTWORK_CACHE_TTL_MS } from '../media-engine-cache';
 import { MediaService } from '../media.service';
-import {
-  editorialCatalog,
-  mediaCatalogCollectionDefinitions,
-  type EditorialCatalogEntry,
-  type EditorialCollectionId,
-} from './editorial-catalog';
-import type { MediaCollectionResponseDto } from './dto/media-collection-response.dto';
-import type { MediaCatalogResponseDto } from './dto/media-catalog-response.dto';
 import type { MediaSummaryResolutionResponseDto } from '../summary-resolution/dto/media-summary-resolution-response.dto';
-import { AppLogger } from '../../platform/logging/app-logger';
+import type { MediaCatalogResponseDto } from './dto/media-catalog-response.dto';
+import type { MediaCollectionResponseDto } from './dto/media-collection-response.dto';
+import type { EditorialCollectionId } from './editorial-catalog';
+import { EditorialCatalogRepository } from './editorial-catalog.repository';
 
-const CATALOG_HYDRATION_CONCURRENCY = 3;
-const CATALOG_CACHE_TTL_MS = 5 * 60_000;
-const CATALOG_STALE_TTL_MS = 30 * 60_000;
+const FALLBACK_CACHE_TTL_MS = 5 * 60_000;
+const FALLBACK_STALE_TTL_MS = 30 * 60_000;
+const FALLBACK_CONCURRENCY = 3;
+const MEDIA_TYPES = ['movie', 'series', 'anime'] as const;
 
-interface CatalogCacheEntry {
+type PublishedItemRow = Awaited<
+  ReturnType<EditorialCatalogRepository['findPublishedItems']>
+>[number];
+type PublishedCollectionRow = Awaited<
+  ReturnType<EditorialCatalogRepository['findPublishedCollectionItems']>
+>[number];
+
+interface FallbackCacheEntry {
   summary: MediaSummaryDto;
   degraded: boolean;
   stale: boolean;
@@ -28,64 +31,44 @@ interface CatalogCacheEntry {
   staleUntil: number;
 }
 
-interface CatalogEntryResolution {
+interface SummaryResolution {
   summary?: MediaSummaryDto;
   degraded: boolean;
   stale: boolean;
   unavailable: boolean;
-  refreshed: boolean;
 }
 
-interface MediaSummaryResolutionEntry {
-  mediaRef: string;
-  type?: MediaRefType;
+export interface PublishedHomeCollection {
+  id: string;
+  title: string;
+  items: MediaSummaryDto[];
 }
 
 @Injectable()
 export class MediaCatalogService {
-  private readonly cache = new Map<string, CatalogCacheEntry>();
-  private readonly pendingResolutions = new Map<string, Promise<CatalogEntryResolution>>();
+  private readonly fallbackCache = new Map<string, FallbackCacheEntry>();
+  private readonly pendingFallbacks = new Map<string, Promise<SummaryResolution>>();
 
   constructor(
     private readonly mediaService: MediaService,
+    private readonly repository: EditorialCatalogRepository,
     private readonly logger?: AppLogger,
   ) {}
 
   async getCatalog(type: MediaRefType): Promise<MediaCatalogResponseDto> {
-    const entries = editorialCatalog
-      .filter((entry) => entry.type === type)
-      .sort((left, right) => left.catalogOrder - right.catalogOrder);
-    const catalog = await this.hydrateEntries(entries);
-    const itemsByMediaRef = new Map(catalog.items.map((item) => [item.mediaRef, item]));
+    const startedAt = performance.now();
+    const rows = await this.repository.findPublishedCollectionItems({ scope: 'catalog', type });
+    this.assertPublishedCatalog(rows);
 
-    return {
-      ...catalog,
-      collections: mediaCatalogCollectionDefinitions[type]
-        .map((collection) => ({
-          id: collection.id,
-          title: collection.title,
-          mediaRefs: collection.mediaRefs.filter((mediaRef) => itemsByMediaRef.has(mediaRef)),
-        }))
-        .filter((collection) => collection.mediaRefs.length > 0),
-    };
-  }
+    const collections = this.groupCollections(rows).map((collection) => ({
+      id: collection.id.replace(`${type}-`, ''),
+      title: collection.title,
+      mediaRefs: collection.items.map(({ mediaRef }) => mediaRef),
+    }));
+    const items = this.uniqueSummaries(rows);
 
-  async resolveMediaRefs(mediaRefs: readonly string[]): Promise<MediaSummaryResolutionResponseDto> {
-    const entries = mediaRefs.map((mediaRef) => ({ mediaRef }));
-
-    return this.hydrateEntries(entries);
-  }
-
-  async assertMediaRefsExist(mediaRefs: readonly string[]): Promise<void> {
-    const resolutions = await this.resolveEntries(mediaRefs.map((mediaRef) => ({ mediaRef })));
-
-    if (resolutions.some(({ summary, unavailable }) => !summary && !unavailable)) {
-      throw new NotFoundException('Media not found');
-    }
-
-    if (resolutions.some(({ summary }) => !summary)) {
-      throw new ServiceUnavailableException('Media providers are temporarily unavailable');
-    }
+    this.logCatalogRead(startedAt, items.length);
+    return { items, collections, partial: false, degraded: false, stale: false };
   }
 
   async getCollection(
@@ -93,204 +76,209 @@ export class MediaCatalogService {
     offset: number,
     limit: number,
   ): Promise<MediaCollectionResponseDto> {
-    const entries = editorialCatalog.filter((entry: EditorialCatalogEntry) =>
-      entry.collections.includes(collectionId),
-    );
-    const page = entries.slice(offset, offset + limit);
-    const catalog = await this.hydrateEntries(page);
+    if (collectionId !== 'editorial-picks') throw new NotFoundException('Collection not found');
 
+    const startedAt = performance.now();
+    const rows = await this.repository.findPublishedCollectionItems({ scope: 'catalog' });
+    this.assertPublishedCatalog(rows);
+
+    const itemsByType = new Map<MediaRefType, MediaSummaryDto[]>(
+      MEDIA_TYPES.map((type) => [
+        type,
+        this.uniqueSummaries(rows.filter((row) => row.type === type)),
+      ]),
+    );
+    const allItems = Array.from(
+      { length: Math.max(...MEDIA_TYPES.map((type) => itemsByType.get(type)?.length ?? 0)) },
+      (_, index) => MEDIA_TYPES.flatMap((type) => itemsByType.get(type)?.[index] ?? []),
+    ).flat();
+    const items = allItems.slice(offset, offset + limit);
+
+    this.logCatalogRead(startedAt, items.length);
     return {
-      ...catalog,
-      total: entries.length,
+      items,
+      total: allItems.length,
       offset,
       limit,
+      partial: false,
+      degraded: false,
+      stale: false,
     };
   }
 
-  private async hydrateEntries(
-    entries: readonly MediaSummaryResolutionEntry[],
-  ): Promise<MediaSummaryResolutionResponseDto> {
-    const startedAt = performance.now();
-    const resolutions = await this.resolveEntries(entries);
+  async getHomeCollections(): Promise<PublishedHomeCollection[]> {
+    const rows = await this.repository.findPublishedCollectionItems({ scope: 'home', type: null });
+    this.assertPublishedCatalog(rows);
+    return this.groupCollections(rows);
+  }
+
+  countPublishedItems(): Promise<number> {
+    return this.repository.countPublishedItems();
+  }
+
+  async resolveMediaRefs(mediaRefs: readonly string[]): Promise<MediaSummaryResolutionResponseDto> {
+    const resolutions = await this.resolveRequestedRefs(mediaRefs);
     const items = resolutions.flatMap(({ summary }) => (summary ? [summary] : []));
-    const partial = items.length !== entries.length;
-    const stale = resolutions.some((resolution) => resolution.stale);
-    const degraded = partial || stale || resolutions.some((resolution) => resolution.degraded);
+    const partial = items.length !== mediaRefs.length;
 
-    this.logger?.logPerformance({
-      event: 'discovery.catalog_read',
-      storage: 'editorial_manifest_memory',
-      durationMs: Math.round(performance.now() - startedAt),
-      requestedItems: entries.length,
-      returnedItems: items.length,
-      freshCacheItems: resolutions.filter(({ refreshed, stale }) => !refreshed && !stale).length,
-      refreshedItems: resolutions.filter(({ refreshed }) => refreshed).length,
-      staleItems: resolutions.filter(({ stale: isStale }) => isStale).length,
-      missingItems: resolutions.filter(({ summary }) => !summary).length,
-    });
-
-    if (items.length === 0 && resolutions.some((resolution) => resolution.unavailable)) {
+    if (items.length === 0 && resolutions.some(({ unavailable }) => unavailable)) {
       throw new ServiceUnavailableException('Media catalog is temporarily unavailable');
     }
 
     return {
       items,
       partial,
-      degraded,
-      stale,
+      degraded: partial || resolutions.some(({ degraded, stale }) => degraded || stale),
+      stale: resolutions.some(({ stale }) => stale),
     };
   }
 
-  private async resolveEntries(
-    entries: readonly MediaSummaryResolutionEntry[],
-  ): Promise<CatalogEntryResolution[]> {
-    const resolutions = new Array<CatalogEntryResolution>(entries.length);
-    const queuedAt = performance.now();
-    let nextIndex = 0;
+  async assertMediaRefsExist(mediaRefs: readonly string[]): Promise<void> {
+    const resolutions = await this.resolveRequestedRefs(mediaRefs);
 
-    const resolveNext = async () => {
-      while (nextIndex < entries.length) {
-        const index = nextIndex;
-        nextIndex += 1;
-        resolutions[index] = await this.resolveEntry(entries[index], queuedAt);
+    if (resolutions.some(({ summary, unavailable }) => !summary && !unavailable)) {
+      throw new NotFoundException('Media not found');
+    }
+    if (resolutions.some(({ summary }) => !summary)) {
+      throw new ServiceUnavailableException('Media providers are temporarily unavailable');
+    }
+  }
+
+  private async resolveRequestedRefs(mediaRefs: readonly string[]): Promise<SummaryResolution[]> {
+    const publishedRows = await this.repository.findPublishedItems(mediaRefs);
+    const publishedByRef = new Map(
+      publishedRows.map((row) => [row.mediaRef, this.toMediaSummary(row)]),
+    );
+    const missingRefs = [...new Set(mediaRefs.filter((mediaRef) => !publishedByRef.has(mediaRef)))];
+    const fallbackResolutions = await this.resolveFallbacks(missingRefs);
+    const fallbackByRef = new Map(
+      missingRefs.map((mediaRef, index) => [mediaRef, fallbackResolutions[index]]),
+    );
+
+    return mediaRefs.map((mediaRef) => {
+      const summary = publishedByRef.get(mediaRef);
+      return summary
+        ? { summary, degraded: false, stale: false, unavailable: false }
+        : (fallbackByRef.get(mediaRef) ?? {
+            degraded: false,
+            stale: false,
+            unavailable: false,
+          });
+    });
+  }
+
+  private async resolveFallbacks(mediaRefs: readonly string[]): Promise<SummaryResolution[]> {
+    const resolutions = new Array<SummaryResolution>(mediaRefs.length);
+    let nextIndex = 0;
+    const worker = async () => {
+      while (nextIndex < mediaRefs.length) {
+        const index = nextIndex++;
+        resolutions[index] = await this.resolveFallback(mediaRefs[index]);
       }
     };
 
-    const workerCount = Math.min(CATALOG_HYDRATION_CONCURRENCY, entries.length);
-
-    await Promise.all(Array.from({ length: workerCount }, () => resolveNext()));
-
+    await Promise.all(
+      Array.from({ length: Math.min(FALLBACK_CONCURRENCY, mediaRefs.length) }, () => worker()),
+    );
     return resolutions;
   }
 
-  private async resolveEntry(
-    entry: MediaSummaryResolutionEntry,
-    queuedAt: number,
-  ): Promise<CatalogEntryResolution> {
-    const pendingKey = `${entry.mediaRef}:${entry.type ?? '*'}`;
-    const pending = this.pendingResolutions.get(pendingKey);
+  private async resolveFallback(mediaRef: string): Promise<SummaryResolution> {
+    const pending = this.pendingFallbacks.get(mediaRef);
+    if (pending) return pending;
 
-    if (pending) {
-      return pending;
-    }
-
-    const resolution = this.resolveEntryUncached(entry, queuedAt).finally(() => {
-      if (this.pendingResolutions.get(pendingKey) === resolution) {
-        this.pendingResolutions.delete(pendingKey);
-      }
+    const resolution = this.resolveFallbackUncached(mediaRef).finally(() => {
+      if (this.pendingFallbacks.get(mediaRef) === resolution)
+        this.pendingFallbacks.delete(mediaRef);
     });
-
-    this.pendingResolutions.set(pendingKey, resolution);
+    this.pendingFallbacks.set(mediaRef, resolution);
     return resolution;
   }
 
-  private async resolveEntryUncached(
-    entry: MediaSummaryResolutionEntry,
-    queuedAt: number,
-  ): Promise<CatalogEntryResolution> {
+  private async resolveFallbackUncached(mediaRef: string): Promise<SummaryResolution> {
     const now = Date.now();
-    const stored = this.cache.get(entry.mediaRef);
-    const cached =
-      entry.type === undefined || stored?.summary.type === entry.type ? stored : undefined;
-
+    const cached = this.fallbackCache.get(mediaRef);
     if (cached && now < cached.expiresAt) {
-      return {
-        summary: cached.summary,
-        degraded: cached.degraded,
-        stale: cached.stale,
-        unavailable: false,
-        refreshed: false,
-      };
+      return { ...cached, unavailable: false };
     }
 
     try {
-      const { details, meta } = await this.mediaService.getDetailsByRef(
-        entry.mediaRef,
-        performance.now() - queuedAt,
-      );
+      const { details, meta } = await this.mediaService.getDetailsByRef(mediaRef);
+      if (!details) return this.useStale(cached, now, false);
 
-      if (!details || (entry.type !== undefined && details.type !== entry.type)) {
-        return this.useStaleOrMissing(cached, now, true);
-      }
-
-      const mappedSummary = this.toMediaSummary(details);
-      const summary = this.preserveCachedArtwork(mappedSummary, cached, now);
-      const artworkIncomplete = this.isArtworkIncomplete(summary);
-      const degraded = this.isDegraded(meta) || artworkIncomplete;
-      const stale = meta.stale === true;
-      const cacheTtl = artworkIncomplete ? INCOMPLETE_ARTWORK_CACHE_TTL_MS : CATALOG_CACHE_TTL_MS;
-
-      this.cache.set(entry.mediaRef, {
+      const summary = this.toFallbackSummary(details);
+      const entry: FallbackCacheEntry = {
         summary,
-        degraded,
-        stale,
-        expiresAt: now + cacheTtl,
-        staleUntil: now + cacheTtl + CATALOG_STALE_TTL_MS,
-      });
-
-      return {
-        summary,
-        degraded,
-        stale,
-        unavailable: false,
-        refreshed: true,
+        degraded: this.isDegraded(meta),
+        stale: meta.stale === true,
+        expiresAt: now + FALLBACK_CACHE_TTL_MS,
+        staleUntil: now + FALLBACK_CACHE_TTL_MS + FALLBACK_STALE_TTL_MS,
       };
+      this.fallbackCache.set(mediaRef, entry);
+      return { ...entry, unavailable: false };
     } catch (error) {
-      if (!(error instanceof ServiceUnavailableException)) {
-        throw error;
-      }
-
-      return this.useStaleOrUnavailable(cached, now, true);
+      if (!(error instanceof ServiceUnavailableException)) throw error;
+      return this.useStale(cached, now, true);
     }
   }
 
-  private useStaleOrMissing(
-    cached: CatalogCacheEntry | undefined,
+  private useStale(
+    cached: FallbackCacheEntry | undefined,
     now: number,
-    refreshed: boolean,
-  ): CatalogEntryResolution {
+    unavailable: boolean,
+  ): SummaryResolution {
     if (cached && now < cached.staleUntil) {
-      return {
-        summary: cached.summary,
-        degraded: true,
-        stale: true,
-        unavailable: false,
-        refreshed,
-      };
+      return { summary: cached.summary, degraded: true, stale: true, unavailable };
     }
+    return { degraded: unavailable, stale: false, unavailable };
+  }
 
+  private groupCollections(rows: readonly PublishedCollectionRow[]): PublishedHomeCollection[] {
+    const collections = new Map<string, PublishedHomeCollection>();
+    for (const row of rows) {
+      const collection = collections.get(row.collectionId) ?? {
+        id: row.collectionId,
+        title: row.collectionTitle,
+        items: [],
+      };
+      collection.items.push(this.toMediaSummary(row));
+      collections.set(row.collectionId, collection);
+    }
+    return [...collections.values()];
+  }
+
+  private uniqueSummaries(rows: readonly PublishedItemRow[]): MediaSummaryDto[] {
+    return [...new Map(rows.map((row) => [row.mediaRef, this.toMediaSummary(row)])).values()];
+  }
+
+  private toMediaSummary(row: PublishedItemRow): MediaSummaryDto {
     return {
-      degraded: false,
-      stale: false,
-      unavailable: false,
-      refreshed,
+      mediaRef: row.mediaRef,
+      type: row.type,
+      title: row.title,
+      originalTitle: row.originalTitle ?? undefined,
+      year: row.year ?? undefined,
+      shortDescription: row.shortDescription ?? undefined,
+      poster: row.posterObjectKey
+        ? {
+            url: `/api/v1/media/assets/poster/${row.posterObjectKey}`,
+            width: row.posterWidth ?? undefined,
+            height: row.posterHeight ?? undefined,
+          }
+        : undefined,
+      backdrop: row.backdropObjectKey
+        ? {
+            url: `/api/v1/media/assets/backdrop/${row.backdropObjectKey}`,
+            width: row.backdropWidth ?? undefined,
+            height: row.backdropHeight ?? undefined,
+          }
+        : undefined,
+      genres: row.genres,
+      rating: row.rating === null ? undefined : { value: row.rating, scale: 10 },
     };
   }
 
-  private useStaleOrUnavailable(
-    cached: CatalogCacheEntry | undefined,
-    now: number,
-    refreshed: boolean,
-  ): CatalogEntryResolution {
-    if (cached && now < cached.staleUntil) {
-      return {
-        summary: cached.summary,
-        degraded: true,
-        stale: true,
-        unavailable: true,
-        refreshed,
-      };
-    }
-
-    return {
-      degraded: true,
-      stale: false,
-      unavailable: true,
-      refreshed,
-    };
-  }
-
-  private toMediaSummary(details: MediaDetailsDto): MediaSummaryDto {
+  private toFallbackSummary(details: MediaDetailsDto): MediaSummaryDto {
     return {
       mediaRef: details.mediaRef,
       type: details.type,
@@ -305,29 +293,24 @@ export class MediaCatalogService {
     };
   }
 
-  private preserveCachedArtwork(
-    summary: MediaSummaryDto,
-    cached: CatalogCacheEntry | undefined,
-    now: number,
-  ): MediaSummaryDto {
-    if (!cached || now >= cached.staleUntil) {
-      return summary;
+  private assertPublishedCatalog(rows: readonly unknown[]): void {
+    if (rows.length === 0) {
+      throw new ServiceUnavailableException('Published media catalog is unavailable');
     }
-
-    return {
-      ...summary,
-      poster: summary.poster ?? cached.summary.poster,
-      backdrop: summary.backdrop ?? cached.summary.backdrop,
-    };
-  }
-
-  private isArtworkIncomplete(summary: MediaSummaryDto): boolean {
-    return summary.type !== 'anime' && summary.backdrop === undefined;
   }
 
   private isDegraded(meta: DetailsResponse['meta']): boolean {
     return (
       meta.providers.failed.length > 0 || (meta.warnings?.length ?? 0) > 0 || meta.stale === true
     );
+  }
+
+  private logCatalogRead(startedAt: number, returnedItems: number): void {
+    this.logger?.logPerformance({
+      event: 'discovery.catalog_read',
+      storage: 'postgres_editorial_catalog',
+      durationMs: Math.round(performance.now() - startedAt),
+      returnedItems,
+    });
   }
 }

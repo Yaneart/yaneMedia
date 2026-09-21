@@ -1,10 +1,67 @@
 {
-  "version": 1,
+  "version": 2,
   "source": "yanemedia-editorial-v1",
   "featuredMediaRefs": ["imdb:tt15239678", "imdb:tt15398776", "imdb:tt2788316", "imdb:tt2543164"],
   "artworkOverrides": {
     "anilist:1535": {
       "posterUrl": "https://shikimori.io/system/animes/original/1535.jpg"
+    },
+    "imdb:tt9253284": {
+      "backdropUrl": "https://images.metahub.space/background/medium/tt9253284/img"
+    },
+    "imdb:tt4288182": {
+      "backdropUrl": "https://images.metahub.space/background/medium/tt4288182/img"
+    },
+    "imdb:tt2243973": {
+      "backdropUrl": "https://images.metahub.space/background/medium/tt2243973/img"
+    },
+    "imdb:tt14403178": {
+      "backdropUrl": "https://images.metahub.space/background/medium/tt14403178/img"
+    },
+    "imdb:tt7120662": {
+      "backdropUrl": "https://images.metahub.space/background/medium/tt7120662/img"
+    },
+    "imdb:tt8888462": {
+      "backdropUrl": "https://images.metahub.space/background/medium/tt8888462/img"
+    },
+    "imdb:tt4786824": {
+      "backdropUrl": "https://images.metahub.space/background/medium/tt4786824/img"
+    },
+    "imdb:tt3032476": {
+      "backdropUrl": "https://images.metahub.space/background/medium/tt3032476/img"
+    },
+    "imdb:tt10155688": {
+      "backdropUrl": "https://images.metahub.space/background/medium/tt10155688/img"
+    },
+    "imdb:tt7660850": {
+      "backdropUrl": "https://images.metahub.space/background/medium/tt7660850/img"
+    },
+    "imdb:tt2442560": {
+      "backdropUrl": "https://images.metahub.space/background/medium/tt2442560/img"
+    },
+    "imdb:tt3230854": {
+      "backdropUrl": "https://images.metahub.space/background/medium/tt3230854/img"
+    },
+    "imdb:tt11280740": {
+      "backdropUrl": "https://images.metahub.space/background/medium/tt11280740/img"
+    },
+    "imdb:tt11016042": {
+      "backdropUrl": "https://images.metahub.space/background/medium/tt11016042/img"
+    },
+    "imdb:tt10986410": {
+      "backdropUrl": "https://images.metahub.space/background/medium/tt10986410/img"
+    },
+    "imdb:tt14688458": {
+      "backdropUrl": "https://images.metahub.space/background/medium/tt14688458/img"
+    },
+    "imdb:tt2802850": {
+      "backdropUrl": "https://images.metahub.space/background/medium/tt2802850/img"
+    },
+    "imdb:tt12637874": {
+      "backdropUrl": "https://images.metahub.space/background/medium/tt12637874/img"
+    },
+    "imdb:tt7366338": {
+      "backdropUrl": "https://images.metahub.space/background/medium/tt7366338/img"
     }
   },
   "catalogs": {
