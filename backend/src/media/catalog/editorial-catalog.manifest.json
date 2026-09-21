@@ -1,11 +1,8 @@
 {
-  "version": 2,
+  "version": 3,
   "source": "yanemedia-editorial-v1",
   "featuredMediaRefs": ["imdb:tt15239678", "imdb:tt15398776", "imdb:tt2788316", "imdb:tt2543164"],
   "artworkOverrides": {
-    "anilist:1535": {
-      "posterUrl": "https://shikimori.io/system/animes/original/1535.jpg"
-    },
     "imdb:tt9253284": {
       "backdropUrl": "https://images.metahub.space/background/medium/tt9253284/img"
     },
@@ -41,6 +38,12 @@
     },
     "imdb:tt3230854": {
       "backdropUrl": "https://images.metahub.space/background/medium/tt3230854/img"
+    },
+    "imdb:tt5290382": {
+      "backdropUrl": "https://images.metahub.space/background/medium/tt5290382/img"
+    },
+    "imdb:tt4955642": {
+      "backdropUrl": "https://images.metahub.space/background/medium/tt4955642/img"
     },
     "imdb:tt11280740": {
       "backdropUrl": "https://images.metahub.space/background/medium/tt11280740/img"

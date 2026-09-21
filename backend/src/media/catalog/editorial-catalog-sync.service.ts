@@ -20,7 +20,7 @@ import {
 const DEFAULT_CONCURRENCY = 3;
 const DEFAULT_RETRY_DELAYS_MS = [250, 1_000] as const;
 const MIN_BACKDROP_WIDTH = 1_280;
-const MIN_BACKDROP_ASPECT_RATIO = 1.4;
+const MIN_BACKDROP_ASPECT_RATIO = 4 / 3;
 
 export interface EditorialCatalogSyncOptions {
   concurrency?: number;

@@ -268,6 +268,18 @@ describe('EditorialCatalogSyncService', () => {
     expect(repository.publishRevision).not.toHaveBeenCalled();
   });
 
+  it('accepts a full-resolution 4:3 anime backdrop', async () => {
+    const { service, assetImport } = setup({});
+    assetImport.mockImplementation((kind: 'poster' | 'backdrop', url: string) => {
+      const asset = storedAsset(kind, url);
+      return Promise.resolve(
+        kind === 'backdrop' ? { ...asset, width: 1_440, height: 1_080 } : asset,
+      );
+    });
+
+    await expect(service.sync(manifest, noRetry)).resolves.toMatchObject({ skipped: false });
+  });
+
   it('leaves the previous published revision untouched when any item fails', async () => {
     const getSummaryByRef = jest.fn((mediaRef: string) =>
       Promise.resolve({
