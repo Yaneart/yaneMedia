@@ -1,9 +1,9 @@
 import { mapMediaSummary } from '@/entities/media';
 
-import type { MediaCatalogResult } from '../model/mediaCatalog';
+import type { MediaCatalogPage } from '../model/mediaCatalog';
 import type { MediaCatalogResponseDto } from './mediaCatalogDto';
 
-export function mapMediaCatalog(dto: MediaCatalogResponseDto): MediaCatalogResult {
+export function mapMediaCatalog(dto: MediaCatalogResponseDto): MediaCatalogPage {
   const items = dto.items.map(mapMediaSummary);
   const itemsByMediaRef = new Map(items.map((item) => [item.mediaRef, item]));
 
@@ -18,6 +18,10 @@ export function mapMediaCatalog(dto: MediaCatalogResponseDto): MediaCatalogResul
         return item ? [item] : [];
       }),
     })),
+    offset: dto.offset,
+    limit: dto.limit,
+    total: dto.total,
+    nextOffset: dto.offset + dto.limit,
     partial: dto.partial,
     degraded: dto.degraded,
     stale: dto.stale,

@@ -28,6 +28,10 @@ import {
   type CatalogSearchFilters,
 } from '../model/catalogSearchParams';
 import { getGenreOptions } from '../model/genreOptions';
+import {
+  shouldEnableCatalogPaginationSentinel,
+  useCatalogPaginationSentinel,
+} from '../model/useCatalogPaginationSentinel';
 import { useMediaCatalog } from '../model/useMediaCatalog';
 import { getYearOptions } from '../model/yearOptions';
 import { MediaCatalogSkeleton } from './MediaCatalogSkeleton';
@@ -40,7 +44,18 @@ export type MediaCatalogProps = {
 
 export function MediaCatalog({ type, title, filters }: MediaCatalogProps) {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { catalog, isError, isFetching, isPaused, retry } = useMediaCatalog(type);
+  const {
+    catalog,
+    isError,
+    hasRefreshError,
+    isFetching,
+    isPaused,
+    hasMore: hasMoreCatalogCollections,
+    isLoadingMore: areMoreCatalogCollectionsLoading,
+    loadMoreError: hasMoreCatalogCollectionsError,
+    loadMore: loadMoreCatalogCollections,
+    retry,
+  } = useMediaCatalog(type);
   const { isFavorite, toggleFavorite, canUpdateFavorites } = useFavorites();
   const filtersPanelId = useId();
 
@@ -110,6 +125,17 @@ export function MediaCatalog({ type, title, filters }: MediaCatalogProps) {
 
   const isPreviousResult = isPreviousQueryResult || isSearchDraftPending;
   const isSearchUpdating = isQueryUpdating || isSearchDraftPending;
+  const catalogPaginationSentinelRef = useCatalogPaginationSentinel({
+    enabled: shouldEnableCatalogPaginationSentinel({
+      isResultsMode,
+      hasCatalog: Boolean(catalog),
+      hasMore: hasMoreCatalogCollections,
+      isLoadingMore: areMoreCatalogCollectionsLoading,
+      hasLoadMoreError: hasMoreCatalogCollectionsError,
+      isPaused,
+    }),
+    onLoadMore: loadMoreCatalogCollections,
+  });
 
   if (!catalog && !isResultsMode && !isError && !isPaused) {
     return <MediaCatalogSkeleton title={title} />;
@@ -120,7 +146,7 @@ export function MediaCatalog({ type, title, filters }: MediaCatalogProps) {
       ? 'Обновление ожидает подключения к сети. Показана сохранённая версия.'
       : isFetching
         ? 'Обновляем каталог…'
-        : isError
+        : hasRefreshError
           ? 'Не удалось обновить каталог. Показана сохранённая версия.'
           : catalog.partial
             ? 'Часть каталога временно недоступна. Показаны доступные произведения.'
@@ -166,7 +192,12 @@ export function MediaCatalog({ type, title, filters }: MediaCatalogProps) {
   };
 
   return (
-    <section aria-busy={isResultsMode && (searchStatus === 'loading' || isSearchUpdating)}>
+    <section
+      aria-busy={
+        (isResultsMode && (searchStatus === 'loading' || isSearchUpdating)) ||
+        (!isResultsMode && areMoreCatalogCollectionsLoading)
+      }
+    >
       <p role="status" aria-atomic="true" className="sr-only">
         {searchResultsAnnouncement}
       </p>
@@ -442,6 +473,30 @@ export function MediaCatalog({ type, title, filters }: MediaCatalogProps) {
               </RestorableContentRow>
             </section>
           ))}
+
+          {(hasMoreCatalogCollections || hasMoreCatalogCollectionsError) && (
+            <div
+              ref={catalogPaginationSentinelRef}
+              className="flex min-h-20 flex-col items-center justify-center gap-3"
+            >
+              {hasMoreCatalogCollectionsError && (
+                <p role="alert" className="text-caption text-danger">
+                  Не удалось загрузить следующие подборки.
+                </p>
+              )}
+              <Button
+                variant="secondary"
+                disabled={areMoreCatalogCollectionsLoading || isPaused}
+                onClick={loadMoreCatalogCollections}
+              >
+                {areMoreCatalogCollectionsLoading
+                  ? 'Загружаем…'
+                  : hasMoreCatalogCollectionsError
+                    ? 'Попробовать снова'
+                    : 'Показать ещё'}
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </section>

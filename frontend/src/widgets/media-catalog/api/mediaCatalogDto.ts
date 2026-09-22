@@ -9,6 +9,9 @@ export interface MediaCatalogCollectionDto {
 export interface MediaCatalogResponseDto {
   items: MediaSummaryDto[];
   collections: MediaCatalogCollectionDto[];
+  offset: number;
+  limit: number;
+  total: number;
   partial: boolean;
   degraded: boolean;
   stale: boolean;

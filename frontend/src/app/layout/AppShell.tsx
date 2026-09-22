@@ -37,7 +37,7 @@ export function AppShell() {
     const type = catalogTypeByPath[path];
 
     if (type) {
-      void queryClient.prefetchQuery({
+      void queryClient.prefetchInfiniteQuery({
         ...mediaCatalogQueryOptions(type),
         retry: false,
       });
