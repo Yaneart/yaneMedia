@@ -76,6 +76,7 @@ export function ContinueWatchingCard({
     <article className="relative min-w-0">
       <MediaLink
         mediaRef={media.mediaRef}
+        summary={media}
         aria-label={`Продолжить просмотр: ${media.title}`}
         className={[
           'group relative block aspect-[2.35/1] w-full overflow-hidden rounded-card border border-context-border bg-elevated text-left',

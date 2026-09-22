@@ -191,6 +191,26 @@ describe('MediaController catalog', () => {
     expect(getCatalog).toHaveBeenCalledWith('series', 2, 2);
   });
 
+  it('returns one local catalog summary', async () => {
+    const summary = {
+      mediaRef: 'imdb:tt15239678',
+      type: 'movie' as const,
+      title: 'Dune: Part Two',
+      genres: ['Science fiction'],
+    };
+    const getPublishedSummary = jest.fn().mockResolvedValue(summary) as jest.MockedFunction<
+      MediaCatalogService['getPublishedSummary']
+    >;
+    const controller = new MediaController(
+      {} as MediaService,
+      { getPublishedSummary } as unknown as MediaCatalogService,
+      {} as HomeFeedService,
+    );
+
+    await expect(controller.getCatalogSummary(summary.mediaRef)).resolves.toBe(summary);
+    expect(getPublishedSummary).toHaveBeenCalledWith(summary.mediaRef);
+  });
+
   it('returns a bounded editorial collection page', async () => {
     const collection: MediaCollectionResponseDto = {
       items: [],

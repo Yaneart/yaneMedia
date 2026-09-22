@@ -29,6 +29,7 @@ export function MediaCard({
     <article className="relative min-w-0">
       <MediaLink
         mediaRef={media.mediaRef}
+        summary={media}
         aria-label={`Открыть ${media.title}`}
         className={[
           'group/card block w-full min-w-0 text-left',

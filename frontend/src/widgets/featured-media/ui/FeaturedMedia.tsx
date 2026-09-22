@@ -66,6 +66,7 @@ export function FeaturedMedia({ media }: FeaturedMediaProps) {
       <div className="mt-7">
         <MediaLink
           mediaRef={media.mediaRef}
+          summary={media}
           className={[
             'inline-flex min-h-12 items-center justify-center gap-2 rounded-pill',
             'bg-hero-button pr-5 pl-2 text-base font-semibold text-hero-button-text',

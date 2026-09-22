@@ -127,6 +127,13 @@ export class MediaCatalogService {
     };
   }
 
+  async getPublishedSummary(mediaRef: string): Promise<MediaSummaryDto> {
+    const [row] = await this.repository.findPublishedItems([mediaRef]);
+
+    if (!row) throw new NotFoundException('Media not found');
+    return this.toMediaSummary(row);
+  }
+
   async getHomeCollections(): Promise<PublishedHomeCollection[]> {
     const rows = await this.repository.findPublishedCollectionItems({ scope: 'home', type: null });
     this.assertPublishedCatalog(rows.length);

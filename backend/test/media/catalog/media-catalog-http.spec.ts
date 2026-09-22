@@ -45,6 +45,11 @@ describe('editorial catalog HTTP', () => {
         {
           provide: EditorialCatalogRepository,
           useValue: {
+            findPublishedItems: jest
+              .fn()
+              .mockImplementation((mediaRefs: string[]) =>
+                Promise.resolve(mediaRefs.includes(row.mediaRef) ? [row] : []),
+              ),
             findPublishedCollectionItems: jest
               .fn()
               .mockImplementation(({ offset }: { offset?: number }) =>
@@ -87,6 +92,30 @@ describe('editorial catalog HTTP', () => {
         },
       }),
     ]);
+    expect(getDetailsByRef).not.toHaveBeenCalled();
+  });
+
+  it('serves one local summary while Media Engine is unavailable', async () => {
+    const response = await fetch(
+      `${origin}/api/v1/media/catalog/${encodeURIComponent('imdb:tt15239678')}`,
+    );
+    const body = (await response.json()) as {
+      data: { mediaRef: string; title: string; backdrop: { url: string } };
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.data.mediaRef).toBe('imdb:tt15239678');
+    expect(body.data.title).toBe('Dune: Part Two');
+    expect(body.data.backdrop.url).toContain('/backdrop/');
+    expect(getDetailsByRef).not.toHaveBeenCalled();
+  });
+
+  it('returns 404 for a summary outside the published catalog', async () => {
+    const response = await fetch(
+      `${origin}/api/v1/media/catalog/${encodeURIComponent('imdb:tt9999999')}`,
+    );
+
+    expect(response.status).toBe(404);
     expect(getDetailsByRef).not.toHaveBeenCalled();
   });
 

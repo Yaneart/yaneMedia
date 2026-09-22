@@ -20,6 +20,7 @@ export function LandscapeMediaCard({ media }: LandscapeMediaCardProps) {
   return (
     <MediaLink
       mediaRef={media.mediaRef}
+      summary={media}
       aria-label={`Открыть ${media.title}`}
       className={[
         'group relative block aspect-video w-full overflow-hidden',

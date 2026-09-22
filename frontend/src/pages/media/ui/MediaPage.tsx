@@ -1,9 +1,11 @@
 import { useOpeningHistory } from '@/features/opening-history';
+import { resolveMediaDetailsPresentation } from '@/entities/media';
 import { EmptyState, ErrorState } from '@/shared';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router';
 
 import { useMediaDetails } from '../model/useMediaDetails';
+import { useMediaSummary } from '../model/useMediaSummary';
 import { useMediaAvailability } from '../model/useMediaAvailability';
 import { MediaPageSkeleton } from './MediaPageSkeleton';
 import { MediaView } from './MediaView';
@@ -15,6 +17,7 @@ export function MediaPage() {
   const { recordOpening } = useOpeningHistory();
 
   const { result, status: detailsStatus, retry: retryDetails } = useMediaDetails(mediaRef);
+  const { summary, status: summaryStatus } = useMediaSummary(mediaRef);
 
   const {
     availability,
@@ -22,17 +25,19 @@ export function MediaPage() {
     status: availabilityStatus,
   } = useMediaAvailability(mediaRef);
 
-  const media = result?.details ?? null;
+  const media = useMemo(
+    () => resolveMediaDetailsPresentation(summary, result?.details ?? null),
+    [result?.details, summary],
+  );
+  const openingMediaRef = media?.mediaRef;
 
   useEffect(() => {
-    if (!media) {
-      return;
-    }
+    if (!openingMediaRef) return;
 
-    recordOpening(media.mediaRef);
-  }, [media, recordOpening]);
+    recordOpening(openingMediaRef);
+  }, [openingMediaRef, recordOpening]);
 
-  if (detailsStatus === 'not-found') {
+  if (detailsStatus === 'not-found' && summaryStatus === 'not-found') {
     return (
       <ErrorState
         variant="page"
@@ -46,7 +51,12 @@ export function MediaPage() {
     );
   }
 
-  if (detailsStatus === 'error') {
+  if (
+    !media &&
+    (detailsStatus === 'error' || summaryStatus === 'error') &&
+    detailsStatus !== 'loading' &&
+    summaryStatus !== 'loading'
+  ) {
     return (
       <ErrorState
         variant="page"
@@ -61,7 +71,12 @@ export function MediaPage() {
     );
   }
 
-  if (detailsStatus === 'offline') {
+  if (
+    !media &&
+    (detailsStatus === 'offline' || summaryStatus === 'offline') &&
+    detailsStatus !== 'loading' &&
+    summaryStatus !== 'loading'
+  ) {
     return (
       <EmptyState
         title="Нет подключения к сети"
@@ -75,23 +90,42 @@ export function MediaPage() {
     return <MediaPageSkeleton />;
   }
 
-  return (
-    <MediaView
-      key={media.mediaRef}
-      media={media}
-      animeSeasonChain={result?.animeSeasonChain ?? []}
-      onAnimeSeasonChange={(seasonNumber) => {
-        const target = getAnimeSeasonNavigationTarget(
-          result?.animeSeasonChain ?? [],
-          seasonNumber,
-          media.mediaRef,
-        );
+  const detailsUnavailable = detailsStatus !== 'success';
 
-        if (target) navigate(`/media/${encodeURIComponent(target)}`);
-      }}
-      availability={availability}
-      availabilityPending={availabilityPending}
-      availabilityStatus={availabilityStatus}
-    />
+  return (
+    <div className="space-y-6">
+      {detailsUnavailable && detailsStatus !== 'loading' && (
+        <ErrorState
+          variant="section"
+          title={
+            detailsStatus === 'offline'
+              ? 'Подробности появятся после подключения к сети'
+              : 'Не удалось загрузить подробности'
+          }
+          description="Основная информация из локального каталога остаётся доступной."
+          retryLabel="Повторить загрузку подробностей"
+          onRetry={detailsStatus === 'offline' ? undefined : retryDetails}
+          className="rounded-card border border-context-border bg-surface-elevated"
+        />
+      )}
+
+      <MediaView
+        key={media.mediaRef}
+        media={media}
+        animeSeasonChain={result?.animeSeasonChain ?? []}
+        onAnimeSeasonChange={(seasonNumber) => {
+          const target = getAnimeSeasonNavigationTarget(
+            result?.animeSeasonChain ?? [],
+            seasonNumber,
+            media.mediaRef,
+          );
+
+          if (target) navigate(`/media/${encodeURIComponent(target)}`);
+        }}
+        availability={availability}
+        availabilityPending={availabilityPending}
+        availabilityStatus={availabilityStatus}
+      />
+    </div>
   );
 }

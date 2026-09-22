@@ -86,6 +86,11 @@ export class MediaController {
       : this.mediaCatalogService.getCatalog(query.type, query.offset, query.limit);
   }
 
+  @Get('catalog/:mediaRef')
+  getCatalogSummary(@Param('mediaRef') mediaRef: string): Promise<MediaSummaryDto> {
+    return this.mediaCatalogService.getPublishedSummary(mediaRef);
+  }
+
   @Get('collections/editorial-picks')
   getEditorialPicks(@Query() query: MediaCollectionQueryDto): Promise<MediaCollectionResponseDto> {
     return this.mediaCatalogService.getCollection('editorial-picks', query.offset, query.limit);

@@ -54,6 +54,7 @@ describe('MediaCatalogService', () => {
     getDetailsByRef?: jest.Mock;
   }) {
     const getDetailsByRef = options?.getDetailsByRef ?? jest.fn();
+    const findPublishedItems = jest.fn().mockResolvedValue(options?.publishedItems ?? []);
     const findPublishedCollectionItems = jest.fn().mockResolvedValue(options?.collectionRows ?? []);
     const countPublishedCollections = jest
       .fn()
@@ -62,7 +63,7 @@ describe('MediaCatalogService', () => {
           new Set((options?.collectionRows ?? []).map(({ collectionId }) => collectionId)).size,
       );
     const repository = {
-      findPublishedItems: jest.fn().mockResolvedValue(options?.publishedItems ?? []),
+      findPublishedItems,
       findPublishedCollectionItems,
       countPublishedCollections,
       countPublishedItems: jest.fn().mockResolvedValue(150),
@@ -71,6 +72,7 @@ describe('MediaCatalogService', () => {
       service: new MediaCatalogService({ getDetailsByRef } as unknown as MediaService, repository),
       getDetailsByRef,
       repository,
+      findPublishedItems,
       findPublishedCollectionItems,
       countPublishedCollections,
     };
@@ -155,6 +157,31 @@ describe('MediaCatalogService', () => {
       degraded: false,
       stale: false,
     });
+  });
+
+  it('returns one published summary without calling Media Engine', async () => {
+    const published = createRow('imdb:tt0000001', 'movie');
+    const { service, getDetailsByRef, findPublishedItems } = createService({
+      publishedItems: [published],
+    });
+
+    const result = await service.getPublishedSummary('imdb:tt0000001');
+
+    expect(result.mediaRef).toBe('imdb:tt0000001');
+    expect(result.title).toBe('imdb:tt0000001');
+    expect(result.poster?.url).toContain('/media/assets/poster/');
+    expect(result.backdrop?.url).toContain('/media/assets/backdrop/');
+    expect(findPublishedItems).toHaveBeenCalledWith(['imdb:tt0000001']);
+    expect(getDetailsByRef).not.toHaveBeenCalled();
+  });
+
+  it('does not resolve an unknown catalog summary through Media Engine', async () => {
+    const { service, getDetailsByRef } = createService();
+
+    await expect(service.getPublishedSummary('imdb:tt9999999')).rejects.toThrow(
+      new NotFoundException('Media not found'),
+    );
+    expect(getDetailsByRef).not.toHaveBeenCalled();
   });
 
   it('builds the combined editorial collection in movie-series-anime order', async () => {
