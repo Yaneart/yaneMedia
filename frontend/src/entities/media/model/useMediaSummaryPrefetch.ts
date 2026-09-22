@@ -1,13 +1,15 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef } from 'react';
 
-import { mediaDetailsQueryOptions } from './mediaDetailsQuery';
+import { claimIntentPrefetch } from '@/shared/lib/intentPrefetch';
+import { mediaSummaryQueryOptions } from './mediaSummaryQuery';
 
 const intentDelayMs = 120;
 
-export function useMediaDetailsPrefetch(mediaRef: string) {
+export function useMediaSummaryPrefetch(mediaRef: string) {
   const queryClient = useQueryClient();
   const timeoutIdRef = useRef<number | null>(null);
+  const prefetchedMediaRefsRef = useRef(new Set<string>());
 
   const cancelScheduledPrefetch = useCallback(() => {
     if (timeoutIdRef.current === null) return;
@@ -18,16 +20,21 @@ export function useMediaDetailsPrefetch(mediaRef: string) {
 
   const prefetch = useCallback(() => {
     cancelScheduledPrefetch();
+
+    if (!claimIntentPrefetch(prefetchedMediaRefsRef.current, mediaRef)) return;
+
     void queryClient.prefetchQuery({
-      ...mediaDetailsQueryOptions(mediaRef),
+      ...mediaSummaryQueryOptions(mediaRef),
       retry: false,
     });
   }, [cancelScheduledPrefetch, mediaRef, queryClient]);
 
   const schedulePrefetch = useCallback(() => {
+    if (prefetchedMediaRefsRef.current.has(mediaRef)) return;
+
     cancelScheduledPrefetch();
     timeoutIdRef.current = window.setTimeout(prefetch, intentDelayMs);
-  }, [cancelScheduledPrefetch, prefetch]);
+  }, [cancelScheduledPrefetch, mediaRef, prefetch]);
 
   useEffect(() => cancelScheduledPrefetch, [cancelScheduledPrefetch]);
 

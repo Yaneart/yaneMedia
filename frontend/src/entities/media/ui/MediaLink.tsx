@@ -2,7 +2,7 @@ import type { FocusEvent, MouseEvent, PointerEvent } from 'react';
 import { Link, type LinkProps } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 
-import { useMediaDetailsPrefetch } from '../model/useMediaDetailsPrefetch';
+import { useMediaSummaryPrefetch } from '../model/useMediaSummaryPrefetch';
 import { seedMediaSummary } from '../model/mediaSummaryCache';
 import type { MediaRef, MediaSummary } from '../model/media';
 
@@ -18,10 +18,11 @@ export function MediaLink({
   onFocus,
   onPointerEnter,
   onPointerLeave,
+  onPointerDown,
   ...props
 }: MediaLinkProps) {
   const queryClient = useQueryClient();
-  const { cancelScheduledPrefetch, prefetch, schedulePrefetch } = useMediaDetailsPrefetch(mediaRef);
+  const { cancelScheduledPrefetch, prefetch, schedulePrefetch } = useMediaSummaryPrefetch(mediaRef);
 
   const seedSummary = () => {
     if (summary) seedMediaSummary(queryClient, summary);
@@ -53,6 +54,14 @@ export function MediaLink({
     cancelScheduledPrefetch();
   };
 
+  const handlePointerDown = (event: PointerEvent<HTMLAnchorElement>) => {
+    onPointerDown?.(event);
+    if (!event.defaultPrevented && event.pointerType === 'touch') {
+      seedSummary();
+      prefetch();
+    }
+  };
+
   return (
     <Link
       {...props}
@@ -61,6 +70,7 @@ export function MediaLink({
       onFocus={handleFocus}
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
+      onPointerDown={handlePointerDown}
     />
   );
 }

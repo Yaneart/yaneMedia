@@ -63,6 +63,9 @@ export function DesktopNavigation({
                   className={getLinkClassName}
                   onFocus={() => onItemIntent?.(item.path)}
                   onPointerEnter={() => onItemIntent?.(item.path)}
+                  onPointerDown={(event) => {
+                    if (event.pointerType === 'touch') onItemIntent?.(item.path);
+                  }}
                 >
                   {({ isActive }) => {
                     const Icon = isActive ? item.activeIcon : item.icon;

@@ -1,4 +1,4 @@
-import { QueryClientProvider } from '@tanstack/react-query';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { PlaybackSessionProvider } from '@/features/playback-session';
 import { FavoriteProvider } from '@/features/favorite';
 import { OpeningHistoryProvider } from '@/features/opening-history';
@@ -7,10 +7,25 @@ import { AuthProvider } from '@/app/providers/AuthProvider';
 import { RouterProvider } from 'react-router';
 import { router } from './router/router';
 import { queryClient } from './providers/queryClient';
+import {
+  editorialQueryPersistOptions,
+  isEditorialQueryKey,
+} from './providers/editorialQueryPersistence';
+
+function revalidateRestoredEditorialQueries() {
+  return queryClient.invalidateQueries({
+    predicate: (query) => isEditorialQueryKey(query.queryKey),
+    refetchType: 'active',
+  });
+}
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
+    <PersistQueryClientProvider
+      client={queryClient}
+      persistOptions={editorialQueryPersistOptions}
+      onSuccess={revalidateRestoredEditorialQueries}
+    >
       <ThemeProvider>
         <AuthProvider>
           <FavoriteProvider>
@@ -22,7 +37,7 @@ function App() {
           </FavoriteProvider>
         </AuthProvider>
       </ThemeProvider>
-    </QueryClientProvider>
+    </PersistQueryClientProvider>
   );
 }
 export default App;

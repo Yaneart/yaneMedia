@@ -12,6 +12,8 @@ import { mediaCatalogQueryOptions } from '@/widgets/media-catalog';
 import { useQueryClient } from '@tanstack/react-query';
 import type { MediaType } from '@/entities/media';
 import { mainContentId } from '@/shared';
+import { claimIntentPrefetch } from '@/shared/lib/intentPrefetch';
+import { useRef } from 'react';
 
 const catalogTypeByPath: Partial<Record<string, MediaType>> = {
   [routePaths.movies]: 'movie',
@@ -23,6 +25,7 @@ export function AppShell() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const prefetchedCatalogPathsRef = useRef(new Set<string>());
 
   const { session, endSession } = usePlaybackSession();
   const { cancelPendingRestoration, contentRef, mainRef, rowScrollRestoration, saveMainPosition } =
@@ -36,7 +39,7 @@ export function AppShell() {
   const prefetchCatalog = (path: string) => {
     const type = catalogTypeByPath[path];
 
-    if (type) {
+    if (type && claimIntentPrefetch(prefetchedCatalogPathsRef.current, path)) {
       void queryClient.prefetchInfiniteQuery({
         ...mediaCatalogQueryOptions(type),
         retry: false,
