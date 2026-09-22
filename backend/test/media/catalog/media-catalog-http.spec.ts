@@ -1,5 +1,5 @@
 import type { INestApplication } from '@nestjs/common';
-import { ServiceUnavailableException } from '@nestjs/common';
+import { ServiceUnavailableException, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { EditorialCatalogRepository } from '../../../src/media/catalog/editorial-catalog.repository';
 import { MediaCatalogService } from '../../../src/media/catalog/media-catalog.service';
@@ -45,7 +45,12 @@ describe('editorial catalog HTTP', () => {
         {
           provide: EditorialCatalogRepository,
           useValue: {
-            findPublishedCollectionItems: jest.fn().mockResolvedValue([row]),
+            findPublishedCollectionItems: jest
+              .fn()
+              .mockImplementation(({ offset }: { offset?: number }) =>
+                Promise.resolve(offset === 2 ? [] : [row]),
+              ),
+            countPublishedCollections: jest.fn().mockResolvedValue(1),
           },
         },
         { provide: HomeFeedService, useValue: {} },
@@ -56,6 +61,7 @@ describe('editorial catalog HTTP', () => {
     app = module.createNestApplication();
     app.setGlobalPrefix('api/v1');
     app.useGlobalInterceptors(new ApiResponseInterceptor());
+    app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
     await app.listen(0, '127.0.0.1');
     origin = await app.getUrl();
   });
@@ -82,5 +88,46 @@ describe('editorial catalog HTTP', () => {
       }),
     ]);
     expect(getDetailsByRef).not.toHaveBeenCalled();
+  });
+
+  it('serves a bounded collection page and its total', async () => {
+    const response = await fetch(`${origin}/api/v1/media/catalog?type=movie&offset=0&limit=2`);
+    const body = (await response.json()) as {
+      data: { collections: unknown[]; offset: number; limit: number; total: number };
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.data).toEqual(
+      expect.objectContaining({ collections: [expect.any(Object)], offset: 0, limit: 2, total: 1 }),
+    );
+  });
+
+  it('serves an empty page after the final collection', async () => {
+    const response = await fetch(`${origin}/api/v1/media/catalog?type=movie&offset=2&limit=2`);
+    const body = (await response.json()) as {
+      data: {
+        items: unknown[];
+        collections: unknown[];
+        offset: number;
+        limit: number;
+        total: number;
+      };
+    };
+
+    expect(response.status).toBe(200);
+    expect(body.data).toEqual(
+      expect.objectContaining({ items: [], collections: [], offset: 2, limit: 2, total: 1 }),
+    );
+  });
+
+  it.each([
+    'type=movie&offset=0',
+    'type=movie&limit=2',
+    'type=movie&offset=-1&limit=2',
+    'type=movie&offset=0&limit=21',
+  ])('rejects invalid pagination: %s', async (query) => {
+    const response = await fetch(`${origin}/api/v1/media/catalog?${query}`);
+
+    expect(response.status).toBe(400);
   });
 });

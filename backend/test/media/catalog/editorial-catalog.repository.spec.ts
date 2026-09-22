@@ -65,6 +65,46 @@ describe('EditorialCatalogRepository', () => {
     ]);
   });
 
+  it('loads cards only for the requested collection window', async () => {
+    const pageOffset = jest.fn().mockResolvedValue([{ id: 'first' }, { id: 'second' }]);
+    const pageBuilder: Record<string, jest.Mock> = {};
+    pageBuilder.innerJoin = jest.fn(() => pageBuilder);
+    pageBuilder.where = jest.fn(() => pageBuilder);
+    pageBuilder.orderBy = jest.fn(() => pageBuilder);
+    pageBuilder.limit = jest.fn(() => pageBuilder);
+    pageBuilder.offset = pageOffset;
+
+    let itemCondition: SQL | undefined;
+    const itemOrderBy = jest.fn().mockResolvedValue([]);
+    const itemBuilder: Record<string, jest.Mock> = {};
+    itemBuilder.innerJoin = jest.fn(() => itemBuilder);
+    itemBuilder.leftJoin = jest.fn(() => itemBuilder);
+    itemBuilder.where = jest.fn((condition: SQL) => {
+      itemCondition = condition;
+      return { orderBy: itemOrderBy };
+    });
+    const select = jest
+      .fn()
+      .mockReturnValueOnce({ from: jest.fn(() => pageBuilder) })
+      .mockReturnValueOnce({ from: jest.fn(() => itemBuilder) });
+    const repository = new EditorialCatalogRepository({
+      db: { select },
+    } as unknown as DatabaseService);
+
+    await repository.findPublishedCollectionItems({
+      scope: 'catalog',
+      type: 'movie',
+      offset: 0,
+      limit: 2,
+    });
+
+    expect(pageBuilder.limit).toHaveBeenCalledWith(2);
+    expect(pageOffset).toHaveBeenCalledWith(0);
+    const itemQuery = new PgDialect().sqlToQuery(itemCondition!);
+    expect(itemQuery.sql).toContain('"media_collections"."id" in ($');
+    expect(itemQuery.params).toEqual(expect.arrayContaining(['first', 'second']));
+  });
+
   it('retires the current revision and publishes the target in one transaction', async () => {
     const returning = jest.fn().mockResolvedValue([{ id: 'next-revision' }]);
     const where = jest.fn().mockResolvedValueOnce(undefined).mockReturnValueOnce({ returning });

@@ -50,13 +50,21 @@ describe('MediaCatalogService', () => {
   function createService(options?: {
     publishedItems?: ReturnType<typeof createRow>[];
     collectionRows?: ReturnType<typeof createCollectionRow>[];
+    collectionTotal?: number;
     getDetailsByRef?: jest.Mock;
   }) {
     const getDetailsByRef = options?.getDetailsByRef ?? jest.fn();
     const findPublishedCollectionItems = jest.fn().mockResolvedValue(options?.collectionRows ?? []);
+    const countPublishedCollections = jest
+      .fn()
+      .mockResolvedValue(
+        options?.collectionTotal ??
+          new Set((options?.collectionRows ?? []).map(({ collectionId }) => collectionId)).size,
+      );
     const repository = {
       findPublishedItems: jest.fn().mockResolvedValue(options?.publishedItems ?? []),
       findPublishedCollectionItems,
+      countPublishedCollections,
       countPublishedItems: jest.fn().mockResolvedValue(150),
     } as unknown as EditorialCatalogRepository;
     return {
@@ -64,6 +72,7 @@ describe('MediaCatalogService', () => {
       getDetailsByRef,
       repository,
       findPublishedCollectionItems,
+      countPublishedCollections,
     };
   }
 
@@ -101,6 +110,51 @@ describe('MediaCatalogService', () => {
       type: 'movie',
     });
     expect(getDetailsByRef).not.toHaveBeenCalled();
+  });
+
+  it('returns only the requested collection page with stable pagination metadata', async () => {
+    const rows = [
+      createCollectionRow('imdb:tt0000001', 'movie', 'movie-first', 1, 1),
+      createCollectionRow('imdb:tt0000002', 'movie', 'movie-second', 2, 1),
+    ];
+    const { service, findPublishedCollectionItems, countPublishedCollections } = createService({
+      collectionRows: rows,
+      collectionTotal: 5,
+    });
+
+    const result = await service.getCatalog('movie', 0, 2);
+
+    expect(result.collections.map(({ id }) => id)).toEqual(['first', 'second']);
+    expect(result.items.map(({ mediaRef }) => mediaRef)).toEqual([
+      'imdb:tt0000001',
+      'imdb:tt0000002',
+    ]);
+    expect(result).toEqual(expect.objectContaining({ offset: 0, limit: 2, total: 5 }));
+    expect(findPublishedCollectionItems).toHaveBeenCalledWith({
+      scope: 'catalog',
+      type: 'movie',
+      offset: 0,
+      limit: 2,
+    });
+    expect(countPublishedCollections).toHaveBeenCalledWith({
+      scope: 'catalog',
+      type: 'movie',
+    });
+  });
+
+  it('returns an empty page after the last published collection', async () => {
+    const { service } = createService({ collectionTotal: 2 });
+
+    await expect(service.getCatalog('movie', 2, 2)).resolves.toEqual({
+      items: [],
+      collections: [],
+      offset: 2,
+      limit: 2,
+      total: 2,
+      partial: false,
+      degraded: false,
+      stale: false,
+    });
   });
 
   it('builds the combined editorial collection in movie-series-anime order', async () => {

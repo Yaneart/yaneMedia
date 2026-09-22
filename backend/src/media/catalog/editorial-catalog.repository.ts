@@ -276,15 +276,42 @@ export class EditorialCatalogRepository {
     });
   }
 
-  findPublishedCollectionItems(options: { scope: 'home' | 'catalog'; type?: MediaRefType | null }) {
+  async findPublishedCollectionItems(options: {
+    scope: 'home' | 'catalog';
+    type?: MediaRefType | null;
+    offset?: number;
+    limit?: number;
+  }) {
     const typeCondition =
       options.type === null
         ? isNull(mediaCollections.type)
         : options.type
           ? eq(mediaCollections.type, options.type)
           : undefined;
+    let collectionIds: string[] | undefined;
 
-    return this.databaseService.db
+    if (options.offset !== undefined && options.limit !== undefined) {
+      const collections = await this.databaseService.db
+        .select({ id: mediaCollections.id })
+        .from(mediaCollections)
+        .innerJoin(catalogRevisions, eq(catalogRevisions.id, mediaCollections.revisionId))
+        .where(
+          and(
+            eq(catalogRevisions.status, 'published'),
+            eq(mediaCollections.scope, options.scope),
+            eq(mediaCollections.active, true),
+            typeCondition,
+          ),
+        )
+        .orderBy(asc(mediaCollections.position), asc(mediaCollections.stableId))
+        .limit(options.limit)
+        .offset(options.offset);
+      collectionIds = collections.map(({ id }) => id);
+
+      if (collectionIds.length === 0) return [];
+    }
+
+    return await this.databaseService.db
       .select({
         collectionId: mediaCollections.stableId,
         collectionTitle: mediaCollections.title,
@@ -318,6 +345,7 @@ export class EditorialCatalogRepository {
           eq(mediaCatalogItems.active, true),
           eq(mediaCatalogItems.status, 'ready'),
           typeCondition,
+          collectionIds ? inArray(mediaCollections.id, collectionIds) : undefined,
         ),
       )
       .orderBy(
@@ -326,6 +354,32 @@ export class EditorialCatalogRepository {
         asc(mediaCollectionItems.position),
         asc(mediaCatalogItems.mediaRef),
       );
+  }
+
+  async countPublishedCollections(options: {
+    scope: 'home' | 'catalog';
+    type?: MediaRefType | null;
+  }): Promise<number> {
+    const typeCondition =
+      options.type === null
+        ? isNull(mediaCollections.type)
+        : options.type
+          ? eq(mediaCollections.type, options.type)
+          : undefined;
+    const [result] = await this.databaseService.db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(mediaCollections)
+      .innerJoin(catalogRevisions, eq(catalogRevisions.id, mediaCollections.revisionId))
+      .where(
+        and(
+          eq(catalogRevisions.status, 'published'),
+          eq(mediaCollections.scope, options.scope),
+          eq(mediaCollections.active, true),
+          typeCondition,
+        ),
+      );
+
+    return result?.count ?? 0;
   }
 
   async countPublishedItems(): Promise<number> {

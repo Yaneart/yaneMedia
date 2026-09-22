@@ -55,10 +55,24 @@ export class MediaCatalogService {
     private readonly logger?: AppLogger,
   ) {}
 
-  async getCatalog(type: MediaRefType): Promise<MediaCatalogResponseDto> {
+  async getCatalog(
+    type: MediaRefType,
+    offset?: number,
+    limit?: number,
+  ): Promise<MediaCatalogResponseDto> {
     const startedAt = performance.now();
-    const rows = await this.repository.findPublishedCollectionItems({ scope: 'catalog', type });
-    this.assertPublishedCatalog(rows);
+    const pagination = offset !== undefined && limit !== undefined ? { offset, limit } : undefined;
+    const [rows, total] = await Promise.all([
+      this.repository.findPublishedCollectionItems({
+        scope: 'catalog',
+        type,
+        ...pagination,
+      }),
+      pagination
+        ? this.repository.countPublishedCollections({ scope: 'catalog', type })
+        : undefined,
+    ]);
+    this.assertPublishedCatalog(total ?? rows.length);
 
     const collections = this.groupCollections(rows).map((collection) => ({
       id: collection.id.replace(`${type}-`, ''),
@@ -68,7 +82,14 @@ export class MediaCatalogService {
     const items = this.uniqueSummaries(rows);
 
     this.logCatalogRead(startedAt, items.length);
-    return { items, collections, partial: false, degraded: false, stale: false };
+    return {
+      items,
+      collections,
+      ...(pagination ? { ...pagination, total: total! } : {}),
+      partial: false,
+      degraded: false,
+      stale: false,
+    };
   }
 
   async getCollection(
@@ -80,7 +101,7 @@ export class MediaCatalogService {
 
     const startedAt = performance.now();
     const rows = await this.repository.findPublishedCollectionItems({ scope: 'catalog' });
-    this.assertPublishedCatalog(rows);
+    this.assertPublishedCatalog(rows.length);
 
     const itemsByType = new Map<MediaRefType, MediaSummaryDto[]>(
       MEDIA_TYPES.map((type) => [
@@ -108,7 +129,7 @@ export class MediaCatalogService {
 
   async getHomeCollections(): Promise<PublishedHomeCollection[]> {
     const rows = await this.repository.findPublishedCollectionItems({ scope: 'home', type: null });
-    this.assertPublishedCatalog(rows);
+    this.assertPublishedCatalog(rows.length);
     return this.groupCollections(rows);
   }
 
@@ -293,8 +314,8 @@ export class MediaCatalogService {
     };
   }
 
-  private assertPublishedCatalog(rows: readonly unknown[]): void {
-    if (rows.length === 0) {
+  private assertPublishedCatalog(available: number): void {
+    if (available === 0) {
       throw new ServiceUnavailableException('Published media catalog is unavailable');
     }
   }

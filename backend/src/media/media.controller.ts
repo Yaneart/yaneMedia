@@ -81,7 +81,9 @@ export class MediaController {
 
   @Get('catalog')
   getCatalog(@Query() query: MediaCatalogQueryDto): Promise<MediaCatalogResponseDto> {
-    return this.mediaCatalogService.getCatalog(query.type);
+    return query.offset === undefined || query.limit === undefined
+      ? this.mediaCatalogService.getCatalog(query.type)
+      : this.mediaCatalogService.getCatalog(query.type, query.offset, query.limit);
   }
 
   @Get('collections/editorial-picks')

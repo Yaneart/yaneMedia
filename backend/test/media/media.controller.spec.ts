@@ -165,6 +165,32 @@ describe('MediaController catalog', () => {
     expect(getCatalog).toHaveBeenCalledWith('anime');
   });
 
+  it('forwards catalog collection pagination', async () => {
+    const catalog: MediaCatalogResponseDto = {
+      items: [],
+      collections: [],
+      offset: 2,
+      limit: 2,
+      total: 5,
+      partial: false,
+      degraded: false,
+      stale: false,
+    };
+    const getCatalog = jest.fn().mockResolvedValue(catalog) as jest.MockedFunction<
+      MediaCatalogService['getCatalog']
+    >;
+    const controller = new MediaController(
+      {} as MediaService,
+      { getCatalog } as unknown as MediaCatalogService,
+      {} as HomeFeedService,
+    );
+
+    await expect(controller.getCatalog({ type: 'series', offset: 2, limit: 2 })).resolves.toBe(
+      catalog,
+    );
+    expect(getCatalog).toHaveBeenCalledWith('series', 2, 2);
+  });
+
   it('returns a bounded editorial collection page', async () => {
     const collection: MediaCollectionResponseDto = {
       items: [],

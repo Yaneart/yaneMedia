@@ -9,6 +9,9 @@ export class MediaCatalogCollectionDto {
 export class MediaCatalogResponseDto {
   items!: MediaSummaryDto[];
   collections!: MediaCatalogCollectionDto[];
+  offset?: number;
+  limit?: number;
+  total?: number;
   partial!: boolean;
   degraded!: boolean;
   stale!: boolean;
