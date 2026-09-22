@@ -1,12 +1,16 @@
-import { useEffect } from 'react';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 
 import { getHomeCollectionsPage, getHomeFeatured } from '../api/getHomeFeed';
 import type { HomeFeatured } from './homeFeed';
+import {
+  getHomeCollectionsQueryKey,
+  getNextHomeCollectionsPageParam,
+  homeCollectionsStaleTimeMs,
+  initialHomeCollectionsPageParam,
+} from './homeFeedPagination';
 
 const homeStaleTimeMs = 5 * 60_000;
 const backgroundRetryDelayMs = 60_000;
-const initialHomeCollectionsPageSize = 2;
 
 function getFeaturedRefreshDelay(featured: HomeFeatured | undefined, now: number): number | null {
   if (!featured) {
@@ -46,18 +50,11 @@ export function useHomeFeed() {
       query.state.status !== 'error' && getFeaturedRefreshDelay(query.state.data, Date.now()) === 0,
   });
   const collectionsQuery = useInfiniteQuery({
-    queryKey: ['media', 'home', 'collections', { initialLimit: initialHomeCollectionsPageSize }],
-    queryFn: ({ pageParam, signal }) =>
-      getHomeCollectionsPage(pageParam.offset, pageParam.limit, signal),
-    initialPageParam: { offset: 0, limit: initialHomeCollectionsPageSize },
-    getNextPageParam: (lastPage) => {
-      const nextOffset = lastPage.offset + lastPage.limit;
-
-      return nextOffset < lastPage.total
-        ? { offset: nextOffset, limit: lastPage.total - nextOffset }
-        : undefined;
-    },
-    staleTime: homeStaleTimeMs,
+    queryKey: getHomeCollectionsQueryKey(),
+    queryFn: ({ pageParam, signal }) => getHomeCollectionsPage(pageParam, signal),
+    initialPageParam: initialHomeCollectionsPageParam,
+    getNextPageParam: getNextHomeCollectionsPageParam,
+    staleTime: homeCollectionsStaleTimeMs,
   });
   const {
     fetchNextPage,
@@ -66,14 +63,6 @@ export function useHomeFeed() {
     isFetchNextPageError,
     isFetchingNextPage,
   } = collectionsQuery;
-
-  useEffect(() => {
-    if (!hasNextPage || isFetchingNextPage || hasCollectionsError || isFetchNextPageError) {
-      return;
-    }
-
-    void fetchNextPage({ cancelRefetch: false });
-  }, [fetchNextPage, hasCollectionsError, hasNextPage, isFetchNextPageError, isFetchingNextPage]);
 
   const collectionPages = collectionsQuery.data?.pages ?? [];
   const collections = collectionPages.flatMap((page) => page.collections);
@@ -91,6 +80,11 @@ export function useHomeFeed() {
     areMoreCollectionsLoading: isFetchingNextPage,
     isCollectionsError: hasCollectionsError && collectionPages.length === 0,
     isMoreCollectionsError: isFetchNextPageError && collectionPages.length > 0,
+    hasMoreCollections: hasNextPage,
+    isCollectionsPaused: collectionsQuery.isPaused,
+    loadMoreCollections: () => {
+      void fetchNextPage({ cancelRefetch: false });
+    },
     retryCollections: () => {
       if (collectionPages.length > 0) {
         void fetchNextPage({ cancelRefetch: false });

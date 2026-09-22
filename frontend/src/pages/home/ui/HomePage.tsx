@@ -17,6 +17,10 @@ import { ContinueWatchingCard } from '@/widgets/continue-watching-card';
 import { LibraryDataNotice } from '@/widgets/library-page';
 import { EmptyState, ErrorState, LoadingState, Skeleton, YaneMark } from '@/shared';
 import { useHomeFeed } from '../model/useHomeFeed';
+import {
+  shouldEnableHomeCollectionsSentinel,
+  useHomeCollectionsSentinel,
+} from '../model/useHomeCollectionsSentinel';
 import { HomeCollectionsSkeleton } from './HomeCollectionsSkeleton';
 
 export function HomePage() {
@@ -29,10 +33,24 @@ export function HomePage() {
     collections,
     areCollectionsLoading,
     areCollectionsPaused,
+    isCollectionsPaused,
     areMoreCollectionsLoading,
     isCollectionsError,
+    isMoreCollectionsError,
+    hasMoreCollections,
+    loadMoreCollections,
     retryCollections,
   } = useHomeFeed();
+  const homeCollectionsSentinelRef = useHomeCollectionsSentinel({
+    enabled: shouldEnableHomeCollectionsSentinel({
+      hasCollections: collections.length > 0,
+      hasMore: hasMoreCollections,
+      isLoadingMore: areMoreCollectionsLoading,
+      hasLoadMoreError: isMoreCollectionsError,
+      isPaused: isCollectionsPaused,
+    }),
+    onLoadMore: loadMoreCollections,
+  });
   const [continueWatchingAnnouncement, setContinueWatchingAnnouncement] = useState('');
   const { isFavorite, toggleFavorite, canUpdateFavorites } = useFavorites();
   const {
@@ -276,6 +294,19 @@ export function HomePage() {
         )}
 
         {areMoreCollectionsLoading && collections.length > 0 && <HomeCollectionsSkeleton />}
+
+        {isMoreCollectionsError && (
+          <ErrorState
+            variant="section"
+            title="Не удалось загрузить остальные подборки"
+            description="Уже загруженная часть главной останется доступной. Попробуйте загрузить нижние подборки ещё раз."
+            retryLabel="Повторить"
+            onRetry={retryCollections}
+            className="min-h-64 rounded-card bg-surface-elevated"
+          />
+        )}
+
+        <div ref={homeCollectionsSentinelRef} aria-hidden="true" className="h-px" />
       </div>
     </div>
   );

@@ -1,6 +1,10 @@
 import { apiRequest } from '@/shared/api';
 
 import type { HomeCollectionsPage, HomeFeatured, HomeFeed } from '../model/homeFeed';
+import {
+  createHomeCollectionsQuery,
+  type HomeCollectionsPageParam,
+} from '../model/homeFeedPagination';
 import type { HomeCollectionsPageDto, HomeFeaturedDto, HomeFeedDto } from './homeFeedDto';
 import { mapHomeCollectionsPage, mapHomeFeatured, mapHomeFeed } from './mapHomeFeed';
 
@@ -19,14 +23,10 @@ export async function getHomeFeatured(signal?: AbortSignal): Promise<HomeFeature
 }
 
 export async function getHomeCollectionsPage(
-  offset: number,
-  limit: number,
+  page: HomeCollectionsPageParam,
   signal?: AbortSignal,
 ): Promise<HomeCollectionsPage> {
-  const query = new URLSearchParams({
-    offset: String(offset),
-    limit: String(limit),
-  });
+  const query = createHomeCollectionsQuery(page);
   const dto = await apiRequest<HomeCollectionsPageDto>(`/media/home/collections?${query}`, {
     signal,
   });
