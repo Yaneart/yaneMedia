@@ -12,9 +12,12 @@ import { AppLogger } from '../../../src/platform/logging/app-logger';
 describe('editorial catalog HTTP', () => {
   let app: INestApplication;
   let origin: string;
+  const frontendOrigin = 'http://localhost:5173';
+  const searchMedia = jest.fn().mockResolvedValue([]);
   const getDetailsByRef = jest
     .fn()
     .mockRejectedValue(new ServiceUnavailableException('Provider unavailable'));
+  const getAvailabilityByRef = jest.fn().mockResolvedValue({ sources: [] });
 
   beforeAll(async () => {
     const row = {
@@ -41,7 +44,10 @@ describe('editorial catalog HTTP', () => {
       controllers: [MediaController],
       providers: [
         MediaCatalogService,
-        { provide: MediaService, useValue: { getDetailsByRef } },
+        {
+          provide: MediaService,
+          useValue: { searchMedia, getDetailsByRef, getAvailabilityByRef },
+        },
         {
           provide: EditorialCatalogRepository,
           useValue: {
@@ -58,17 +64,35 @@ describe('editorial catalog HTTP', () => {
             countPublishedCollections: jest.fn().mockResolvedValue(1),
           },
         },
-        { provide: HomeFeedService, useValue: {} },
+        {
+          provide: HomeFeedService,
+          useValue: {
+            getHomeFeed: jest.fn().mockResolvedValue({ featured: row, collections: [] }),
+            getFeatured: jest.fn().mockResolvedValue({ featured: row }),
+            getCollections: jest
+              .fn()
+              .mockResolvedValue({ collections: [], offset: 0, limit: 2, total: 0 }),
+          },
+        },
         { provide: AppLogger, useValue: { logPerformance: jest.fn() } },
       ],
     }).compile();
 
     app = module.createNestApplication();
     app.setGlobalPrefix('api/v1');
+    app.enableCors({
+      origin: frontendOrigin,
+      credentials: true,
+      exposedHeaders: ['Retry-After', 'ETag'],
+    });
     app.useGlobalInterceptors(new ApiResponseInterceptor());
     app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
     await app.listen(0, '127.0.0.1');
     origin = await app.getUrl();
+  });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
   });
 
   afterAll(async () => {
@@ -93,6 +117,58 @@ describe('editorial catalog HTTP', () => {
       }),
     ]);
     expect(getDetailsByRef).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    '/api/v1/media/home',
+    '/api/v1/media/home/featured',
+    '/api/v1/media/home/collections?offset=0&limit=2',
+    '/api/v1/media/catalog?type=movie&offset=0&limit=2',
+    `/api/v1/media/catalog/${encodeURIComponent('imdb:tt15239678')}`,
+    '/api/v1/media/collections/editorial-picks?offset=0&limit=2',
+  ])('sets the public metadata cache and CORS contract for %s', async (path) => {
+    const response = await fetch(`${origin}${path}`, {
+      headers: { Origin: frontendOrigin },
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe(
+      'public, max-age=60, stale-while-revalidate=86400',
+    );
+    expect(response.headers.get('etag')).toBeTruthy();
+    expect(response.headers.get('vary')).toContain('Origin');
+    expect(response.headers.get('access-control-allow-origin')).toBe(frontendOrigin);
+    expect(response.headers.get('access-control-allow-credentials')).toBe('true');
+    expect(response.headers.get('access-control-expose-headers')).toContain('ETag');
+  });
+
+  it('returns 304 for a matching public metadata ETag', async () => {
+    const url = `${origin}/api/v1/media/catalog?type=movie&offset=0&limit=2`;
+    const initial = await fetch(url, { headers: { Origin: frontendOrigin } });
+    const etag = initial.headers.get('etag');
+
+    expect(etag).toBeTruthy();
+
+    const cached = await fetch(url, {
+      headers: { Origin: frontendOrigin, 'If-None-Match': etag! },
+    });
+
+    expect(cached.status).toBe(304);
+    expect(cached.headers.get('cache-control')).toBe(
+      'public, max-age=60, stale-while-revalidate=86400',
+    );
+    expect(cached.headers.get('vary')).toContain('Origin');
+    expect(await cached.text()).toBe('');
+  });
+
+  it.each([
+    '/api/v1/media/search?query=Dune',
+    `/api/v1/media/${encodeURIComponent('imdb:tt15239678')}`,
+    `/api/v1/media/${encodeURIComponent('imdb:tt15239678')}/availability`,
+  ])('prevents public caching for dynamic media route %s', async (path) => {
+    const response = await fetch(`${origin}${path}`);
+
+    expect(response.headers.get('cache-control')).toBe('no-store');
   });
 
   it('serves one local summary while Media Engine is unavailable', async () => {

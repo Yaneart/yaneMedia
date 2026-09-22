@@ -31,6 +31,7 @@ export class MediaAssetsController {
       'Content-Type': asset.mimeType,
       'Content-Length': String(asset.byteSize),
       ETag: asset.etag,
+      Vary: 'Origin',
       'X-Content-Type-Options': 'nosniff',
     });
 

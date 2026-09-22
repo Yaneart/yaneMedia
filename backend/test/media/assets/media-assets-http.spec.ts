@@ -62,6 +62,7 @@ describe('media asset HTTP contract', () => {
     expect(response.headers.get('content-length')).toBe(String(BODY.length));
     expect(response.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
     expect(response.headers.get('etag')).toBe(`"${CHECKSUM}"`);
+    expect(response.headers.get('vary')).toBe('Origin');
     expect(Buffer.from(await response.arrayBuffer())).toEqual(BODY);
 
     const cached = await fetch(url, { headers: { 'If-None-Match': `"${CHECKSUM}"` } });

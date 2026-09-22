@@ -33,6 +33,7 @@ import type {
 import { HomeFeedService } from './home/home-feed.service';
 import { MediaSummaryResolutionRequestDto } from './summary-resolution/dto/media-summary-resolution-request.dto';
 import type { MediaSummaryResolutionResponseDto } from './summary-resolution/dto/media-summary-resolution-response.dto';
+import { NoStore, PublicMetadataCache } from '../platform/http/cache-policy';
 
 @Controller('media')
 export class MediaController {
@@ -43,6 +44,7 @@ export class MediaController {
   ) {}
 
   @Get('search')
+  @NoStore()
   search(@Query() query: MediaSearchQueryDto): Promise<MediaSummaryDto[]> {
     if (
       !query.query &&
@@ -65,21 +67,25 @@ export class MediaController {
   }
 
   @Get('home')
+  @PublicMetadataCache()
   getHome(): Promise<HomeFeedDto> {
     return this.homeFeedService.getHomeFeed();
   }
 
   @Get('home/featured')
+  @PublicMetadataCache()
   getHomeFeatured(): Promise<HomeFeaturedDto> {
     return this.homeFeedService.getFeatured();
   }
 
   @Get('home/collections')
+  @PublicMetadataCache()
   getHomeCollections(@Query() query: MediaCollectionQueryDto): Promise<HomeCollectionsPageDto> {
     return this.homeFeedService.getCollections(query.offset, query.limit);
   }
 
   @Get('catalog')
+  @PublicMetadataCache()
   getCatalog(@Query() query: MediaCatalogQueryDto): Promise<MediaCatalogResponseDto> {
     return query.offset === undefined || query.limit === undefined
       ? this.mediaCatalogService.getCatalog(query.type)
@@ -87,16 +93,19 @@ export class MediaController {
   }
 
   @Get('catalog/:mediaRef')
+  @PublicMetadataCache()
   getCatalogSummary(@Param('mediaRef') mediaRef: string): Promise<MediaSummaryDto> {
     return this.mediaCatalogService.getPublishedSummary(mediaRef);
   }
 
   @Get('collections/editorial-picks')
+  @PublicMetadataCache()
   getEditorialPicks(@Query() query: MediaCollectionQueryDto): Promise<MediaCollectionResponseDto> {
     return this.mediaCatalogService.getCollection('editorial-picks', query.offset, query.limit);
   }
 
   @Get(':mediaRef')
+  @NoStore()
   async getDetails(@Param('mediaRef') mediaRef: string): Promise<MediaDetailsResponseDto> {
     const { details, meta, animeSeasonChain } = await this.mediaService.getDetailsByRef(mediaRef);
 
@@ -113,6 +122,7 @@ export class MediaController {
   }
 
   @Post('summaries/resolve')
+  @NoStore()
   resolveMediaSummaries(
     @Body() body: MediaSummaryResolutionRequestDto,
   ): Promise<MediaSummaryResolutionResponseDto> {
@@ -120,6 +130,7 @@ export class MediaController {
   }
 
   @Get(':mediaRef/availability')
+  @NoStore()
   async getAvailability(
     @Param('mediaRef') mediaRef: string,
     @Query() query: MediaAvailabilityQueryDto,
@@ -143,6 +154,7 @@ export class MediaController {
   }
 
   @Sse(':mediaRef/availability/stream')
+  @NoStore()
   streamAvailability(
     @Param('mediaRef') mediaRef: string,
     @Query() query: MediaAvailabilityQueryDto,
