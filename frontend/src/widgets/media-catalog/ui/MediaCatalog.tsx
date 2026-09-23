@@ -204,7 +204,7 @@ export function MediaCatalog({ type, title, filters }: MediaCatalogProps) {
 
       <header
         className={[
-          'relative rounded-card',
+          'relative rounded-card border border-border',
           'bg-linear-to-br from-watermark/50 via-surface-elevated to-surface-elevated',
           'px-5 py-6 shadow-sm sm:px-7 sm:py-7',
           'xl:grid xl:grid-cols-[minmax(16rem,0.65fr)_minmax(34rem,1.35fr)]',

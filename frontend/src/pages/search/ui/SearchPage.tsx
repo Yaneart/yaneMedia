@@ -98,8 +98,8 @@ export function SearchPage() {
 
       <header
         className={[
-          'relative overflow-hidden rounded-card',
-          'bg-linear-to-br from-watermark/20 via-surface-elevated to-surface-elevated',
+          'relative overflow-hidden rounded-card border border-border',
+          'bg-linear-to-br from-watermark/50 via-surface-elevated to-surface-elevated',
           'px-5 py-6 shadow-sm sm:px-7 sm:py-7',
           'lg:grid lg:grid-cols-[minmax(18rem,0.75fr)_minmax(28rem,1.25fr)]',
           'lg:items-center lg:gap-10 lg:px-10 lg:py-8',
