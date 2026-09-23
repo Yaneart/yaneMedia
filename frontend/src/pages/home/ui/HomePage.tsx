@@ -15,13 +15,14 @@ import { RestorableContentRow } from '@/features/scroll-restoration';
 import { FeaturedMedia } from '@/widgets/featured-media';
 import { ContinueWatchingCard } from '@/widgets/continue-watching-card';
 import { LibraryDataNotice } from '@/widgets/library-page';
-import { EmptyState, ErrorState, LoadingState, Skeleton, YaneMark } from '@/shared';
+import { EmptyState, ErrorState, Skeleton, YaneMark } from '@/shared';
 import { useHomeFeed } from '../model/useHomeFeed';
 import {
   shouldEnableHomeCollectionsSentinel,
   useHomeCollectionsSentinel,
 } from '../model/useHomeCollectionsSentinel';
 import { HomeCollectionsSkeleton } from './HomeCollectionsSkeleton';
+import { HomeHeroSkeleton } from './HomeHeroSkeleton';
 
 export function HomePage() {
   const queryClient = useQueryClient();
@@ -140,11 +141,7 @@ export function HomePage() {
           className="min-h-[500px] bg-elevated px-page md:min-h-[clamp(32rem,62vh,43rem)]"
         />
       ) : (
-        <LoadingState
-          variant="page"
-          label="Загружаем главную"
-          className="min-h-[500px] bg-elevated md:min-h-[clamp(32rem,62vh,43rem)]"
-        />
+        <HomeHeroSkeleton />
       )}
 
       <div className="relative z-10 -mt-10 space-y-10 px-page pb-8 md:-mt-8 md:space-y-12 md:pb-10">

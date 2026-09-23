@@ -1,8 +1,13 @@
 import { lazy } from 'react';
 
-export const AnimePage = lazy(() =>
-  import('@/pages/anime').then(({ AnimePage }) => ({ default: AnimePage })),
-);
+const loadAnimePage = () =>
+  import('@/pages/anime').then(({ AnimePage }) => ({ default: AnimePage }));
+const loadMoviesPage = () =>
+  import('@/pages/movies').then(({ MoviesPage }) => ({ default: MoviesPage }));
+const loadSeriesPage = () =>
+  import('@/pages/series').then(({ SeriesPage }) => ({ default: SeriesPage }));
+
+export const AnimePage = lazy(loadAnimePage);
 export const EditorialCollectionPage = lazy(() =>
   import('@/pages/editorial-collection').then(({ EditorialCollectionPage }) => ({
     default: EditorialCollectionPage,
@@ -30,9 +35,7 @@ export const ResetPasswordPage = lazy(() =>
     default: ResetPasswordPage,
   })),
 );
-export const MoviesPage = lazy(() =>
-  import('@/pages/movies').then(({ MoviesPage }) => ({ default: MoviesPage })),
-);
+export const MoviesPage = lazy(loadMoviesPage);
 export const NotFoundPage = lazy(() =>
   import('@/pages/not-found').then(({ NotFoundPage }) => ({ default: NotFoundPage })),
 );
@@ -42,9 +45,11 @@ export const RegisterPage = lazy(() =>
 export const SearchPage = lazy(() =>
   import('@/pages/search').then(({ SearchPage }) => ({ default: SearchPage })),
 );
-export const SeriesPage = lazy(() =>
-  import('@/pages/series').then(({ SeriesPage }) => ({ default: SeriesPage })),
-);
+export const SeriesPage = lazy(loadSeriesPage);
 export const VerifyEmailPage = lazy(() =>
   import('@/pages/verify-email').then(({ VerifyEmailPage }) => ({ default: VerifyEmailPage })),
 );
+
+export const preloadAnimePage = loadAnimePage;
+export const preloadMoviesPage = loadMoviesPage;
+export const preloadSeriesPage = loadSeriesPage;

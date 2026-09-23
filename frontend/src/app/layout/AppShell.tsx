@@ -1,6 +1,7 @@
 import { Outlet, useLocation, useNavigate } from 'react-router';
 import { routePaths } from '../router/routes';
 import { primaryNavigationItems, secondaryNavigationItems } from '../router/navigation';
+import { preloadAnimePage, preloadMoviesPage, preloadSeriesPage } from '../router/lazyPages';
 import { DesktopNavigation } from '@/widgets/desktop-navigation';
 import { MobileNavigation } from '@/widgets/mobile-navigation';
 import { MobileHeader } from '@/widgets/mobile-header';
@@ -21,6 +22,12 @@ const catalogTypeByPath: Partial<Record<string, MediaType>> = {
   [routePaths.anime]: 'anime',
 };
 
+const catalogPageLoaderByPath: Partial<Record<string, () => Promise<unknown>>> = {
+  [routePaths.movies]: preloadMoviesPage,
+  [routePaths.series]: preloadSeriesPage,
+  [routePaths.anime]: preloadAnimePage,
+};
+
 export function AppShell() {
   const { pathname } = useLocation();
   const navigate = useNavigate();
@@ -38,8 +45,13 @@ export function AppShell() {
   const isActiveMediaPage = activeMediaPath === normalizedPathname;
   const prefetchCatalog = (path: string) => {
     const type = catalogTypeByPath[path];
+    const preloadPage = catalogPageLoaderByPath[path];
 
     if (type && claimIntentPrefetch(prefetchedCatalogPathsRef.current, path)) {
+      if (preloadPage) {
+        void preloadPage().catch(() => undefined);
+      }
+
       void queryClient.prefetchInfiniteQuery({
         ...mediaCatalogQueryOptions(type),
         retry: false,

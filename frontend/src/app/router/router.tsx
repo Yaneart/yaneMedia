@@ -21,6 +21,7 @@ import { routePaths } from './routes';
 import { RouteAccessibility } from './RouteAccessibility';
 import { LoadingState, MediaPageSkeleton } from '@/shared';
 import { HomePage } from '@/pages/home';
+import { MediaCatalogSkeleton } from '@/widgets/media-catalog';
 
 function lazyRoute(page: ReactNode, fallback?: ReactNode) {
   return (
@@ -85,15 +86,15 @@ export const router = createBrowserRouter([
           },
           {
             path: routePaths.movies,
-            element: lazyRoute(<MoviesPage />),
+            element: lazyRoute(<MoviesPage />, <MediaCatalogSkeleton title="Фильмы" />),
           },
           {
             path: routePaths.series,
-            element: lazyRoute(<SeriesPage />),
+            element: lazyRoute(<SeriesPage />, <MediaCatalogSkeleton title="Сериалы" />),
           },
           {
             path: routePaths.anime,
-            element: lazyRoute(<AnimePage />),
+            element: lazyRoute(<AnimePage />, <MediaCatalogSkeleton title="Аниме" />),
           },
           {
             path: routePaths.editorialPicks,
