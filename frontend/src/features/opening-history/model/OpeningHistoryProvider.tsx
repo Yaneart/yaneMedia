@@ -17,6 +17,7 @@ import { OpeningHistoryContext, type OpeningHistoryEntry } from './openingHistor
 import {
   loadOpeningHistory,
   loadOpeningHistoryUndo,
+  OPENING_HISTORY_UNDO_DURATION_MS,
   removeOpeningHistory,
   removeOpeningHistoryUndo,
   restoreOpeningHistory,
@@ -126,6 +127,24 @@ export function OpeningHistoryProvider({ children }: OpeningHistoryProviderProps
     setUndoPendingOwnerId(undefined);
   }, []);
 
+  useEffect(() => {
+    if (!historyUndo) return;
+
+    const expiresIn = historyUndo.expiresAt - Date.now();
+    if (expiresIn <= 0) {
+      clearHistoryUndo(historyUndo.ownerId);
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      if (historyUndoRef.current?.expiresAt === historyUndo.expiresAt) {
+        clearHistoryUndo(historyUndo.ownerId);
+      }
+    }, expiresIn);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [clearHistoryUndo, historyUndo]);
+
   currentUserIdRef.current = accountUserId;
 
   useEffect(() => {
@@ -196,7 +215,11 @@ export function OpeningHistoryProvider({ children }: OpeningHistoryProviderProps
       if (variables.type === 'clear') {
         const clearedAccountEntries = rollback?.previous?.entries;
         if (clearedAccountEntries?.length) {
-          storeHistoryUndo({ ownerId: variables.userId, entries: clearedAccountEntries });
+          storeHistoryUndo({
+            ownerId: variables.userId,
+            entries: clearedAccountEntries,
+            expiresAt: Date.now() + OPENING_HISTORY_UNDO_DURATION_MS,
+          });
         } else {
           clearHistoryUndo(variables.userId);
         }
@@ -389,7 +412,11 @@ export function OpeningHistoryProvider({ children }: OpeningHistoryProviderProps
     if (!canManageHistory || openingHistoryEntries.length === 0) return;
 
     if (storageMode === 'guest') {
-      storeHistoryUndo({ ownerId: null, entries: guestEntries });
+      storeHistoryUndo({
+        ownerId: null,
+        entries: guestEntries,
+        expiresAt: Date.now() + OPENING_HISTORY_UNDO_DURATION_MS,
+      });
       setGuestEntries([]);
     } else if (accountUserId) {
       runAccountMutation({ userId: accountUserId, type: 'clear' });
@@ -461,6 +488,7 @@ export function OpeningHistoryProvider({ children }: OpeningHistoryProviderProps
         hasSyncError,
         canUndoClearHistory:
           canManageHistory && clearedEntries !== null && undoPendingOwnerId !== historyOwnerId,
+        clearHistoryUndoExpiresAt: clearedEntries ? (historyUndo?.expiresAt ?? null) : null,
         recordOpening,
         removeOpening,
         clearHistory,

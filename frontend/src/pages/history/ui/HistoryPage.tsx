@@ -19,7 +19,7 @@ import {
   LibraryStorageNotice,
   matchesLibraryQuery,
 } from '@/widgets/library-page';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 
 const openingDateFormatter = new Intl.DateTimeFormat('ru-RU', {
@@ -30,6 +30,32 @@ const openingTimeFormatter = new Intl.DateTimeFormat('ru-RU', {
   hour: '2-digit',
   minute: '2-digit',
 });
+
+function HistoryUndoCountdown({ expiresAt }: { expiresAt: number }) {
+  const [secondsLeft, setSecondsLeft] = useState(() =>
+    Math.max(1, Math.ceil((expiresAt - Date.now()) / 1_000)),
+  );
+
+  useEffect(() => {
+    const updateCountdown = () => {
+      setSecondsLeft(Math.max(1, Math.ceil((expiresAt - Date.now()) / 1_000)));
+    };
+
+    updateCountdown();
+    const intervalId = window.setInterval(updateCountdown, 100);
+
+    return () => window.clearInterval(intervalId);
+  }, [expiresAt]);
+
+  return (
+    <span
+      aria-hidden="true"
+      className="inline-grid size-7 shrink-0 place-items-center rounded-full border border-action/40 bg-action/10 text-xs font-semibold tabular-nums text-action"
+    >
+      {secondsLeft}
+    </span>
+  );
+}
 
 function formatOpeningDate(openedAt: string) {
   const openedDate = new Date(openedAt);
@@ -67,6 +93,7 @@ export function HistoryPage() {
     canManageHistory,
     hasSyncError,
     canUndoClearHistory,
+    clearHistoryUndoExpiresAt,
     removeOpening,
     clearHistory,
     undoClearHistory,
@@ -129,9 +156,14 @@ export function HistoryPage() {
           className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-card border border-context-border bg-surface-elevated px-4 py-3"
         >
           <p className="text-caption text-text-secondary">История очищена.</p>
-          <Button size="small" variant="secondary" onClick={undoClearHistory}>
-            Отменить
-          </Button>
+          <div className="flex items-center gap-2">
+            {clearHistoryUndoExpiresAt && (
+              <HistoryUndoCountdown expiresAt={clearHistoryUndoExpiresAt} />
+            )}
+            <Button size="small" variant="secondary" onClick={undoClearHistory}>
+              Отменить
+            </Button>
+          </div>
         </div>
       )}
 

@@ -33,7 +33,7 @@ export function MediaCast({ persons, className }: MediaCastProps) {
               aria-hidden={!actor.photo}
               className={[
                 'relative aspect-3/4 w-full overflow-hidden rounded-overlay',
-                'bg-linear-to-br from-watermark/25 via-surface-elevated to-background',
+                'bg-linear-to-br from-watermark/50 via-surface-elevated to-background',
               ].join(' ')}
             >
               <YaneMark className="absolute -right-6 -bottom-2 h-[115%] w-[170%] rotate-6 text-watermark/35" />

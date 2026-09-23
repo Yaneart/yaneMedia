@@ -13,6 +13,7 @@ export type OpeningHistoryContextValue = {
   canManageHistory: boolean;
   hasSyncError: boolean;
   canUndoClearHistory: boolean;
+  clearHistoryUndoExpiresAt: number | null;
   recordOpening: (mediaRef: MediaRef) => void;
   removeOpening: (mediaRef: MediaRef) => void;
   clearHistory: () => void;

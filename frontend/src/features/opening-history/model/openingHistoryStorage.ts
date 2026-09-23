@@ -5,7 +5,8 @@ import type { OpeningHistoryEntry } from './openingHistoryContext';
 const OPENING_HISTORY_STORAGE_KEY = 'yanemedia-opening-history';
 const OPENING_HISTORY_STORAGE_VERSION = 1;
 const OPENING_HISTORY_UNDO_STORAGE_KEY = 'yanemedia-opening-history-undo';
-const OPENING_HISTORY_UNDO_STORAGE_VERSION = 1;
+const OPENING_HISTORY_UNDO_STORAGE_VERSION = 2;
+export const OPENING_HISTORY_UNDO_DURATION_MS = 3_000;
 export const OPENING_HISTORY_LIMIT = 100;
 
 type StoredOpeningHistory = {
@@ -16,6 +17,7 @@ type StoredOpeningHistory = {
 export type OpeningHistoryUndo = {
   ownerId: string | null;
   entries: OpeningHistoryEntry[];
+  expiresAt: number;
 };
 
 type StoredOpeningHistoryUndo = OpeningHistoryUndo & {
@@ -60,7 +62,10 @@ function isStoredOpeningHistoryUndo(value: unknown): value is StoredOpeningHisto
     Array.isArray(value.entries) &&
     value.entries.length > 0 &&
     value.entries.length <= OPENING_HISTORY_LIMIT &&
-    value.entries.every(isOpeningHistoryEntry)
+    value.entries.every(isOpeningHistoryEntry) &&
+    typeof value.expiresAt === 'number' &&
+    Number.isSafeInteger(value.expiresAt) &&
+    value.expiresAt > 0
   );
 }
 
@@ -153,11 +158,15 @@ export function loadOpeningHistoryUndo(): OpeningHistoryUndo | null {
     if (!serializedUndo) return null;
 
     const storedUndo: unknown = JSON.parse(serializedUndo);
-    if (!isStoredOpeningHistoryUndo(storedUndo)) return null;
+    if (!isStoredOpeningHistoryUndo(storedUndo) || storedUndo.expiresAt <= Date.now()) {
+      removeOpeningHistoryUndo();
+      return null;
+    }
 
     return {
       ownerId: storedUndo.ownerId,
       entries: normalizeOpeningHistory(storedUndo.entries),
+      expiresAt: storedUndo.expiresAt,
     };
   } catch {
     return null;
@@ -176,6 +185,7 @@ export function saveOpeningHistoryUndo(undo: OpeningHistoryUndo): void {
       version: OPENING_HISTORY_UNDO_STORAGE_VERSION,
       ownerId: undo.ownerId,
       entries,
+      expiresAt: undo.expiresAt,
     };
 
     window.localStorage.setItem(OPENING_HISTORY_UNDO_STORAGE_KEY, JSON.stringify(storedUndo));

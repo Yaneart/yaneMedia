@@ -28,7 +28,7 @@ export function LibraryEmptyState({
         aria-hidden="true"
         className={[
           'relative mx-auto flex size-40 items-center justify-center overflow-hidden rounded-[2rem]',
-          'border border-context-border bg-linear-to-br from-watermark/25 via-surface-elevated to-surface-elevated',
+          'border border-context-border bg-linear-to-br from-watermark/50 via-surface-elevated to-surface-elevated',
           'shadow-sm sm:size-48 md:size-56',
         ].join(' ')}
       >

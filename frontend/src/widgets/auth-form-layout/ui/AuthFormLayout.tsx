@@ -127,7 +127,7 @@ export function AuthFormLayout({
             aria-hidden="true"
             className={[
               'relative hidden min-h-[34rem] overflow-hidden p-10',
-              'bg-linear-to-br from-watermark/25 via-surface to-surface',
+              'bg-linear-to-br from-watermark/50 via-surface to-surface',
               'lg:flex lg:flex-col',
             ].join(' ')}
           >

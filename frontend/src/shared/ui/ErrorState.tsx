@@ -98,7 +98,7 @@ export function ErrorState({
             className={[
               'relative mx-auto flex size-44 items-center justify-center overflow-hidden rounded-[2rem]',
               'border border-context-border',
-              'bg-linear-to-br from-watermark/25 via-surface-elevated to-surface',
+              'bg-linear-to-br from-watermark/50 via-surface-elevated to-surface',
               'shadow-overlay sm:size-52',
             ].join(' ')}
           >
