@@ -1,13 +1,12 @@
 import { useOpeningHistory } from '@/features/opening-history';
 import { resolveMediaDetailsPresentation } from '@/entities/media';
-import { EmptyState, ErrorState } from '@/shared';
+import { EmptyState, ErrorState, MediaPageSkeleton } from '@/shared';
 import { useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router';
 
 import { useMediaDetails } from '../model/useMediaDetails';
 import { useMediaSummary } from '../model/useMediaSummary';
 import { useMediaAvailability } from '../model/useMediaAvailability';
-import { MediaPageSkeleton } from './MediaPageSkeleton';
 import { MediaView } from './MediaView';
 import { getAnimeSeasonNavigationTarget } from '../model/animeSeasonNavigation';
 

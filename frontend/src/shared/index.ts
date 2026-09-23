@@ -59,6 +59,7 @@ export type { LoadingStateProps, LoadingStateVariant } from './ui/LoadingState';
 
 export { Skeleton } from './ui/Skeleton';
 export type { SkeletonProps } from './ui/Skeleton';
+export { MediaPageSkeleton } from './ui/MediaPageSkeleton';
 
 export { EmptyState } from './ui/EmptyState';
 export type { EmptyStateProps } from './ui/EmptyState';

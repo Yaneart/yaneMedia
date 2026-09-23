@@ -1,4 +1,4 @@
-import { Skeleton } from '@/shared';
+import { Skeleton } from './Skeleton';
 
 export function MediaPageSkeleton() {
   return (

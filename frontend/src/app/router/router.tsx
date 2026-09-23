@@ -19,12 +19,12 @@ import {
 } from './lazyPages';
 import { routePaths } from './routes';
 import { RouteAccessibility } from './RouteAccessibility';
-import { LoadingState } from '@/shared';
+import { LoadingState, MediaPageSkeleton } from '@/shared';
 import { HomePage } from '@/pages/home';
 
-function lazyRoute(page: ReactNode) {
+function lazyRoute(page: ReactNode, fallback?: ReactNode) {
   return (
-    <Suspense fallback={<LoadingState label="Загружаем страницу" variant="page" />}>
+    <Suspense fallback={fallback ?? <LoadingState label="Загружаем страницу" variant="page" />}>
       {page}
     </Suspense>
   );
@@ -101,7 +101,7 @@ export const router = createBrowserRouter([
           },
           {
             path: routePaths.media,
-            element: lazyRoute(<MediaPage />),
+            element: lazyRoute(<MediaPage />, <MediaPageSkeleton />),
           },
           {
             path: routePaths.favorites,
