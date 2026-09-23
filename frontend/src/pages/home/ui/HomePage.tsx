@@ -104,7 +104,7 @@ export function HomePage() {
   };
 
   return (
-    <div className="-m-page" style={{ background: 'var(--theme-home-background)' }}>
+    <div className="-m-page">
       {featured ? (
         <section className="relative isolate min-h-[500px] overflow-hidden bg-elevated md:min-h-[clamp(32rem,62vh,43rem)]">
           <div className="absolute inset-0 -z-20">

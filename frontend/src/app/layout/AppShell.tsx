@@ -92,7 +92,7 @@ export function AppShell() {
           id={mainContentId}
           ref={mainRef}
           tabIndex={-1}
-          className="relative z-10 min-h-0 flex-1 overflow-y-auto bg-surface p-page [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:m-4 md:ml-0 md:rounded-card md:shadow-surface"
+          className="relative z-10 min-h-0 flex-1 overflow-y-auto bg-[var(--theme-home-background)] p-page [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:m-4 md:ml-0 md:rounded-card md:shadow-surface"
           onKeyDownCapture={cancelPendingRestoration}
           onPointerDownCapture={cancelPendingRestoration}
           onScroll={saveMainPosition}
