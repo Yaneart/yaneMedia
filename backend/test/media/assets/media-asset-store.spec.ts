@@ -77,6 +77,13 @@ describe('MediaAssetStore', () => {
     expect(await store.getPublicAsset('other', `${'a'.repeat(64)}.png`)).toBeUndefined();
   });
 
+  it('keeps cleanup targets inside the configured asset root', async () => {
+    await expect(store.delete('poster', '../secret.png')).rejects.toThrow(
+      'outside the configured root',
+    );
+    await expect(store.delete('backdrop', `${'d'.repeat(64)}.jpg`)).resolves.toBe(false);
+  });
+
   it('leaves no file and permits retry when a download is interrupted', async () => {
     downloader.download = () => Promise.reject(new Error('interrupted'));
     await expect(store.import('poster', 'https://images.example/retry')).rejects.toThrow(

@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Client } from 'pg';
@@ -6,6 +6,7 @@ import type { DatabaseService } from '../../../src/database/database.service';
 import { EditorialCatalogRepository } from '../../../src/media/catalog/editorial-catalog.repository';
 import {
   catalogRevisions,
+  mediaAssets,
   mediaCatalogItems,
 } from '../../../src/media/catalog/editorial-catalog.schema';
 
@@ -17,6 +18,7 @@ describePostgres('editorial catalog with PostgreSQL', () => {
   let repository: EditorialCatalogRepository;
   let previousPublished: { id: string; updatedAt: Date } | undefined;
   const revisionIds: string[] = [];
+  const assetIds: string[] = [];
 
   beforeAll(async () => {
     if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required');
@@ -38,6 +40,9 @@ describePostgres('editorial catalog with PostgreSQL', () => {
           .delete(catalogRevisions)
           .where(inArray(catalogRevisions.id, revisionIds));
       }
+      if (assetIds.length > 0) {
+        await drizzle(client).delete(mediaAssets).where(inArray(mediaAssets.id, assetIds));
+      }
       if (previousPublished) {
         await drizzle(client)
           .update(catalogRevisions)
@@ -52,6 +57,35 @@ describePostgres('editorial catalog with PostgreSQL', () => {
   it('switches revisions atomically while preserving order and inactive rows', async () => {
     const database = drizzle(client);
     const source = `integration-${randomUUID()}`;
+    const checksum = (value: string) => createHash('sha256').update(value).digest('hex');
+    const [protectedAsset, unusedAsset] = await database
+      .insert(mediaAssets)
+      .values([
+        {
+          kind: 'poster',
+          objectKey: `${checksum(`${source}-protected`)}.jpg`,
+          mimeType: 'image/jpeg',
+          width: 600,
+          height: 900,
+          byteSize: 100,
+          checksum: checksum(`${source}-protected`),
+          sourceUrl: `https://images.example/${source}/protected.jpg`,
+          createdAt: new Date('2020-01-01T00:00:00.000Z'),
+        },
+        {
+          kind: 'poster',
+          objectKey: `${checksum(`${source}-unused`)}.jpg`,
+          mimeType: 'image/jpeg',
+          width: 600,
+          height: 900,
+          byteSize: 100,
+          checksum: checksum(`${source}-unused`),
+          sourceUrl: `https://images.example/${source}/unused.jpg`,
+          createdAt: new Date('2020-01-01T00:00:00.000Z'),
+        },
+      ])
+      .returning({ id: mediaAssets.id, objectKey: mediaAssets.objectKey });
+    assetIds.push(protectedAsset.id, unusedAsset.id);
     const beforeUserRows = await client.query<{ count: string }>('select count(*) from users');
     const firstRevision = await repository.createStagingRevision(`${source}-first`);
     revisionIds.push(firstRevision);
@@ -69,6 +103,7 @@ describePostgres('editorial catalog with PostgreSQL', () => {
         type: 'movie',
         title: 'First',
         genres: ['Drama'],
+        posterAssetId: protectedAsset.id,
         status: 'ready',
         active: true,
       },
@@ -107,14 +142,6 @@ describePostgres('editorial catalog with PostgreSQL', () => {
     revisionIds.push(secondRevision);
     await repository.upsertStagingItems(secondRevision, [
       {
-        mediaRef: 'imdb:tt0000001',
-        type: 'movie',
-        title: 'First, archived',
-        genres: ['Drama'],
-        status: 'ready',
-        active: false,
-      },
-      {
         mediaRef: 'imdb:tt0000003',
         type: 'movie',
         title: 'Third',
@@ -123,6 +150,7 @@ describePostgres('editorial catalog with PostgreSQL', () => {
         active: true,
       },
     ]);
+    await repository.carryPublishedItemsAsInactive(secondRevision, ['imdb:tt0000003']);
     await repository.upsertStagingCollection(
       secondRevision,
       {
@@ -140,7 +168,10 @@ describePostgres('editorial catalog with PostgreSQL', () => {
     await repository.publishRevision(secondRevision);
     await expect(
       repository.findPublishedItems(['imdb:tt0000001', 'imdb:tt0000003']),
-    ).resolves.toEqual([expect.objectContaining({ mediaRef: 'imdb:tt0000003' })]);
+    ).resolves.toEqual([
+      expect.objectContaining({ mediaRef: 'imdb:tt0000001' }),
+      expect.objectContaining({ mediaRef: 'imdb:tt0000003' }),
+    ]);
 
     const revisions = await database
       .select({ id: catalogRevisions.id, status: catalogRevisions.status })
@@ -164,6 +195,14 @@ describePostgres('editorial catalog with PostgreSQL', () => {
           ),
         ),
     ).resolves.toEqual([{ count: 1 }]);
+
+    await expect(
+      repository.findUnreferencedAssets(new Date('2021-01-01T00:00:00.000Z')),
+    ).resolves.toEqual([
+      expect.objectContaining({ id: unusedAsset.id, objectKey: unusedAsset.objectKey }),
+    ]);
+    await expect(repository.deleteAssetIfUnreferenced(protectedAsset.id)).resolves.toBe(false);
+    await expect(repository.deleteAssetIfUnreferenced(unusedAsset.id)).resolves.toBe(true);
 
     await expect(repository.publishRevision(firstRevision)).rejects.toThrow(
       'Catalog revision is not staging',

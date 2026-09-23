@@ -1,25 +1,25 @@
 import { Module } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { EditorialCatalogSyncService } from '../media/catalog/editorial-catalog-sync.service';
+import { MediaAssetCleanupService } from '../media/assets/media-asset-cleanup.service';
 import { MediaModule } from '../media/media.module';
 
 @Module({ imports: [MediaModule] })
-class EditorialCatalogSyncModule {}
+class EditorialAssetCleanupModule {}
 
 async function main(): Promise<void> {
-  const unknownArguments = process.argv.slice(2).filter((argument) => argument !== '--dry-run');
+  const unknownArguments = process.argv.slice(2).filter((argument) => argument !== '--delete');
   if (unknownArguments.length > 0) {
     throw new Error(`Unknown arguments: ${unknownArguments.join(', ')}`);
   }
 
-  const application = await NestFactory.createApplicationContext(EditorialCatalogSyncModule, {
+  const application = await NestFactory.createApplicationContext(EditorialAssetCleanupModule, {
     logger: ['error', 'warn'],
   });
 
   try {
     const report = await application
-      .get(EditorialCatalogSyncService)
-      .sync(undefined, { dryRun: process.argv.includes('--dry-run') });
+      .get(MediaAssetCleanupService)
+      .cleanup({ apply: process.argv.includes('--delete') });
     process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
   } finally {
     await application.close();
@@ -27,7 +27,7 @@ async function main(): Promise<void> {
 }
 
 void main().catch((error: unknown) => {
-  const message = error instanceof Error ? error.message : 'Editorial catalog sync failed';
+  const message = error instanceof Error ? error.message : 'Editorial asset cleanup failed';
   process.stderr.write(`${message}\n`);
   process.exitCode = 1;
 });

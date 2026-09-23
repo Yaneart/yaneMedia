@@ -86,6 +86,7 @@ function setup(options: {
   getSummaryByRef?: jest.Mock;
   findReusableRevision?: jest.Mock;
   findAssetsBySourceUrls?: jest.Mock;
+  findPublishedItemStates?: jest.Mock;
 }) {
   const getSummaryByRef =
     options.getSummaryByRef ??
@@ -101,10 +102,12 @@ function setup(options: {
   );
   const repository = {
     findReusableRevision: options.findReusableRevision ?? jest.fn().mockResolvedValue(undefined),
+    findPublishedItemStates: options.findPublishedItemStates ?? jest.fn().mockResolvedValue([]),
     createStagingRevision: jest.fn().mockResolvedValue('revision-1'),
     findAssetsBySourceUrls: options.findAssetsBySourceUrls ?? jest.fn().mockResolvedValue([]),
     upsertAssets,
     upsertStagingItems: jest.fn().mockResolvedValue(undefined),
+    carryPublishedItemsAsInactive: jest.fn().mockResolvedValue(undefined),
     upsertStagingCollection: jest.fn().mockResolvedValue(undefined),
     publishRevision: jest.fn().mockResolvedValue(undefined),
   };
@@ -135,10 +138,16 @@ describe('EditorialCatalogSyncService', () => {
     await expect(service.sync(manifest, noRetry)).resolves.toEqual({
       source: 'sync-test@7',
       skipped: false,
+      dryRun: false,
       items: 3,
       collections: 5,
       downloadedAssets: 6,
       reusedAssets: 0,
+      changes: {
+        add: ['anilist:1', 'imdb:tt0000001', 'imdb:tt0000002'],
+        update: [],
+        deactivate: [],
+      },
     });
 
     expect(maximumActive).toBe(2);
@@ -152,10 +161,38 @@ describe('EditorialCatalogSyncService', () => {
       ]),
     );
     expect(repository.upsertStagingCollection).toHaveBeenCalledTimes(5);
+    expect(repository.carryPublishedItemsAsInactive).toHaveBeenCalledWith('revision-1', [
+      'imdb:tt0000001',
+      'imdb:tt0000002',
+      'anilist:1',
+    ]);
     expect(repository.publishRevision).toHaveBeenCalledWith('revision-1');
     expect(repository.publishRevision.mock.invocationCallOrder[0]).toBeGreaterThan(
       repository.upsertStagingCollection.mock.invocationCallOrder.at(-1)!,
     );
+  });
+
+  it('reports rotation changes without creating staging during a dry run', async () => {
+    const { service, getSummaryByRef, assetImport, repository } = setup({
+      findPublishedItemStates: jest.fn().mockResolvedValue([
+        { mediaRef: 'imdb:tt0000001', active: true },
+        { mediaRef: 'imdb:tt9999999', active: true },
+        { mediaRef: 'imdb:tt8888888', active: false },
+      ]),
+    });
+
+    await expect(service.sync(manifest, { ...noRetry, dryRun: true })).resolves.toMatchObject({
+      dryRun: true,
+      changes: {
+        add: ['anilist:1', 'imdb:tt0000002'],
+        update: ['imdb:tt0000001'],
+        deactivate: ['imdb:tt9999999'],
+      },
+    });
+    expect(getSummaryByRef).not.toHaveBeenCalled();
+    expect(assetImport).not.toHaveBeenCalled();
+    expect(repository.createStagingRevision).not.toHaveBeenCalled();
+    expect(repository.publishRevision).not.toHaveBeenCalled();
   });
 
   it('is idempotent for an already published manifest', async () => {

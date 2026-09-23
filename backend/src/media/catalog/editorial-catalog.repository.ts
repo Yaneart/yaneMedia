@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, lte, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { DatabaseService } from '../../database/database.service';
 import type { MediaRefType } from '../media-ref';
@@ -50,6 +50,13 @@ export interface StagingCollectionItem {
   position: number;
 }
 
+export interface CatalogAssetCleanupCandidate {
+  id: string;
+  kind: 'poster' | 'backdrop';
+  objectKey: string;
+  createdAt: Date;
+}
+
 @Injectable()
 export class EditorialCatalogRepository {
   constructor(private readonly databaseService: DatabaseService) {}
@@ -78,6 +85,14 @@ export class EditorialCatalogRepository {
       .limit(1);
 
     return revision;
+  }
+
+  async findPublishedItemStates(): Promise<Array<{ mediaRef: string; active: boolean }>> {
+    return await this.databaseService.db
+      .select({ mediaRef: mediaCatalogItems.mediaRef, active: mediaCatalogItems.active })
+      .from(mediaCatalogItems)
+      .innerJoin(catalogRevisions, eq(catalogRevisions.id, mediaCatalogItems.revisionId))
+      .where(eq(catalogRevisions.status, 'published'));
   }
 
   async findAssetsBySourceUrls(
@@ -178,6 +193,47 @@ export class EditorialCatalogRepository {
     });
   }
 
+  async carryPublishedItemsAsInactive(
+    revisionId: string,
+    activeMediaRefs: readonly string[],
+  ): Promise<void> {
+    const activeFilter =
+      activeMediaRefs.length === 0
+        ? sql``
+        : sql`and item.media_ref not in (${sql.join(
+            [...new Set(activeMediaRefs)].map((mediaRef) => sql`${mediaRef}`),
+            sql`, `,
+          )})`;
+
+    await this.databaseService.db.transaction(async (transaction) => {
+      const [revision] = await transaction
+        .select({ status: catalogRevisions.status })
+        .from(catalogRevisions)
+        .where(eq(catalogRevisions.id, revisionId))
+        .for('update');
+
+      if (revision?.status !== 'staging') {
+        throw new Error('Catalog revision is not staging');
+      }
+
+      await transaction.execute(sql`
+        insert into ${mediaCatalogItems} (
+          revision_id, media_ref, type, title, original_title, year, short_description,
+          genres, rating, poster_asset_id, backdrop_asset_id, status, active
+        )
+        select
+          ${revisionId}, item.media_ref, item.type, item.title, item.original_title, item.year,
+          item.short_description, item.genres, item.rating, item.poster_asset_id,
+          item.backdrop_asset_id, item.status, false
+        from ${mediaCatalogItems} item
+        inner join ${catalogRevisions} revision on revision.id = item.revision_id
+        where revision.status = 'published'
+          ${activeFilter}
+        on conflict (revision_id, media_ref) do nothing
+      `);
+    });
+  }
+
   async upsertStagingCollection(
     revisionId: string,
     collection: StagingCollection,
@@ -251,6 +307,52 @@ export class EditorialCatalogRepository {
     });
   }
 
+  async findUnreferencedAssets(cutoff: Date): Promise<CatalogAssetCleanupCandidate[]> {
+    return await this.databaseService.db
+      .select({
+        id: mediaAssets.id,
+        kind: mediaAssets.kind,
+        objectKey: mediaAssets.objectKey,
+        createdAt: mediaAssets.createdAt,
+      })
+      .from(mediaAssets)
+      .where(
+        and(
+          lte(mediaAssets.createdAt, cutoff),
+          sql`not exists (
+            select 1 from ${mediaCatalogItems} item
+            where item.poster_asset_id = ${mediaAssets.id}
+               or item.backdrop_asset_id = ${mediaAssets.id}
+          )`,
+        ),
+      )
+      .orderBy(asc(mediaAssets.createdAt), asc(mediaAssets.objectKey));
+  }
+
+  async findAssetObjectKeys(): Promise<string[]> {
+    const rows = await this.databaseService.db
+      .select({ objectKey: mediaAssets.objectKey })
+      .from(mediaAssets);
+    return rows.map(({ objectKey }) => objectKey);
+  }
+
+  async deleteAssetIfUnreferenced(assetId: string): Promise<boolean> {
+    const [deleted] = await this.databaseService.db
+      .delete(mediaAssets)
+      .where(
+        and(
+          eq(mediaAssets.id, assetId),
+          sql`not exists (
+            select 1 from ${mediaCatalogItems} item
+            where item.poster_asset_id = ${mediaAssets.id}
+               or item.backdrop_asset_id = ${mediaAssets.id}
+          )`,
+        ),
+      )
+      .returning({ id: mediaAssets.id });
+    return deleted !== undefined;
+  }
+
   async findPublishedItems(mediaRefs: readonly string[]) {
     if (mediaRefs.length === 0) return [];
 
@@ -264,7 +366,6 @@ export class EditorialCatalogRepository {
         and(
           eq(catalogRevisions.status, 'published'),
           eq(mediaCatalogItems.status, 'ready'),
-          eq(mediaCatalogItems.active, true),
           inArray(mediaCatalogItems.mediaRef, [...new Set(mediaRefs)]),
         ),
       );

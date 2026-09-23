@@ -12,6 +12,7 @@ import { AppConfigModule } from '../config/config.module';
 import { MediaAssetDownloader } from './assets/media-asset-downloader';
 import { MediaAssetStore } from './assets/media-asset-store';
 import { MediaAssetsController } from './assets/media-assets.controller';
+import { MediaAssetCleanupService } from './assets/media-asset-cleanup.service';
 
 const MEDIA_ENGINE_PROVIDER_TIMEOUT_MS = 5_000;
 const MEDIA_ENGINE_CINEMETA_TIMEOUT_MS = 15_000;
@@ -100,6 +101,7 @@ async function createMediaEngine() {
     EditorialCatalogSyncService,
     MediaAssetDownloader,
     MediaAssetStore,
+    MediaAssetCleanupService,
     HomeFeedService,
     AppLogger,
   ],
@@ -109,6 +111,7 @@ async function createMediaEngine() {
     EditorialCatalogSyncService,
     MediaAssetDownloader,
     MediaAssetStore,
+    MediaAssetCleanupService,
   ],
 })
 export class MediaModule {}

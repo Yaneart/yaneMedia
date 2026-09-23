@@ -25,15 +25,24 @@ const MIN_BACKDROP_ASPECT_RATIO = 4 / 3;
 export interface EditorialCatalogSyncOptions {
   concurrency?: number;
   retryDelaysMs?: readonly number[];
+  dryRun?: boolean;
+}
+
+export interface EditorialCatalogRotationPlan {
+  add: string[];
+  update: string[];
+  deactivate: string[];
 }
 
 export interface EditorialCatalogSyncReport {
   source: string;
   skipped: boolean;
+  dryRun: boolean;
   items: number;
   collections: number;
   downloadedAssets: number;
   reusedAssets: number;
+  changes: EditorialCatalogRotationPlan;
 }
 
 interface ManifestItem {
@@ -70,10 +79,26 @@ export class EditorialCatalogSyncService {
       return {
         source,
         skipped: true,
+        dryRun: options.dryRun === true,
         items: items.length,
         collections,
         downloadedAssets: 0,
         reusedAssets: 0,
+        changes: { add: [], update: [], deactivate: [] },
+      };
+    }
+
+    const changes = await this.planRotation(items.map(({ mediaRef }) => mediaRef));
+    if (options.dryRun) {
+      return {
+        source,
+        skipped: false,
+        dryRun: true,
+        items: items.length,
+        collections,
+        downloadedAssets: 0,
+        reusedAssets: 0,
+        changes,
       };
     }
 
@@ -114,21 +139,44 @@ export class EditorialCatalogSyncService {
       revisionId,
       resolvedItems.map((item) => this.toStagingItem(item, assetsByRequest, assetIdByChecksum)),
     );
+    await this.repository.carryPublishedItemsAsInactive(
+      revisionId,
+      items.map(({ mediaRef }) => mediaRef),
+    );
     await this.storeCollections(revisionId, manifest);
     await this.repository.publishRevision(revisionId);
 
     return {
       source,
       skipped: false,
+      dryRun: false,
       items: items.length,
       collections,
       downloadedAssets: resolvedAssets.filter(({ reused }) => !reused).length,
       reusedAssets: resolvedAssets.filter(({ reused }) => reused).length,
+      changes,
+    };
+  }
+
+  private async planRotation(
+    activeMediaRefs: readonly string[],
+  ): Promise<EditorialCatalogRotationPlan> {
+    const publishedItems = await this.repository.findPublishedItemStates();
+    const publishedByRef = new Map(publishedItems.map((item) => [item.mediaRef, item]));
+    const activeSet = new Set(activeMediaRefs);
+
+    return {
+      add: activeMediaRefs.filter((mediaRef) => !publishedByRef.has(mediaRef)).sort(),
+      update: activeMediaRefs.filter((mediaRef) => publishedByRef.has(mediaRef)).sort(),
+      deactivate: publishedItems
+        .filter(({ mediaRef, active }) => active && !activeSet.has(mediaRef))
+        .map(({ mediaRef }) => mediaRef)
+        .sort(),
     };
   }
 
   private toManifestItems(manifest: EditorialCatalogManifest): ManifestItem[] {
-    return (['movie', 'series', 'anime'] as const).flatMap((type) =>
+    const items = (['movie', 'series', 'anime'] as const).flatMap((type) =>
       manifest.catalogs[type].flatMap((collection) =>
         collection.mediaRefs.map((mediaRef) => ({
           mediaRef,
@@ -137,6 +185,7 @@ export class EditorialCatalogSyncService {
         })),
       ),
     );
+    return [...new Map(items.map((item) => [item.mediaRef, item])).values()];
   }
 
   private resolveMetadata(

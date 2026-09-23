@@ -33,7 +33,6 @@ describe('EditorialCatalogRepository', () => {
     expect(query.params).toEqual([
       'published',
       'ready',
-      true,
       'imdb:tt0000002',
       'imdb:tt9999999',
       'imdb:tt0000001',

@@ -1,8 +1,8 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash, randomUUID } from 'node:crypto';
-import { access, mkdir, rename, stat, unlink, writeFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { access, mkdir, readdir, rename, stat, unlink, writeFile } from 'node:fs/promises';
+import { isAbsolute, join, relative, resolve } from 'node:path';
 import { inspectImage } from './image-metadata';
 import { MediaAssetDownloader } from './media-asset-downloader';
 
@@ -16,6 +16,10 @@ export type StoredMediaAsset = {
   byteSize: number;
   checksum: string;
   sourceUrl: string;
+};
+
+export type StoredMediaAssetFile = Pick<StoredMediaAsset, 'kind' | 'objectKey'> & {
+  modifiedAt: Date;
 };
 
 const OBJECT_KEY_PATTERN = /^[a-f0-9]{64}\.(?:jpg|png|webp)$/;
@@ -98,10 +102,9 @@ export class MediaAssetStore implements OnModuleInit {
   }
 
   async getPublicAsset(kindValue: string, objectKey: string) {
-    if (!(kindValue in KIND_DIRECTORIES) || !OBJECT_KEY_PATTERN.test(objectKey)) return undefined;
+    const path = this.resolveAssetPath(kindValue, objectKey);
+    if (!path) return undefined;
 
-    const kind = kindValue as MediaAssetKind;
-    const path = join(this.root, KIND_DIRECTORIES[kind], objectKey);
     const file = await stat(path).catch(() => undefined);
     if (!file?.isFile()) return undefined;
 
@@ -113,5 +116,45 @@ export class MediaAssetStore implements OnModuleInit {
       byteSize: file.size,
       etag: `"${objectKey.slice(0, 64)}"`,
     };
+  }
+
+  async listStoredAssets(): Promise<StoredMediaAssetFile[]> {
+    const assets: StoredMediaAssetFile[] = [];
+    for (const kind of Object.keys(KIND_DIRECTORIES) as MediaAssetKind[]) {
+      const directory = join(this.root, KIND_DIRECTORIES[kind]);
+      const entries = await readdir(directory, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isFile() || !OBJECT_KEY_PATTERN.test(entry.name)) continue;
+        const path = this.resolveAssetPath(kind, entry.name);
+        if (!path) continue;
+        const file = await stat(path);
+        assets.push({ kind, objectKey: entry.name, modifiedAt: file.mtime });
+      }
+    }
+    return assets;
+  }
+
+  async delete(kind: MediaAssetKind, objectKey: string): Promise<boolean> {
+    const path = this.resolveAssetPath(kind, objectKey);
+    if (!path) throw new Error('Media asset cleanup target is outside the configured root');
+
+    try {
+      await unlink(path);
+      return true;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
+      throw error;
+    }
+  }
+
+  private resolveAssetPath(kindValue: string, objectKey: string): string | undefined {
+    if (!(kindValue in KIND_DIRECTORIES) || !OBJECT_KEY_PATTERN.test(objectKey)) return undefined;
+
+    const kind = kindValue as MediaAssetKind;
+    const path = resolve(this.root, KIND_DIRECTORIES[kind], objectKey);
+    const pathFromRoot = relative(this.root, path);
+    if (!pathFromRoot || pathFromRoot.startsWith('..') || isAbsolute(pathFromRoot))
+      return undefined;
+    return path;
   }
 }
