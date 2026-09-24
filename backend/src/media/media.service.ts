@@ -32,6 +32,7 @@ import { normalizeMediaGenres } from './media-genres';
 import { selectMediaDescription, selectMediaShortDescription } from './media-descriptions';
 import { AppLogger } from '../platform/logging/app-logger';
 import { buildAnimeSeasonChain, type AnimeSeasonChainEntry } from './anime-season-chain';
+import { providerDiagnostics, withProviderCounts } from './media-provider-diagnostics';
 
 export const MEDIA_ENGINE = Symbol('MEDIA_ENGINE');
 
@@ -301,6 +302,7 @@ export class MediaService {
     snapshots: AsyncIterable<MediaAvailabilityProgressSnapshot>,
     episodeSelection: MediaSourceEpisodeRefDto,
   ): AsyncGenerator<MediaAvailabilityProgressDto> {
+    const startedAt = performance.now();
     try {
       for await (const snapshot of snapshots) {
         const availability = snapshot.availability
@@ -310,12 +312,22 @@ export class MediaService {
             )
           : null;
 
+        if (snapshot.state === 'complete' && snapshot.availability?.meta) {
+          this.logProviderDiagnostics(
+            'availability',
+            snapshot.availability.meta,
+            undefined,
+            snapshot.availability,
+          );
+        }
+
         yield {
           availability,
           state: snapshot.state,
         };
       }
     } catch (error) {
+      this.logProviderFailure(error, 'availability', performance.now() - startedAt);
       this.throwMediaEngineError(error);
     }
   }
@@ -570,7 +582,7 @@ export class MediaService {
     const startedAt = performance.now();
 
     try {
-      const result = await execute();
+      const { result, counts } = await withProviderCounts(execute);
 
       this.logMediaEnginePerformance(
         operation,
@@ -579,6 +591,7 @@ export class MediaService {
         performance.now() - startedAt,
         result.meta,
       );
+      if (result.meta) this.logProviderDiagnostics(operation, result.meta, counts, result);
 
       return result;
     } catch (error) {
@@ -588,8 +601,84 @@ export class MediaService {
         queueWaitMs,
         performance.now() - startedAt,
       );
+      this.logProviderFailure(error, operation, performance.now() - startedAt);
       this.throwMediaEngineError(error);
     }
+  }
+
+  private logProviderDiagnostics(
+    operation: 'search' | 'details' | 'availability' | 'related',
+    meta: ResponseMeta,
+    counts?: ReadonlyMap<string, number>,
+    response?: unknown,
+  ): void {
+    if (!this.logger) return;
+    const accepted = new Map<string, number>();
+    if (
+      operation === 'availability' &&
+      response &&
+      typeof response === 'object' &&
+      'options' in response
+    ) {
+      const mapped = mapMediaAvailability(response as Parameters<typeof mapMediaAvailability>[0]);
+      for (const source of [
+        ...mapped.sources,
+        ...mapped.episodes.flatMap((episode) => episode.sources),
+      ]) {
+        accepted.set(source.provider, (accepted.get(source.provider) ?? 0) + 1);
+      }
+    }
+    for (const diagnostic of providerDiagnostics(operation, meta, counts, accepted)) {
+      this.logger.logProviderDiagnostic({ event: 'media.provider_diagnostic', ...diagnostic });
+    }
+  }
+
+  private logProviderFailure(
+    error: unknown,
+    operation: 'search' | 'details' | 'availability' | 'related',
+    durationMs: number,
+  ): void {
+    if (
+      !(error instanceof Error) ||
+      !('cause' in error) ||
+      !error.cause ||
+      typeof error.cause !== 'object' ||
+      !('failed' in error.cause) ||
+      !Array.isArray(error.cause.failed)
+    )
+      return;
+    const failures: unknown[] = error.cause.failed;
+    const failed = failures.filter(
+      (item): item is { provider: string; code: string } =>
+        item !== null &&
+        typeof item === 'object' &&
+        'provider' in item &&
+        typeof item.provider === 'string' &&
+        'code' in item &&
+        typeof item.code === 'string',
+    );
+    this.logProviderDiagnostics(operation, {
+      providers: {
+        requested: failed.map((item) => item.provider),
+        successful: [],
+        failed: failed.map((item) => ({
+          provider: item.provider,
+          code: item.code,
+          retryable: false,
+          message: '',
+        })),
+      },
+      cached: false,
+      tookMs: 0,
+      debug: {
+        providers: failed.map((item) => item.provider),
+        timings: failed.map((item) => ({
+          provider: item.provider,
+          status: 'failed',
+          tookMs: durationMs,
+        })),
+      },
+    });
   }
 
   private logMediaEnginePerformance(

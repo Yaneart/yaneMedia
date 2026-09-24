@@ -13,6 +13,7 @@ import { MediaAssetDownloader } from './assets/media-asset-downloader';
 import { MediaAssetStore } from './assets/media-asset-store';
 import { MediaAssetsController } from './assets/media-assets.controller';
 import { MediaAssetCleanupService } from './assets/media-asset-cleanup.service';
+import { countProviderResults } from './media-provider-diagnostics';
 
 const MEDIA_ENGINE_PROVIDER_TIMEOUT_MS = 5_000;
 const MEDIA_ENGINE_CINEMETA_TIMEOUT_MS = 15_000;
@@ -47,6 +48,7 @@ async function createMediaEngine() {
   ] = await Promise.all([import('@media-engine/core'), import('@media-engine/providers')]);
 
   return new MediaEngine({
+    debug: true,
     timeoutMs: MEDIA_ENGINE_TIMEOUT_MS,
     circuitBreaker: {
       recoveryTimeoutMs: MEDIA_ENGINE_CIRCUIT_RECOVERY_TIMEOUT_MS,
@@ -76,7 +78,7 @@ async function createMediaEngine() {
       shikimoriProvider(),
       aniListProvider(),
       tvMazeProvider(),
-    ],
+    ].map(countProviderResults),
     streamingProviders: [
       kinobdStreamingProvider({ playerValidationLimit: 0 }),
       ddbbStreamingProvider(),

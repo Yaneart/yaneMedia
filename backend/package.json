@@ -22,6 +22,7 @@
     "db:check": "drizzle-kit check",
     "db:studio": "drizzle-kit studio",
     "probe:discovery": "node scripts/probe-discovery.mjs",
+    "probe:media-providers": "node scripts/probe-media-providers.mjs",
     "catalog:sync": "node dist/scripts/sync-editorial-catalog.js",
     "catalog:assets:cleanup": "node dist/scripts/cleanup-editorial-assets.js"
   },

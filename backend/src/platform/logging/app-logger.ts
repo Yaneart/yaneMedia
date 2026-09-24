@@ -1,4 +1,5 @@
 import { ConsoleLogger, Injectable } from '@nestjs/common';
+import type { ProviderDiagnostic } from '../../media/media-provider-diagnostics';
 
 export interface DiscoveryHttpPerformanceEvent {
   event: 'discovery.http';
@@ -49,11 +50,17 @@ export type PerformanceEvent =
   | DiscoveryCatalogReadPerformanceEvent
   | DiscoveryMediaEnginePerformanceEvent;
 
+export type ProviderDiagnosticEvent = ProviderDiagnostic & { event: 'media.provider_diagnostic' };
+
 @Injectable()
 export class AppLogger {
   private readonly logger = new ConsoleLogger({ json: true });
 
   logPerformance(event: PerformanceEvent): void {
+    this.logger.log(event);
+  }
+
+  logProviderDiagnostic(event: ProviderDiagnosticEvent): void {
     this.logger.log(event);
   }
 
