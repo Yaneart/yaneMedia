@@ -2,6 +2,7 @@ import type { MediaEngine } from '@media-engine/core';
 import { ServiceUnavailableException } from '@nestjs/common';
 import type { MediaAvailabilityProgressDto } from '../../src/media/dto/media-availability.dto';
 import { MediaService } from '../../src/media/media.service';
+import type { EditorialCatalogRepository } from '../../src/media/catalog/editorial-catalog.repository';
 
 describe('MediaService', () => {
   const createProviderFailure = () =>
@@ -18,6 +19,138 @@ describe('MediaService', () => {
 
     await expect(invoke(service)).rejects.toBeInstanceOf(ServiceUnavailableException);
   };
+
+  const publishedItem = (overrides: Record<string, unknown> = {}) => ({
+    mediaRef: 'imdb:tt2788316',
+    type: 'series',
+    title: 'Сёгун',
+    originalTitle: 'Shōgun',
+    year: 2024,
+    shortDescription: 'Исторический сериал.',
+    genres: ['Драма'],
+    rating: 8.5,
+    posterObjectKey: 'shogun-poster',
+    backdropObjectKey: 'shogun-backdrop',
+    ...overrides,
+  });
+
+  const withCatalog = (engine: Partial<MediaEngine>, item = publishedItem()) =>
+    new MediaService(engine as MediaEngine, undefined, {
+      findPublishedItems: jest.fn().mockResolvedValue([item]),
+    } as unknown as EditorialCatalogRepository);
+
+  it('keeps published Shōgun identity and excludes conflicting movie metadata', async () => {
+    const getDetails = jest.fn().mockResolvedValue({
+      details: {
+        type: 'movie',
+        title: 'Who Killed Cock Robin?',
+        year: 2005,
+        description: 'Description of an unrelated movie.',
+        ids: { imdb: 'tt2788316', kinopoisk: 'wrong-id' },
+      },
+      meta: { providers: { requested: [], successful: [], failed: [] } },
+    });
+    const getAvailability = jest.fn().mockResolvedValue({
+      query: { type: 'series' },
+      options: [],
+      sourceProviders: [],
+      checkedAt: '2026-09-24T00:00:00.000Z',
+    });
+    const service = withCatalog({ getDetails, getAvailability });
+
+    const result = await service.getDetailsByRef('imdb:tt2788316');
+    expect(result.details).toMatchObject({
+      mediaRef: 'imdb:tt2788316',
+      type: 'series',
+      title: 'Сёгун',
+      year: 2024,
+      seasons: [],
+      description: 'Исторический сериал.',
+    });
+    expect(JSON.stringify(result.details)).not.toMatch(
+      /Who Killed Cock Robin|unrelated movie|wrong-id/,
+    );
+    await service.getAvailabilityByRef('imdb:tt2788316');
+
+    expect(getDetails).toHaveBeenCalledWith({
+      ids: { imdb: 'tt2788316' },
+      type: 'series',
+      language: 'ru',
+    });
+    expect(getAvailability).toHaveBeenCalledWith(
+      { type: 'series', ids: { imdb: 'tt2788316' }, title: 'Shōgun', year: 2024 },
+      { playbackUserAgent: undefined },
+    );
+  });
+
+  it('enriches matching details while preserving the published title and year', async () => {
+    const getDetails = jest.fn().mockResolvedValue({
+      details: {
+        type: 'series',
+        title: 'Shōgun',
+        year: 2024,
+        description: 'Dynamic series description.',
+        seasons: [{ number: 1, episodes: [] }],
+        ids: { imdb: 'tt2788316' },
+      },
+      meta: { providers: { requested: [], successful: [], failed: [] } },
+    });
+    const result = await withCatalog({ getDetails }).getDetailsByRef('imdb:tt2788316');
+
+    expect(result.details).toMatchObject({
+      type: 'series',
+      title: 'Сёгун',
+      year: 2024,
+      description: 'Dynamic series description.',
+      seasons: [{ number: 1 }],
+    });
+  });
+
+  it('rejects dynamic details with a conflicting year even when the type matches', async () => {
+    const getDetails = jest.fn().mockResolvedValue({
+      details: {
+        type: 'series',
+        title: 'Unrelated series',
+        year: 2005,
+        description: 'Wrong story.',
+        ids: { imdb: 'tt2788316' },
+      },
+      meta: { providers: { requested: [], successful: [], failed: [] } },
+    });
+
+    const result = await withCatalog({ getDetails }).getDetailsByRef('imdb:tt2788316');
+
+    expect(result.details).toMatchObject({ type: 'series', title: 'Сёгун', year: 2024 });
+    expect(JSON.stringify(result.details)).not.toMatch(/Unrelated series|Wrong story/);
+  });
+
+  it('keeps a published card when metadata providers find no details', async () => {
+    const getDetails = jest.fn().mockResolvedValue({
+      details: null,
+      meta: { providers: { requested: [], successful: [], failed: [] } },
+    });
+
+    const result = await withCatalog({ getDetails }).getDetailsByRef('imdb:tt2788316');
+
+    expect(result.details).toMatchObject({ type: 'series', title: 'Сёгун', year: 2024 });
+  });
+
+  it('uses published identity for availability when metadata is empty', async () => {
+    const getDetails = jest.fn().mockResolvedValue({ details: null });
+    const getAvailability = jest.fn().mockResolvedValue({
+      query: { type: 'series' },
+      options: [],
+      sourceProviders: [],
+      checkedAt: '2026-09-24T00:00:00.000Z',
+    });
+
+    await withCatalog({ getDetails, getAvailability }).getAvailabilityByRef('imdb:tt2788316');
+
+    expect(getAvailability).toHaveBeenCalledWith(
+      { type: 'series', ids: { imdb: 'tt2788316' }, title: 'Shōgun', year: 2024 },
+      { playbackUserAgent: undefined },
+    );
+  });
 
   it('uses an anime-native reference for anime search results', async () => {
     const search = jest.fn().mockResolvedValue({

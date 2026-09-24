@@ -33,6 +33,7 @@ import { selectMediaDescription, selectMediaShortDescription } from './media-des
 import { AppLogger } from '../platform/logging/app-logger';
 import { buildAnimeSeasonChain, type AnimeSeasonChainEntry } from './anime-season-chain';
 import { providerDiagnostics, withProviderCounts } from './media-provider-diagnostics';
+import { EditorialCatalogRepository } from './catalog/editorial-catalog.repository';
 
 export const MEDIA_ENGINE = Symbol('MEDIA_ENGINE');
 
@@ -54,6 +55,8 @@ interface AvailabilityRequest {
   playbackUserAgent?: string;
   signal?: AbortSignal;
 }
+
+type PublishedItem = Awaited<ReturnType<EditorialCatalogRepository['findPublishedItems']>>[number];
 
 export type MediaSearchOptions = Pick<
   SearchQuery,
@@ -77,6 +80,7 @@ export class MediaService {
   constructor(
     @Inject(MEDIA_ENGINE) private readonly mediaEngine: MediaEngine,
     private readonly logger?: AppLogger,
+    private readonly catalogRepository?: EditorialCatalogRepository,
   ) {}
 
   async searchMedia(options: MediaSearchOptions): Promise<MediaSummaryDto[]> {
@@ -114,21 +118,35 @@ export class MediaService {
     animeSeasonChain?: Array<AnimeSeasonChainEntry & { number: number }>;
   }> {
     const ids = this.resolveMediaRefOrThrow(mediaRef);
+    const catalogItem = await this.getPublishedItem(mediaRef);
 
     const response = await this.runMediaEngine(
       'details',
-      () => this.mediaEngine.getDetails({ ids, language: 'ru' }),
+      () =>
+        this.mediaEngine.getDetails({
+          ids,
+          ...(catalogItem ? { type: catalogItem.type } : {}),
+          language: 'ru',
+        }),
       queueWaitMs,
     );
 
-    if (!response.details) {
+    if (!response.details && !catalogItem) {
       return { details: null, meta: response.meta };
     }
 
-    const animeSeasonChain = await this.getAnimeSeasonChain(mediaRef, response.details, ids);
+    const trustedDetails =
+      response.details && this.matchesCatalogIdentity(response.details, catalogItem)
+        ? response.details
+        : undefined;
+    const animeSeasonChain = trustedDetails
+      ? await this.getAnimeSeasonChain(mediaRef, trustedDetails, ids)
+      : [];
 
     return {
-      details: this.toMediaDetails(mediaRef, response.details),
+      details: trustedDetails
+        ? this.applyCatalogIdentity(this.toMediaDetails(mediaRef, trustedDetails), catalogItem)
+        : this.toCatalogDetails(catalogItem!),
       meta: response.meta,
       ...(animeSeasonChain.length > 1
         ? {
@@ -266,29 +284,34 @@ export class MediaService {
     signal?: AbortSignal,
   ): Promise<AvailabilityRequest | null> {
     const ids = this.resolveMediaRefOrThrow(mediaRef);
+    const catalogItem = await this.getPublishedItem(mediaRef);
     const { details } = await this.runMediaEngine('details', () =>
       signal
-        ? this.mediaEngine.getDetails({ ids }, { signal })
-        : this.mediaEngine.getDetails({ ids }),
+        ? this.mediaEngine.getDetails(
+            { ids, ...(catalogItem ? { type: catalogItem.type } : {}) },
+            { signal },
+          )
+        : this.mediaEngine.getDetails({ ids, ...(catalogItem ? { type: catalogItem.type } : {}) }),
     );
 
-    if (!details) {
+    if (!details && !catalogItem) {
       return null;
     }
 
-    const availabilityIds = await this.resolveAvailabilityIds(
-      details,
-      ids,
-      episodeSelection,
-      signal,
-    );
+    const trustedDetails =
+      details && this.matchesCatalogIdentity(details, catalogItem) ? details : undefined;
+    const availabilityIds = trustedDetails
+      ? await this.resolveAvailabilityIds(trustedDetails, ids, episodeSelection, signal)
+      : ids;
 
     return {
       query: {
-        type: details.type,
+        type: catalogItem?.type ?? details!.type,
         ids: availabilityIds,
-        title: details.originalTitle?.trim() || details.title,
-        year: details.year,
+        title: catalogItem
+          ? catalogItem.originalTitle?.trim() || catalogItem.title
+          : details!.originalTitle?.trim() || details!.title,
+        year: catalogItem?.year ?? details?.year ?? undefined,
         seasonNumber: episodeSelection.seasonNumber,
         episodeNumber: episodeSelection.episodeNumber,
         absoluteEpisodeNumber: episodeSelection.absoluteEpisodeNumber,
@@ -430,6 +453,54 @@ export class MediaService {
         return normalized ? [normalized] : [];
       }),
     );
+  }
+
+  private async getPublishedItem(mediaRef: string): Promise<PublishedItem | undefined> {
+    return (await this.catalogRepository?.findPublishedItems([mediaRef]))?.[0];
+  }
+
+  private matchesCatalogIdentity(details: MediaDetails, item?: PublishedItem): boolean {
+    return (
+      !item ||
+      (details.type === item.type &&
+        (item.year === null || details.year === undefined || details.year === item.year))
+    );
+  }
+
+  private applyCatalogIdentity(details: MediaDetailsDto, item?: PublishedItem): MediaDetailsDto {
+    if (!item) return details;
+    return {
+      ...details,
+      title: item.title,
+      originalTitle: item.originalTitle ?? details.originalTitle,
+      year: item.year ?? details.year,
+    };
+  }
+
+  private toCatalogDetails(item: PublishedItem): MediaDetailsDto {
+    const base = {
+      mediaRef: item.mediaRef,
+      title: item.title,
+      originalTitle: item.originalTitle ?? undefined,
+      year: item.year ?? undefined,
+      shortDescription: item.shortDescription ?? undefined,
+      description: item.shortDescription ?? undefined,
+      poster: item.posterObjectKey
+        ? { url: `/api/v1/media/assets/poster/${item.posterObjectKey}` }
+        : undefined,
+      backdrop: item.backdropObjectKey
+        ? { url: `/api/v1/media/assets/backdrop/${item.backdropObjectKey}` }
+        : undefined,
+      genres: item.genres,
+      rating: item.rating === null ? undefined : { value: item.rating, scale: 10 as const },
+      countries: [],
+      languages: [],
+      persons: [],
+    };
+
+    if (item.type === 'series') return { ...base, type: 'series', seasons: [] };
+    if (item.type === 'anime') return { ...base, type: 'anime', episodes: [] };
+    return { ...base, type: 'movie' };
   }
 
   private toMediaDetails(mediaRef: string, details: MediaDetails): MediaDetailsDto {
