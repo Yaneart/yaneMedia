@@ -14,6 +14,23 @@ import type { MediaService } from '../../../src/media/media.service';
 const manifest: EditorialCatalogManifest = {
   version: 7,
   source: 'sync-test',
+  identities: {
+    'imdb:tt0000001': {
+      mediaRefs: ['imdb:tt0000001'],
+      externalIds: { imdb: 'tt0000001' },
+      provenance: 'sync-test',
+    },
+    'imdb:tt0000002': {
+      mediaRefs: ['imdb:tt0000002'],
+      externalIds: { imdb: 'tt0000002' },
+      provenance: 'sync-test',
+    },
+    'anilist:1': {
+      mediaRefs: ['anilist:1', 'shikimori:1', 'myanimelist:1'],
+      externalIds: { aniList: '1', shikimori: '1', myAnimeList: '1' },
+      provenance: 'editorial-verified',
+    },
+  },
   featuredMediaRefs: ['imdb:tt0000001'],
   artworkOverrides: {},
   catalogs: {
@@ -87,6 +104,7 @@ function setup(options: {
   findReusableRevision?: jest.Mock;
   findAssetsBySourceUrls?: jest.Mock;
   findPublishedItemStates?: jest.Mock;
+  findPublishedArtwork?: jest.Mock;
 }) {
   const getSummaryByRef =
     options.getSummaryByRef ??
@@ -103,10 +121,12 @@ function setup(options: {
   const repository = {
     findReusableRevision: options.findReusableRevision ?? jest.fn().mockResolvedValue(undefined),
     findPublishedItemStates: options.findPublishedItemStates ?? jest.fn().mockResolvedValue([]),
+    findPublishedArtwork: options.findPublishedArtwork ?? jest.fn().mockResolvedValue([]),
     createStagingRevision: jest.fn().mockResolvedValue('revision-1'),
     findAssetsBySourceUrls: options.findAssetsBySourceUrls ?? jest.fn().mockResolvedValue([]),
     upsertAssets,
     upsertStagingItems: jest.fn().mockResolvedValue(undefined),
+    replaceStagingIdentities: jest.fn().mockResolvedValue(undefined),
     carryPublishedItemsAsInactive: jest.fn().mockResolvedValue(undefined),
     upsertStagingCollection: jest.fn().mockResolvedValue(undefined),
     publishRevision: jest.fn().mockResolvedValue(undefined),
@@ -158,6 +178,16 @@ describe('EditorialCatalogSyncService', () => {
         expect.objectContaining({ mediaRef: 'imdb:tt0000001', status: 'ready' }),
         expect.objectContaining({ mediaRef: 'imdb:tt0000002', status: 'ready' }),
         expect.objectContaining({ mediaRef: 'anilist:1', status: 'ready' }),
+      ]),
+    );
+    expect(repository.replaceStagingIdentities).toHaveBeenCalledWith(
+      'revision-1',
+      expect.arrayContaining([
+        expect.objectContaining({
+          mediaRef: 'anilist:1',
+          externalMediaRefs: ['anilist:1', 'shikimori:1', 'myanimelist:1'],
+          provenance: 'editorial-verified',
+        }),
       ]),
     );
     expect(repository.upsertStagingCollection).toHaveBeenCalledTimes(5);
@@ -289,6 +319,28 @@ describe('EditorialCatalogSyncService', () => {
       'backdrop',
       'https://images.example/series/backdrop-override.jpg',
     );
+  });
+
+  it('reuses published artwork when a provider temporarily omits it', async () => {
+    const getSummaryByRef = jest.fn((mediaRef: string) => {
+      const resolved = summary(mediaRef);
+      if (mediaRef === 'imdb:tt0000002') delete resolved.backdrop;
+      return Promise.resolve({ summary: resolved, meta: {} });
+    });
+    const fallbackUrl = 'https://images.example/published-series-backdrop.jpg';
+    const { service, assetImport } = setup({
+      getSummaryByRef,
+      findPublishedArtwork: jest.fn().mockResolvedValue([
+        {
+          mediaRef: 'imdb:tt0000002',
+          posterSourceUrl: null,
+          backdropSourceUrl: fallbackUrl,
+        },
+      ]),
+    });
+
+    await expect(service.sync(manifest, noRetry)).resolves.toMatchObject({ items: 3 });
+    expect(assetImport).toHaveBeenCalledWith('backdrop', fallbackUrl);
   });
 
   it('rejects a low-resolution backdrop before publishing the revision', async () => {

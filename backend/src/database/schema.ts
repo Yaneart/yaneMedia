@@ -12,6 +12,7 @@ export {
   mediaAssetKind,
   mediaAssets,
   mediaCatalogItemStatus,
+  mediaCatalogIdentities,
   mediaCatalogItems,
   mediaCollectionItems,
   mediaCollectionScope,

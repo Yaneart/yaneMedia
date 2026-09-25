@@ -2,10 +2,11 @@ import { Injectable } from '@nestjs/common';
 import { and, asc, desc, eq, inArray, isNull, lte, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import { DatabaseService } from '../../database/database.service';
-import type { MediaRefType } from '../media-ref';
+import { resolveMediaRefs, type MediaExternalIds, type MediaRefType } from '../media-ref';
 import {
   catalogRevisions,
   mediaAssets,
+  mediaCatalogIdentities,
   mediaCatalogItems,
   mediaCollectionItems,
   mediaCollections,
@@ -48,6 +49,18 @@ export type StagingCollection = Omit<
 export interface StagingCollectionItem {
   mediaRef: string;
   position: number;
+}
+
+export interface StagingCatalogIdentity {
+  mediaRef: string;
+  externalMediaRefs: readonly string[];
+  provenance: string;
+}
+
+export interface PublishedCatalogIdentity {
+  mediaRef: string;
+  externalIds: MediaExternalIds;
+  provenance: string[];
 }
 
 export interface CatalogAssetCleanupCandidate {
@@ -93,6 +106,27 @@ export class EditorialCatalogRepository {
       .from(mediaCatalogItems)
       .innerJoin(catalogRevisions, eq(catalogRevisions.id, mediaCatalogItems.revisionId))
       .where(eq(catalogRevisions.status, 'published'));
+  }
+
+  async findPublishedArtwork(mediaRefs: readonly string[]) {
+    if (mediaRefs.length === 0) return [];
+
+    return await this.databaseService.db
+      .select({
+        mediaRef: mediaCatalogItems.mediaRef,
+        posterSourceUrl: posterAssets.sourceUrl,
+        backdropSourceUrl: backdropAssets.sourceUrl,
+      })
+      .from(mediaCatalogItems)
+      .innerJoin(catalogRevisions, eq(catalogRevisions.id, mediaCatalogItems.revisionId))
+      .leftJoin(posterAssets, eq(posterAssets.id, mediaCatalogItems.posterAssetId))
+      .leftJoin(backdropAssets, eq(backdropAssets.id, mediaCatalogItems.backdropAssetId))
+      .where(
+        and(
+          eq(catalogRevisions.status, 'published'),
+          inArray(mediaCatalogItems.mediaRef, [...new Set(mediaRefs)]),
+        ),
+      );
   }
 
   async findAssetsBySourceUrls(
@@ -193,6 +227,35 @@ export class EditorialCatalogRepository {
     });
   }
 
+  async replaceStagingIdentities(
+    revisionId: string,
+    identities: readonly StagingCatalogIdentity[],
+  ): Promise<void> {
+    await this.databaseService.db.transaction(async (transaction) => {
+      const [revision] = await transaction
+        .select({ status: catalogRevisions.status })
+        .from(catalogRevisions)
+        .where(eq(catalogRevisions.id, revisionId))
+        .for('update');
+
+      if (revision?.status !== 'staging') throw new Error('Catalog revision is not staging');
+
+      await transaction
+        .delete(mediaCatalogIdentities)
+        .where(eq(mediaCatalogIdentities.revisionId, revisionId));
+
+      const rows = identities.flatMap((identity) =>
+        identity.externalMediaRefs.map((externalMediaRef) => ({
+          revisionId,
+          mediaRef: identity.mediaRef,
+          externalMediaRef,
+          provenance: identity.provenance,
+        })),
+      );
+      if (rows.length > 0) await transaction.insert(mediaCatalogIdentities).values(rows);
+    });
+  }
+
   async carryPublishedItemsAsInactive(
     revisionId: string,
     activeMediaRefs: readonly string[],
@@ -230,6 +293,19 @@ export class EditorialCatalogRepository {
         where revision.status = 'published'
           ${activeFilter}
         on conflict (revision_id, media_ref) do nothing
+      `);
+      await transaction.execute(sql`
+        insert into ${mediaCatalogIdentities} (
+          revision_id, media_ref, external_media_ref, provenance
+        )
+        select
+          ${revisionId}, identity.media_ref, identity.external_media_ref, identity.provenance
+        from ${mediaCatalogIdentities} identity
+        inner join ${catalogRevisions} revision on revision.id = identity.revision_id
+        inner join ${mediaCatalogItems} item
+          on item.revision_id = ${revisionId} and item.media_ref = identity.media_ref
+        where revision.status = 'published'
+        on conflict (revision_id, external_media_ref) do nothing
       `);
     });
   }
@@ -354,11 +430,25 @@ export class EditorialCatalogRepository {
   }
 
   async findPublishedItems(mediaRefs: readonly string[]) {
+    return (await this.findPublishedItemMatches(mediaRefs)).map(({ item }) => item);
+  }
+
+  async findPublishedItemMatches(mediaRefs: readonly string[]) {
     if (mediaRefs.length === 0) return [];
 
     const rows = await this.databaseService.db
-      .select(publishedItemSelection)
-      .from(mediaCatalogItems)
+      .select({
+        ...publishedItemSelection,
+        requestedMediaRef: mediaCatalogIdentities.externalMediaRef,
+      })
+      .from(mediaCatalogIdentities)
+      .innerJoin(
+        mediaCatalogItems,
+        and(
+          eq(mediaCatalogItems.revisionId, mediaCatalogIdentities.revisionId),
+          eq(mediaCatalogItems.mediaRef, mediaCatalogIdentities.mediaRef),
+        ),
+      )
       .innerJoin(catalogRevisions, eq(catalogRevisions.id, mediaCatalogItems.revisionId))
       .leftJoin(posterAssets, eq(posterAssets.id, mediaCatalogItems.posterAssetId))
       .leftJoin(backdropAssets, eq(backdropAssets.id, mediaCatalogItems.backdropAssetId))
@@ -366,15 +456,56 @@ export class EditorialCatalogRepository {
         and(
           eq(catalogRevisions.status, 'published'),
           eq(mediaCatalogItems.status, 'ready'),
-          inArray(mediaCatalogItems.mediaRef, [...new Set(mediaRefs)]),
+          inArray(mediaCatalogIdentities.externalMediaRef, [...new Set(mediaRefs)]),
         ),
       );
-    const rowsByMediaRef = new Map(rows.map((row) => [row.mediaRef, row]));
+    const rowsByMediaRef = new Map(rows.map((row) => [row.requestedMediaRef, row]));
 
     return mediaRefs.flatMap((mediaRef) => {
       const row = rowsByMediaRef.get(mediaRef);
-      return row ? [row] : [];
+      if (!row) return [];
+      const { requestedMediaRef: _, ...item } = row;
+      return [{ requestedMediaRef: mediaRef, item }];
     });
+  }
+
+  async findPublishedIdentity(mediaRef: string): Promise<PublishedCatalogIdentity | undefined> {
+    const [match] = await this.databaseService.db
+      .select({
+        revisionId: mediaCatalogIdentities.revisionId,
+        mediaRef: mediaCatalogIdentities.mediaRef,
+      })
+      .from(mediaCatalogIdentities)
+      .innerJoin(catalogRevisions, eq(catalogRevisions.id, mediaCatalogIdentities.revisionId))
+      .where(
+        and(
+          eq(catalogRevisions.status, 'published'),
+          eq(mediaCatalogIdentities.externalMediaRef, mediaRef),
+        ),
+      )
+      .limit(1);
+    if (!match) return undefined;
+
+    const rows = await this.databaseService.db
+      .select({
+        externalMediaRef: mediaCatalogIdentities.externalMediaRef,
+        provenance: mediaCatalogIdentities.provenance,
+      })
+      .from(mediaCatalogIdentities)
+      .where(
+        and(
+          eq(mediaCatalogIdentities.revisionId, match.revisionId),
+          eq(mediaCatalogIdentities.mediaRef, match.mediaRef),
+        ),
+      );
+    const externalIds = resolveMediaRefs(rows.map(({ externalMediaRef }) => externalMediaRef));
+    if (!externalIds) throw new Error(`Stored catalog identity is invalid for ${match.mediaRef}`);
+
+    return {
+      mediaRef: match.mediaRef,
+      externalIds,
+      provenance: [...new Set(rows.map(({ provenance }) => provenance))],
+    };
   }
 
   async findPublishedCollectionItems(options: {

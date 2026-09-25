@@ -173,9 +173,12 @@ export class MediaCatalogService {
   }
 
   private async resolveRequestedRefs(mediaRefs: readonly string[]): Promise<SummaryResolution[]> {
-    const publishedRows = await this.repository.findPublishedItems(mediaRefs);
+    const publishedMatches = await this.repository.findPublishedItemMatches(mediaRefs);
     const publishedByRef = new Map(
-      publishedRows.map((row) => [row.mediaRef, this.toMediaSummary(row)]),
+      publishedMatches.map(({ requestedMediaRef, item }) => [
+        requestedMediaRef,
+        this.toMediaSummary(item),
+      ]),
     );
     const missingRefs = [...new Set(mediaRefs.filter((mediaRef) => !publishedByRef.has(mediaRef)))];
     const fallbackResolutions = await this.resolveFallbacks(missingRefs);

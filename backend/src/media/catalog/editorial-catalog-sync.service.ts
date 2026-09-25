@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { MediaSummaryDto } from '../dto/media-summary.dto';
-import type { MediaRefType } from '../media-ref';
+import type { MediaExternalIds, MediaRefType } from '../media-ref';
 import { MediaService } from '../media.service';
 import {
   MediaAssetStore,
@@ -48,11 +48,19 @@ export interface EditorialCatalogSyncReport {
 interface ManifestItem {
   mediaRef: string;
   type: MediaRefType;
+  externalIds: MediaExternalIds;
+  externalMediaRefs: readonly string[];
+  provenance: string;
   artworkOverride?: { posterUrl?: string; backdropUrl?: string };
 }
 
 interface ResolvedItem extends ManifestItem {
   summary: MediaSummaryDto;
+}
+
+interface PublishedArtwork {
+  posterSourceUrl: string | null;
+  backdropSourceUrl: string | null;
 }
 
 @Injectable()
@@ -106,8 +114,13 @@ export class EditorialCatalogSyncService {
       existingRevision?.id ?? (await this.repository.createStagingRevision(source));
     const concurrency = Math.max(1, Math.floor(options.concurrency ?? DEFAULT_CONCURRENCY));
     const retryDelaysMs = options.retryDelaysMs ?? DEFAULT_RETRY_DELAYS_MS;
+    const publishedArtwork = new Map(
+      (await this.repository.findPublishedArtwork(items.map(({ mediaRef }) => mediaRef))).map(
+        ({ mediaRef, ...artwork }) => [mediaRef, artwork],
+      ),
+    );
     const resolvedItems = await this.runBounded(items, concurrency, (item, queuedAt) =>
-      this.resolveMetadata(item, queuedAt, retryDelaysMs),
+      this.resolveMetadata(item, publishedArtwork.get(item.mediaRef), queuedAt, retryDelaysMs),
     );
     const assetRequests = this.toAssetRequests(resolvedItems);
     const existingAssets = await this.findUsableAssets(assetRequests);
@@ -138,6 +151,14 @@ export class EditorialCatalogSyncService {
     await this.repository.upsertStagingItems(
       revisionId,
       resolvedItems.map((item) => this.toStagingItem(item, assetsByRequest, assetIdByChecksum)),
+    );
+    await this.repository.replaceStagingIdentities(
+      revisionId,
+      items.map(({ mediaRef, externalMediaRefs, provenance }) => ({
+        mediaRef,
+        externalMediaRefs,
+        provenance,
+      })),
     );
     await this.repository.carryPublishedItemsAsInactive(
       revisionId,
@@ -181,6 +202,9 @@ export class EditorialCatalogSyncService {
         collection.mediaRefs.map((mediaRef) => ({
           mediaRef,
           type,
+          externalIds: manifest.identities[mediaRef].externalIds,
+          externalMediaRefs: manifest.identities[mediaRef].mediaRefs,
+          provenance: manifest.identities[mediaRef].provenance,
           artworkOverride: manifest.artworkOverrides[mediaRef],
         })),
       ),
@@ -190,6 +214,7 @@ export class EditorialCatalogSyncService {
 
   private resolveMetadata(
     item: ManifestItem,
+    publishedArtwork: PublishedArtwork | undefined,
     queuedAt: number,
     retryDelaysMs: readonly number[],
   ): Promise<ResolvedItem> {
@@ -200,19 +225,22 @@ export class EditorialCatalogSyncService {
       const { summary } = await this.mediaService.getSummaryByRef(
         item.mediaRef,
         performance.now() - queuedAt,
+        item.externalIds,
       );
       if (!summary) throw new Error(`No metadata found for ${item.mediaRef}`);
       if (summary.mediaRef !== item.mediaRef || summary.type !== item.type) {
         throw new Error(`Metadata identity mismatch for ${item.mediaRef}`);
       }
+      const posterUrl =
+        item.artworkOverride?.posterUrl ?? summary.poster?.url ?? publishedArtwork?.posterSourceUrl;
+      const backdropUrl =
+        item.artworkOverride?.backdropUrl ??
+        summary.backdrop?.url ??
+        publishedArtwork?.backdropSourceUrl;
       const resolvedSummary: MediaSummaryDto = {
         ...summary,
-        ...(item.artworkOverride?.posterUrl
-          ? { poster: { url: item.artworkOverride.posterUrl } }
-          : {}),
-        ...(item.artworkOverride?.backdropUrl
-          ? { backdrop: { url: item.artworkOverride.backdropUrl } }
-          : {}),
+        ...(posterUrl ? { poster: { url: posterUrl } } : {}),
+        ...(backdropUrl ? { backdrop: { url: backdropUrl } } : {}),
       };
       if (!resolvedSummary.title.trim() || resolvedSummary.title.length > 300) {
         throw new Error(`Invalid title for ${item.mediaRef}`);

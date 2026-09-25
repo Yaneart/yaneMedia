@@ -26,7 +26,7 @@ import {
   Injectable,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { createMediaRef, resolveMediaRefWithAliases } from './media-ref';
+import { createMediaRef, resolveMediaRef, type MediaExternalIds } from './media-ref';
 import { mapMediaAvailability, selectMediaAvailabilityEpisode } from './media-availability.mapper';
 import { normalizeMediaGenres } from './media-genres';
 import { selectMediaDescription, selectMediaShortDescription } from './media-descriptions';
@@ -117,7 +117,7 @@ export class MediaService {
     meta: DetailsResponse['meta'];
     animeSeasonChain?: Array<AnimeSeasonChainEntry & { number: number }>;
   }> {
-    const ids = this.resolveMediaRefOrThrow(mediaRef);
+    const ids = await this.resolveMediaRefOrThrow(mediaRef);
     const catalogItem = await this.getPublishedItem(mediaRef);
 
     const response = await this.runMediaEngine(
@@ -162,8 +162,9 @@ export class MediaService {
   async getSummaryByRef(
     mediaRef: string,
     queueWaitMs = 0,
+    externalIds?: MediaExternalIds,
   ): Promise<{ summary: MediaSummaryDto | null; meta: DetailsResponse['meta'] }> {
-    const ids = this.resolveMediaRefOrThrow(mediaRef);
+    const ids = await this.resolveMediaRefOrThrow(mediaRef, externalIds);
     const response = await this.runMediaEngine(
       'details',
       () => this.mediaEngine.getDetails({ ids, language: 'ru' }),
@@ -283,7 +284,7 @@ export class MediaService {
     episodeSelection: MediaSourceEpisodeRefDto,
     signal?: AbortSignal,
   ): Promise<AvailabilityRequest | null> {
-    const ids = this.resolveMediaRefOrThrow(mediaRef);
+    const ids = await this.resolveMediaRefOrThrow(mediaRef);
     const catalogItem = await this.getPublishedItem(mediaRef);
     const { details } = await this.runMediaEngine('details', () =>
       signal
@@ -635,8 +636,11 @@ export class MediaService {
     };
   }
 
-  private resolveMediaRefOrThrow(mediaRef: string) {
-    const ids = resolveMediaRefWithAliases(mediaRef);
+  private async resolveMediaRefOrThrow(mediaRef: string, providedIds?: MediaExternalIds) {
+    const identity = providedIds
+      ? undefined
+      : await this.catalogRepository?.findPublishedIdentity?.(mediaRef);
+    const ids = providedIds ?? identity?.externalIds ?? resolveMediaRef(mediaRef);
 
     if (!ids) {
       throw new BadRequestException('Invalid media reference');

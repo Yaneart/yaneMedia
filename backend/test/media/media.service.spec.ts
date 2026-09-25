@@ -39,6 +39,20 @@ describe('MediaService', () => {
       findPublishedItems: jest.fn().mockResolvedValue([item]),
     } as unknown as EditorialCatalogRepository);
 
+  const withAnimeIdentity = (engine: Partial<MediaEngine>) =>
+    new MediaService(engine as MediaEngine, undefined, {
+      findPublishedIdentity: jest.fn().mockResolvedValue({
+        mediaRef: 'anilist:154587',
+        externalIds: {
+          aniList: '154587',
+          shikimori: '52991',
+          myAnimeList: '52991',
+        },
+        provenance: ['editorial-verified'],
+      }),
+      findPublishedItems: jest.fn().mockResolvedValue([]),
+    } as unknown as EditorialCatalogRepository);
+
   it('keeps published Shōgun identity and excludes conflicting movie metadata', async () => {
     const getDetails = jest.fn().mockResolvedValue({
       details: {
@@ -253,7 +267,7 @@ describe('MediaService', () => {
       },
       meta: { failures: [] },
     });
-    const service = new MediaService({ getDetails } as unknown as MediaEngine);
+    const service = withAnimeIdentity({ getDetails });
 
     const response = await service.getDetailsByRef('anilist:154587');
 
@@ -667,7 +681,7 @@ describe('MediaService', () => {
       getAvailability,
       search,
     } as unknown as MediaEngine;
-    const service = new MediaService(mediaEngine);
+    const service = withAnimeIdentity(mediaEngine);
 
     const result = await service.getAvailabilityByRef('anilist:154587', 'browser-user-agent', {
       absoluteEpisodeNumber: 2,
@@ -723,7 +737,7 @@ describe('MediaService', () => {
       search: jest.fn().mockRejectedValue(createProviderFailure()),
       getAvailability,
     } as unknown as MediaEngine;
-    const service = new MediaService(mediaEngine);
+    const service = withAnimeIdentity(mediaEngine);
 
     await expect(
       service.getAvailabilityByRef('anilist:154587', 'browser-user-agent', {

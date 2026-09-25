@@ -1,10 +1,11 @@
 import {
   editorialCatalog,
   editorialCollectionIds,
+  editorialManifest,
   mediaCatalogCollectionDefinitions,
   parseEditorialCatalogManifest,
 } from '../../../src/media/catalog/editorial-catalog';
-import { resolveMediaRef, resolveMediaRefWithAliases } from '../../../src/media/media-ref';
+import { resolveMediaRef } from '../../../src/media/media-ref';
 
 describe('editorial catalog', () => {
   it('contains only stable configuration fields and valid unique media refs', () => {
@@ -69,10 +70,13 @@ describe('editorial catalog', () => {
     const animeEntries = editorialCatalog.filter(({ type }) => type === 'anime');
 
     for (const entry of animeEntries) {
-      const ids = resolveMediaRefWithAliases(entry.mediaRef);
+      const identity = editorialManifest.identities[entry.mediaRef];
+      const ids = identity.externalIds;
 
       expect(ids?.aniList).toBeDefined();
       expect(ids?.shikimori).toBeDefined();
+      expect(ids?.myAnimeList).toBeDefined();
+      expect(identity.provenance).toBe('editorial-verified');
     }
   });
 

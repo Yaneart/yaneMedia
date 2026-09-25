@@ -1,5 +1,11 @@
 import rawManifest from './editorial-catalog.manifest.json';
-import { createMediaRef, resolveMediaRef, type MediaRefType } from '../media-ref';
+import {
+  createMediaRef,
+  resolveMediaRef,
+  resolveMediaRefs,
+  type MediaExternalIds,
+  type MediaRefType,
+} from '../media-ref';
 
 export const editorialCollectionIds = ['featured', 'editorial-picks'] as const;
 export type EditorialCollectionId = (typeof editorialCollectionIds)[number];
@@ -24,10 +30,17 @@ export interface HomeCollectionManifest extends MediaCatalogCollectionDefinition
 export interface EditorialCatalogManifest {
   version: number;
   source: string;
+  identities: Readonly<Record<string, EditorialMediaIdentity>>;
   featuredMediaRefs: readonly string[];
   artworkOverrides: Readonly<Record<string, { posterUrl?: string; backdropUrl?: string }>>;
   catalogs: Record<MediaRefType, readonly MediaCatalogCollectionDefinition[]>;
   homeCollections: readonly HomeCollectionManifest[];
+}
+
+export interface EditorialMediaIdentity {
+  mediaRefs: readonly string[];
+  externalIds: MediaExternalIds;
+  provenance: string;
 }
 
 const mediaTypes = ['movie', 'series', 'anime'] as const;
@@ -129,6 +142,39 @@ export function parseEditorialCatalogManifest(value: unknown): EditorialCatalogM
     catalogs[type] = collections;
   }
 
+  const rawIdentities = readRecord(root.identities ?? {}, '$.identities');
+  const claimedAliases = new Map<string, string>();
+  const identities = Object.fromEntries(
+    [...knownRefs].map((mediaRef) => {
+      const path = `$.identities.${mediaRef}`;
+      const rawIdentity = rawIdentities[mediaRef];
+      const record = rawIdentity === undefined ? undefined : readRecord(rawIdentity, path);
+      const mediaRefs = record ? readMediaRefs(record.mediaRefs, `${path}.mediaRefs`) : [mediaRef];
+      if (!mediaRefs.includes(mediaRef)) fail(path, `must include canonical reference ${mediaRef}`);
+      const externalIds = resolveMediaRefs(mediaRefs);
+      if (!externalIds) fail(path, 'contains conflicting external identifiers');
+
+      for (const alias of mediaRefs) {
+        const owner = claimedAliases.get(alias);
+        if (owner && owner !== mediaRef) fail(path, `${alias} is already assigned to ${owner}`);
+        claimedAliases.set(alias, mediaRef);
+      }
+
+      return [
+        mediaRef,
+        {
+          mediaRefs,
+          externalIds,
+          provenance: record ? readString(record.provenance, `${path}.provenance`, 200) : source,
+        },
+      ];
+    }),
+  );
+  for (const mediaRef of Object.keys(rawIdentities)) {
+    if (!knownRefs.has(mediaRef))
+      fail('$.identities', `contains unknown media reference ${mediaRef}`);
+  }
+
   const featuredMediaRefs = readMediaRefs(root.featuredMediaRefs, '$.featuredMediaRefs', knownRefs);
   const rawArtworkOverrides = readRecord(root.artworkOverrides ?? {}, '$.artworkOverrides');
   const artworkOverrides = Object.fromEntries(
@@ -180,6 +226,7 @@ export function parseEditorialCatalogManifest(value: unknown): EditorialCatalogM
   return {
     version: root.version as number,
     source,
+    identities,
     featuredMediaRefs,
     artworkOverrides,
     catalogs,

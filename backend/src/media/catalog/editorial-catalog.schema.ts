@@ -115,6 +115,30 @@ export const mediaCatalogItems = pgTable(
   ],
 );
 
+export const mediaCatalogIdentities = pgTable(
+  'media_catalog_identities',
+  {
+    revisionId: uuid('revision_id').notNull(),
+    mediaRef: varchar('media_ref', { length: 64 }).notNull(),
+    externalMediaRef: varchar('external_media_ref', { length: 64 }).notNull(),
+    provenance: varchar('provenance', { length: 200 }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.revisionId, table.externalMediaRef] }),
+    index('media_catalog_identities_item_index').on(table.revisionId, table.mediaRef),
+    foreignKey({
+      columns: [table.revisionId, table.mediaRef],
+      foreignColumns: [mediaCatalogItems.revisionId, mediaCatalogItems.mediaRef],
+      name: 'media_catalog_identities_catalog_item_fk',
+    }).onDelete('cascade'),
+    check(
+      'media_catalog_identities_provenance_not_blank',
+      sql`length(btrim(${table.provenance})) > 0`,
+    ),
+  ],
+);
+
 export const mediaCollections = pgTable(
   'media_collections',
   {
@@ -179,5 +203,7 @@ export type MediaAsset = typeof mediaAssets.$inferSelect;
 export type NewMediaAsset = typeof mediaAssets.$inferInsert;
 export type MediaCatalogItem = typeof mediaCatalogItems.$inferSelect;
 export type NewMediaCatalogItem = typeof mediaCatalogItems.$inferInsert;
+export type MediaCatalogIdentity = typeof mediaCatalogIdentities.$inferSelect;
+export type NewMediaCatalogIdentity = typeof mediaCatalogIdentities.$inferInsert;
 export type MediaCollection = typeof mediaCollections.$inferSelect;
 export type NewMediaCollection = typeof mediaCollections.$inferInsert;

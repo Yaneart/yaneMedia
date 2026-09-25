@@ -10,9 +10,10 @@ describe('EditorialCatalogRepository', () => {
       { mediaRef: 'imdb:tt0000002', title: 'Second' },
       { mediaRef: 'imdb:tt0000001', title: 'First' },
     ];
+    const queryRows = rows.map((row) => ({ ...row, requestedMediaRef: row.mediaRef }));
     const where = jest.fn((value: SQL) => {
       condition = value;
-      return Promise.resolve(rows);
+      return Promise.resolve(queryRows);
     });
     const builder: Record<string, jest.Mock> = {};
     builder.innerJoin = jest.fn(() => builder);

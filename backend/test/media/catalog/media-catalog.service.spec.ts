@@ -49,12 +49,23 @@ describe('MediaCatalogService', () => {
 
   function createService(options?: {
     publishedItems?: ReturnType<typeof createRow>[];
+    publishedAliases?: Record<string, ReturnType<typeof createRow>>;
     collectionRows?: ReturnType<typeof createCollectionRow>[];
     collectionTotal?: number;
     getDetailsByRef?: jest.Mock;
   }) {
     const getDetailsByRef = options?.getDetailsByRef ?? jest.fn();
     const findPublishedItems = jest.fn().mockResolvedValue(options?.publishedItems ?? []);
+    const findPublishedItemMatches = jest.fn().mockImplementation((mediaRefs: string[]) =>
+      Promise.resolve(
+        mediaRefs.flatMap((requestedMediaRef) => {
+          const item =
+            options?.publishedAliases?.[requestedMediaRef] ??
+            (options?.publishedItems ?? []).find(({ mediaRef }) => mediaRef === requestedMediaRef);
+          return item ? [{ requestedMediaRef, item }] : [];
+        }),
+      ),
+    );
     const findPublishedCollectionItems = jest.fn().mockResolvedValue(options?.collectionRows ?? []);
     const countPublishedCollections = jest
       .fn()
@@ -64,6 +75,7 @@ describe('MediaCatalogService', () => {
       );
     const repository = {
       findPublishedItems,
+      findPublishedItemMatches,
       findPublishedCollectionItems,
       countPublishedCollections,
       countPublishedItems: jest.fn().mockResolvedValue(150),
@@ -231,6 +243,23 @@ describe('MediaCatalogService', () => {
     ]);
     expect(getDetailsByRef).toHaveBeenCalledTimes(1);
     expect(getDetailsByRef).toHaveBeenCalledWith('imdb:tt9999999');
+  });
+
+  it('resolves a stored alias to the canonical catalog item', async () => {
+    const canonical = createRow('anilist:154587', 'anime');
+    const getDetailsByRef = jest.fn();
+    const { service } = createService({
+      publishedAliases: { 'shikimori:52991': canonical },
+      getDetailsByRef,
+    });
+
+    await expect(service.resolveMediaRefs(['shikimori:52991'])).resolves.toEqual(
+      expect.objectContaining({
+        items: [expect.objectContaining({ mediaRef: 'anilist:154587' })],
+        partial: false,
+      }),
+    );
+    expect(getDetailsByRef).not.toHaveBeenCalled();
   });
 
   it('reuses one fallback request for simultaneous unknown summary resolutions', async () => {

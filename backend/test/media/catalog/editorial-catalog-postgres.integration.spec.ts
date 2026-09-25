@@ -108,6 +108,18 @@ describePostgres('editorial catalog with PostgreSQL', () => {
         active: true,
       },
     ]);
+    await repository.replaceStagingIdentities(firstRevision, [
+      {
+        mediaRef: 'imdb:tt0000002',
+        externalMediaRefs: ['imdb:tt0000002', 'kinopoisk:2000002'],
+        provenance: 'integration-test',
+      },
+      {
+        mediaRef: 'imdb:tt0000001',
+        externalMediaRefs: ['imdb:tt0000001'],
+        provenance: 'integration-test',
+      },
+    ]);
     await repository.upsertStagingCollection(
       firstRevision,
       {
@@ -126,11 +138,16 @@ describePostgres('editorial catalog with PostgreSQL', () => {
     await repository.publishRevision(firstRevision);
 
     await expect(
-      repository.findPublishedItems(['imdb:tt0000002', 'imdb:tt9999999', 'imdb:tt0000001']),
+      repository.findPublishedItems(['kinopoisk:2000002', 'imdb:tt9999999', 'imdb:tt0000001']),
     ).resolves.toEqual([
       expect.objectContaining({ mediaRef: 'imdb:tt0000002', title: 'Second' }),
       expect.objectContaining({ mediaRef: 'imdb:tt0000001', title: 'First' }),
     ]);
+    await expect(repository.findPublishedIdentity('kinopoisk:2000002')).resolves.toEqual({
+      mediaRef: 'imdb:tt0000002',
+      externalIds: { imdb: 'tt0000002', kinopoisk: '2000002' },
+      provenance: ['integration-test'],
+    });
     await expect(
       repository.findPublishedCollectionItems({ scope: 'catalog', type: 'movie' }),
     ).resolves.toEqual([
@@ -148,6 +165,13 @@ describePostgres('editorial catalog with PostgreSQL', () => {
         genres: ['Comedy'],
         status: 'ready',
         active: true,
+      },
+    ]);
+    await repository.replaceStagingIdentities(secondRevision, [
+      {
+        mediaRef: 'imdb:tt0000003',
+        externalMediaRefs: ['imdb:tt0000003'],
+        provenance: 'integration-test',
       },
     ]);
     await repository.carryPublishedItemsAsInactive(secondRevision, ['imdb:tt0000003']);
