@@ -27,8 +27,8 @@
     "catalog:assets:cleanup": "node dist/scripts/cleanup-editorial-assets.js"
   },
   "dependencies": {
-    "@media-engine/core": "1.8.1",
-    "@media-engine/providers": "1.8.1",
+    "@media-engine/core": "1.9.0",
+    "@media-engine/providers": "1.9.0",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.4",
     "@nestjs/core": "^11.0.1",
@@ -73,7 +73,7 @@
     "typescript-eslint": "^8.20.0"
   },
   "overrides": {
-    "@media-engine/core": "1.8.1"
+    "@media-engine/core": "1.9.0"
   },
   "jest": {
     "moduleFileExtensions": [
