@@ -111,13 +111,14 @@ describePostgres('editorial catalog with PostgreSQL', () => {
     await repository.replaceStagingIdentities(firstRevision, [
       {
         mediaRef: 'imdb:tt0000002',
-        externalMediaRefs: ['imdb:tt0000002', 'kinopoisk:2000002'],
-        provenance: 'integration-test',
+        identities: ['imdb:tt0000002', 'kinopoisk:2000002'].map((mediaRef) => ({
+          mediaRef,
+          provenance: 'integration-test',
+        })),
       },
       {
         mediaRef: 'imdb:tt0000001',
-        externalMediaRefs: ['imdb:tt0000001'],
-        provenance: 'integration-test',
+        identities: [{ mediaRef: 'imdb:tt0000001', provenance: 'integration-test' }],
       },
     ]);
     await repository.upsertStagingCollection(
@@ -170,8 +171,7 @@ describePostgres('editorial catalog with PostgreSQL', () => {
     await repository.replaceStagingIdentities(secondRevision, [
       {
         mediaRef: 'imdb:tt0000003',
-        externalMediaRefs: ['imdb:tt0000003'],
-        provenance: 'integration-test',
+        identities: [{ mediaRef: 'imdb:tt0000003', provenance: 'integration-test' }],
       },
     ]);
     await repository.carryPublishedItemsAsInactive(secondRevision, ['imdb:tt0000003']);

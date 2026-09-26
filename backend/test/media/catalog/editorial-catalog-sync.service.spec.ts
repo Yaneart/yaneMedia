@@ -14,6 +14,7 @@ import type { MediaService } from '../../../src/media/media.service';
 const manifest: EditorialCatalogManifest = {
   version: 7,
   source: 'sync-test',
+  identityOverrides: {},
   identities: {
     'imdb:tt0000001': {
       mediaRefs: ['imdb:tt0000001'],
@@ -25,9 +26,9 @@ const manifest: EditorialCatalogManifest = {
       externalIds: { imdb: 'tt0000002' },
       provenance: 'sync-test',
     },
-    'anilist:1': {
-      mediaRefs: ['anilist:1', 'shikimori:1', 'myanimelist:1'],
-      externalIds: { aniList: '1', shikimori: '1', myAnimeList: '1' },
+    'anilist:199': {
+      mediaRefs: ['anilist:199', 'shikimori:199', 'myanimelist:199'],
+      externalIds: { aniList: '199', shikimori: '199', myAnimeList: '199' },
       provenance: 'editorial-verified',
     },
   },
@@ -52,7 +53,7 @@ const manifest: EditorialCatalogManifest = {
       {
         id: 'anime',
         title: 'Anime',
-        mediaRefs: ['anilist:1'],
+        mediaRefs: ['anilist:199'],
       },
     ],
   },
@@ -60,7 +61,7 @@ const manifest: EditorialCatalogManifest = {
     {
       id: 'home-picks',
       title: 'Home picks',
-      mediaRefs: ['imdb:tt0000001', 'imdb:tt0000002', 'anilist:1'],
+      mediaRefs: ['imdb:tt0000001', 'imdb:tt0000002', 'anilist:199'],
     },
   ],
 };
@@ -68,7 +69,7 @@ const manifest: EditorialCatalogManifest = {
 const typesByRef = new Map([
   ['imdb:tt0000001', 'movie'],
   ['imdb:tt0000002', 'series'],
-  ['anilist:1', 'anime'],
+  ['anilist:199', 'anime'],
 ] as const);
 
 function summary(mediaRef: string): MediaSummaryDto {
@@ -164,7 +165,7 @@ describe('EditorialCatalogSyncService', () => {
       downloadedAssets: 6,
       reusedAssets: 0,
       changes: {
-        add: ['anilist:1', 'imdb:tt0000001', 'imdb:tt0000002'],
+        add: ['anilist:199', 'imdb:tt0000001', 'imdb:tt0000002'],
         update: [],
         deactivate: [],
       },
@@ -172,21 +173,30 @@ describe('EditorialCatalogSyncService', () => {
 
     expect(maximumActive).toBe(2);
     expect(assetImport).toHaveBeenCalledTimes(6);
+    expect(getSummaryByRef).toHaveBeenCalledWith('anilist:199', expect.any(Number), {
+      aniList: '199',
+      shikimori: '199',
+      myAnimeList: '199',
+    });
     expect(repository.upsertStagingItems).toHaveBeenCalledWith(
       'revision-1',
       expect.arrayContaining([
         expect.objectContaining({ mediaRef: 'imdb:tt0000001', status: 'ready' }),
         expect.objectContaining({ mediaRef: 'imdb:tt0000002', status: 'ready' }),
-        expect.objectContaining({ mediaRef: 'anilist:1', status: 'ready' }),
+        expect.objectContaining({ mediaRef: 'anilist:199', status: 'ready' }),
       ]),
     );
     expect(repository.replaceStagingIdentities).toHaveBeenCalledWith(
       'revision-1',
       expect.arrayContaining([
         expect.objectContaining({
-          mediaRef: 'anilist:1',
-          externalMediaRefs: ['anilist:1', 'shikimori:1', 'myanimelist:1'],
-          provenance: 'editorial-verified',
+          mediaRef: 'anilist:199',
+          identities: [
+            { mediaRef: 'anilist:199', provenance: 'editorial-verified' },
+            { mediaRef: 'shikimori:199', provenance: 'editorial-verified' },
+            { mediaRef: 'myanimelist:199', provenance: 'editorial-verified' },
+            expect.objectContaining({ mediaRef: 'imdb:tt0245429' }),
+          ],
         }),
       ]),
     );
@@ -194,7 +204,7 @@ describe('EditorialCatalogSyncService', () => {
     expect(repository.carryPublishedItemsAsInactive).toHaveBeenCalledWith('revision-1', [
       'imdb:tt0000001',
       'imdb:tt0000002',
-      'anilist:1',
+      'anilist:199',
     ]);
     expect(repository.publishRevision).toHaveBeenCalledWith('revision-1');
     expect(repository.publishRevision.mock.invocationCallOrder[0]).toBeGreaterThan(
@@ -214,7 +224,7 @@ describe('EditorialCatalogSyncService', () => {
     await expect(service.sync(manifest, { ...noRetry, dryRun: true })).resolves.toMatchObject({
       dryRun: true,
       changes: {
-        add: ['anilist:1', 'imdb:tt0000002'],
+        add: ['anilist:199', 'imdb:tt0000002'],
         update: ['imdb:tt0000001'],
         deactivate: ['imdb:tt9999999'],
       },
@@ -274,12 +284,12 @@ describe('EditorialCatalogSyncService', () => {
 
   it('uses a validated manifest artwork override when providers omit a required poster', async () => {
     const overrideManifest = structuredClone(manifest);
-    overrideManifest.artworkOverrides['anilist:1'] = {
+    overrideManifest.artworkOverrides['anilist:199'] = {
       posterUrl: 'https://images.example/anime/poster-override.jpg',
     };
     const getSummaryByRef = jest.fn((mediaRef: string) => {
       const resolved = summary(mediaRef);
-      if (mediaRef === 'anilist:1') delete resolved.poster;
+      if (mediaRef === 'anilist:199') delete resolved.poster;
       return Promise.resolve({ summary: resolved, meta: {} });
     });
     const { service, assetImport } = setup({ getSummaryByRef });

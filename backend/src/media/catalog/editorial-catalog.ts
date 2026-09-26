@@ -31,10 +31,16 @@ export interface EditorialCatalogManifest {
   version: number;
   source: string;
   identities: Readonly<Record<string, EditorialMediaIdentity>>;
+  identityOverrides: Readonly<Record<string, EditorialIdentityOverride>>;
   featuredMediaRefs: readonly string[];
   artworkOverrides: Readonly<Record<string, { posterUrl?: string; backdropUrl?: string }>>;
   catalogs: Record<MediaRefType, readonly MediaCatalogCollectionDefinition[]>;
   homeCollections: readonly HomeCollectionManifest[];
+}
+
+export interface EditorialIdentityOverride {
+  mediaRefs: readonly string[];
+  provenance: string;
 }
 
 export interface EditorialMediaIdentity {
@@ -175,6 +181,33 @@ export function parseEditorialCatalogManifest(value: unknown): EditorialCatalogM
       fail('$.identities', `contains unknown media reference ${mediaRef}`);
   }
 
+  const rawIdentityOverrides = readRecord(root.identityOverrides ?? {}, '$.identityOverrides');
+  const animeRefs = new Set(catalogs.anime.flatMap(({ mediaRefs }) => mediaRefs));
+  const identityOverrides = Object.fromEntries(
+    Object.entries(rawIdentityOverrides).map(([mediaRef, value]) => {
+      if (!animeRefs.has(mediaRef)) {
+        fail('$.identityOverrides', `contains unknown anime reference ${mediaRef}`);
+      }
+      const path = `$.identityOverrides.${mediaRef}`;
+      const record = readRecord(value, path);
+      const mediaRefs = readMediaRefs(record.mediaRefs, `${path}.mediaRefs`);
+      if (mediaRefs.some((ref) => !/^(?:imdb|kinopoisk):/.test(ref))) {
+        fail(`${path}.mediaRefs`, 'only IMDb and Kinopoisk overrides are supported');
+      }
+      const providers = mediaRefs.map((ref) => ref.split(':')[0]);
+      if (new Set(providers).size !== providers.length) {
+        fail(`${path}.mediaRefs`, 'contains multiple references for one provider');
+      }
+      return [
+        mediaRef,
+        {
+          mediaRefs,
+          provenance: readString(record.provenance, `${path}.provenance`, 200),
+        },
+      ];
+    }),
+  );
+
   const featuredMediaRefs = readMediaRefs(root.featuredMediaRefs, '$.featuredMediaRefs', knownRefs);
   const rawArtworkOverrides = readRecord(root.artworkOverrides ?? {}, '$.artworkOverrides');
   const artworkOverrides = Object.fromEntries(
@@ -227,6 +260,7 @@ export function parseEditorialCatalogManifest(value: unknown): EditorialCatalogM
     version: root.version as number,
     source,
     identities,
+    identityOverrides,
     featuredMediaRefs,
     artworkOverrides,
     catalogs,

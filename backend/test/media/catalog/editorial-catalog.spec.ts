@@ -96,6 +96,31 @@ describe('editorial catalog', () => {
     expect(featuredEntries.every((entry) => editorialCatalog.indexOf(entry) < 10)).toBe(true);
   });
 
+  it('accepts provenance-bearing IMDb and Kinopoisk anime identity overrides', () => {
+    const input = structuredClone(editorialManifest) as EditorialCatalogManifestInput;
+    input.identityOverrides['anilist:199'] = {
+      mediaRefs: ['imdb:tt0245429', 'kinopoisk:370'],
+      provenance: 'editorial-verified:manual-review',
+    };
+
+    expect(parseEditorialCatalogManifest(input).identityOverrides['anilist:199']).toEqual({
+      mediaRefs: ['imdb:tt0245429', 'kinopoisk:370'],
+      provenance: 'editorial-verified:manual-review',
+    });
+  });
+
+  it('rejects multiple anime identity overrides for one provider', () => {
+    const input = structuredClone(editorialManifest) as EditorialCatalogManifestInput;
+    input.identityOverrides['anilist:199'] = {
+      mediaRefs: ['imdb:tt0245429', 'imdb:tt9999999'],
+      provenance: 'editorial-verified:manual-review',
+    };
+
+    expect(() => parseEditorialCatalogManifest(input)).toThrow(
+      'contains multiple references for one provider',
+    );
+  });
+
   it('rejects a partially invalid manifest instead of exposing partial configuration', () => {
     expect(() =>
       parseEditorialCatalogManifest({
@@ -108,3 +133,7 @@ describe('editorial catalog', () => {
     ).toThrow('Invalid editorial catalog manifest at $.catalogs.movie');
   });
 });
+
+type EditorialCatalogManifestInput = typeof editorialManifest & {
+  identityOverrides: Record<string, { mediaRefs: string[]; provenance: string }>;
+};

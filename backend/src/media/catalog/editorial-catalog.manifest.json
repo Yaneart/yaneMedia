@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "source": "yanemedia-editorial-v1",
   "identities": {
     "anilist:154587": { "mediaRefs": ["anilist:154587", "shikimori:52991", "myanimelist:52991"], "provenance": "editorial-verified" },
@@ -53,6 +53,7 @@
     "anilist:205": { "mediaRefs": ["anilist:205", "shikimori:205", "myanimelist:205"], "provenance": "editorial-verified" },
     "anilist:2001": { "mediaRefs": ["anilist:2001", "shikimori:2001", "myanimelist:2001"], "provenance": "editorial-verified" }
   },
+  "identityOverrides": {},
   "featuredMediaRefs": ["imdb:tt15239678", "imdb:tt15398776", "imdb:tt2788316", "imdb:tt2543164"],
   "artworkOverrides": {
     "imdb:tt2788316": {

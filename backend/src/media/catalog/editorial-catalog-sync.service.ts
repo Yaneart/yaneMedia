@@ -12,6 +12,7 @@ import {
   parseEditorialCatalogManifest,
   type EditorialCatalogManifest,
 } from './editorial-catalog';
+import { resolveAnimeIdentityMappings, type ResolvedIdentityRef } from './anime-identity-mapping';
 import {
   EditorialCatalogRepository,
   type StagingCatalogItem,
@@ -49,8 +50,7 @@ interface ManifestItem {
   mediaRef: string;
   type: MediaRefType;
   externalIds: MediaExternalIds;
-  externalMediaRefs: readonly string[];
-  provenance: string;
+  identities: readonly ResolvedIdentityRef[];
   artworkOverride?: { posterUrl?: string; backdropUrl?: string };
 }
 
@@ -154,10 +154,9 @@ export class EditorialCatalogSyncService {
     );
     await this.repository.replaceStagingIdentities(
       revisionId,
-      items.map(({ mediaRef, externalMediaRefs, provenance }) => ({
+      items.map(({ mediaRef, identities }) => ({
         mediaRef,
-        externalMediaRefs,
-        provenance,
+        identities,
       })),
     );
     await this.repository.carryPublishedItemsAsInactive(
@@ -199,14 +198,30 @@ export class EditorialCatalogSyncService {
   private toManifestItems(manifest: EditorialCatalogManifest): ManifestItem[] {
     const items = (['movie', 'series', 'anime'] as const).flatMap((type) =>
       manifest.catalogs[type].flatMap((collection) =>
-        collection.mediaRefs.map((mediaRef) => ({
-          mediaRef,
-          type,
-          externalIds: manifest.identities[mediaRef].externalIds,
-          externalMediaRefs: manifest.identities[mediaRef].mediaRefs,
-          provenance: manifest.identities[mediaRef].provenance,
-          artworkOverride: manifest.artworkOverrides[mediaRef],
-        })),
+        collection.mediaRefs.map((mediaRef) => {
+          const identity = manifest.identities[mediaRef];
+          const mapped =
+            type === 'anime'
+              ? resolveAnimeIdentityMappings(
+                  identity.mediaRefs,
+                  manifest.identityOverrides[mediaRef],
+                ).identities
+              : [];
+          const identities = [
+            ...identity.mediaRefs.map((ref) => ({
+              mediaRef: ref,
+              provenance: identity.provenance,
+            })),
+            ...mapped,
+          ];
+          return {
+            mediaRef,
+            type,
+            externalIds: identity.externalIds,
+            identities,
+            artworkOverride: manifest.artworkOverrides[mediaRef],
+          };
+        }),
       ),
     );
     return [...new Map(items.map((item) => [item.mediaRef, item])).values()];

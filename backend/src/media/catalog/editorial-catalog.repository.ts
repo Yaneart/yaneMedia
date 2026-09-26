@@ -53,8 +53,7 @@ export interface StagingCollectionItem {
 
 export interface StagingCatalogIdentity {
   mediaRef: string;
-  externalMediaRefs: readonly string[];
-  provenance: string;
+  identities: ReadonlyArray<{ mediaRef: string; provenance: string }>;
 }
 
 export interface PublishedCatalogIdentity {
@@ -245,11 +244,11 @@ export class EditorialCatalogRepository {
         .where(eq(mediaCatalogIdentities.revisionId, revisionId));
 
       const rows = identities.flatMap((identity) =>
-        identity.externalMediaRefs.map((externalMediaRef) => ({
+        identity.identities.map(({ mediaRef: externalMediaRef, provenance }) => ({
           revisionId,
           mediaRef: identity.mediaRef,
           externalMediaRef,
-          provenance: identity.provenance,
+          provenance,
         })),
       );
       if (rows.length > 0) await transaction.insert(mediaCatalogIdentities).values(rows);

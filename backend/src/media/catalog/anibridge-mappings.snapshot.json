@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "repository": "anibridge/anibridge-mappings",
+    "release": "v3",
+    "asset": "mappings.min.json",
+    "assetUpdatedAt": "2026-09-25T06:58:34Z",
+    "assetSha256": "e224de82869f785889a677a1674c6ad5ffc0e4b06cea39ef8156f4b06f8846ee"
+  },
+  "mappings": [
+    { "mediaRef": "anilist:164", "imdbIds": ["tt0119698"] },
+    { "mediaRef": "myanimelist:164", "imdbIds": ["tt0119698"] },
+    { "mediaRef": "anilist:199", "imdbIds": ["tt0245429"] },
+    { "mediaRef": "myanimelist:199", "imdbIds": ["tt0245429"] },
+    { "mediaRef": "anilist:437", "imdbIds": ["tt0156887"] },
+    { "mediaRef": "myanimelist:437", "imdbIds": ["tt0156887"] },
+    { "mediaRef": "anilist:20954", "imdbIds": ["tt5323662"] },
+    { "mediaRef": "myanimelist:28851", "imdbIds": ["tt5323662"] }
+  ]
+}
