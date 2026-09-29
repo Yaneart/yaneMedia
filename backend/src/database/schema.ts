@@ -19,3 +19,4 @@ export {
   mediaCollections,
   mediaType,
 } from '../media/catalog/editorial-catalog.schema';
+export { mediaWorkAliases, mediaWorks } from '../media/registry/media-registry.schema';

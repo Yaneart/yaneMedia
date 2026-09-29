@@ -4,7 +4,12 @@ import { AppLogger } from '../../platform/logging/app-logger';
 import type { MediaDetailsDto } from '../dto/media-details.dto';
 import type { MediaSummaryDto } from '../dto/media-summary.dto';
 import type { MediaRefType } from '../media-ref';
+import { resolveMediaRef } from '../media-ref';
 import { MediaService } from '../media.service';
+import {
+  MediaRegistryService,
+  type CanonicalMediaIdentity,
+} from '../registry/media-registry.service';
 import type { MediaSummaryResolutionResponseDto } from '../summary-resolution/dto/media-summary-resolution-response.dto';
 import type { MediaCatalogResponseDto } from './dto/media-catalog-response.dto';
 import type { MediaCollectionResponseDto } from './dto/media-collection-response.dto';
@@ -22,6 +27,7 @@ type PublishedItemRow = Awaited<
 type PublishedCollectionRow = Awaited<
   ReturnType<EditorialCatalogRepository['findPublishedCollectionItems']>
 >[number];
+type MediaRoute = Pick<CanonicalMediaIdentity, 'mediaRef' | 'slug'>;
 
 interface FallbackCacheEntry {
   summary: MediaSummaryDto;
@@ -53,6 +59,7 @@ export class MediaCatalogService {
     private readonly mediaService: MediaService,
     private readonly repository: EditorialCatalogRepository,
     private readonly logger?: AppLogger,
+    private readonly mediaRegistry?: MediaRegistryService,
   ) {}
 
   async getCatalog(
@@ -74,12 +81,13 @@ export class MediaCatalogService {
     ]);
     this.assertPublishedCatalog(total ?? rows.length);
 
-    const collections = this.groupCollections(rows).map((collection) => ({
+    const routes = await this.registerPublishedRows(rows);
+    const collections = this.groupCollections(rows, routes).map((collection) => ({
       id: collection.id.replace(`${type}-`, ''),
       title: collection.title,
       mediaRefs: collection.items.map(({ mediaRef }) => mediaRef),
     }));
-    const items = this.uniqueSummaries(rows);
+    const items = this.uniqueSummaries(rows, routes);
 
     this.logCatalogRead(startedAt, items.length);
     return {
@@ -102,11 +110,15 @@ export class MediaCatalogService {
     const startedAt = performance.now();
     const rows = await this.repository.findPublishedCollectionItems({ scope: 'catalog' });
     this.assertPublishedCatalog(rows.length);
+    const routes = await this.registerPublishedRows(rows);
 
     const itemsByType = new Map<MediaRefType, MediaSummaryDto[]>(
       MEDIA_TYPES.map((type) => [
         type,
-        this.uniqueSummaries(rows.filter((row) => row.type === type)),
+        this.uniqueSummaries(
+          rows.filter((row) => row.type === type),
+          routes,
+        ),
       ]),
     );
     const allItems = Array.from(
@@ -128,16 +140,18 @@ export class MediaCatalogService {
   }
 
   async getPublishedSummary(mediaRef: string): Promise<MediaSummaryDto> {
-    const [row] = await this.repository.findPublishedItems([mediaRef]);
+    const identity = await this.mediaRegistry?.resolve(mediaRef);
+    const [row] = await this.repository.findPublishedItems(identity?.aliases ?? [mediaRef]);
 
     if (!row) throw new NotFoundException('Media not found');
-    return this.toMediaSummary(row);
+    const route = identity ? this.toPublicRoute(identity) : await this.registerPublishedRow(row);
+    return this.toMediaSummary(row, route);
   }
 
   async getHomeCollections(): Promise<PublishedHomeCollection[]> {
     const rows = await this.repository.findPublishedCollectionItems({ scope: 'home', type: null });
     this.assertPublishedCatalog(rows.length);
-    return this.groupCollections(rows);
+    return this.groupCollections(rows, await this.registerPublishedRows(rows));
   }
 
   countPublishedItems(): Promise<number> {
@@ -146,8 +160,11 @@ export class MediaCatalogService {
 
   async resolveMediaRefs(mediaRefs: readonly string[]): Promise<MediaSummaryResolutionResponseDto> {
     const resolutions = await this.resolveRequestedRefs(mediaRefs);
-    const items = resolutions.flatMap(({ summary }) => (summary ? [summary] : []));
-    const partial = items.length !== mediaRefs.length;
+    const matches = resolutions.flatMap(({ summary }, requestIndex) =>
+      summary ? [{ requestIndex, item: summary }] : [],
+    );
+    const items = [...new Map(matches.map(({ item }) => [item.mediaRef, item])).values()];
+    const partial = matches.length !== mediaRefs.length;
 
     if (items.length === 0 && resolutions.some(({ unavailable }) => unavailable)) {
       throw new ServiceUnavailableException('Media catalog is temporarily unavailable');
@@ -155,6 +172,7 @@ export class MediaCatalogService {
 
     return {
       items,
+      matches,
       partial,
       degraded: partial || resolutions.some(({ degraded, stale }) => degraded || stale),
       stale: resolutions.some(({ stale }) => stale),
@@ -173,12 +191,36 @@ export class MediaCatalogService {
   }
 
   private async resolveRequestedRefs(mediaRefs: readonly string[]): Promise<SummaryResolution[]> {
-    const publishedMatches = await this.repository.findPublishedItemMatches(mediaRefs);
-    const publishedByRef = new Map(
-      publishedMatches.map(({ requestedMediaRef, item }) => [
-        requestedMediaRef,
-        this.toMediaSummary(item),
+    const registry = this.mediaRegistry;
+    const requestedIdentities = registry
+      ? await Promise.all(mediaRefs.map((mediaRef) => registry.resolve(mediaRef)))
+      : mediaRefs.map(() => undefined);
+    const aliasesByRequestedRef = new Map(
+      mediaRefs.map((mediaRef, index) => [
+        mediaRef,
+        requestedIdentities[index]?.aliases ?? [mediaRef],
       ]),
+    );
+    const requestedAliases = [...new Set([...aliasesByRequestedRef.values()].flat())];
+    const publishedMatches = await this.repository.findPublishedItemMatches(requestedAliases);
+    const publishedByAlias = new Map(
+      publishedMatches.map(({ requestedMediaRef, item }) => [requestedMediaRef, item]),
+    );
+    const matchedRows = [
+      ...new Map(publishedMatches.map(({ item }) => [item.mediaRef, item])).values(),
+    ];
+    const routes =
+      matchedRows.length > 0 ? await this.registerPublishedRows(matchedRows) : new Map();
+    const publishedByRef = new Map(
+      mediaRefs.flatMap((mediaRef) => {
+        const item = aliasesByRequestedRef
+          .get(mediaRef)
+          ?.map((alias) => publishedByAlias.get(alias))
+          .find((candidate) => candidate !== undefined);
+        return item
+          ? [[mediaRef, this.toMediaSummary(item, routes.get(item.mediaRef)!)] as const]
+          : [];
+      }),
     );
     const missingRefs = [...new Set(mediaRefs.filter((mediaRef) => !publishedByRef.has(mediaRef)))];
     const fallbackResolutions = await this.resolveFallbacks(missingRefs);
@@ -264,7 +306,51 @@ export class MediaCatalogService {
     return { degraded: unavailable, stale: false, unavailable };
   }
 
-  private groupCollections(rows: readonly PublishedCollectionRow[]): PublishedHomeCollection[] {
+  private async registerPublishedRow(row: PublishedItemRow): Promise<MediaRoute> {
+    return (await this.registerPublishedRows([row])).get(row.mediaRef)!;
+  }
+
+  private async registerPublishedRows(
+    rows: readonly PublishedItemRow[],
+  ): Promise<Map<string, MediaRoute>> {
+    const uniqueRows = [...new Map(rows.map((row) => [row.mediaRef, row])).values()];
+    if (!this.mediaRegistry) {
+      return new Map(
+        uniqueRows.map((row) => [row.mediaRef, { mediaRef: row.mediaRef, slug: row.mediaRef }]),
+      );
+    }
+
+    const identities = this.repository.findPublishedIdentities
+      ? await this.repository.findPublishedIdentities(uniqueRows.map(({ mediaRef }) => mediaRef))
+      : [];
+    const idsByMediaRef = new Map(
+      identities.map(({ mediaRef, externalIds }) => [mediaRef, externalIds]),
+    );
+    const entries = await Promise.all(
+      uniqueRows.map(async (row) => {
+        const ids = idsByMediaRef.get(row.mediaRef) ?? resolveMediaRef(row.mediaRef);
+        if (!ids) throw new NotFoundException('Media identity is unavailable');
+        const identity = await this.mediaRegistry!.resolveOrCreate({
+          type: row.type,
+          ids,
+          title: row.title,
+          originalTitle: row.originalTitle ?? undefined,
+          year: row.year ?? undefined,
+        });
+        return [row.mediaRef, this.toPublicRoute(identity)] as const;
+      }),
+    );
+    return new Map(entries);
+  }
+
+  private toPublicRoute(identity: Pick<CanonicalMediaIdentity, 'mediaRef' | 'slug'>): MediaRoute {
+    return { mediaRef: identity.mediaRef, slug: identity.slug };
+  }
+
+  private groupCollections(
+    rows: readonly PublishedCollectionRow[],
+    routes: ReadonlyMap<string, MediaRoute>,
+  ): PublishedHomeCollection[] {
     const collections = new Map<string, PublishedHomeCollection>();
     for (const row of rows) {
       const collection = collections.get(row.collectionId) ?? {
@@ -272,19 +358,26 @@ export class MediaCatalogService {
         title: row.collectionTitle,
         items: [],
       };
-      collection.items.push(this.toMediaSummary(row));
+      collection.items.push(this.toMediaSummary(row, routes.get(row.mediaRef)!));
       collections.set(row.collectionId, collection);
     }
     return [...collections.values()];
   }
 
-  private uniqueSummaries(rows: readonly PublishedItemRow[]): MediaSummaryDto[] {
-    return [...new Map(rows.map((row) => [row.mediaRef, this.toMediaSummary(row)])).values()];
+  private uniqueSummaries(
+    rows: readonly PublishedItemRow[],
+    routes: ReadonlyMap<string, MediaRoute>,
+  ): MediaSummaryDto[] {
+    return [
+      ...new Map(
+        rows.map((row) => [row.mediaRef, this.toMediaSummary(row, routes.get(row.mediaRef)!)]),
+      ).values(),
+    ];
   }
 
-  private toMediaSummary(row: PublishedItemRow): MediaSummaryDto {
+  private toMediaSummary(row: PublishedItemRow, route: MediaRoute): MediaSummaryDto {
     return {
-      mediaRef: row.mediaRef,
+      ...route,
       type: row.type,
       title: row.title,
       originalTitle: row.originalTitle ?? undefined,
@@ -312,6 +405,7 @@ export class MediaCatalogService {
   private toFallbackSummary(details: MediaDetailsDto): MediaSummaryDto {
     return {
       mediaRef: details.mediaRef,
+      slug: details.slug,
       type: details.type,
       title: details.title,
       originalTitle: details.originalTitle,

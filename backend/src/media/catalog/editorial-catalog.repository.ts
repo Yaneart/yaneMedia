@@ -507,6 +507,43 @@ export class EditorialCatalogRepository {
     };
   }
 
+  async findPublishedIdentities(mediaRefs: readonly string[]): Promise<PublishedCatalogIdentity[]> {
+    if (mediaRefs.length === 0) return [];
+
+    const rows = await this.databaseService.db
+      .select({
+        mediaRef: mediaCatalogIdentities.mediaRef,
+        externalMediaRef: mediaCatalogIdentities.externalMediaRef,
+        provenance: mediaCatalogIdentities.provenance,
+      })
+      .from(mediaCatalogIdentities)
+      .innerJoin(catalogRevisions, eq(catalogRevisions.id, mediaCatalogIdentities.revisionId))
+      .where(
+        and(
+          eq(catalogRevisions.status, 'published'),
+          inArray(mediaCatalogIdentities.mediaRef, [...new Set(mediaRefs)]),
+        ),
+      );
+    const grouped = new Map<string, typeof rows>();
+    for (const row of rows) {
+      const group = grouped.get(row.mediaRef) ?? [];
+      group.push(row);
+      grouped.set(row.mediaRef, group);
+    }
+
+    return [...grouped.entries()].map(([mediaRef, identities]) => {
+      const externalIds = resolveMediaRefs(
+        identities.map(({ externalMediaRef }) => externalMediaRef),
+      );
+      if (!externalIds) throw new Error(`Stored catalog identity is invalid for ${mediaRef}`);
+      return {
+        mediaRef,
+        externalIds,
+        provenance: [...new Set(identities.map(({ provenance }) => provenance))],
+      };
+    });
+  }
+
   async findPublishedCollectionItems(options: {
     scope: 'home' | 'catalog';
     type?: MediaRefType | null;

@@ -1,0 +1,1 @@
+ALTER TABLE "media_works" ADD COLUMN "redirect_media_ref" varchar(64);

@@ -11,6 +11,7 @@ export class MediaRatingDto {
 
 export class MediaSummaryDto {
   mediaRef!: string;
+  slug!: string;
   type!: 'movie' | 'series' | 'anime';
   title!: string;
   originalTitle?: string;

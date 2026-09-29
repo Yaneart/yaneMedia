@@ -8,6 +8,7 @@ import {
   mediaSummaryResolutionQueryKey,
   useMediaSummaryResolution,
   type MediaRef,
+  type MediaSummary,
 } from '@/entities/media';
 import { useFavorites } from '@/features/favorite';
 import { usePlaybackSession } from '@/features/playback-session';
@@ -69,21 +70,45 @@ export function HomePage() {
     retry: retryContinueWatchingResolution,
   } = useMediaSummaryResolution(continueWatchingEntries.map((entry) => entry.mediaRef));
 
-  const continueWatchingMediaByRef = new Map(
-    continueWatchingResolution?.items.map((media) => [media.mediaRef, media]),
+  const continueWatchingMediaByRequestedRef = new Map(
+    continueWatchingResolution?.matches.map(({ requestedMediaRef, media }) => [
+      requestedMediaRef,
+      media,
+    ]) ?? [],
   );
-  const resolvedContinueWatchingEntries = continueWatchingEntries.flatMap((entry) => {
-    const media = continueWatchingMediaByRef.get(entry.mediaRef);
-
-    return media ? [{ entry, media }] : [];
-  });
+  const continueWatchingByCanonicalRef = new Map<
+    string,
+    {
+      entry: (typeof continueWatchingEntries)[number];
+      media: MediaSummary;
+      storedRefs: MediaRef[];
+    }
+  >();
+  for (const entry of continueWatchingEntries) {
+    const media = continueWatchingMediaByRequestedRef.get(entry.mediaRef);
+    if (!media) continue;
+    const existing = continueWatchingByCanonicalRef.get(media.mediaRef);
+    if (!existing) {
+      continueWatchingByCanonicalRef.set(media.mediaRef, {
+        entry,
+        media,
+        storedRefs: [entry.mediaRef],
+      });
+      continue;
+    }
+    existing.storedRefs.push(entry.mediaRef);
+    if (Date.parse(entry.updatedAt) > Date.parse(existing.entry.updatedAt)) existing.entry = entry;
+  }
+  const resolvedContinueWatchingEntries = [...continueWatchingByCanonicalRef.values()].sort(
+    (left, right) => Date.parse(right.entry.updatedAt) - Date.parse(left.entry.updatedAt),
+  );
 
   const removeFromContinueWatching = (mediaRef: MediaRef, title: string) => {
     const remainingMediaRefs = continueWatchingEntries
       .filter((entry) => entry.mediaRef !== mediaRef)
       .map((entry) => entry.mediaRef);
     const remainingMedia = remainingMediaRefs.flatMap((remainingMediaRef) => {
-      const media = continueWatchingMediaByRef.get(remainingMediaRef);
+      const media = continueWatchingMediaByRequestedRef.get(remainingMediaRef);
 
       return media ? [media] : [];
     });
@@ -188,7 +213,7 @@ export function HomePage() {
               </RestorableContentRow>
             ) : resolvedContinueWatchingEntries.length > 0 ? (
               <RestorableContentRow scrollKey="continue-watching" variant="continuation">
-                {resolvedContinueWatchingEntries.map(({ entry, media }) => (
+                {resolvedContinueWatchingEntries.map(({ entry, media, storedRefs }) => (
                   <ContinueWatchingCard
                     key={entry.mediaRef}
                     media={media}
@@ -199,12 +224,16 @@ export function HomePage() {
                     }}
                     episode={entry.episode}
                     onContinue={() =>
-                      restoreSession(entry.mediaRef, {
+                      restoreSession(media.mediaRef, {
                         title: media.title,
                         artwork: media.backdrop ?? media.poster,
                       })
                     }
-                    onRemove={() => removeFromContinueWatching(entry.mediaRef, media.title)}
+                    onRemove={() => {
+                      for (const mediaRef of storedRefs) {
+                        removeFromContinueWatching(mediaRef, media.title);
+                      }
+                    }}
                   />
                 ))}
               </RestorableContentRow>

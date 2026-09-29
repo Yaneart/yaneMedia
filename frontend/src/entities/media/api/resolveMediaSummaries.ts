@@ -1,15 +1,14 @@
 import { apiRequest } from '@/shared/api';
 
 import type { MediaRef, MediaSummary } from '../model/media';
+import { isMediaRef } from '../model/media';
 import { mapMediaSummary } from './mapMediaSummary';
 import type { MediaSummaryResolutionResponseDto } from './mediaSummaryResolutionDto';
 
 const MEDIA_SUMMARY_RESOLUTION_LIMIT = 100;
-const RESOLVABLE_MEDIA_REF_PATTERN =
-  /^(?:imdb:tt\d{7,12}|(?:kinopoisk|shikimori|anilist|myanimelist):\d{1,12})$/;
-
 export interface MediaSummaryResolutionResult {
   items: MediaSummary[];
+  matches: Array<{ requestedMediaRef: MediaRef; media: MediaSummary }>;
   partial: boolean;
   degraded: boolean;
   stale: boolean;
@@ -20,7 +19,7 @@ function prepareMediaRefs(mediaRefs: readonly MediaRef[]) {
   let hasInvalidMediaRefs = false;
 
   for (const mediaRef of mediaRefs) {
-    if (!RESOLVABLE_MEDIA_REF_PATTERN.test(mediaRef)) {
+    if (!isMediaRef(mediaRef)) {
       hasInvalidMediaRefs = true;
       continue;
     }
@@ -43,6 +42,7 @@ export async function resolveMediaSummaries(
   if (prepared.mediaRefs.length === 0) {
     return {
       items: [],
+      matches: [],
       partial: prepared.hasInvalidMediaRefs,
       degraded: prepared.hasInvalidMediaRefs,
       stale: false,
@@ -50,6 +50,7 @@ export async function resolveMediaSummaries(
   }
 
   const items: MediaSummary[] = [];
+  const matches: MediaSummaryResolutionResult['matches'] = [];
   let partial = prepared.hasInvalidMediaRefs;
   let degraded = prepared.hasInvalidMediaRefs;
   let stale = false;
@@ -69,16 +70,25 @@ export async function resolveMediaSummaries(
       signal,
     });
 
-    items.push(...dto.items.map(mapMediaSummary));
+    const mappedItems = dto.items.map(mapMediaSummary);
+    items.push(...mappedItems);
+    matches.push(
+      ...dto.matches.flatMap(({ requestIndex, item }) => {
+        const requestedMediaRef = batch[requestIndex];
+        return requestedMediaRef ? [{ requestedMediaRef, media: mapMediaSummary(item) }] : [];
+      }),
+    );
     partial = partial || dto.partial;
     degraded = degraded || dto.degraded;
     stale = stale || dto.stale;
   }
 
-  partial = partial || items.length !== prepared.mediaRefs.length;
+  const uniqueItems = [...new Map(items.map((item) => [item.mediaRef, item])).values()];
+  partial = partial || matches.length !== prepared.mediaRefs.length;
 
   return {
-    items,
+    items: uniqueItems,
+    matches,
     partial,
     degraded: degraded || partial,
     stale,

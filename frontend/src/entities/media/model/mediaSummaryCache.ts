@@ -8,4 +8,5 @@ export function mediaSummaryQueryKey(mediaRef: string) {
 
 export function seedMediaSummary(queryClient: QueryClient, summary: MediaSummary) {
   queryClient.setQueryData(mediaSummaryQueryKey(summary.mediaRef), summary);
+  queryClient.setQueryData(mediaSummaryQueryKey(summary.slug), summary);
 }

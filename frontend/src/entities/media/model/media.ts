@@ -1,7 +1,7 @@
 export type MediaRef = string;
 
 const mediaRefPattern =
-  /^(?:imdb:tt\d{7,12}|(?:kinopoisk|shikimori|anilist|myanimelist):\d{1,12})$/;
+  /^(?:work_[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|imdb:tt\d{7,12}|(?:kinopoisk|shikimori|anilist|myanimelist):\d{1,12})$/i;
 
 export function isMediaRef(value: unknown): value is MediaRef {
   return typeof value === 'string' && mediaRefPattern.test(value);
@@ -23,6 +23,7 @@ export interface MediaRating {
 
 export interface MediaSummary {
   mediaRef: MediaRef;
+  slug: string;
   type: MediaType;
   title: string;
   originalTitle?: string;
@@ -105,6 +106,7 @@ export interface AnimeDetails extends BaseMediaDetails {
 export interface AnimeSeasonChainEntry {
   number: number;
   mediaRef: MediaRef;
+  slug: string;
   title: string;
   year?: number;
   episodesCount: number;

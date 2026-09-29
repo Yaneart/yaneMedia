@@ -9,7 +9,7 @@ export interface MediaExternalIds {
 export type MediaRefType = 'movie' | 'series' | 'anime';
 
 export const MEDIA_REF_PATTERN =
-  /^(?:imdb:tt\d{7,12}|(?:kinopoisk|shikimori|anilist|myanimelist):\d{1,12})$/;
+  /^(?:work_[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|imdb:tt\d{7,12}|(?:kinopoisk|shikimori|anilist|myanimelist):\d{1,12})$/i;
 
 export function createMediaRef(ids: MediaExternalIds, type?: MediaRefType): string | undefined {
   if (type === 'anime') {

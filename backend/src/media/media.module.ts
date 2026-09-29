@@ -14,6 +14,7 @@ import { MediaAssetStore } from './assets/media-asset-store';
 import { MediaAssetsController } from './assets/media-assets.controller';
 import { MediaAssetCleanupService } from './assets/media-asset-cleanup.service';
 import { countProviderResults } from './media-provider-diagnostics';
+import { MediaRegistryService } from './registry/media-registry.service';
 
 const MEDIA_ENGINE_PROVIDER_TIMEOUT_MS = 5_000;
 const MEDIA_ENGINE_CINEMETA_TIMEOUT_MS = 15_000;
@@ -47,6 +48,7 @@ async function createMediaEngine() {
       kinobdProvider,
       kinobdStreamingProvider,
       shikimoriProvider,
+      shikimoriCinemaIdentitySource,
       shikimoriIdentitySource,
       tmdbProvider,
       tvMazeProvider,
@@ -93,6 +95,7 @@ async function createMediaEngine() {
         wikidataIdentitySource(),
         aniListIdentitySource(),
         shikimoriIdentitySource(),
+        shikimoriCinemaIdentitySource(),
         aderomIdentitySource(),
       ],
       {
@@ -131,6 +134,7 @@ async function createMediaEngine() {
       useFactory: createMediaEngine,
     },
     MediaService,
+    MediaRegistryService,
     MediaCatalogService,
     EditorialCatalogRepository,
     EditorialCatalogSyncService,

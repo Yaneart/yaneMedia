@@ -1,4 +1,4 @@
-import { MediaCard, useMediaSummaryResolution } from '@/entities/media';
+import { MediaCard, useMediaSummaryResolution, type MediaSummary } from '@/entities/media';
 import { useFavorites } from '@/features/favorite';
 import { useOpeningHistory } from '@/features/opening-history';
 import {
@@ -103,19 +103,38 @@ export function HistoryPage() {
   const { resolution, status, hasRefreshError, retry } = useMediaSummaryResolution(
     openingHistoryEntries.map((entry) => entry.mediaRef),
   );
-  const openedAtByMediaRef = new Map(
-    openingHistoryEntries.map((entry) => [entry.mediaRef, entry.openedAt]),
+  const mediaByRequestedRef = new Map(
+    resolution?.matches.map(({ requestedMediaRef, media }) => [requestedMediaRef, media]) ?? [],
   );
-  const historyMedia = (resolution?.items ?? []).flatMap((media) => {
-    const openedAt = openedAtByMediaRef.get(media.mediaRef);
-
-    return openedAt ? [{ media, openedAt }] : [];
-  });
+  const historyByCanonicalRef = new Map<
+    string,
+    { media: MediaSummary; openedAt: string; storedRefs: string[] }
+  >();
+  for (const entry of openingHistoryEntries) {
+    const media = mediaByRequestedRef.get(entry.mediaRef);
+    if (!media) continue;
+    const existing = historyByCanonicalRef.get(media.mediaRef);
+    if (!existing) {
+      historyByCanonicalRef.set(media.mediaRef, {
+        media,
+        openedAt: entry.openedAt,
+        storedRefs: [entry.mediaRef],
+      });
+      continue;
+    }
+    existing.storedRefs.push(entry.mediaRef);
+    if (Date.parse(entry.openedAt) > Date.parse(existing.openedAt))
+      existing.openedAt = entry.openedAt;
+  }
+  const historyMedia = [...historyByCanonicalRef.values()].sort(
+    (left, right) => Date.parse(right.openedAt) - Date.parse(left.openedAt),
+  );
   const visibleHistoryMedia = historyMedia.filter(({ media }) => matchesLibraryQuery(media, query));
   const hasStoredHistory = openingHistoryEntries.length > 0;
+  const displayedHistoryCount = resolution ? historyMedia.length : openingHistoryEntries.length;
 
-  const handleRemoveOpening = (mediaRef: string, title: string) => {
-    removeOpening(mediaRef);
+  const handleRemoveOpening = (storedRefs: readonly string[], title: string) => {
+    for (const mediaRef of storedRefs) removeOpening(mediaRef);
     setRemovalAnnouncement(`«${title}» удалено из истории.`);
   };
 
@@ -130,7 +149,7 @@ export function HistoryPage() {
           hasStoredHistory ? (
             <div className="flex flex-wrap items-center gap-2 sm:justify-end">
               <p className="rounded-full bg-watermark/10 px-3 py-1.5 text-caption text-text-secondary">
-                Открыто: {openingHistoryEntries.length}
+                Открыто: {displayedHistoryCount}
               </p>
               {canManageHistory && (
                 <Button size="small" variant="secondary" onClick={clearHistory}>
@@ -231,7 +250,7 @@ export function HistoryPage() {
         />
       ) : visibleHistoryMedia.length > 0 ? (
         <MediaGrid>
-          {visibleHistoryMedia.map(({ media, openedAt }) => (
+          {visibleHistoryMedia.map(({ media, openedAt, storedRefs }) => (
             <div key={media.mediaRef} className="min-w-0">
               <MediaCard
                 media={media}
@@ -250,7 +269,7 @@ export function HistoryPage() {
                     variant="ghost"
                     className="min-h-8 shrink-0 px-2 text-text-secondary"
                     aria-label={`Удалить «${media.title}» из истории`}
-                    onClick={() => handleRemoveOpening(media.mediaRef, media.title)}
+                    onClick={() => handleRemoveOpening(storedRefs, media.title)}
                   >
                     <DeleteIcon aria-hidden="true" className="size-4" />
                     <span className="hidden sm:inline">Удалить</span>

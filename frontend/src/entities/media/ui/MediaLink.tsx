@@ -22,7 +22,8 @@ export function MediaLink({
   ...props
 }: MediaLinkProps) {
   const queryClient = useQueryClient();
-  const { cancelScheduledPrefetch, prefetch, schedulePrefetch } = useMediaSummaryPrefetch(mediaRef);
+  const locator = summary?.slug ?? mediaRef;
+  const { cancelScheduledPrefetch, prefetch, schedulePrefetch } = useMediaSummaryPrefetch(locator);
 
   const seedSummary = () => {
     if (summary) seedMediaSummary(queryClient, summary);
@@ -65,7 +66,7 @@ export function MediaLink({
   return (
     <Link
       {...props}
-      to={`/media/${encodeURIComponent(mediaRef)}`}
+      to={`/media/${encodeURIComponent(locator)}`}
       onClick={handleClick}
       onFocus={handleFocus}
       onPointerEnter={handlePointerEnter}

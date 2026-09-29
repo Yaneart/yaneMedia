@@ -3,6 +3,7 @@ import { ServiceUnavailableException } from '@nestjs/common';
 import type { MediaAvailabilityProgressDto } from '../../src/media/dto/media-availability.dto';
 import { MediaService } from '../../src/media/media.service';
 import type { EditorialCatalogRepository } from '../../src/media/catalog/editorial-catalog.repository';
+import type { MediaRegistryService } from '../../src/media/registry/media-registry.service';
 
 describe('MediaService', () => {
   const createProviderFailure = () =>
@@ -197,6 +198,43 @@ describe('MediaService', () => {
       title: 'Fullmetal Alchemist',
       type: 'anime',
     });
+  });
+
+  it('exposes only the app-owned identity and readable route for dynamic results', async () => {
+    const item = {
+      id: 'death-note',
+      type: 'anime' as const,
+      title: 'Тетрадь смерти',
+      originalTitle: 'Death Note',
+      year: 2006,
+      ids: { imdb: 'tt0877057', shikimori: '1535', aniList: '1535' },
+    };
+    const search = jest.fn().mockResolvedValue({ results: [{ item }] });
+    const resolveOrMergeVerified = jest.fn().mockResolvedValue({
+      mediaRef: 'work_11111111-1111-4111-8111-111111111111',
+      slug: 'death-note',
+    });
+    const service = new MediaService({ search } as unknown as MediaEngine, undefined, undefined, {
+      resolveOrMergeVerified,
+    } as unknown as MediaRegistryService);
+
+    await expect(service.searchMedia({ title: 'Death Note', type: 'anime' })).resolves.toEqual([
+      expect.objectContaining({
+        mediaRef: 'work_11111111-1111-4111-8111-111111111111',
+        slug: 'death-note',
+        type: 'anime',
+      }),
+    ]);
+    expect(resolveOrMergeVerified).toHaveBeenCalledWith({
+      type: 'anime',
+      ids: item.ids,
+      title: 'Тетрадь смерти',
+      originalTitle: 'Death Note',
+      year: 2006,
+    });
+    expect(JSON.stringify(await service.searchMedia({ title: 'Death Note' }))).not.toMatch(
+      /imdb|shikimori|aniList/,
+    );
   });
 
   it('forwards title-independent catalog filters with a wider bounded limit', async () => {
@@ -500,6 +538,40 @@ describe('MediaService', () => {
       {
         playbackUserAgent: 'browser-user-agent',
       },
+    );
+  });
+
+  it('forwards the anime release kind when resolving availability', async () => {
+    const getDetails = jest.fn().mockResolvedValue({
+      details: {
+        id: 'spirited-away',
+        type: 'anime',
+        animeKind: 'movie',
+        title: 'Унесённые призраками',
+        originalTitle: 'Sen to Chihiro no Kamikakushi',
+        year: 2001,
+        ids: { aniList: '199', kinopoisk: '370' },
+      },
+    });
+    const getAvailability = jest.fn().mockResolvedValue({
+      query: { type: 'anime', animeKind: 'movie' },
+      options: [],
+      sourceProviders: [],
+      checkedAt: '2026-09-29T00:00:00.000Z',
+    });
+    const service = new MediaService({ getDetails, getAvailability } as unknown as MediaEngine);
+
+    await service.getAvailabilityByRef('anilist:199');
+
+    expect(getAvailability).toHaveBeenCalledWith(
+      {
+        type: 'anime',
+        animeKind: 'movie',
+        ids: { aniList: '199', kinopoisk: '370' },
+        title: 'Sen to Chihiro no Kamikakushi',
+        year: 2001,
+      },
+      { playbackUserAgent: undefined },
     );
   });
 

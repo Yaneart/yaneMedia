@@ -71,6 +71,7 @@ export interface AnimeDetailsDto extends BaseMediaDetailsDto {
 export interface AnimeSeasonChainEntryDto {
   number: number;
   mediaRef: string;
+  slug: string;
   title: string;
   year?: number;
   episodesCount: number;

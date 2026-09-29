@@ -262,6 +262,27 @@ describe('MediaCatalogService', () => {
     expect(getDetailsByRef).not.toHaveBeenCalled();
   });
 
+  it('maps multiple legacy aliases to one canonical summary without duplicating the item', async () => {
+    const canonical = createRow('anilist:154587', 'anime');
+    const { service } = createService({
+      publishedAliases: {
+        'anilist:154587': canonical,
+        'shikimori:52991': canonical,
+      },
+    });
+
+    await expect(service.resolveMediaRefs(['anilist:154587', 'shikimori:52991'])).resolves.toEqual(
+      expect.objectContaining({
+        items: [expect.objectContaining({ mediaRef: 'anilist:154587' })],
+        matches: [
+          expect.objectContaining({ requestIndex: 0 }),
+          expect.objectContaining({ requestIndex: 1 }),
+        ],
+        partial: false,
+      }),
+    );
+  });
+
   it('reuses one fallback request for simultaneous unknown summary resolutions', async () => {
     let complete:
       ((value: Awaited<ReturnType<MediaService['getDetailsByRef']>>) => void) | undefined;

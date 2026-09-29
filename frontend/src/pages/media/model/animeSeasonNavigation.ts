@@ -21,8 +21,8 @@ export function getAnimeSeasonNavigationTarget(
   chain: readonly AnimeSeasonChainEntry[],
   seasonNumber: number,
   currentMediaRef: MediaRef,
-): MediaRef | null {
-  const target = chain.find((season) => season.number === seasonNumber)?.mediaRef;
+): string | null {
+  const target = chain.find((season) => season.number === seasonNumber);
 
-  return target && target !== currentMediaRef ? target : null;
+  return target && target.mediaRef !== currentMediaRef ? target.slug || target.mediaRef : null;
 }

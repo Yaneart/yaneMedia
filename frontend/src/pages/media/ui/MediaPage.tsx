@@ -31,6 +31,12 @@ export function MediaPage() {
   const openingMediaRef = media?.mediaRef;
 
   useEffect(() => {
+    const canonicalSlug = result?.details.slug;
+    if (!mediaRef || !canonicalSlug || mediaRef === canonicalSlug) return;
+    navigate(`/media/${encodeURIComponent(canonicalSlug)}`, { replace: true });
+  }, [mediaRef, navigate, result?.details.slug]);
+
+  useEffect(() => {
     if (!openingMediaRef) return;
 
     recordOpening(openingMediaRef);

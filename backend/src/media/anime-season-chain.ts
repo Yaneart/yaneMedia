@@ -11,9 +11,11 @@ export const MAX_ANIME_SEASON_CHAIN_LENGTH = 12;
 
 export interface AnimeSeasonChainEntry {
   mediaRef: string;
+  slug?: string;
   title: string;
   year?: number;
   episodesCount: number;
+  ids?: ExternalIds;
 }
 
 interface AnimeSeasonNode extends AnimeSeasonChainEntry {
@@ -184,10 +186,11 @@ export async function buildAnimeSeasonChain(
     cursor = sequel;
   }
 
-  return chain.map(({ mediaRef: nodeMediaRef, title, year, episodesCount }) => ({
+  return chain.map(({ mediaRef: nodeMediaRef, title, year, episodesCount, ids }) => ({
     mediaRef: nodeMediaRef,
     title,
     year,
     episodesCount,
+    ids,
   }));
 }

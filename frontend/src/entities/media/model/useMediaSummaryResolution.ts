@@ -10,6 +10,7 @@ export type MediaSummaryResolutionStatus = 'loading' | 'success' | 'empty' | 'er
 
 const emptyResolution: MediaSummaryResolutionResult = {
   items: [],
+  matches: [],
   partial: false,
   degraded: false,
   stale: false,

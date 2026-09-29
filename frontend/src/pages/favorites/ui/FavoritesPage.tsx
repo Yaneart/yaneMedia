@@ -39,8 +39,7 @@ export function FavoritesPage() {
     hasRefreshError,
     retry,
   } = useMediaSummaryResolution(Array.from(favoriteMediaRefs));
-  const favoriteMedia =
-    resolution?.items.filter((media) => favoriteMediaRefs.has(media.mediaRef)) ?? [];
+  const favoriteMedia = resolution?.items ?? [];
   const visibleFavoriteMedia = favoriteMedia.filter((media) => matchesLibraryQuery(media, query));
   const hasStoredFavorites = favoriteMediaRefs.size > 0;
 

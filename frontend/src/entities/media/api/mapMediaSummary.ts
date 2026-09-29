@@ -13,6 +13,7 @@ export function mapMediaArtwork(dto: MediaArtworkDto): MediaArtwork {
 export function mapMediaSummary(dto: MediaSummaryDto): MediaSummary {
   return {
     mediaRef: dto.mediaRef,
+    slug: dto.slug,
     type: dto.type,
     title: dto.title,
     originalTitle: dto.originalTitle,

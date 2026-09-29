@@ -237,6 +237,7 @@ describe('MediaController catalog', () => {
   it('resolves a validated batch of media references', async () => {
     const resolution: MediaSummaryResolutionResponseDto = {
       items: [],
+      matches: [],
       partial: false,
       degraded: false,
       stale: false,

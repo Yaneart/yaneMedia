@@ -64,6 +64,20 @@
       "when": 1790341208764,
       "tag": "0008_heavy_fallen_one",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790678846641,
+      "tag": "0009_chubby_blue_shield",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790681856953,
+      "tag": "0010_cute_may_parker",
+      "breakpoints": true
     }
   ]
 }
