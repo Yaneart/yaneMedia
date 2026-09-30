@@ -45,7 +45,11 @@ const PLACEHOLDER_ARTWORK_PATHS = [
   '/no_image_poster.png',
   '/assets/globals/missing_original.jpg',
 ] as const;
-const ANIME_ID_SOURCES = ['shikimori', 'aniList', 'myAnimeList'] as const;
+const ANIME_WORK_ID_SOURCES = [
+  'aniList',
+  'myAnimeList',
+  'shikimori',
+] as const satisfies readonly (keyof ExternalIds)[];
 const ANIME_SEASON_CHAIN_CACHE_TTL_MS = 15 * 60_000;
 const ANIME_SEASON_CHAIN_CACHE_MAX_ENTRIES = 500;
 
@@ -126,13 +130,14 @@ export class MediaService {
     animeSeasonChain?: Array<CanonicalAnimeSeasonChainEntry & { number: number }>;
   }> {
     const resolved = await this.resolveMediaRefOrThrow(mediaRef);
+    const engineIds = this.toEngineInputIds(resolved);
     const catalogItem = await this.getPublishedItem(mediaRef, resolved.identity);
 
     const response = await this.runMediaEngine(
       'details',
       () =>
         this.mediaEngine.getDetails({
-          ids: resolved.ids,
+          ids: engineIds,
           ...(catalogItem ? { type: catalogItem.type } : {}),
           language: 'ru',
         }),
@@ -148,13 +153,13 @@ export class MediaService {
         ? response.details
         : undefined;
     const identity = trustedDetails
-      ? await this.registerIdentity(trustedDetails, resolved.ids)
+      ? await this.registerIdentity(trustedDetails, engineIds)
       : catalogItem
-        ? await this.registerCatalogIdentity(catalogItem, resolved.ids)
+        ? await this.registerCatalogIdentity(catalogItem, engineIds)
         : resolved.identity;
     const route = identity ? this.toPublicRoute(identity) : this.legacyRoute(mediaRef);
     const animeSeasonChain = trustedDetails
-      ? await this.getAnimeSeasonChain(route.mediaRef, trustedDetails, resolved.ids)
+      ? await this.getAnimeSeasonChain(route.mediaRef, trustedDetails, engineIds)
       : [];
 
     return {
@@ -179,9 +184,10 @@ export class MediaService {
     externalIds?: MediaExternalIds,
   ): Promise<{ summary: MediaSummaryDto | null; meta: DetailsResponse['meta'] }> {
     const resolved = await this.resolveMediaRefOrThrow(mediaRef, externalIds);
+    const engineIds = this.toEngineInputIds(resolved);
     const response = await this.runMediaEngine(
       'details',
-      () => this.mediaEngine.getDetails({ ids: resolved.ids, language: 'ru' }),
+      () => this.mediaEngine.getDetails({ ids: engineIds, language: 'ru' }),
       queueWaitMs,
     );
 
@@ -189,7 +195,7 @@ export class MediaService {
       summary: response.details
         ? this.buildMediaSummary(
             response.details,
-            await this.registerIdentity(response.details, resolved.ids),
+            await this.registerIdentity(response.details, engineIds),
           )
         : null,
       meta: response.meta,
@@ -228,7 +234,7 @@ export class MediaService {
             ...(ids
               ? await this.registerRoute({
                   type: 'anime',
-                  ids,
+                  ids: this.toRegistryIds('anime', 'tv', ids),
                   title: entry.title,
                   year: entry.year,
                 })
@@ -323,15 +329,16 @@ export class MediaService {
     signal?: AbortSignal,
   ): Promise<AvailabilityRequest | null> {
     const resolved = await this.resolveMediaRefOrThrow(mediaRef);
+    const engineIds = this.toEngineInputIds(resolved);
     const catalogItem = await this.getPublishedItem(mediaRef, resolved.identity);
     const { details } = await this.runMediaEngine('details', () =>
       signal
         ? this.mediaEngine.getDetails(
-            { ids: resolved.ids, ...(catalogItem ? { type: catalogItem.type } : {}) },
+            { ids: engineIds, ...(catalogItem ? { type: catalogItem.type } : {}) },
             { signal },
           )
         : this.mediaEngine.getDetails({
-            ids: resolved.ids,
+            ids: engineIds,
             ...(catalogItem ? { type: catalogItem.type } : {}),
           }),
     );
@@ -343,8 +350,8 @@ export class MediaService {
     const trustedDetails =
       details && this.matchesCatalogIdentity(details, catalogItem) ? details : undefined;
     const availabilityIds = trustedDetails
-      ? await this.resolveAvailabilityIds(trustedDetails, resolved.ids, episodeSelection, signal)
-      : resolved.ids;
+      ? { ...(trustedDetails.ids ?? {}), ...engineIds }
+      : engineIds;
     const mediaType = catalogItem?.type ?? details!.type;
 
     return {
@@ -399,106 +406,6 @@ export class MediaService {
       this.logProviderFailure(error, 'availability', performance.now() - startedAt);
       this.throwMediaEngineError(error);
     }
-  }
-
-  private async resolveAvailabilityIds(
-    details: MediaDetails,
-    resolvedIds: ExternalIds,
-    episodeSelection: MediaSourceEpisodeRefDto,
-    signal?: AbortSignal,
-  ): Promise<ExternalIds> {
-    const ids = {
-      ...(details.ids ?? {}),
-      ...resolvedIds,
-    };
-
-    if (
-      details.type !== 'anime' ||
-      ids.kinopoisk ||
-      !this.hasExactEpisodeSelection(episodeSelection)
-    ) {
-      return ids;
-    }
-
-    let response: Awaited<ReturnType<MediaEngine['search']>>;
-
-    try {
-      const query = {
-        title: details.originalTitle?.trim() || details.title,
-        year: details.year,
-        limit: 10,
-      };
-      response = signal
-        ? await this.mediaEngine.search(query, { signal })
-        : await this.mediaEngine.search(query);
-    } catch (error) {
-      if (this.isMediaEngineProviderError(error)) {
-        return ids;
-      }
-
-      throw error;
-    }
-
-    const kinopoiskIds = new Set(
-      response.results.flatMap(({ item }) => {
-        const kinopoisk = item.ids?.kinopoisk;
-
-        return kinopoisk && this.matchesAnimeIdentity(details, item) ? [kinopoisk] : [];
-      }),
-    );
-
-    return kinopoiskIds.size === 1 ? { ...ids, kinopoisk: [...kinopoiskIds][0] } : ids;
-  }
-
-  private hasExactEpisodeSelection(selection: MediaSourceEpisodeRefDto): boolean {
-    return (
-      selection.absoluteEpisodeNumber !== undefined ||
-      (selection.seasonNumber !== undefined && selection.episodeNumber !== undefined)
-    );
-  }
-
-  private matchesAnimeIdentity(details: MediaDetails, item: MediaItem): boolean {
-    if (
-      ANIME_ID_SOURCES.some((source) => {
-        const detailsId = details.ids?.[source]?.trim();
-        const itemId = item.ids?.[source]?.trim();
-
-        return Boolean(detailsId && itemId && detailsId === itemId);
-      })
-    ) {
-      return true;
-    }
-
-    if (item.type !== 'anime' || details.year === undefined || item.year !== details.year) {
-      return false;
-    }
-
-    const detailsTitles = this.normalizeIdentityTitles([
-      details.title,
-      details.originalTitle,
-      ...(details.alternativeTitles ?? []),
-    ]);
-    const itemTitles = this.normalizeIdentityTitles([
-      item.title,
-      item.originalTitle,
-      ...(item.alternativeTitles ?? []),
-    ]);
-
-    return [...detailsTitles].some((title) => itemTitles.has(title));
-  }
-
-  private normalizeIdentityTitles(values: Array<string | undefined>): Set<string> {
-    return new Set(
-      values.flatMap((value) => {
-        const normalized = value
-          ?.normalize('NFKC')
-          .toLocaleLowerCase()
-          .replace(/[^\p{L}\p{N}]+/gu, ' ')
-          .trim();
-
-        return normalized ? [normalized] : [];
-      }),
-    );
   }
 
   private async getPublishedItem(
@@ -700,11 +607,31 @@ export class MediaService {
   ): Promise<Pick<CanonicalMediaIdentity, 'mediaRef' | 'slug'>> {
     return this.registerRoute({
       type: item.type,
-      ids: { ...resolvedIds, ...(item.ids ?? {}) },
+      ids: this.toRegistryIds(item.type, 'animeKind' in item ? item.animeKind : undefined, {
+        ...resolvedIds,
+        ...(item.ids ?? {}),
+      }),
       title: item.title,
       originalTitle: item.originalTitle,
       year: item.year,
     });
+  }
+
+  private toRegistryIds(
+    type: MediaItem['type'],
+    animeKind: unknown,
+    ids: ExternalIds,
+  ): ExternalIds {
+    if (type !== 'anime' || animeKind === 'movie') return ids;
+
+    const animeIds = Object.fromEntries(
+      ANIME_WORK_ID_SOURCES.flatMap((source) => {
+        const value = ids[source];
+        return value === undefined ? [] : [[source, value]];
+      }),
+    ) as ExternalIds;
+
+    return Object.keys(animeIds).length > 0 ? animeIds : ids;
   }
 
   private registerCatalogIdentity(
@@ -761,6 +688,15 @@ export class MediaService {
     }
 
     return { ids, identity: canonicalIdentity };
+  }
+
+  private toEngineInputIds(resolved: {
+    ids: MediaExternalIds;
+    identity?: CanonicalMediaIdentity;
+  }): MediaExternalIds {
+    return resolved.identity?.type === 'anime'
+      ? this.toRegistryIds('anime', undefined, resolved.ids)
+      : resolved.ids;
   }
 
   private async runMediaEngine<T extends { meta?: ResponseMeta }>(

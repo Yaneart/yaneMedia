@@ -227,7 +227,7 @@ describe('MediaService', () => {
     ]);
     expect(resolveOrMergeVerified).toHaveBeenCalledWith({
       type: 'anime',
-      ids: item.ids,
+      ids: { shikimori: '1535', aniList: '1535' },
       title: 'Тетрадь смерти',
       originalTitle: 'Death Note',
       year: 2006,
@@ -235,6 +235,31 @@ describe('MediaService', () => {
     expect(JSON.stringify(await service.searchMedia({ title: 'Death Note' }))).not.toMatch(
       /imdb|shikimori|aniList/,
     );
+  });
+
+  it('keeps cinema aliases for anime movies where the mapping is work-specific', async () => {
+    const item = {
+      id: 'spirited-away',
+      type: 'anime' as const,
+      animeKind: 'movie' as const,
+      title: 'Унесённые призраками',
+      year: 2001,
+      ids: { imdb: 'tt0245429', kinopoisk: '370', shikimori: '199' },
+    };
+    const resolveOrMergeVerified = jest.fn().mockResolvedValue({
+      mediaRef: 'work_11111111-1111-4111-8111-111111111112',
+      slug: 'spirited-away',
+    });
+    const service = new MediaService(
+      { search: jest.fn().mockResolvedValue({ results: [{ item }] }) } as unknown as MediaEngine,
+      undefined,
+      undefined,
+      { resolveOrMergeVerified } as unknown as MediaRegistryService,
+    );
+
+    await service.searchMedia({ title: 'Spirited Away', type: 'anime' });
+
+    expect(resolveOrMergeVerified).toHaveBeenCalledWith(expect.objectContaining({ ids: item.ids }));
   });
 
   it('forwards title-independent catalog filters with a wider bounded limit', async () => {
@@ -696,7 +721,7 @@ describe('MediaService', () => {
     await expect(consume()).rejects.toBeInstanceOf(ServiceUnavailableException);
   });
 
-  it('enriches an exact anime episode with one confirmed Kinopoisk identity', async () => {
+  it('forwards verified episodic anime identity and exact episode coordinates without app-side search', async () => {
     const getDetails = jest.fn().mockResolvedValue({
       details: {
         id: 'frieren',
@@ -704,7 +729,8 @@ describe('MediaService', () => {
         title: 'Провожающая в последний путь Фрирен',
         originalTitle: 'Frieren: Beyond Journey’s End',
         year: 2023,
-        ids: { aniList: '154587' },
+        animeKind: 'tv',
+        ids: { aniList: '154587', kinopoisk: '5401195' },
       },
     });
     const createEpisodeOption = (id: string) => ({
@@ -727,52 +753,58 @@ describe('MediaService', () => {
           options: [createEpisodeOption('episode-1')],
         },
         {
-          absoluteEpisodeNumber: 2,
+          seasonNumber: 2,
+          episodeNumber: 2,
+          absoluteEpisodeNumber: 30,
           options: [createEpisodeOption('episode-2')],
         },
       ],
       sourceProviders: ['aniliberty'],
       checkedAt: '2026-08-25T00:00:00.000Z',
     });
-    const search = jest.fn().mockResolvedValue({
-      results: [
-        {
-          item: {
-            id: 'frieren-enriched',
-            type: 'anime',
-            title: 'Провожающая в последний путь Фрирен',
-            originalTitle: 'Frieren: Beyond Journey’s End',
-            year: 2023,
-            ids: { aniList: '154587', kinopoisk: '5401195' },
-          },
-        },
-      ],
-    });
+    const search = jest.fn();
     const mediaEngine = {
       getDetails,
       getAvailability,
       search,
     } as unknown as MediaEngine;
-    const service = withAnimeIdentity(mediaEngine);
+    const service = new MediaService(mediaEngine, undefined, undefined, {
+      resolve: jest.fn().mockResolvedValue({
+        mediaRef: 'work_11111111-1111-4111-8111-111111111113',
+        slug: 'frieren',
+        type: 'anime',
+        ids: {
+          aniList: '154587',
+          shikimori: '52991',
+          myAnimeList: '52991',
+          kinopoisk: '5401195',
+        },
+        aliases: [],
+      }),
+    } as unknown as MediaRegistryService);
 
     const result = await service.getAvailabilityByRef('anilist:154587', 'browser-user-agent', {
-      absoluteEpisodeNumber: 2,
+      seasonNumber: 2,
+      episodeNumber: 2,
+      absoluteEpisodeNumber: 30,
     });
 
     expect(result?.episodes).toEqual([
       expect.objectContaining({
-        absoluteEpisodeNumber: 2,
+        seasonNumber: 2,
+        episodeNumber: 2,
+        absoluteEpisodeNumber: 30,
         sources: [expect.objectContaining({ sourceRef: 'stream:aniliberty:episode-2' })],
       }),
     ]);
-    expect(search).toHaveBeenCalledWith({
-      title: 'Frieren: Beyond Journey’s End',
-      year: 2023,
-      limit: 10,
+    expect(search).not.toHaveBeenCalled();
+    expect(getDetails).toHaveBeenCalledWith({
+      ids: { aniList: '154587', shikimori: '52991', myAnimeList: '52991' },
     });
     expect(getAvailability).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'anime',
+        animeKind: 'tv',
         ids: {
           aniList: '154587',
           shikimori: '52991',
@@ -781,13 +813,15 @@ describe('MediaService', () => {
         },
         title: 'Frieren: Beyond Journey’s End',
         year: 2023,
-        absoluteEpisodeNumber: 2,
+        seasonNumber: 2,
+        episodeNumber: 2,
+        absoluteEpisodeNumber: 30,
       }),
       { playbackUserAgent: 'browser-user-agent' },
     );
   });
 
-  it('keeps anime availability usable when optional identity enrichment is degraded', async () => {
+  it('keeps anime availability independent from app-side search providers', async () => {
     const getDetails = jest.fn().mockResolvedValue({
       details: {
         id: 'frieren',
@@ -832,9 +866,10 @@ describe('MediaService', () => {
       }),
       { playbackUserAgent: 'browser-user-agent' },
     );
+    expect(mediaEngine.search).not.toHaveBeenCalled();
   });
 
-  it('does not choose between ambiguous anime Kinopoisk identities', async () => {
+  it('does not infer episodic anime cinema identity from ambiguous titles', async () => {
     const getDetails = jest.fn().mockResolvedValue({
       details: {
         id: 'ambiguous-anime',
@@ -876,6 +911,7 @@ describe('MediaService', () => {
       expect.objectContaining({ ids: { aniList: '100' } }),
       { playbackUserAgent: undefined },
     );
+    expect(search).not.toHaveBeenCalled();
   });
 
   it('returns null availability without calling streaming providers when details are missing', async () => {
