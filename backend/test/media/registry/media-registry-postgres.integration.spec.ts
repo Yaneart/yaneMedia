@@ -12,6 +12,8 @@ const fixtureId = BigInt(Date.now().toString().slice(-10)).toString();
 const secondFixtureId = (BigInt(fixtureId) + 1n).toString();
 const animeBridgeId = (BigInt(fixtureId) + 2n).toString();
 const cinemaBridgeId = (BigInt(fixtureId) + 3n).toString();
+const splitAnimeId = (BigInt(fixtureId) + 4n).toString();
+const splitMalId = (BigInt(fixtureId) + 5n).toString();
 const fixtureTitle = `Registry Fixture ${fixtureId}`;
 
 describePostgres('media registry with PostgreSQL', () => {
@@ -120,6 +122,49 @@ describePostgres('media registry with PostgreSQL', () => {
     await expect(registry.resolve(series.slug)).resolves.toMatchObject({
       mediaRef: anime.mediaRef,
       slug: anime.slug,
+    });
+  });
+
+  it('repairs split same-type works when verified aliases connect them', async () => {
+    const aniListWork = await registry.resolveOrCreate({
+      type: 'anime',
+      ids: { aniList: splitAnimeId },
+      title: `Split Anime ${splitAnimeId}`,
+    });
+    const malWork = await registry.resolveOrCreate({
+      type: 'anime',
+      ids: { myAnimeList: splitMalId, shikimori: splitMalId },
+      title: `Split Anime ${splitAnimeId} Season`,
+    });
+    createdRefs.push(aniListWork.mediaRef, malWork.mediaRef);
+
+    const merged = await registry.resolveOrMergeVerified({
+      type: 'anime',
+      ids: {
+        aniList: splitAnimeId,
+        myAnimeList: splitMalId,
+        shikimori: splitMalId,
+      },
+      title: `Split Anime ${splitAnimeId}`,
+    });
+
+    expect([aniListWork.mediaRef, malWork.mediaRef]).toContain(merged.mediaRef);
+    expect(merged.ids).toEqual(
+      expect.objectContaining({
+        aniList: splitAnimeId,
+        myAnimeList: splitMalId,
+        shikimori: splitMalId,
+      }),
+    );
+
+    const redirected = merged.mediaRef === aniListWork.mediaRef ? malWork : aniListWork;
+    await expect(registry.resolve(redirected.mediaRef)).resolves.toMatchObject({
+      mediaRef: merged.mediaRef,
+      slug: merged.slug,
+    });
+    await expect(registry.resolve(redirected.slug)).resolves.toMatchObject({
+      mediaRef: merged.mediaRef,
+      slug: merged.slug,
     });
   });
 });

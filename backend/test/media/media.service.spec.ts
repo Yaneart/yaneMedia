@@ -799,7 +799,7 @@ describe('MediaService', () => {
     ]);
     expect(search).not.toHaveBeenCalled();
     expect(getDetails).toHaveBeenCalledWith({
-      ids: { aniList: '154587', shikimori: '52991', myAnimeList: '52991' },
+      ids: { aniList: '154587', shikimori: '52991' },
     });
     expect(getAvailability).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -808,7 +808,6 @@ describe('MediaService', () => {
         ids: {
           aniList: '154587',
           shikimori: '52991',
-          myAnimeList: '52991',
           kinopoisk: '5401195',
         },
         title: 'Frieren: Beyond Journey’s End',
@@ -818,6 +817,78 @@ describe('MediaService', () => {
         absoluteEpisodeNumber: 30,
       }),
       { playbackUserAgent: 'browser-user-agent' },
+    );
+  });
+
+  it('forwards verified split-release evidence separately from canonical coordinates', async () => {
+    const counts: Record<string, number> = { '1': 25, '2': 13, '3': 12, '4': 16 };
+    const details = {
+      id: '3',
+      type: 'anime' as const,
+      title: 'Season 2 Part 2',
+      animeKind: 'tv' as const,
+      status: 'released' as const,
+      ids: { shikimori: '3', kinopoisk: '971114' },
+      episodesCount: 12,
+      episodes: [{ episodeNumber: 1, absoluteNumber: 1 }],
+      canonicalSeasons: [
+        { number: 1, episodesCount: 25 },
+        { number: 2, episodesCount: 25 },
+        { number: 3, episodesCount: 16 },
+      ],
+    };
+    const getDetails = jest.fn().mockResolvedValue({ details });
+    const getRelatedMedia = jest.fn(({ ids }: { ids?: { shikimori?: string } }) => {
+      const id = Number(ids?.shikimori);
+      const item = (relatedId: number) => ({
+        id: String(relatedId),
+        type: 'anime' as const,
+        title: `Release ${relatedId}`,
+        animeKind: 'tv' as const,
+        status: 'released' as const,
+        ids: { shikimori: String(relatedId) },
+        episodesCount: counts[String(relatedId)],
+      });
+
+      return Promise.resolve({
+        query: {},
+        relations: [
+          ...(id > 1 ? [{ kind: 'prequel' as const, item: item(id - 1), sources: [] }] : []),
+          ...(id < 4 ? [{ kind: 'sequel' as const, item: item(id + 1), sources: [] }] : []),
+        ],
+        meta: { providers: { requested: [], successful: [], failed: [] } },
+      });
+    });
+    const getAvailability = jest.fn().mockResolvedValue({
+      query: { type: 'anime' },
+      options: [],
+      sourceProviders: [],
+      checkedAt: '2026-10-01T00:00:00.000Z',
+    });
+    const service = new MediaService({
+      getDetails,
+      getRelatedMedia,
+      getAvailability,
+    } as unknown as MediaEngine);
+
+    await service.getAvailabilityByRef('shikimori:3', undefined, {
+      seasonNumber: 2,
+      episodeNumber: 14,
+      absoluteEpisodeNumber: 39,
+    });
+
+    expect(getAvailability).toHaveBeenCalledWith(
+      expect.objectContaining({
+        seasonNumber: 2,
+        episodeNumber: 14,
+        absoluteEpisodeNumber: 39,
+        animeReleaseEpisode: {
+          releaseIndex: 2,
+          releaseEpisodeNumber: 1,
+          releaseEpisodeCounts: [25, 13, 12, 16],
+        },
+      }),
+      { playbackUserAgent: undefined },
     );
   });
 

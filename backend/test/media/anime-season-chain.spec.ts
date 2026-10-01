@@ -62,6 +62,105 @@ describe('buildAnimeSeasonChain', () => {
     ]);
   });
 
+  it('groups split releases into verified canonical seasons with explicit offsets', async () => {
+    const details = {
+      ...anime('3', { title: 'Season 2 Part 2', episodesCount: 12 }),
+      canonicalSeasons: [
+        { number: 1, episodesCount: 25 },
+        { number: 2, episodesCount: 25 },
+        { number: 3, episodesCount: 16 },
+      ],
+    } as MediaDetails;
+    const counts: Record<string, number> = { '1': 25, '2': 13, '3': 12, '4': 16 };
+    const loadRelated = jest.fn((ids: { shikimori?: string }) => {
+      const id = Number(ids.shikimori);
+      const related = [
+        ...(id > 1
+          ? [relation('prequel', String(id - 1), { episodesCount: counts[String(id - 1)] })]
+          : []),
+        ...(id < 4
+          ? [relation('sequel', String(id + 1), { episodesCount: counts[String(id + 1)] })]
+          : []),
+      ];
+
+      return Promise.resolve(response(related));
+    });
+
+    const chain = await buildAnimeSeasonChain('shikimori:3', details, loadRelated);
+
+    expect(chain).toEqual([
+      expect.objectContaining({
+        number: 1,
+        releaseIndex: 0,
+        seasonEpisodeOffset: 0,
+        absoluteEpisodeOffset: 0,
+        canonicalMappingVerified: true,
+      }),
+      expect.objectContaining({
+        number: 2,
+        releaseIndex: 1,
+        seasonEpisodeOffset: 0,
+        absoluteEpisodeOffset: 25,
+        canonicalMappingVerified: true,
+      }),
+      expect.objectContaining({
+        number: 2,
+        releaseIndex: 2,
+        seasonEpisodeOffset: 13,
+        absoluteEpisodeOffset: 38,
+        canonicalMappingVerified: true,
+      }),
+      expect.objectContaining({
+        number: 3,
+        releaseIndex: 3,
+        seasonEpisodeOffset: 0,
+        absoluteEpisodeOffset: 50,
+        canonicalMappingVerified: true,
+      }),
+    ]);
+  });
+
+  it('keeps the longest completed canonical prefix when a future season is incomplete', async () => {
+    const counts: Record<string, number> = { '1': 11, '2': 12, '3': 13, '4': 12, '5': 14 };
+    const details = {
+      ...anime('2', { episodesCount: 12 }),
+      canonicalSeasons: [
+        { number: 1, episodesCount: 23 },
+        { number: 2, episodesCount: 25 },
+        { number: 3, episodesCount: 1 },
+      ],
+    } as MediaDetails;
+    const loadRelated = jest.fn((ids: { shikimori?: string }) => {
+      const id = Number(ids.shikimori);
+      return Promise.resolve(
+        response([
+          ...(id > 1
+            ? [relation('prequel', String(id - 1), { episodesCount: counts[String(id - 1)] })]
+            : []),
+          ...(id < 5
+            ? [relation('sequel', String(id + 1), { episodesCount: counts[String(id + 1)] })]
+            : []),
+        ]),
+      );
+    });
+
+    const chain = await buildAnimeSeasonChain('shikimori:2', details, loadRelated);
+
+    expect(
+      chain.map(({ number, seasonEpisodeOffset, canonicalMappingVerified }) => ({
+        number,
+        seasonEpisodeOffset,
+        canonicalMappingVerified,
+      })),
+    ).toEqual([
+      { number: 1, seasonEpisodeOffset: 0, canonicalMappingVerified: true },
+      { number: 1, seasonEpisodeOffset: 11, canonicalMappingVerified: true },
+      { number: 2, seasonEpisodeOffset: 0, canonicalMappingVerified: true },
+      { number: 2, seasonEpisodeOffset: 13, canonicalMappingVerified: true },
+      { number: 3, seasonEpisodeOffset: 0, canonicalMappingVerified: false },
+    ]);
+  });
+
   it('includes completed anime normalized with the ended lifecycle status', async () => {
     const loadRelated = jest.fn((ids: { shikimori?: string }) =>
       Promise.resolve(

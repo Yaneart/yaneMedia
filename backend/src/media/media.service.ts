@@ -32,6 +32,7 @@ import { normalizeMediaGenres } from './media-genres';
 import { selectMediaDescription, selectMediaShortDescription } from './media-descriptions';
 import { AppLogger } from '../platform/logging/app-logger';
 import { buildAnimeSeasonChain, type AnimeSeasonChainEntry } from './anime-season-chain';
+import { createAnimeReleaseEpisodeSelection } from './anime-release-episode';
 import { providerDiagnostics, withProviderCounts } from './media-provider-diagnostics';
 import { EditorialCatalogRepository } from './catalog/editorial-catalog.repository';
 import {
@@ -127,7 +128,7 @@ export class MediaService {
   ): Promise<{
     details: MediaDetailsDto | null;
     meta: DetailsResponse['meta'];
-    animeSeasonChain?: Array<CanonicalAnimeSeasonChainEntry & { number: number }>;
+    animeSeasonChain?: CanonicalAnimeSeasonChainEntry[];
   }> {
     const resolved = await this.resolveMediaRefOrThrow(mediaRef);
     const engineIds = this.toEngineInputIds(resolved);
@@ -169,10 +170,7 @@ export class MediaService {
       meta: response.meta,
       ...(animeSeasonChain.length > 1
         ? {
-            animeSeasonChain: animeSeasonChain.map((entry, index) => ({
-              ...entry,
-              number: index + 1,
-            })),
+            animeSeasonChain,
           }
         : {}),
     };
@@ -353,6 +351,18 @@ export class MediaService {
       ? { ...(trustedDetails.ids ?? {}), ...engineIds }
       : engineIds;
     const mediaType = catalogItem?.type ?? details!.type;
+    const currentMediaRef = resolved.identity
+      ? this.toPublicRoute(resolved.identity).mediaRef
+      : mediaRef;
+    const animeSeasonChain =
+      mediaType === 'anime' && trustedDetails?.type === 'anime'
+        ? await this.getAnimeSeasonChain(currentMediaRef, trustedDetails, engineIds)
+        : [];
+    const animeReleaseEpisode = createAnimeReleaseEpisodeSelection(
+      animeSeasonChain,
+      currentMediaRef,
+      episodeSelection,
+    );
 
     return {
       query: {
@@ -368,6 +378,7 @@ export class MediaService {
         seasonNumber: episodeSelection.seasonNumber,
         episodeNumber: episodeSelection.episodeNumber,
         absoluteEpisodeNumber: episodeSelection.absoluteEpisodeNumber,
+        ...(animeReleaseEpisode ? { animeReleaseEpisode } : {}),
       },
       playbackUserAgent,
       signal,
@@ -694,9 +705,20 @@ export class MediaService {
     ids: MediaExternalIds;
     identity?: CanonicalMediaIdentity;
   }): MediaExternalIds {
-    return resolved.identity?.type === 'anime'
-      ? this.toRegistryIds('anime', undefined, resolved.ids)
-      : resolved.ids;
+    if (resolved.identity?.type !== 'anime') return resolved.ids;
+
+    const ids = this.toRegistryIds('anime', undefined, resolved.ids);
+
+    // A cinema record can represent the whole franchise and legitimately expose
+    // a different MAL release. The exact Shikimori release is already sufficient
+    // for anime identity resolution, so do not let the redundant MAL alias reject
+    // otherwise compatible IMDb/Kinopoisk claims.
+    if (ids.shikimori && ids.myAnimeList) {
+      const { myAnimeList: _redundantMyAnimeList, ...releaseIds } = ids;
+      return releaseIds;
+    }
+
+    return ids;
   }
 
   private async runMediaEngine<T extends { meta?: ResponseMeta }>(

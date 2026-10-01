@@ -13,6 +13,7 @@ export type DirectEpisodeOption = {
   seasonNumber?: number;
   episodeNumber?: number;
   absoluteEpisodeNumber?: number;
+  releaseEpisodeNumber?: number;
   sources: readonly MediaSourceOption[];
 };
 

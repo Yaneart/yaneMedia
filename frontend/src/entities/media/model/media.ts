@@ -105,11 +105,15 @@ export interface AnimeDetails extends BaseMediaDetails {
 
 export interface AnimeSeasonChainEntry {
   number: number;
+  releaseIndex: number;
   mediaRef: MediaRef;
   slug: string;
   title: string;
   year?: number;
   episodesCount: number;
+  seasonEpisodeOffset: number;
+  absoluteEpisodeOffset: number;
+  canonicalMappingVerified: boolean;
 }
 
 export type MediaDetails = MovieDetails | SeriesDetails | AnimeDetails;

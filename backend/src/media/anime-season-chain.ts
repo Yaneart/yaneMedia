@@ -10,11 +10,16 @@ import { createMediaRef } from './media-ref';
 export const MAX_ANIME_SEASON_CHAIN_LENGTH = 12;
 
 export interface AnimeSeasonChainEntry {
+  number: number;
+  releaseIndex: number;
   mediaRef: string;
   slug?: string;
   title: string;
   year?: number;
   episodesCount: number;
+  seasonEpisodeOffset: number;
+  absoluteEpisodeOffset: number;
+  canonicalMappingVerified: boolean;
   ids?: ExternalIds;
 }
 
@@ -53,12 +58,17 @@ function toRelatedNode(relation: MediaRelation): AnimeSeasonNode | undefined {
   if (!mediaRef || !identityRef) return undefined;
 
   return {
+    number: 0,
+    releaseIndex: 0,
     mediaRef,
     identityRef,
     ids: relation.item.ids,
     title: relation.item.title,
     year: relation.item.year,
     episodesCount: relation.item.episodesCount!,
+    seasonEpisodeOffset: 0,
+    absoluteEpisodeOffset: 0,
+    canonicalMappingVerified: false,
   };
 }
 
@@ -112,13 +122,31 @@ function toInitialNode(mediaRef: string, details: MediaDetails): AnimeSeasonNode
   if (episodesCount <= 0) return undefined;
 
   return {
+    number: 0,
+    releaseIndex: 0,
     mediaRef,
     identityRef: createAnimeIdentityRef(details.ids) ?? mediaRef,
     ids: details.ids,
     title: details.title,
     year: details.year,
     episodesCount,
+    seasonEpisodeOffset: 0,
+    absoluteEpisodeOffset: 0,
+    canonicalMappingVerified: false,
   };
+}
+
+function getCanonicalSeasonEpisodeCounts(details: MediaDetails): number[] | undefined {
+  if (details.type !== 'anime' || !details.canonicalSeasons?.length) return undefined;
+
+  const seasons = [...details.canonicalSeasons].sort(
+    (first, second) => first.number - second.number,
+  );
+
+  if (!seasons.every((season, index) => season.number === index + 1)) return undefined;
+
+  const counts = seasons.map((season) => season.episodesCount ?? season.episodes?.length ?? 0);
+  return counts.every((count) => Number.isSafeInteger(count) && count > 0) ? counts : undefined;
 }
 
 export async function buildAnimeSeasonChain(
@@ -186,11 +214,46 @@ export async function buildAnimeSeasonChain(
     cursor = sequel;
   }
 
-  return chain.map(({ mediaRef: nodeMediaRef, title, year, episodesCount, ids }) => ({
-    mediaRef: nodeMediaRef,
-    title,
-    year,
-    episodesCount,
-    ids,
-  }));
+  const releaseEpisodeCounts = chain.map(({ episodesCount }) => episodesCount);
+  const canonicalSeasonEpisodeCounts = getCanonicalSeasonEpisodeCounts(details);
+  const mapCanonicalSeasons = canonicalSeasonEpisodeCounts
+    ? (await import('@media-engine/core')).mapAnimeReleasesToCanonicalSeasons
+    : undefined;
+  let canonicalMapping: ReturnType<NonNullable<typeof mapCanonicalSeasons>> = undefined;
+
+  if (mapCanonicalSeasons && canonicalSeasonEpisodeCounts) {
+    for (let length = releaseEpisodeCounts.length; length > 0 && !canonicalMapping; length -= 1) {
+      canonicalMapping = mapCanonicalSeasons(
+        releaseEpisodeCounts.slice(0, length),
+        canonicalSeasonEpisodeCounts,
+      );
+    }
+  }
+
+  const mappedReleaseCount = canonicalMapping?.length ?? 0;
+  const lastMappedSeasonNumber = canonicalMapping?.at(-1)?.canonicalSeasonNumber ?? 0;
+  let fallbackAbsoluteOffset = 0;
+
+  return chain.map(({ mediaRef: nodeMediaRef, title, year, episodesCount, ids }, releaseIndex) => {
+    const mapping = canonicalMapping?.[releaseIndex];
+    const entry: AnimeSeasonChainEntry = {
+      number:
+        mapping?.canonicalSeasonNumber ??
+        (mappedReleaseCount > 0
+          ? lastMappedSeasonNumber + releaseIndex - mappedReleaseCount + 1
+          : releaseIndex + 1),
+      releaseIndex,
+      mediaRef: nodeMediaRef,
+      title,
+      year,
+      episodesCount,
+      seasonEpisodeOffset: mapping?.canonicalSeasonEpisodeOffset ?? 0,
+      absoluteEpisodeOffset: mapping?.canonicalAbsoluteEpisodeOffset ?? fallbackAbsoluteOffset,
+      canonicalMappingVerified: mapping !== undefined,
+      ids,
+    };
+
+    fallbackAbsoluteOffset += episodesCount;
+    return entry;
+  });
 }

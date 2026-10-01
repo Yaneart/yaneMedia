@@ -166,7 +166,7 @@ export class MediaRegistryService {
 
       if (matchedWorks.length > 1) {
         const canonicalCandidates = matchedWorks.filter(({ type }) => type === input.type);
-        if (canonicalCandidates.length !== 1) {
+        if (canonicalCandidates.length === 0) {
           throw new ConflictException('Conflicting media aliases');
         }
 
@@ -184,7 +184,11 @@ export class MediaRegistryService {
           throw new ConflictException('Conflicting media aliases');
         }
 
-        work = canonicalCandidates[0];
+        work = canonicalCandidates.sort(
+          (first, second) =>
+            first.createdAt.getTime() - second.createdAt.getTime() ||
+            first.mediaRef.localeCompare(second.mediaRef),
+        )[0];
         const redirectedRefs = matchedRefs.filter((mediaRef) => mediaRef !== work!.mediaRef);
         await transaction
           .update(mediaWorkAliases)

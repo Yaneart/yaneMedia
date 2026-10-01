@@ -2,17 +2,28 @@ import { useOpeningHistory } from '@/features/opening-history';
 import { resolveMediaDetailsPresentation } from '@/entities/media';
 import { EmptyState, ErrorState, MediaPageSkeleton } from '@/shared';
 import { useEffect, useMemo } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { useNavigate, useParams, useSearchParams } from 'react-router';
 
 import { useMediaDetails } from '../model/useMediaDetails';
 import { useMediaSummary } from '../model/useMediaSummary';
 import { useMediaAvailability } from '../model/useMediaAvailability';
 import { MediaView } from './MediaView';
-import { getAnimeSeasonNavigationTarget } from '../model/animeSeasonNavigation';
+import {
+  getAnimeEpisodeNavigationTarget,
+  getAnimeSeasonNavigationTarget,
+} from '../model/animeSeasonNavigation';
+
+function parseEpisodeNumber(value: string | null): number | undefined {
+  if (!value || !/^\d+$/.test(value)) return undefined;
+
+  const episodeNumber = Number(value);
+  return Number.isSafeInteger(episodeNumber) && episodeNumber > 0 ? episodeNumber : undefined;
+}
 
 export function MediaPage() {
   const { mediaRef } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { recordOpening } = useOpeningHistory();
 
   const { result, status: detailsStatus, retry: retryDetails } = useMediaDetails(mediaRef);
@@ -95,29 +106,13 @@ export function MediaPage() {
     return <MediaPageSkeleton />;
   }
 
-  const detailsUnavailable = detailsStatus !== 'success';
-
   return (
-    <div className="space-y-6">
-      {detailsUnavailable && detailsStatus !== 'loading' && (
-        <ErrorState
-          variant="section"
-          title={
-            detailsStatus === 'offline'
-              ? 'Подробности появятся после подключения к сети'
-              : 'Не удалось загрузить подробности'
-          }
-          description="Основная информация из локального каталога остаётся доступной."
-          retryLabel="Повторить загрузку подробностей"
-          onRetry={detailsStatus === 'offline' ? undefined : retryDetails}
-          className="rounded-card border border-context-border bg-surface-elevated"
-        />
-      )}
-
+    <div>
       <MediaView
         key={media.mediaRef}
         media={media}
         animeSeasonChain={result?.animeSeasonChain ?? []}
+        initialAnimeEpisodeNumber={parseEpisodeNumber(searchParams.get('episode'))}
         onAnimeSeasonChange={(seasonNumber) => {
           const target = getAnimeSeasonNavigationTarget(
             result?.animeSeasonChain ?? [],
@@ -126,6 +121,18 @@ export function MediaPage() {
           );
 
           if (target) navigate(`/media/${encodeURIComponent(target)}`);
+        }}
+        onAnimeEpisodeChange={(seasonNumber, episodeNumber) => {
+          const target = getAnimeEpisodeNavigationTarget(
+            result?.animeSeasonChain ?? [],
+            seasonNumber,
+            episodeNumber,
+            media.mediaRef,
+          );
+
+          if (target) {
+            navigate(`/media/${encodeURIComponent(target)}?episode=${episodeNumber}`);
+          }
         }}
         availability={availability}
         availabilityPending={availabilityPending}

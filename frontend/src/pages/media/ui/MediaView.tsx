@@ -43,13 +43,22 @@ import { useCallback, useEffect, useState } from 'react';
 import type { MediaAvailabilityStatus } from '../model/useMediaAvailability';
 import { useMediaEpisodeAvailability } from '../model/useMediaEpisodeAvailability';
 import { useMediaEpisodePrefetch } from '../model/useMediaEpisodePrefetch';
-import { createAnimeSeasonSelectorState } from '../model/animeSeasonNavigation';
-import { getAvailabilityEpisode } from '../model/animeEpisodeAvailability';
+import {
+  createAnimeSeasonSelectorState,
+  createCanonicalAnimeEpisodeOptions,
+} from '../model/animeSeasonNavigation';
+import {
+  createAnimePlaybackEpisodes,
+  getAvailabilityEpisode,
+} from '../model/animeEpisodeAvailability';
+import { resolveAvailablePlaybackMode } from '../model/playbackModeResolution';
 
 export type MediaViewProps = {
   media: MediaDetails;
   animeSeasonChain: readonly AnimeSeasonChainEntry[];
   onAnimeSeasonChange: (seasonNumber: number) => void;
+  onAnimeEpisodeChange: (seasonNumber: number, episodeNumber: number) => void;
+  initialAnimeEpisodeNumber?: number;
   availability: MediaAvailability | null;
   availabilityPending: boolean;
   availabilityStatus: MediaAvailabilityStatus;
@@ -184,6 +193,10 @@ function findEpisodeMetadata(media: MediaDetails, episode: DirectEpisodeOption |
   }
 
   return media.episodes.find((item) => {
+    if (episode.releaseEpisodeNumber !== undefined) {
+      return item.episodeNumber === episode.releaseEpisodeNumber;
+    }
+
     if (
       episode.absoluteEpisodeNumber !== undefined &&
       item.absoluteEpisodeNumber === episode.absoluteEpisodeNumber
@@ -225,6 +238,8 @@ export function MediaView({
   media,
   animeSeasonChain,
   onAnimeSeasonChange,
+  onAnimeEpisodeChange,
+  initialAnimeEpisodeNumber,
   availability,
   availabilityPending,
   availabilityStatus,
@@ -236,34 +251,34 @@ export function MediaView({
   const mediaSession = session?.mediaRef === media.mediaRef ? session : null;
 
   const catalog = createPlaybackSourceCatalog(availability ?? emptyAvailability);
-  const animeSeasonSelector = createAnimeSeasonSelectorState(animeSeasonChain, media.mediaRef);
   const currentAnimeSeason = animeSeasonChain.find((season) => season.mediaRef === media.mediaRef);
-  const animeSeasonNumber = media.type === 'anime' ? (currentAnimeSeason?.number ?? 1) : undefined;
-  const animeAbsoluteEpisodeOffset = currentAnimeSeason
-    ? animeSeasonChain
-        .filter((season) => season.number < currentAnimeSeason.number)
-        .reduce((total, season) => total + season.episodesCount, 0)
-    : 0;
-  const usesDirectEpisodes = media.type !== 'movie' && catalog.directEpisodes.length > 0;
+  const animeReleaseCoordinates =
+    media.type === 'anime'
+      ? (currentAnimeSeason ?? {
+          number: 1,
+          seasonEpisodeOffset: 0,
+          absoluteEpisodeOffset: 0,
+        })
+      : undefined;
+  const directEpisodes = createAnimePlaybackEpisodes(
+    media,
+    catalog.directEpisodes,
+    animeReleaseCoordinates,
+  );
+  const animeSeasonSelector = createAnimeSeasonSelectorState(animeSeasonChain, media.mediaRef);
+  const usesDirectEpisodes = media.type !== 'movie' && directEpisodes.length > 0;
   const hasEmbedMode = catalog.embedSources.length > 0;
-  const hasDirectMode = usesDirectEpisodes
+  const hasInitialDirectMode = usesDirectEpisodes
     ? catalog.directEpisodes.length > 0
     : catalog.directSources.length > 0;
-  const hasPlaybackSources = hasEmbedMode || hasDirectMode;
-
-  const playerEmptyState = getMediaPlayerEmptyState(
-    availability,
-    availabilityPending,
-    availabilityStatus,
-    hasPlaybackSources,
-  );
+  const hasInitialPlaybackSources = hasEmbedMode || hasInitialDirectMode;
 
   const sessionEmbedSource = catalog.embedSources.find(
     (source) => source.sourceRef === mediaSession?.sourceRef,
   );
   const sessionDirectEpisode = usesDirectEpisodes
-    ? (findDirectEpisodeBySourceRef(catalog.directEpisodes, mediaSession?.sourceRef) ??
-      findDirectEpisodeByRef(catalog.directEpisodes, mediaSession?.episode))
+    ? (findDirectEpisodeBySourceRef(directEpisodes, mediaSession?.sourceRef) ??
+      findDirectEpisodeByRef(directEpisodes, mediaSession?.episode))
     : undefined;
   const sessionDirectSource = usesDirectEpisodes
     ? sessionDirectEpisode?.sources.find((source) => source.sourceRef === mediaSession?.sourceRef)
@@ -276,13 +291,18 @@ export function MediaView({
       : hasEmbedMode
         ? 'embed'
         : 'direct';
-  const initialDirectEpisode = sessionDirectEpisode ?? catalog.directEpisodes[0];
+  const requestedAnimeEpisode =
+    media.type === 'anime' && initialAnimeEpisodeNumber !== undefined
+      ? directEpisodes.find(({ episodeNumber }) => episodeNumber === initialAnimeEpisodeNumber)
+      : undefined;
+  const initialDirectEpisode = sessionDirectEpisode ?? requestedAnimeEpisode ?? directEpisodes[0];
   const initialDirectSources = usesDirectEpisodes
     ? (initialDirectEpisode?.sources ?? [])
     : catalog.directSources;
 
   const [selectedPlaybackMode, setSelectedPlaybackMode] = useState<PlaybackMode>(initialMode);
-  const [isPlaybackModeInitialized, setIsPlaybackModeInitialized] = useState(hasPlaybackSources);
+  const [isPlaybackModeInitialized, setIsPlaybackModeInitialized] =
+    useState(hasInitialPlaybackSources);
   const [selectedEmbedSourceRef, setSelectedEmbedSourceRef] = useState<string | null>(
     sessionEmbedSource?.sourceRef ?? getPreferredSource(catalog.embedSources)?.sourceRef ?? null,
   );
@@ -302,43 +322,15 @@ export function MediaView({
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
   const playbackMode = isPlaybackModeInitialized ? selectedPlaybackMode : initialMode;
 
-  useEffect(() => {
-    if (!hasPlaybackSources) return;
-
-    if (!isPlaybackModeInitialized) {
-      setSelectedPlaybackMode(initialMode);
-      setIsPlaybackModeInitialized(true);
-      return;
-    }
-
-    if (playbackMode === 'embed' && !hasEmbedMode && hasDirectMode) {
-      setSelectedPlaybackMode('direct');
-    } else if (playbackMode === 'direct' && !hasDirectMode && hasEmbedMode) {
-      setSelectedPlaybackMode('embed');
-    }
-  }, [
-    hasDirectMode,
-    hasEmbedMode,
-    hasPlaybackSources,
-    initialMode,
-    isPlaybackModeInitialized,
-    playbackMode,
-  ]);
-
   const selectedEmbedSource =
     catalog.embedSources.find((source) => source.sourceRef === selectedEmbedSourceRef) ??
     sessionEmbedSource ??
     getPreferredSource(catalog.embedSources);
   const selectedDirectEpisode = usesDirectEpisodes
-    ? (catalog.directEpisodes.find((episode) => episode.key === selectedDirectEpisodeKey) ??
+    ? (directEpisodes.find((episode) => episode.key === selectedDirectEpisodeKey) ??
       initialDirectEpisode)
     : undefined;
-  const availabilityEpisode = getAvailabilityEpisode(
-    media,
-    selectedDirectEpisode,
-    animeSeasonNumber,
-    animeAbsoluteEpisodeOffset,
-  );
+  const availabilityEpisode = getAvailabilityEpisode(media, selectedDirectEpisode);
   const { availability: episodeAvailability, isPending: episodeAvailabilityPending } =
     useMediaEpisodeAvailability(media.mediaRef, availabilityEpisode);
   const currentDirectSources = usesDirectEpisodes
@@ -348,13 +340,47 @@ export function MediaView({
         availabilityEpisode,
       )
     : catalog.directSources;
+  const hasDirectMode = currentDirectSources.length > 0;
+  const hasPlaybackSources = hasEmbedMode || hasDirectMode;
+  const directModePending = usesDirectEpisodes && episodeAvailabilityPending;
+  const playerEmptyState = getMediaPlayerEmptyState(
+    availability,
+    availabilityPending || directModePending,
+    availabilityStatus,
+    hasPlaybackSources,
+  );
+
+  useEffect(() => {
+    if (!hasPlaybackSources && !directModePending) return;
+
+    if (!isPlaybackModeInitialized) {
+      setSelectedPlaybackMode(initialMode);
+      setIsPlaybackModeInitialized(true);
+      return;
+    }
+
+    const availableMode = resolveAvailablePlaybackMode(
+      playbackMode,
+      hasEmbedMode,
+      hasDirectMode,
+      directModePending,
+    );
+
+    if (availableMode !== playbackMode) setSelectedPlaybackMode(availableMode);
+  }, [
+    directModePending,
+    hasDirectMode,
+    hasEmbedMode,
+    hasPlaybackSources,
+    initialMode,
+    isPlaybackModeInitialized,
+    playbackMode,
+  ]);
   const adjacentAvailabilityEpisodes = getAdjacentDirectEpisodes(
-    catalog.directEpisodes,
+    directEpisodes,
     selectedDirectEpisode,
   )
-    .map((episode) =>
-      getAvailabilityEpisode(media, episode, animeSeasonNumber, animeAbsoluteEpisodeOffset),
-    )
+    .map((episode) => getAvailabilityEpisode(media, episode))
     .filter((episode): episode is MediaSourceEpisodeRef => episode !== null);
   const canPrefetchEpisodes =
     playbackMode === 'direct' &&
@@ -438,7 +464,7 @@ export function MediaView({
 
   const directSeasonNumbers = Array.from(
     new Set(
-      catalog.directEpisodes.flatMap((episode) =>
+      directEpisodes.flatMap((episode) =>
         episode.seasonNumber === undefined ? [] : [episode.seasonNumber],
       ),
     ),
@@ -448,14 +474,21 @@ export function MediaView({
   }));
   const episodesForSelectedSeason =
     directSeasonNumbers.length > 0
-      ? catalog.directEpisodes.filter(
+      ? directEpisodes.filter(
           (episode) => episode.seasonNumber === selectedDirectEpisode?.seasonNumber,
         )
-      : catalog.directEpisodes;
-  const directEpisodeOptions = episodesForSelectedSeason
-    .map(toEpisodeSelectorOption)
-    .filter((episode): episode is MediaEpisode => episode !== null);
-  const nextDirectEpisode = getNextDirectEpisode(catalog.directEpisodes, selectedDirectEpisode);
+      : directEpisodes;
+  const canonicalAnimeEpisodeOptions = createCanonicalAnimeEpisodeOptions(
+    animeSeasonChain,
+    media.mediaRef,
+  );
+  const directEpisodeOptions =
+    canonicalAnimeEpisodeOptions.length > 0
+      ? canonicalAnimeEpisodeOptions
+      : episodesForSelectedSeason
+          .map(toEpisodeSelectorOption)
+          .filter((episode): episode is MediaEpisode => episode !== null);
+  const nextDirectEpisode = getNextDirectEpisode(directEpisodes, selectedDirectEpisode);
 
   const selectedPlaybackEpisode =
     playbackMode === 'direct' && usesDirectEpisodes
@@ -508,9 +541,7 @@ export function MediaView({
   const selectSeason = (seasonNumber: number) => {
     if (seasonNumber === selectedDirectEpisode?.seasonNumber) return;
 
-    const nextEpisode = catalog.directEpisodes.find(
-      (episode) => episode.seasonNumber === seasonNumber,
-    );
+    const nextEpisode = directEpisodes.find((episode) => episode.seasonNumber === seasonNumber);
 
     if (!nextEpisode) return;
 
@@ -522,7 +553,14 @@ export function MediaView({
       (episode) => getDirectEpisodeDisplayNumber(episode) === episodeNumber,
     );
 
-    if (!nextEpisode || nextEpisode.key === selectedDirectEpisode?.key) return;
+    if (!nextEpisode) {
+      if (media.type === 'anime' && currentAnimeSeason) {
+        onAnimeEpisodeChange(currentAnimeSeason.number, episodeNumber);
+      }
+      return;
+    }
+
+    if (nextEpisode.key === selectedDirectEpisode?.key) return;
 
     selectDirectEpisode(nextEpisode);
   };
@@ -589,18 +627,7 @@ export function MediaView({
   return (
     <div className="grid min-w-0 items-start gap-8 xl:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)] xl:gap-10">
       <div className="order-2 min-w-0 space-y-8 xl:order-none xl:col-start-2 xl:row-start-1">
-        <div className="min-w-0 space-y-4">
-          {animeSeasonSelector && (
-            <div className="min-w-0 rounded-card border border-context-border bg-surface-elevated px-4 py-3 shadow-surface sm:px-5">
-              <SeasonSelector
-                seasons={animeSeasonSelector.options}
-                selectedSeasonNumber={animeSeasonSelector.selectedSeasonNumber}
-                onSeasonChange={onAnimeSeasonChange}
-                variant="inline"
-              />
-            </div>
-          )}
-
+        <div className="min-w-0">
           <div className="min-w-0 overflow-hidden rounded-card border border-context-border bg-surface shadow-surface">
             <div
               className={[
@@ -611,6 +638,16 @@ export function MediaView({
                   : 'min-[70rem]:gap-x-6',
               ].join(' ')}
             >
+              {animeSeasonSelector && (
+                <SeasonSelector
+                  seasons={animeSeasonSelector.options}
+                  selectedSeasonNumber={animeSeasonSelector.selectedSeasonNumber}
+                  onSeasonChange={onAnimeSeasonChange}
+                  variant="inline"
+                  compactDesktop
+                />
+              )}
+
               {hasEmbedMode && hasDirectMode && (
                 <PlaybackModeSelector
                   value={playbackMode}
