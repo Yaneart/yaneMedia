@@ -28,8 +28,6 @@ import {
 } from '@nestjs/common';
 import { createMediaRef, resolveMediaRef, type MediaExternalIds } from './media-ref';
 import { mapMediaAvailability, selectMediaAvailabilityEpisode } from './media-availability.mapper';
-import { normalizeMediaGenres } from './media-genres';
-import { selectMediaDescription, selectMediaShortDescription } from './media-descriptions';
 import { AppLogger } from '../platform/logging/app-logger';
 import { buildAnimeSeasonChain, type AnimeSeasonChainEntry } from './anime-season-chain';
 import { createAnimeReleaseEpisodeSelection } from './anime-release-episode';
@@ -145,28 +143,25 @@ export class MediaService {
       queueWaitMs,
     );
 
-    if (!response.details && !catalogItem) {
-      return { details: null, meta: response.meta };
-    }
-
     const trustedDetails =
       response.details && this.matchesCatalogIdentity(response.details, catalogItem)
         ? response.details
         : undefined;
-    const identity = trustedDetails
-      ? await this.registerIdentity(trustedDetails, engineIds)
-      : catalogItem
-        ? await this.registerCatalogIdentity(catalogItem, engineIds)
-        : resolved.identity;
+
+    if (!trustedDetails) {
+      return { details: null, meta: response.meta };
+    }
+
+    const identity = await this.registerIdentity(trustedDetails, engineIds);
     const route = identity ? this.toPublicRoute(identity) : this.legacyRoute(mediaRef);
-    const animeSeasonChain = trustedDetails
-      ? await this.getAnimeSeasonChain(route.mediaRef, trustedDetails, engineIds)
-      : [];
+    const animeSeasonChain = await this.getAnimeSeasonChain(
+      route.mediaRef,
+      trustedDetails,
+      engineIds,
+    );
 
     return {
-      details: trustedDetails
-        ? this.applyCatalogIdentity(this.toMediaDetails(route, trustedDetails), catalogItem)
-        : this.toCatalogDetails(catalogItem!, route),
+      details: this.toMediaDetails(route, trustedDetails),
       meta: response.meta,
       ...(animeSeasonChain.length > 1
         ? {
@@ -435,56 +430,14 @@ export class MediaService {
     );
   }
 
-  private applyCatalogIdentity(details: MediaDetailsDto, item?: PublishedItem): MediaDetailsDto {
-    if (!item) return details;
-    return {
-      ...details,
-      title: item.title,
-      originalTitle: item.originalTitle ?? details.originalTitle,
-      year: item.year ?? details.year,
-    };
-  }
-
-  private toCatalogDetails(
-    item: PublishedItem,
-    route: Pick<CanonicalMediaIdentity, 'mediaRef' | 'slug'>,
-  ): MediaDetailsDto {
-    const base = {
-      ...route,
-      title: item.title,
-      originalTitle: item.originalTitle ?? undefined,
-      year: item.year ?? undefined,
-      shortDescription: item.shortDescription ?? undefined,
-      description: item.shortDescription ?? undefined,
-      poster: item.posterObjectKey
-        ? { url: `/api/v1/media/assets/poster/${item.posterObjectKey}` }
-        : undefined,
-      backdrop: item.backdropObjectKey
-        ? { url: `/api/v1/media/assets/backdrop/${item.backdropObjectKey}` }
-        : undefined,
-      genres: item.genres,
-      rating: item.rating === null ? undefined : { value: item.rating, scale: 10 as const },
-      countries: [],
-      languages: [],
-      persons: [],
-    };
-
-    if (item.type === 'series') return { ...base, type: 'series', seasons: [] };
-    if (item.type === 'anime') return { ...base, type: 'anime', episodes: [] };
-    return { ...base, type: 'movie' };
-  }
-
   private toMediaDetails(
     route: Pick<CanonicalMediaIdentity, 'mediaRef' | 'slug'>,
     details: MediaDetails,
   ): MediaDetailsDto {
     const base = {
       ...this.buildMediaSummary(details, route),
-      genres: normalizeMediaGenres(
-        details.genres?.map(({ name }) => name),
-        details.type,
-      ),
-      description: selectMediaDescription(details.description, details.shortDescription),
+      genres: this.normalizeStrings(details.genres?.map(({ name }) => name)),
+      description: details.description ?? details.shortDescription,
       releaseDate: details.releaseDate,
       status: details.status,
       runtimeMinutes: details.runtimeMinutes,
@@ -544,7 +497,7 @@ export class MediaService {
       title: item.title,
       originalTitle: item.originalTitle,
       year: item.year,
-      shortDescription: selectMediaShortDescription(item.shortDescription, item.description),
+      shortDescription: item.shortDescription ?? item.description,
       poster: this.toArtwork(item.poster),
       backdrop: this.toArtwork(item.backdrop),
       genres: this.normalizeStrings(item.genres?.map(({ name }) => name)),
@@ -643,19 +596,6 @@ export class MediaService {
     ) as ExternalIds;
 
     return Object.keys(animeIds).length > 0 ? animeIds : ids;
-  }
-
-  private registerCatalogIdentity(
-    item: PublishedItem,
-    ids: Readonly<MediaExternalIds>,
-  ): Promise<Pick<CanonicalMediaIdentity, 'mediaRef' | 'slug'>> {
-    return this.registerRoute({
-      type: item.type,
-      ids,
-      title: item.title,
-      originalTitle: item.originalTitle ?? undefined,
-      year: item.year ?? undefined,
-    });
   }
 
   private async registerRoute(input: {

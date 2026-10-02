@@ -1,11 +1,9 @@
 import { useOpeningHistory } from '@/features/opening-history';
-import { resolveMediaDetailsPresentation } from '@/entities/media';
 import { EmptyState, ErrorState, MediaPageSkeleton } from '@/shared';
-import { useEffect, useMemo } from 'react';
+import { useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 
 import { useMediaDetails } from '../model/useMediaDetails';
-import { useMediaSummary } from '../model/useMediaSummary';
 import { useMediaAvailability } from '../model/useMediaAvailability';
 import { MediaView } from './MediaView';
 import {
@@ -27,7 +25,6 @@ export function MediaPage() {
   const { recordOpening } = useOpeningHistory();
 
   const { result, status: detailsStatus, retry: retryDetails } = useMediaDetails(mediaRef);
-  const { summary, status: summaryStatus } = useMediaSummary(mediaRef);
 
   const {
     availability,
@@ -35,10 +32,7 @@ export function MediaPage() {
     status: availabilityStatus,
   } = useMediaAvailability(mediaRef);
 
-  const media = useMemo(
-    () => resolveMediaDetailsPresentation(summary, result?.details ?? null),
-    [result?.details, summary],
-  );
+  const media = result?.details ?? null;
   const openingMediaRef = media?.mediaRef;
 
   useEffect(() => {
@@ -53,7 +47,7 @@ export function MediaPage() {
     recordOpening(openingMediaRef);
   }, [openingMediaRef, recordOpening]);
 
-  if (detailsStatus === 'not-found' && summaryStatus === 'not-found') {
+  if (detailsStatus === 'not-found') {
     return (
       <ErrorState
         variant="page"
@@ -67,12 +61,7 @@ export function MediaPage() {
     );
   }
 
-  if (
-    !media &&
-    (detailsStatus === 'error' || summaryStatus === 'error') &&
-    detailsStatus !== 'loading' &&
-    summaryStatus !== 'loading'
-  ) {
+  if (detailsStatus === 'error') {
     return (
       <ErrorState
         variant="page"
@@ -87,12 +76,7 @@ export function MediaPage() {
     );
   }
 
-  if (
-    !media &&
-    (detailsStatus === 'offline' || summaryStatus === 'offline') &&
-    detailsStatus !== 'loading' &&
-    summaryStatus !== 'loading'
-  ) {
+  if (detailsStatus === 'offline') {
     return (
       <EmptyState
         title="Нет подключения к сети"

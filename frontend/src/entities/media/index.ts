@@ -43,11 +43,6 @@ export { mediaDetailsQueryOptions } from './model/mediaDetailsQuery';
 export { getMediaSummary } from './api/getMediaSummary';
 export { mediaSummaryQueryKey, seedMediaSummary } from './model/mediaSummaryCache';
 export { mediaSummaryQueryOptions, mediaSummaryStaleTimeMs } from './model/mediaSummaryQuery';
-export {
-  createMediaDetailsShell,
-  enrichMediaDetails,
-  resolveMediaDetailsPresentation,
-} from './model/mediaDetailsPresentation';
 
 export { MediaCard } from './ui/MediaCard';
 export type { MediaCardProps } from './ui/MediaCard';

@@ -54,7 +54,7 @@ describe('MediaService', () => {
       findPublishedItems: jest.fn().mockResolvedValue([]),
     } as unknown as EditorialCatalogRepository);
 
-  it('keeps published Shōgun identity and excludes conflicting movie metadata', async () => {
+  it('rejects conflicting details instead of building a page from catalog metadata', async () => {
     const getDetails = jest.fn().mockResolvedValue({
       details: {
         type: 'movie',
@@ -74,17 +74,7 @@ describe('MediaService', () => {
     const service = withCatalog({ getDetails, getAvailability });
 
     const result = await service.getDetailsByRef('imdb:tt2788316');
-    expect(result.details).toMatchObject({
-      mediaRef: 'imdb:tt2788316',
-      type: 'series',
-      title: 'Сёгун',
-      year: 2024,
-      seasons: [],
-      description: 'Исторический сериал.',
-    });
-    expect(JSON.stringify(result.details)).not.toMatch(
-      /Who Killed Cock Robin|unrelated movie|wrong-id/,
-    );
+    expect(result.details).toBeNull();
     await service.getAvailabilityByRef('imdb:tt2788316');
 
     expect(getDetails).toHaveBeenCalledWith({
@@ -98,7 +88,7 @@ describe('MediaService', () => {
     );
   });
 
-  it('enriches matching details while preserving the published title and year', async () => {
+  it('keeps coherent metadata and artwork from Media Engine', async () => {
     const getDetails = jest.fn().mockResolvedValue({
       details: {
         type: 'series',
@@ -107,6 +97,8 @@ describe('MediaService', () => {
         description: 'Dynamic series description.',
         seasons: [{ number: 1, episodes: [] }],
         ids: { imdb: 'tt2788316' },
+        poster: { url: 'https://images.example/poster.jpg', width: 600, height: 900 },
+        backdrop: { url: 'https://images.example/backdrop.jpg', width: 1280, height: 720 },
       },
       meta: { providers: { requested: [], successful: [], failed: [] } },
     });
@@ -114,10 +106,12 @@ describe('MediaService', () => {
 
     expect(result.details).toMatchObject({
       type: 'series',
-      title: 'Сёгун',
+      title: 'Shōgun',
       year: 2024,
       description: 'Dynamic series description.',
       seasons: [{ number: 1 }],
+      poster: { url: 'https://images.example/poster.jpg', width: 600, height: 900 },
+      backdrop: { url: 'https://images.example/backdrop.jpg', width: 1280, height: 720 },
     });
   });
 
@@ -135,11 +129,10 @@ describe('MediaService', () => {
 
     const result = await withCatalog({ getDetails }).getDetailsByRef('imdb:tt2788316');
 
-    expect(result.details).toMatchObject({ type: 'series', title: 'Сёгун', year: 2024 });
-    expect(JSON.stringify(result.details)).not.toMatch(/Unrelated series|Wrong story/);
+    expect(result.details).toBeNull();
   });
 
-  it('keeps a published card when metadata providers find no details', async () => {
+  it('does not turn a published card into a details response when providers find no details', async () => {
     const getDetails = jest.fn().mockResolvedValue({
       details: null,
       meta: { providers: { requested: [], successful: [], failed: [] } },
@@ -147,7 +140,7 @@ describe('MediaService', () => {
 
     const result = await withCatalog({ getDetails }).getDetailsByRef('imdb:tt2788316');
 
-    expect(result.details).toMatchObject({ type: 'series', title: 'Сёгун', year: 2024 });
+    expect(result.details).toBeNull();
   });
 
   it('uses published identity for availability when metadata is empty', async () => {
@@ -401,7 +394,7 @@ describe('MediaService', () => {
     expect(getRelatedMedia).toHaveBeenCalledTimes(2);
   });
 
-  it('uses a Russian short description before a foreign full fallback', async () => {
+  it('preserves the coherent Media Engine description without app-side language guessing', async () => {
     const getDetails = jest.fn().mockResolvedValue({
       details: {
         id: 'dark',
@@ -417,14 +410,14 @@ describe('MediaService', () => {
 
     const response = await service.getDetailsByRef('imdb:tt5753856');
 
-    expect(response.details?.description).toBe('Русское краткое описание.');
+    expect(response.details?.description).toBe('English full description.');
     expect(getDetails).toHaveBeenCalledWith({
       ids: { imdb: 'tt5753856' },
       language: 'ru',
     });
   });
 
-  it('returns Russian-only deduplicated genres in media details', async () => {
+  it('preserves the genre selection returned by Media Engine', async () => {
     const getDetails = jest.fn().mockResolvedValue({
       details: {
         id: 'dune',
@@ -446,7 +439,14 @@ describe('MediaService', () => {
 
     const response = await service.getDetailsByRef('imdb:tt1160419');
 
-    expect(response.details?.genres).toEqual(['драма', 'боевик', 'фантастика', 'приключения']);
+    expect(response.details?.genres).toEqual([
+      'драма',
+      'боевик',
+      'фантастика',
+      'Action',
+      'Adventure',
+      'Drama',
+    ]);
   });
 
   it('omits known provider artwork placeholders and keeps real artwork', async () => {
