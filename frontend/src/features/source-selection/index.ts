@@ -21,6 +21,7 @@ export {
   getPreferredSource,
   getProviderLabel,
   getSourceLabel,
+  isDirectMediaSource,
 } from './model/sourceSelection';
 export type {
   DirectEpisodeOption,

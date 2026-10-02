@@ -85,9 +85,13 @@ export function getDirectEpisodeKey(episode: MediaSourceEpisodeRef) {
   return null;
 }
 
+export function isDirectMediaSource(source: MediaSourceOption) {
+  return source.kind === 'hls' || source.kind === 'mp4';
+}
+
 function toDirectEpisodeOption(episode: MediaAvailabilityEpisode): DirectEpisodeOption | null {
   const key = getDirectEpisodeKey(episode);
-  const sources = episode.sources.filter((source) => source.kind !== 'embed');
+  const sources = episode.sources.filter(isDirectMediaSource);
 
   if (!key) {
     return null;
@@ -108,7 +112,7 @@ export function createPlaybackSourceCatalog(
 ): PlaybackSourceCatalog {
   return {
     embedSources: availability.sources.filter((source) => source.kind === 'embed'),
-    directSources: availability.sources.filter((source) => source.kind !== 'embed'),
+    directSources: availability.sources.filter(isDirectMediaSource),
     directEpisodes: availability.episodes
       .map(toDirectEpisodeOption)
       .filter((episode): episode is DirectEpisodeOption => episode !== null),

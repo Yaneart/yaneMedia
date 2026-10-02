@@ -25,6 +25,7 @@ import {
   getNextDirectEpisode,
   getPreferredSource,
   getDirectSourceForTrackPreference,
+  isDirectMediaSource,
   PlaybackModeSelector,
   SourceSelector,
   type DirectEpisodeOption,
@@ -172,7 +173,7 @@ function mergeEpisodeSources(
   const exactSources = availability.episodes
     .filter((episode) => matchesEpisode(episode, selection))
     .flatMap((episode) => episode.sources)
-    .filter((source) => source.kind !== 'embed');
+    .filter(isDirectMediaSource);
 
   if (exactSources.length === 0) return baseSources;
 

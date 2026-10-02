@@ -25,14 +25,13 @@ export function MediaPage() {
   const { recordOpening } = useOpeningHistory();
 
   const { result, status: detailsStatus, retry: retryDetails } = useMediaDetails(mediaRef);
+  const media = result?.details ?? null;
 
   const {
     availability,
     isPending: availabilityPending,
     status: availabilityStatus,
-  } = useMediaAvailability(mediaRef);
-
-  const media = result?.details ?? null;
+  } = useMediaAvailability(media?.mediaRef);
   const openingMediaRef = media?.mediaRef;
 
   useEffect(() => {

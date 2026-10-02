@@ -3,6 +3,42 @@ import { selectUsableAvailability } from '../src/entities/media-source/model/med
 import { createPlaybackSourceCatalog } from '../src/features/source-selection/model/sourceSelection';
 
 describe('source-less episode catalogs', () => {
+  it('uses only HLS and MP4 sources for direct playback', () => {
+    const source = (kind: 'embed' | 'hls' | 'mp4' | 'external', id: string) => ({
+      sourceRef: `stream:test:${id}`,
+      provider: 'test',
+      kind,
+      label: id,
+      url: `https://video.example/${id}`,
+      availability: 'available' as const,
+      browserSupported: kind !== 'external',
+    });
+    const availability = {
+      sources: [
+        source('embed', 'embed'),
+        source('hls', 'hls'),
+        source('mp4', 'mp4'),
+        source('external', 'external'),
+      ],
+      episodes: [
+        {
+          seasonNumber: 1,
+          episodeNumber: 1,
+          sources: [source('hls', 'episode-hls'), source('external', 'episode-external')],
+        },
+      ],
+      checkedAt: '2026-10-02T00:00:00.000Z',
+      degraded: false,
+      hasExpiredSources: false,
+    };
+
+    const catalog = createPlaybackSourceCatalog(availability);
+
+    expect(catalog.embedSources.map(({ kind }) => kind)).toEqual(['embed']);
+    expect(catalog.directSources.map(({ kind }) => kind)).toEqual(['hls', 'mp4']);
+    expect(catalog.directEpisodes[0]?.sources.map(({ kind }) => kind)).toEqual(['hls']);
+  });
+
   it('keeps catalog episodes available for season and episode selection', () => {
     const availability = {
       sources: [],
