@@ -22,6 +22,7 @@ export type SelectProps = Omit<ComponentPropsWithoutRef<'div'>, 'onChange'> & {
   onChange: (value: string | null) => void;
   matchMenuWidth?: boolean;
   allowEmpty?: boolean;
+  menuPlacement?: 'top' | 'bottom';
 };
 
 export function Select({
@@ -32,6 +33,7 @@ export function Select({
   onChange,
   matchMenuWidth = false,
   allowEmpty = true,
+  menuPlacement = 'bottom',
   className = '',
   ...props
 }: SelectProps) {
@@ -182,7 +184,8 @@ export function Select({
           aria-label={ariaLabel}
           onKeyDown={handleListboxKeyDown}
           className={[
-            'absolute top-full left-0 z-30 mt-2 max-h-[20.5rem]',
+            'absolute left-0 z-30 max-h-[20.5rem]',
+            menuPlacement === 'top' ? 'bottom-full mb-2' : 'top-full mt-2',
             matchMenuWidth ? 'w-full' : 'w-max min-w-full',
             'overflow-x-hidden overflow-y-auto',
             '[scrollbar-width:none] [&::-webkit-scrollbar]:hidden',

@@ -77,12 +77,13 @@ export function MediaCard({
         aria-pressed={isFavorite}
         disabled={favoriteDisabled}
         className={[
-          'absolute right-2 top-2 rounded-full border border-transparent',
-          'bg-transparent text-watermark drop-shadow-md',
-          'hover:border-watermark/70 hover:bg-watermark/15 hover:text-watermark',
-          'focus-visible:border-watermark/70 focus-visible:bg-watermark/15 focus-visible:outline-none',
-          'focus-visible:ring-2 focus-visible:ring-watermark/60',
-          'transition-transform duration-200 ease-out hover:scale-105 active:scale-95 active:duration-75',
+          'absolute right-2 top-2 rounded-full border border-white/25',
+          'bg-black/55 text-white shadow-lg backdrop-blur-sm',
+          'hover:border-watermark/70 hover:bg-black/75 hover:text-watermark hover:shadow-xl',
+          'focus-visible:border-white/80 focus-visible:bg-black/75 focus-visible:outline-none',
+          'focus-visible:ring-2 focus-visible:ring-white/70',
+          'transition-[transform,background-color,border-color,color,box-shadow] duration-200 ease-out',
+          'hover:scale-110 active:scale-95 active:duration-75',
           'motion-reduce:transform-none motion-reduce:transition-none',
         ].join(' ')}
         onClick={onFavoriteChange}
@@ -90,7 +91,7 @@ export function MediaCard({
         <FavoriteStateIcon
           className={[
             'size-5 transition-[transform,color] duration-200 ease-out motion-reduce:transform-none motion-reduce:transition-none',
-            isFavorite ? 'scale-110 text-watermark' : 'scale-100 text-watermark',
+            isFavorite ? 'scale-110 text-watermark' : 'scale-100',
           ].join(' ')}
         />
       </IconButton>

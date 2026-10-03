@@ -6,7 +6,10 @@ import {
 } from '@/entities/media-source';
 import { ErrorState, IconButton, PlayIcon, Spinner } from '@/shared';
 
-import { MediaVideoRenderer } from './MediaVideoRenderer';
+import {
+  MediaVideoRenderer,
+  type MediaVideoDirectControls,
+} from './MediaVideoRenderer';
 
 export type MediaPlayerStatus = 'loading' | 'ready' | 'error';
 
@@ -38,6 +41,7 @@ export type MediaPlayerProps = {
   onRetry?: () => void;
   emptyState?: MediaPlayerEmptyState;
   embedded?: boolean;
+  directControls?: MediaVideoDirectControls;
 };
 
 type PlaybackIssueContent = {
@@ -106,6 +110,7 @@ export function MediaPlayer({
   onRetry,
   emptyState,
   embedded = false,
+  directControls,
 }: MediaPlayerProps) {
   const sourceIssue = source ? getMediaSourcePlaybackIssue(source) : null;
   const sourceIssueContent = sourceIssue ? playbackIssueContent[sourceIssue] : null;
@@ -153,6 +158,7 @@ export function MediaPlayer({
             mediaTitle={mediaTitle}
             shouldAutoPlay={shouldAutoPlay}
             initialPositionSeconds={initialPositionSeconds}
+            directControls={directControls}
             onReady={onReady}
             onError={onError}
             onPlay={onPlay}

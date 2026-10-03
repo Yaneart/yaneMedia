@@ -27,6 +27,12 @@ export { default as SunIcon } from '@mingcute/react/core-regular/sun';
 export { default as SystemThemeIcon } from '@mingcute/react/core-regular/computer';
 export { default as CheckIcon } from '@mingcute/react/core-regular/check';
 export { default as DownIcon } from '@mingcute/react/core-regular/down-small';
+export { default as FullscreenIcon } from '@mingcute/react/core-regular/fullscreen';
+export { default as FullscreenExitIcon } from '@mingcute/react/core-regular/fullscreen-exit';
+export { default as PauseIcon } from '@mingcute/react/core-regular/pause';
+export { default as SkipForwardIcon } from '@mingcute/react/core-regular/skip-forward';
+export { default as VolumeIcon } from '@mingcute/react/core-regular/volume';
+export { default as VolumeMuteIcon } from '@mingcute/react/core-regular/volume-mute';
 export { default as DeleteIcon } from '@mingcute/react/core-regular/delete-2';
 export { default as DeviceIcon } from '@mingcute/react/core-regular/device';
 

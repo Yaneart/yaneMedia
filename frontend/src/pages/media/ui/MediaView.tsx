@@ -12,7 +12,7 @@ import { usePlaybackSession } from '@/features/playback-session';
 import { SeasonSelector } from '@/features/season-selection';
 import {
   createPlaybackSourceCatalog,
-  DirectSourceSelector,
+  PlaybackSourcePicker,
   findDirectEpisodeByRef,
   findDirectEpisodeBySourceRef,
   getAdjacentDirectEpisodes,
@@ -26,8 +26,6 @@ import {
   getPreferredSource,
   getDirectSourceForTrackPreference,
   isDirectMediaSource,
-  PlaybackModeSelector,
-  SourceSelector,
   type DirectEpisodeOption,
   type PlaybackMode,
 } from '@/features/source-selection';
@@ -38,7 +36,7 @@ import {
   type MediaPlayerEmptyState,
   type MediaPlayerStatus,
 } from '@/widgets/media-player';
-import { Button, Spinner } from '@/shared';
+import { Spinner } from '@/shared';
 import { useCallback, useEffect, useState } from 'react';
 
 import type { MediaAvailabilityStatus } from '../model/useMediaAvailability';
@@ -73,27 +71,12 @@ const emptyAvailability: MediaAvailability = {
   hasExpiredSources: false,
 };
 
-type AvailabilityToolbarStatusProps = Pick<
-  MediaViewProps,
-  'availability' | 'availabilityPending' | 'availabilityStatus'
->;
-
-function AvailabilityToolbarStatus({
-  availability,
-  availabilityPending,
-  availabilityStatus,
-}: AvailabilityToolbarStatusProps) {
-  const isInitialLoading = !availability && availabilityPending && availabilityStatus === 'loading';
-
-  if (isInitialLoading) {
-    return (
-      <div className="flex min-h-10 min-w-48 flex-1 items-center justify-center" aria-live="polite">
-        <Spinner size="medium" label="Подбираем варианты просмотра" />
-      </div>
-    );
-  }
-
-  return null;
+function AvailabilityToolbarStatus() {
+  return (
+    <div className="flex min-h-12 w-full items-center justify-center" aria-live="polite">
+      <Spinner size="medium" label="Подбираем варианты просмотра" />
+    </div>
+  );
 }
 
 function getMediaPlayerEmptyState(
@@ -153,14 +136,16 @@ function getPlaybackEpisode(
 }
 
 function matchesEpisode(episode: MediaSourceEpisodeRef, selection: MediaSourceEpisodeRef) {
-  if (selection.absoluteEpisodeNumber !== undefined) {
-    return episode.absoluteEpisodeNumber === selection.absoluteEpisodeNumber;
-  }
+  const matchesAbsoluteEpisode =
+    selection.absoluteEpisodeNumber !== undefined &&
+    episode.absoluteEpisodeNumber === selection.absoluteEpisodeNumber;
 
-  return (
-    episode.seasonNumber === selection.seasonNumber &&
-    episode.episodeNumber === selection.episodeNumber
-  );
+  const matchesSeasonEpisode =
+    selection.episodeNumber !== undefined &&
+    episode.episodeNumber === selection.episodeNumber &&
+    (selection.seasonNumber === undefined || episode.seasonNumber === selection.seasonNumber);
+
+  return matchesAbsoluteEpisode || matchesSeasonEpisode;
 }
 
 function mergeEpisodeSources(
@@ -319,6 +304,10 @@ export function MediaView({
   const [preferredDirectTrackKey, setPreferredDirectTrackKey] = useState<string | null>(
     sessionDirectSource ? getDirectTrackKey(sessionDirectSource) : null,
   );
+  const [toolbarResolvedMediaRef, setToolbarResolvedMediaRef] = useState<string | null>(null);
+  const [sourceSearchSettledMediaRef, setSourceSearchSettledMediaRef] = useState<string | null>(
+    null,
+  );
   const [playerStatus, setPlayerStatus] = useState<MediaPlayerStatus>('ready');
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
   const playbackMode = isPlaybackModeInitialized ? selectedPlaybackMode : initialMode;
@@ -344,12 +333,30 @@ export function MediaView({
   const hasDirectMode = currentDirectSources.length > 0;
   const hasPlaybackSources = hasEmbedMode || hasDirectMode;
   const directModePending = usesDirectEpisodes && episodeAvailabilityPending;
+  const sourcesPending = availabilityPending || directModePending;
+  const hasToolbarControls =
+    hasPlaybackSources && (media.type === 'movie' || usesDirectEpisodes);
+  const initialToolbarLoadComplete = hasToolbarControls || !sourcesPending;
+  const isToolbarLoading =
+    toolbarResolvedMediaRef !== media.mediaRef && !initialToolbarLoadComplete;
   const playerEmptyState = getMediaPlayerEmptyState(
     availability,
     availabilityPending || directModePending,
     availabilityStatus,
     hasPlaybackSources,
   );
+
+  useEffect(() => {
+    if (initialToolbarLoadComplete && toolbarResolvedMediaRef !== media.mediaRef) {
+      setToolbarResolvedMediaRef(media.mediaRef);
+    }
+  }, [initialToolbarLoadComplete, media.mediaRef, toolbarResolvedMediaRef]);
+
+  useEffect(() => {
+    if (!sourcesPending && sourceSearchSettledMediaRef !== media.mediaRef) {
+      setSourceSearchSettledMediaRef(media.mediaRef);
+    }
+  }, [media.mediaRef, sourceSearchSettledMediaRef, sourcesPending]);
 
   useEffect(() => {
     if (!hasPlaybackSources && !directModePending) return;
@@ -456,10 +463,11 @@ export function MediaView({
   const selectedSourceRef = selectedSource?.sourceRef ?? null;
 
   const directTracks = getDirectTrackOptions(currentDirectSources);
-  const selectedTrackKey = selectedDirectTrackKey;
-  const selectedTrack = directTracks.find((track) => track.key === selectedTrackKey);
-  const directQualities = getDirectQualityOptions(selectedTrack?.sources ?? []);
-  const selectedQualityKey = selectedDirectSource
+  const selectedDirectTrack = directTracks.find(
+    (track) => track.key === selectedDirectTrackKey,
+  );
+  const directQualities = getDirectQualityOptions(selectedDirectTrack?.sources ?? []);
+  const selectedDirectQualityKey = selectedDirectSource
     ? getDirectQualityKey(selectedDirectSource)
     : null;
 
@@ -523,11 +531,44 @@ export function MediaView({
     resetPlayer();
   };
 
-  const selectDirectSource = (source: MediaSourceOption | undefined) => {
+  const startDirectPlayback = (
+    source: MediaSourceOption,
+    episode: DirectEpisodeOption | undefined,
+    positionSeconds: number,
+  ) => {
+    const episodeMetadata = findEpisodeMetadata(media, episode);
+
+    startSession({
+      mediaRef: media.mediaRef,
+      mediaSnapshot: {
+        title: media.title,
+        artwork: media.backdrop ?? media.poster,
+      },
+      sourceRef: source.sourceRef,
+      episode: usesDirectEpisodes ? getPlaybackEpisode(episode) : null,
+      positionSeconds,
+      durationSeconds:
+        episodeMetadata?.runtimeMinutes !== undefined
+          ? episodeMetadata.runtimeMinutes * 60
+          : media.runtimeMinutes !== undefined
+            ? media.runtimeMinutes * 60
+            : null,
+    });
+    setPlayerStatus('loading');
+  };
+
+  const selectDirectSource = (
+    source: MediaSourceOption | undefined,
+    continuePlayback = false,
+  ) => {
     if (!source || source.sourceRef === selectedDirectSource?.sourceRef) return;
 
     setSelectedDirectSourceRef(source.sourceRef);
-    resetPlayer();
+    if (continuePlayback && isPlayerStarted) {
+      startDirectPlayback(source, selectedDirectEpisode, mediaSession?.positionSeconds ?? 0);
+    } else {
+      resetPlayer();
+    }
   };
 
   const selectDirectEpisode = (episode: DirectEpisodeOption) => {
@@ -566,22 +607,34 @@ export function MediaView({
     selectDirectEpisode(nextEpisode);
   };
 
-  const selectTrack = (trackKey: string) => {
+  const selectTrack = (trackKey: string, continuePlayback = false) => {
     const track = directTracks.find((option) => option.key === trackKey);
 
     setPreferredDirectTrackKey(trackKey);
-    selectDirectSource(getDirectQualityOptions(track?.sources ?? [])[0]?.source);
+    selectDirectSource(
+      getDirectQualityOptions(track?.sources ?? [])[0]?.source,
+      continuePlayback,
+    );
   };
 
   const selectNextEpisode = () => {
     if (nextDirectEpisode) {
-      selectDirectEpisode(nextDirectEpisode);
+      const nextSource = getDirectSourceForTrackPreference(
+        nextDirectEpisode.sources,
+        preferredDirectTrackKey,
+      );
+
+      if (!nextSource || !isPlayerStarted) {
+        selectDirectEpisode(nextDirectEpisode);
+        return;
+      }
+
+      setSelectedDirectEpisodeKey(nextDirectEpisode.key);
+      setSelectedDirectSourceRef(nextSource.sourceRef);
+      startDirectPlayback(nextSource, nextDirectEpisode, 0);
     }
   };
 
-  const selectQuality = (qualityKey: string) => {
-    selectDirectSource(directQualities.find((quality) => quality.key === qualityKey)?.source);
-  };
 
   const loadPlayer = () => {
     if (!selectedSource || getMediaSourcePlaybackIssue(selectedSource)) {
@@ -630,135 +683,73 @@ export function MediaView({
       <div className="order-2 min-w-0 space-y-8 xl:order-none xl:col-start-2 xl:row-start-1">
         <div className="min-w-0">
           <div className="min-w-0 overflow-hidden rounded-card border border-context-border bg-surface shadow-surface">
-            <div
-              className={[
-                'flex min-w-0 flex-col gap-3 bg-surface-elevated px-4 py-3 sm:px-5',
-                'min-[70rem]:flex-row min-[70rem]:flex-wrap min-[70rem]:items-center',
-                playbackMode === 'direct' && usesDirectEpisodes
-                  ? 'min-[70rem]:gap-x-3'
-                  : 'min-[70rem]:gap-x-6',
-              ].join(' ')}
-            >
-              {animeSeasonSelector && (
-                <SeasonSelector
-                  seasons={animeSeasonSelector.options}
-                  selectedSeasonNumber={animeSeasonSelector.selectedSeasonNumber}
-                  onSeasonChange={onAnimeSeasonChange}
-                  variant="inline"
-                  compactDesktop
-                />
-              )}
-
-              {hasEmbedMode && hasDirectMode && (
-                <PlaybackModeSelector
-                  value={playbackMode}
-                  onChange={selectPlaybackMode}
-                  compactDesktop={playbackMode === 'direct' && usesDirectEpisodes}
-                />
-              )}
-
-              {playbackMode === 'embed' && hasEmbedMode && (
-                <SourceSelector
-                  sources={catalog.embedSources}
-                  selectedSourceRef={selectedEmbedSource?.sourceRef ?? null}
-                  onSourceChange={selectEmbedSource}
-                  variant="inline"
-                  includeDetails={false}
-                />
-              )}
-
-              {playbackMode === 'direct' && hasDirectMode && (
+            <div className="flex min-w-0 flex-col gap-3 bg-surface-elevated px-4 py-3 sm:px-5 min-[70rem]:flex-row min-[70rem]:flex-nowrap min-[70rem]:items-center min-[70rem]:gap-x-3">
+              {isToolbarLoading ? (
+                <AvailabilityToolbarStatus />
+              ) : (
                 <>
-                  {usesDirectEpisodes && (
-                    <div className="flex min-w-0 flex-col gap-3 sm:flex-row min-[70rem]:shrink-0 min-[70rem]:gap-3">
-                      {directSeasonNumbers.length > 0 && !animeSeasonSelector && (
-                        <SeasonSelector
-                          seasons={directSeasons}
-                          selectedSeasonNumber={selectedDirectEpisode?.seasonNumber ?? null}
-                          onSeasonChange={selectSeason}
-                          variant="inline"
-                          compactDesktop
-                        />
-                      )}
-
-                      <EpisodeSelector
-                        episodes={directEpisodeOptions}
-                        selectedEpisodeNumber={
-                          selectedDirectEpisode
-                            ? (getDirectEpisodeDisplayNumber(selectedDirectEpisode) ?? null)
-                            : null
-                        }
-                        onEpisodeChange={selectEpisode}
-                        variant="inline"
-                        compactDesktop
-                      />
-                    </div>
-                  )}
-
-                  {selectedDirectSource && usesDirectEpisodes && (
-                    <div className="flex min-w-0 flex-col gap-3 sm:flex-row min-[70rem]:shrink-0 min-[70rem]:gap-3">
-                      <DirectSourceSelector
-                        tracks={directTracks.map((track) => ({
-                          value: track.key,
-                          label: track.label,
-                        }))}
-                        selectedTrackKey={selectedTrackKey}
-                        onTrackChange={selectTrack}
-                        qualities={directQualities.map((quality) => ({
-                          value: quality.key,
-                          label: quality.label,
-                        }))}
-                        selectedQualityKey={selectedQualityKey}
-                        onQualityChange={selectQuality}
-                        compactDesktop
-                        isLoading={episodeAvailabilityPending}
-                        showQuality={directQualities.length > 1}
-                      />
-                    </div>
-                  )}
-
-                  {usesDirectEpisodes && nextDirectEpisode && (
-                    <Button
-                      size="small"
-                      variant="secondary"
-                      className="w-full shrink-0 sm:w-auto"
-                      aria-label={`Перейти к ${getDirectEpisodeDisplayNumber(nextDirectEpisode)} серии${
-                        nextDirectEpisode.seasonNumber === undefined
-                          ? ''
-                          : ` ${nextDirectEpisode.seasonNumber} сезона`
-                      }`}
-                      onClick={selectNextEpisode}
-                    >
-                      Следующая серия
-                    </Button>
-                  )}
-
-                  {selectedDirectSource && !usesDirectEpisodes && (
-                    <DirectSourceSelector
-                      tracks={directTracks.map((track) => ({
-                        value: track.key,
-                        label: track.label,
-                      }))}
-                      selectedTrackKey={selectedTrackKey}
-                      onTrackChange={selectTrack}
-                      qualities={directQualities.map((quality) => ({
-                        value: quality.key,
-                        label: quality.label,
-                      }))}
-                      selectedQualityKey={selectedQualityKey}
-                      onQualityChange={selectQuality}
-                      isLoading={availabilityPending}
-                      showQuality={directQualities.length > 1}
+                  {animeSeasonSelector && (
+                    <SeasonSelector
+                      seasons={animeSeasonSelector.options}
+                      selectedSeasonNumber={animeSeasonSelector.selectedSeasonNumber}
+                      onSeasonChange={onAnimeSeasonChange}
+                      variant="inline"
+                      compactDesktop
                     />
                   )}
+
+                  {usesDirectEpisodes && !animeSeasonSelector && directSeasonNumbers.length > 0 && (
+                    <SeasonSelector
+                      seasons={directSeasons}
+                      selectedSeasonNumber={selectedDirectEpisode?.seasonNumber ?? null}
+                      onSeasonChange={selectSeason}
+                      variant="inline"
+                      compactDesktop
+                    />
+                  )}
+
+                  {usesDirectEpisodes && (
+                    <EpisodeSelector
+                      episodes={directEpisodeOptions}
+                      selectedEpisodeNumber={
+                        selectedDirectEpisode
+                          ? (getDirectEpisodeDisplayNumber(selectedDirectEpisode) ?? null)
+                          : null
+                      }
+                      onEpisodeChange={selectEpisode}
+                      variant="inline"
+                      compactDesktop
+                    />
+                  )}
+
+                  <div className="w-full min-[70rem]:ml-auto min-[70rem]:w-auto">
+                    <PlaybackSourcePicker
+                      embedSources={catalog.embedSources}
+                      directSources={currentDirectSources}
+                      selectedSource={selectedSource}
+                      selectedDirectSource={selectedDirectSource}
+                      selectedTrackKey={selectedDirectTrackKey}
+                      onEmbedSelect={(sourceRef) => {
+                        if (playbackMode !== 'embed') selectPlaybackMode('embed');
+                        selectEmbedSource(sourceRef);
+                      }}
+                      onDirectSelect={(trackKey) => {
+                        if (playbackMode !== 'direct') selectPlaybackMode('direct');
+                        selectTrack(trackKey);
+                      }}
+                      onQualitySelect={(sourceRef) =>
+                        selectDirectSource(
+                          currentDirectSources.find((source) => source.sourceRef === sourceRef),
+                        )
+                      }
+                      isLoading={
+                        sourcesPending && sourceSearchSettledMediaRef !== media.mediaRef
+                      }
+                      align="end"
+                    />
+                  </div>
                 </>
               )}
-
-              <AvailabilityToolbarStatus
-                availability={availability}
-                availabilityPending={availabilityPending}
-                availabilityStatus={availabilityStatus}
-              />
             </div>
 
             <MediaPlayer
@@ -778,6 +769,29 @@ export function MediaView({
               onRetry={loadPlayer}
               emptyState={playerEmptyState}
               embedded
+              directControls={
+                selectedDirectSource
+                  ? {
+                      tracks: directTracks.map((track) => ({
+                        value: track.key,
+                        label: track.label,
+                      })),
+                      selectedTrackKey: selectedDirectTrackKey,
+                      onTrackChange: (trackKey) => selectTrack(trackKey, true),
+                      qualities: directQualities.map((quality) => ({
+                        value: quality.key,
+                        label: quality.label,
+                      })),
+                      selectedQualityKey: selectedDirectQualityKey,
+                      onQualityChange: (qualityKey) =>
+                        selectDirectSource(
+                          directQualities.find((quality) => quality.key === qualityKey)?.source,
+                          true,
+                        ),
+                      onNextEpisode: nextDirectEpisode ? selectNextEpisode : undefined,
+                    }
+                  : undefined
+              }
             />
           </div>
         </div>

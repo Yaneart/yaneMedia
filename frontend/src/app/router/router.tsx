@@ -43,6 +43,11 @@ export const router = createBrowserRouter([
             registerPath={routePaths.register}
             forgotPasswordPath={routePaths.forgotPassword}
           />,
+          <LoadingState
+            label="Загружаем страницу"
+            variant="page"
+            className="!min-h-dvh"
+          />,
         ),
       },
       {

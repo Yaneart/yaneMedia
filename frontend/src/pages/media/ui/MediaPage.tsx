@@ -31,7 +31,7 @@ export function MediaPage() {
     availability,
     isPending: availabilityPending,
     status: availabilityStatus,
-  } = useMediaAvailability(media?.mediaRef);
+  } = useMediaAvailability(mediaRef);
   const openingMediaRef = media?.mediaRef;
 
   useEffect(() => {

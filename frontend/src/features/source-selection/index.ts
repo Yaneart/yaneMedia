@@ -4,6 +4,7 @@ export { DirectSourceSelector } from './ui/DirectSourceSelector';
 export type { DirectSourceSelectorProps } from './ui/DirectSourceSelector';
 export { PlaybackModeSelector } from './ui/PlaybackModeSelector';
 export type { PlaybackModeSelectorProps } from './ui/PlaybackModeSelector';
+export { PlaybackSourcePicker } from './ui/PlaybackSourcePicker';
 
 export {
   createPlaybackSourceCatalog,
