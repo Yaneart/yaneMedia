@@ -10,8 +10,8 @@ import type { AppLogger } from '../../src/platform/logging/app-logger';
 
 const meta: ResponseMeta = {
   providers: {
-    requested: ['cinemeta', 'kinobd', 'anilist', 'untrusted-provider'],
-    successful: ['cinemeta', 'anilist', 'untrusted-provider'],
+    requested: ['cinemeta', 'kinobd', 'anilist', 'tmdb', 'wikidata', 'untrusted-provider'],
+    successful: ['cinemeta', 'anilist', 'tmdb', 'wikidata', 'untrusted-provider'],
     failed: [
       {
         provider: 'kinobd',
@@ -30,6 +30,8 @@ const meta: ResponseMeta = {
       { provider: 'cinemeta', status: 'success', tookMs: 12 },
       { provider: 'kinobd', status: 'failed', tookMs: 5001 },
       { provider: 'anilist', status: 'success', tookMs: 8 },
+      { provider: 'tmdb', status: 'success', tookMs: 7 },
+      { provider: 'wikidata', status: 'success', tookMs: 6 },
     ],
   },
 };
@@ -42,6 +44,8 @@ describe('provider diagnostics', () => {
       new Map([
         ['cinemeta', 1],
         ['anilist', 0],
+        ['tmdb', 1],
+        ['wikidata', 0],
       ]),
     );
 
@@ -69,6 +73,24 @@ describe('provider diagnostics', () => {
         operation: 'details',
         code: 'EMPTY',
         durationMs: 8,
+        acceptedSources: 0,
+        resultCount: 0,
+        degraded: true,
+      },
+      {
+        provider: 'tmdb',
+        operation: 'details',
+        code: 'SUCCESS',
+        durationMs: 7,
+        acceptedSources: 0,
+        resultCount: 1,
+        degraded: true,
+      },
+      {
+        provider: 'wikidata',
+        operation: 'details',
+        code: 'EMPTY',
+        durationMs: 6,
         acceptedSources: 0,
         resultCount: 0,
         degraded: true,

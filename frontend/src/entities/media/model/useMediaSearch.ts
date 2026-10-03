@@ -3,6 +3,11 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { searchMedia } from '../api/searchMedia';
 import type { MediaSummary, MediaType } from './media';
+import {
+  collectUniqueMediaSearchItems,
+  createMediaSearchPage,
+  getMediaSearchPageWindow,
+} from './mediaSearchPagination';
 
 export type MediaSearchStatus = 'idle' | 'loading' | 'success' | 'empty' | 'paused' | 'error';
 
@@ -21,9 +26,6 @@ type NormalizedMediaSearchFilters = {
   year: number | null;
   minimumRating: number | null;
 };
-
-const pageSize = 48;
-const maximumSearchWindow = 250;
 
 function normalizeFilters(filters: MediaSearchFilters): NormalizedMediaSearchFilters {
   return {
@@ -59,8 +61,7 @@ async function loadSearchPage(
   offset: number,
   signal: AbortSignal,
 ) {
-  const visibleLimit = Math.min(pageSize, maximumSearchWindow - offset);
-  const requestLimit = Math.min(visibleLimit + 1, maximumSearchWindow - offset);
+  const { requestLimit } = getMediaSearchPageWindow(offset);
   const items = await searchMedia(filters.query, {
     type: filters.type ?? undefined,
     genre: filters.genre ?? undefined,
@@ -73,23 +74,8 @@ async function loadSearchPage(
 
   return {
     filters,
-    items: items.slice(0, visibleLimit),
-    nextOffset: offset + visibleLimit,
-    hasMore: requestLimit > visibleLimit && items.length > visibleLimit,
+    ...createMediaSearchPage(items, offset),
   };
-}
-
-function collectUniqueItems(pages: Awaited<ReturnType<typeof loadSearchPage>>[]) {
-  const mediaRefs = new Set<string>();
-
-  return pages.flatMap((page) =>
-    page.items.filter((item) => {
-      if (mediaRefs.has(item.mediaRef)) return false;
-
-      mediaRefs.add(item.mediaRef);
-      return true;
-    }),
-  ) satisfies MediaSummary[];
 }
 
 export function useMediaSearch(filters: MediaSearchFilters, debounceMs = 300) {
@@ -121,7 +107,7 @@ export function useMediaSearch(filters: MediaSearchFilters, debounceMs = 300) {
   });
 
   const pages = query.data?.pages;
-  const items = pages ? collectUniqueItems(pages) : [];
+  const items: MediaSummary[] = pages ? collectUniqueMediaSearchItems(pages) : [];
   const resultFilters = pages?.[0]?.filters ?? null;
   const isPreviousResult =
     resultFilters !== null && !filtersMatch(normalizedFilters, resultFilters);

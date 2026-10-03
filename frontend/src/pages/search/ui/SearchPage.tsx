@@ -33,7 +33,11 @@ export function SearchPage() {
     isPreviousResult,
     isUpdating,
     hasRefreshError,
+    hasMore,
+    isLoadingMore,
+    loadMoreError,
     retry,
+    loadMore,
   } = useMediaSearch({ query: submittedQuery }, 0);
 
   useEffect(() => {
@@ -238,6 +242,23 @@ export function SearchPage() {
               />
             ))}
           </MediaGrid>
+
+          {(hasMore || loadMoreError) && (
+            <div className="mt-8 flex flex-col items-center gap-3">
+              {loadMoreError && (
+                <p role="alert" className="text-caption text-danger">
+                  Не удалось загрузить следующую страницу.
+                </p>
+              )}
+              <Button disabled={isLoadingMore || isUpdating} onClick={loadMore}>
+                {isLoadingMore
+                  ? 'Загружаем…'
+                  : loadMoreError
+                    ? 'Попробовать снова'
+                    : 'Показать ещё'}
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </section>

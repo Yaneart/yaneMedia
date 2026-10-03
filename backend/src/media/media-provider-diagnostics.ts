@@ -41,14 +41,18 @@ export function countProviderResults(provider: MediaProvider): MediaProvider {
 const PROVIDERS = new Set([
   'kinobd',
   'cinemeta',
+  'tmdb',
   'shikimori',
   'anilist',
   'tvmaze',
+  'wikidata',
   'kinobd-streaming',
   'ddbb-streaming',
   'aniliberty-streaming',
   'veoveo-streaming',
   'videohub-streaming',
+  'aderom-streaming',
+  'initem-streaming',
 ]);
 const FAILURE_CODES = new Set([
   'PROVIDER_ERROR',
