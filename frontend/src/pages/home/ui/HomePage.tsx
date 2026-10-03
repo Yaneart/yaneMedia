@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import {
   MediaLandscapeArtwork,
@@ -62,6 +62,7 @@ export function HomePage() {
     hasSyncError: hasContinueWatchingSyncError,
     restoreSession,
     removeContinueWatchingEntry,
+    canonicalizeContinueWatching,
     retry: retryContinueWatching,
   } = usePlaybackSession();
   const {
@@ -69,6 +70,11 @@ export function HomePage() {
     status: continueWatchingResolutionStatus,
     retry: retryContinueWatchingResolution,
   } = useMediaSummaryResolution(continueWatchingEntries.map((entry) => entry.mediaRef));
+  useEffect(() => {
+    if (continueWatchingResolution) {
+      canonicalizeContinueWatching(continueWatchingResolution.canonicalMediaRefs);
+    }
+  }, [canonicalizeContinueWatching, continueWatchingResolution]);
 
   const continueWatchingMediaByRequestedRef = new Map(
     continueWatchingResolution?.matches.map(({ requestedMediaRef, media }) => [

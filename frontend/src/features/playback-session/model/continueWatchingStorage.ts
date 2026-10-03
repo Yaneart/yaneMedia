@@ -1,11 +1,14 @@
 import type { ContinueWatchingEntry } from '@/entities/playback';
+import { isMediaRef } from '@/entities/media';
 
 const CONTINUE_WATCHING_STORAGE_KEY = 'yanemedia-continue-watching';
-const CONTINUE_WATCHING_STORAGE_VERSION = 1;
+const CONTINUE_WATCHING_STORAGE_VERSION = 2;
+const LEGACY_CONTINUE_WATCHING_STORAGE_VERSION = 1;
 export const CONTINUE_WATCHING_ENTRY_LIMIT = 5;
 
 type StoredContinueWatching = {
-  version: typeof CONTINUE_WATCHING_STORAGE_VERSION;
+  version:
+    typeof CONTINUE_WATCHING_STORAGE_VERSION | typeof LEGACY_CONTINUE_WATCHING_STORAGE_VERSION;
   entries: ContinueWatchingEntry[];
 };
 
@@ -85,7 +88,7 @@ function isContinueWatchingEntry(value: unknown): value is ContinueWatchingEntry
     typeof value.updatedAt === 'string' && !Number.isNaN(Date.parse(value.updatedAt));
 
   return (
-    isNonEmptyString(value.mediaRef) &&
+    isMediaRef(value.mediaRef) &&
     isMediaSnapshot(value.mediaSnapshot) &&
     isNonEmptyString(value.sourceRef) &&
     isEpisodeSelection(value.episode) &&
@@ -98,9 +101,22 @@ function isContinueWatchingEntry(value: unknown): value is ContinueWatchingEntry
 function isStoredContinueWatching(value: unknown): value is StoredContinueWatching {
   return (
     isRecord(value) &&
-    value.version === CONTINUE_WATCHING_STORAGE_VERSION &&
+    (value.version === CONTINUE_WATCHING_STORAGE_VERSION ||
+      value.version === LEGACY_CONTINUE_WATCHING_STORAGE_VERSION) &&
     Array.isArray(value.entries) &&
     value.entries.every(isContinueWatchingEntry)
+  );
+}
+
+export function canonicalizeContinueWatchingEntries(
+  entries: readonly ContinueWatchingEntry[],
+  canonicalMediaRefs: ReadonlyMap<string, string>,
+): ContinueWatchingEntry[] {
+  return normalizeEntries(
+    entries.map((entry) => ({
+      ...entry,
+      mediaRef: canonicalMediaRefs.get(entry.mediaRef) ?? entry.mediaRef,
+    })),
   );
 }
 

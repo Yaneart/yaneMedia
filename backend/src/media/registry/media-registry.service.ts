@@ -5,6 +5,7 @@ import { and, eq, inArray, or, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../database/database.service';
 import { createMediaSlug } from './media-slug';
 import { mediaWorkAliases, mediaWorks } from './media-registry.schema';
+import { canonicalizeUserMediaInTransaction } from '../../user-media/user-media-canonicalization';
 
 export interface CanonicalMediaIdentity {
   mediaRef: string;
@@ -190,6 +191,13 @@ export class MediaRegistryService {
             first.mediaRef.localeCompare(second.mediaRef),
         )[0];
         const redirectedRefs = matchedRefs.filter((mediaRef) => mediaRef !== work!.mediaRef);
+        await canonicalizeUserMediaInTransaction(
+          transaction,
+          redirectedRefs.map((sourceMediaRef) => ({
+            sourceMediaRef,
+            canonicalMediaRef: work!.mediaRef,
+          })),
+        );
         await transaction
           .update(mediaWorkAliases)
           .set({ mediaRef: work.mediaRef })

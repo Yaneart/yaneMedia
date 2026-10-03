@@ -1,5 +1,6 @@
 import { index, pgTable, primaryKey, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
 import { users } from '../../users/entities/user.entity';
+import { mediaWorks } from '../../media/registry/media-registry.schema';
 
 export const favorites = pgTable(
   'favorites',
@@ -7,7 +8,9 @@ export const favorites = pgTable(
     userId: uuid('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
-    mediaRef: varchar('media_ref', { length: 64 }).notNull(),
+    mediaRef: varchar('media_ref', { length: 64 })
+      .notNull()
+      .references(() => mediaWorks.mediaRef),
     addedAt: timestamp('added_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [

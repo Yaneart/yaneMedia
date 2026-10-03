@@ -11,6 +11,7 @@ export type FavoriteContextValue = {
   addFavorite: (mediaRef: MediaRef) => void;
   removeFavorite: (mediaRef: MediaRef) => void;
   toggleFavorite: (mediaRef: MediaRef) => void;
+  canonicalizeFavorites: (canonicalMediaRefs: ReadonlyMap<MediaRef, MediaRef>) => void;
   retry: () => void;
 };
 

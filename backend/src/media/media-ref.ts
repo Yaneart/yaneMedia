@@ -9,7 +9,7 @@ export interface MediaExternalIds {
 export type MediaRefType = 'movie' | 'series' | 'anime';
 
 export const MEDIA_REF_PATTERN =
-  /^(?:work_[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|imdb:tt\d{7,12}|(?:kinopoisk|shikimori|anilist|myanimelist):\d{1,12})$/i;
+  /^(?:work_[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|imdb:tt\d{7,12}|wikidata:q[1-9]\d{0,11}|(?:tmdb|kinopoisk|tvdb|shikimori|anilist|myanimelist|worldart):\d{1,12})$/i;
 
 export function createMediaRef(ids: MediaExternalIds, type?: MediaRefType): string | undefined {
   if (type === 'anime') {
@@ -72,10 +72,12 @@ export function resolveMediaRefs(mediaRefs: readonly string[]): MediaExternalIds
     const resolved = resolveMediaRef(mediaRef);
     if (!resolved) return undefined;
 
-    for (const [source, id] of Object.entries(resolved)) {
-      const existing = ids[source as keyof MediaExternalIds];
+    for (const source of Object.keys(resolved) as Array<keyof MediaExternalIds>) {
+      const id = resolved[source];
+      if (!id) continue;
+      const existing = ids[source];
       if (existing && existing !== id) return undefined;
-      ids[source as keyof MediaExternalIds] = id;
+      ids[source] = id;
     }
   }
 

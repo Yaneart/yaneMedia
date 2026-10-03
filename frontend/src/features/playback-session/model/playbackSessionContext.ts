@@ -25,6 +25,7 @@ export type PlaybackSessionContextValue = {
   startSession: (input: StartPlaybackSessionInput) => void;
   restoreSession: (mediaRef: string, mediaSnapshot: PlaybackMediaSnapshot) => void;
   removeContinueWatchingEntry: (mediaRef: string) => void;
+  canonicalizeContinueWatching: (canonicalMediaRefs: ReadonlyMap<string, string>) => void;
   pauseSession: () => void;
   resumeSession: () => void;
   updateProgress: (

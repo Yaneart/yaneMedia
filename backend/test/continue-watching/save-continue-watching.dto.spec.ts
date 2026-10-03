@@ -1,5 +1,8 @@
 import { BadRequestException, ValidationPipe } from '@nestjs/common';
-import { SaveContinueWatchingDto } from '../../src/continue-watching/dto/save-continue-watching.dto';
+import {
+  ContinueWatchingMediaRefDto,
+  SaveContinueWatchingDto,
+} from '../../src/continue-watching/dto/save-continue-watching.dto';
 
 describe('SaveContinueWatchingDto', () => {
   const pipe = new ValidationPipe({ transform: true, whitelist: true });
@@ -7,6 +10,16 @@ describe('SaveContinueWatchingDto', () => {
   function transform(body: Record<string, unknown>) {
     return pipe.transform(body, { type: 'body', metatype: SaveContinueWatchingDto });
   }
+
+  function transformParam(param: Record<string, unknown>) {
+    return pipe.transform(param, { type: 'param', metatype: ContinueWatchingMediaRefDto });
+  }
+
+  it('accepts canonical registry aliases in the route', async () => {
+    await expect(transformParam({ mediaRef: 'tmdb:126308' })).resolves.toEqual({
+      mediaRef: 'tmdb:126308',
+    });
+  });
 
   it('accepts movie progress and strips client-owned timestamps', async () => {
     await expect(

@@ -1,10 +1,12 @@
 import { ConflictException } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import { inArray } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Client } from 'pg';
 import type { DatabaseService } from '../../../src/database/database.service';
 import { MediaRegistryService } from '../../../src/media/registry/media-registry.service';
 import { mediaWorks } from '../../../src/media/registry/media-registry.schema';
+import { users } from '../../../src/users/entities/user.entity';
 
 const describePostgres =
   process.env.MEDIA_REGISTRY_POSTGRES_TEST === '1' ? describe : describe.skip;
@@ -20,6 +22,7 @@ describePostgres('media registry with PostgreSQL', () => {
   let client: Client;
   let registry: MediaRegistryService;
   const createdRefs: string[] = [];
+  const createdUserIds: string[] = [];
 
   beforeAll(async () => {
     if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required');
@@ -30,6 +33,9 @@ describePostgres('media registry with PostgreSQL', () => {
 
   afterAll(async () => {
     try {
+      if (createdUserIds.length > 0) {
+        await drizzle(client).delete(users).where(inArray(users.id, createdUserIds));
+      }
       if (createdRefs.length > 0) {
         await drizzle(client).delete(mediaWorks).where(inArray(mediaWorks.mediaRef, createdRefs));
       }
@@ -137,6 +143,33 @@ describePostgres('media registry with PostgreSQL', () => {
       title: `Split Anime ${splitAnimeId} Season`,
     });
     createdRefs.push(aniListWork.mediaRef, malWork.mediaRef);
+    const [user] = await drizzle(client)
+      .insert(users)
+      .values({
+        displayName: 'Registry merge probe',
+        email: `registry-merge-${randomUUID()}@example.com`,
+        passwordHash: 'unused',
+      })
+      .returning({ id: users.id });
+    if (!user) throw new Error('Expected a persisted user');
+    createdUserIds.push(user.id);
+    await client.query(
+      `insert into favorites (user_id, media_ref, added_at) values
+        ($1, $2, '2026-10-01T10:00:00.000Z'), ($1, $3, '2026-10-02T10:00:00.000Z')`,
+      [user.id, aniListWork.mediaRef, malWork.mediaRef],
+    );
+    await client.query(
+      `insert into history_items (user_id, media_ref, opened_at) values
+        ($1, $2, '2026-10-01T10:00:00.000Z'), ($1, $3, '2026-10-02T10:00:00.000Z')`,
+      [user.id, aniListWork.mediaRef, malWork.mediaRef],
+    );
+    await client.query(
+      `insert into continue_watching_items
+        (user_id, media_ref, source_ref, position_seconds, duration_seconds, updated_at) values
+        ($1, $2, 'older-source', 120, 1000, '2026-10-01T10:00:00.000Z'),
+        ($1, $3, 'newer-source', 240, 1000, '2026-10-02T10:00:00.000Z')`,
+      [user.id, aniListWork.mediaRef, malWork.mediaRef],
+    );
 
     const merged = await registry.resolveOrMergeVerified({
       type: 'anime',
@@ -156,6 +189,37 @@ describePostgres('media registry with PostgreSQL', () => {
         shikimori: splitMalId,
       }),
     );
+    const userMedia = await client.query<{
+      kind: string;
+      media_ref: string;
+      timestamp: Date;
+      source_ref: string | null;
+      position_seconds: number | null;
+    }>(
+      `select 'favorite' as kind, media_ref, added_at as timestamp, null::varchar as source_ref,
+          null::double precision as position_seconds from favorites where user_id = $1
+       union all
+       select 'history', media_ref, opened_at, null::varchar, null::double precision
+          from history_items where user_id = $1
+       union all
+       select 'progress', media_ref, updated_at, source_ref, position_seconds
+          from continue_watching_items where user_id = $1
+       order by kind`,
+      [user.id],
+    );
+    expect(userMedia.rows).toEqual([
+      expect.objectContaining({ kind: 'favorite', media_ref: merged.mediaRef }),
+      expect.objectContaining({ kind: 'history', media_ref: merged.mediaRef }),
+      expect.objectContaining({
+        kind: 'progress',
+        media_ref: merged.mediaRef,
+        source_ref: 'newer-source',
+        position_seconds: 240,
+      }),
+    ]);
+    expect(
+      userMedia.rows.every(({ timestamp }) => timestamp.toISOString().startsWith('2026-10-02')),
+    ).toBe(true);
 
     const redirected = merged.mediaRef === aniListWork.mediaRef ? malWork : aniListWork;
     await expect(registry.resolve(redirected.mediaRef)).resolves.toMatchObject({

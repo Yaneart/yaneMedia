@@ -6,6 +6,7 @@ import type { DatabaseService } from '../../src/database/database.service';
 import { historyItems } from '../../src/history/entities/history-item.entity';
 import { HistoryRepository } from '../../src/history/history.repository';
 import { users } from '../../src/users/entities/user.entity';
+import { mediaWorks } from '../../src/media/registry/media-registry.schema';
 
 const describePostgres = process.env.HISTORY_POSTGRES_TEST === '1' ? describe : describe.skip;
 
@@ -48,8 +49,12 @@ describePostgres('history with PostgreSQL', () => {
       .returning({ id: users.id });
     if (!firstUser || !secondUser) throw new Error('Expected two persisted users');
 
-    const sharedRef = 'imdb:tt15239678';
-    const olderRef = 'anilist:154587';
+    const sharedRef = `work_${randomUUID()}`;
+    const olderRef = `work_${randomUUID()}`;
+    await database.insert(mediaWorks).values([
+      { mediaRef: sharedRef, type: 'movie', slug: `history-${randomUUID()}` },
+      { mediaRef: olderRef, type: 'anime', slug: `history-${randomUUID()}` },
+    ]);
     const oldOpenedAt = new Date('2025-01-01T00:00:00.000Z');
     await database.insert(historyItems).values([
       { userId: firstUser.id, mediaRef: sharedRef, openedAt: oldOpenedAt },

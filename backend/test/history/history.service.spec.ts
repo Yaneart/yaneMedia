@@ -1,5 +1,6 @@
 import type { HistoryRepository } from '../../src/history/history.repository';
 import { HistoryService } from '../../src/history/history.service';
+import type { UserMediaCanonicalizationService } from '../../src/user-media/user-media-canonicalization.service';
 
 describe('HistoryService', () => {
   const storedEntries = [
@@ -13,14 +14,18 @@ describe('HistoryService', () => {
     const upsert = jest.fn().mockResolvedValue(undefined);
     const remove = jest.fn().mockResolvedValue(undefined);
     const clear = jest.fn().mockResolvedValue(undefined);
-    const service = new HistoryService({
-      findByUserId,
-      upsert,
-      remove,
-      clear,
-    } as unknown as HistoryRepository);
+    const canonicalize = jest
+      .fn()
+      .mockImplementation((_userId: string, refs: string[]) =>
+        Promise.resolve(new Map(refs.map((mediaRef) => [mediaRef, mediaRef]))),
+      );
+    const canonicalizeRegistered = canonicalize;
+    const service = new HistoryService(
+      { findByUserId, upsert, remove, clear } as unknown as HistoryRepository,
+      { canonicalize, canonicalizeRegistered } as unknown as UserMediaCanonicalizationService,
+    );
 
-    return { service, findByUserId, upsert, remove, clear };
+    return { service, findByUserId, upsert, remove, clear, canonicalize, canonicalizeRegistered };
   }
 
   it('maps user-scoped history timestamps to the HTTP contract', async () => {

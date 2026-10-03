@@ -11,6 +11,7 @@ export type MediaSummaryResolutionStatus = 'loading' | 'success' | 'empty' | 'er
 const emptyResolution: MediaSummaryResolutionResult = {
   items: [],
   matches: [],
+  canonicalMediaRefs: new Map(),
   partial: false,
   degraded: false,
   stale: false,

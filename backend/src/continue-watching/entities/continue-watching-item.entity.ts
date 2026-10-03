@@ -9,6 +9,7 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core';
 import { users } from '../../users/entities/user.entity';
+import { mediaWorks } from '../../media/registry/media-registry.schema';
 
 export const continueWatchingItems = pgTable(
   'continue_watching_items',
@@ -16,7 +17,9 @@ export const continueWatchingItems = pgTable(
     userId: uuid('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
-    mediaRef: varchar('media_ref', { length: 64 }).notNull(),
+    mediaRef: varchar('media_ref', { length: 64 })
+      .notNull()
+      .references(() => mediaWorks.mediaRef),
     sourceRef: varchar('source_ref', { length: 512 }).notNull(),
     seasonNumber: integer('season_number'),
     episodeNumber: integer('episode_number'),

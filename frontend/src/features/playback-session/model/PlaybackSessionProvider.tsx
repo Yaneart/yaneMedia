@@ -26,6 +26,7 @@ import {
   upsertProgressEntry,
 } from './accountContinueWatching';
 import {
+  canonicalizeContinueWatchingEntries,
   loadContinueWatchingEntries,
   removeContinueWatchingEntries,
   saveContinueWatchingEntries,
@@ -600,6 +601,19 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
     [canManageContinueWatching, removeAccountProgress, storageMode, storeSession],
   );
 
+  const canonicalizeContinueWatching = useCallback(
+    (canonicalMediaRefs: ReadonlyMap<string, string>) => {
+      setGuestEntries((current) =>
+        canonicalizeContinueWatchingEntries(current, canonicalMediaRefs),
+      );
+      const current = sessionRef.current;
+      if (!current) return;
+      const mediaRef = canonicalMediaRefs.get(current.mediaRef);
+      if (mediaRef && mediaRef !== current.mediaRef) storeSession({ ...current, mediaRef });
+    },
+    [storeSession],
+  );
+
   const pauseSession = useCallback(() => {
     if (sessionOwnerIdRef.current !== resolvedOwnerId) return;
 
@@ -726,6 +740,7 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
         startSession,
         restoreSession,
         removeContinueWatchingEntry,
+        canonicalizeContinueWatching,
         pauseSession,
         resumeSession,
         updateProgress,

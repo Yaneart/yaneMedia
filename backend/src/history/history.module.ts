@@ -5,9 +5,10 @@ import { DatabaseModule } from '../database/database.module';
 import { HistoryController } from './history.controller';
 import { HistoryRepository } from './history.repository';
 import { HistoryService } from './history.service';
+import { UserMediaModule } from '../user-media/user-media.module';
 
 @Module({
-  imports: [AuthModule, AppConfigModule, DatabaseModule],
+  imports: [AuthModule, AppConfigModule, DatabaseModule, UserMediaModule],
   controllers: [HistoryController],
   providers: [HistoryRepository, HistoryService],
 })

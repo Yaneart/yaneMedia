@@ -18,6 +18,7 @@ export type OpeningHistoryContextValue = {
   removeOpening: (mediaRef: MediaRef) => void;
   clearHistory: () => void;
   undoClearHistory: () => void;
+  canonicalizeHistory: (canonicalMediaRefs: ReadonlyMap<MediaRef, MediaRef>) => void;
   retry: () => void;
 };
 

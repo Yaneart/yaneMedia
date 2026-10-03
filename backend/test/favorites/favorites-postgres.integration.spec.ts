@@ -5,6 +5,7 @@ import { Client } from 'pg';
 import type { DatabaseService } from '../../src/database/database.service';
 import { FavoritesRepository } from '../../src/favorites/favorites.repository';
 import { users } from '../../src/users/entities/user.entity';
+import { mediaWorks } from '../../src/media/registry/media-registry.schema';
 
 const describePostgres = process.env.FAVORITES_POSTGRES_TEST === '1' ? describe : describe.skip;
 
@@ -45,17 +46,22 @@ describePostgres('favorites with PostgreSQL', () => {
       ])
       .returning({ id: users.id });
     if (!firstUser || !secondUser) throw new Error('Expected two persisted users');
-    const sharedRef = 'imdb:tt15239678';
-    const firstOnlyRef = 'anilist:154587';
+    const sharedRef = `work_${randomUUID()}`;
+    const firstOnlyRef = `work_${randomUUID()}`;
+    await drizzle(client)
+      .insert(mediaWorks)
+      .values([
+        { mediaRef: sharedRef, type: 'movie', slug: `favorites-${randomUUID()}` },
+        { mediaRef: firstOnlyRef, type: 'anime', slug: `favorites-${randomUUID()}` },
+      ]);
 
     await repository.addMediaRefs(firstUser.id, [sharedRef, firstOnlyRef]);
     await repository.addMediaRefs(firstUser.id, [sharedRef]);
     await repository.addMediaRefs(secondUser.id, [sharedRef]);
 
-    await expect(repository.findMediaRefsByUserId(firstUser.id)).resolves.toEqual([
-      firstOnlyRef,
-      sharedRef,
-    ]);
+    await expect(repository.findMediaRefsByUserId(firstUser.id)).resolves.toEqual(
+      [firstOnlyRef, sharedRef].sort(),
+    );
     await expect(repository.findMediaRefsByUserId(secondUser.id)).resolves.toEqual([sharedRef]);
 
     await repository.removeMediaRef(firstUser.id, sharedRef);

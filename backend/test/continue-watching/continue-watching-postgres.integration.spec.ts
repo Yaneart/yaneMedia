@@ -6,6 +6,7 @@ import { ContinueWatchingRepository } from '../../src/continue-watching/continue
 import { continueWatchingItems } from '../../src/continue-watching/entities/continue-watching-item.entity';
 import type { DatabaseService } from '../../src/database/database.service';
 import { users } from '../../src/users/entities/user.entity';
+import { mediaWorks } from '../../src/media/registry/media-registry.schema';
 
 const describePostgres =
   process.env.CONTINUE_WATCHING_POSTGRES_TEST === '1' ? describe : describe.skip;
@@ -79,14 +80,14 @@ describePostgres('continue watching with PostgreSQL', () => {
       .returning({ id: users.id });
     if (!firstUser || !secondUser) throw new Error('Expected two persisted users');
 
-    const mediaRefs = [
-      'imdb:tt15239678',
-      'imdb:tt1160419',
-      'imdb:tt0816692',
-      'imdb:tt0133093',
-      'anilist:154587',
-      'kinopoisk:301',
-    ];
+    const mediaRefs = Array.from({ length: 6 }, () => `work_${randomUUID()}`);
+    await database.insert(mediaWorks).values(
+      mediaRefs.map((mediaRef) => ({
+        mediaRef,
+        type: 'movie' as const,
+        slug: `progress-${randomUUID()}`,
+      })),
+    );
     const oldUpdatedAt = new Date('2025-01-01T00:00:00.000Z');
     await database.insert(continueWatchingItems).values([
       ...mediaRefs.map((mediaRef, index) => ({
@@ -152,6 +153,7 @@ describePostgres('continue watching with PostgreSQL', () => {
     let sameUserWrites: Promise<void>[] = [];
     let otherUserWrite: Promise<void> | undefined;
     const userIds: string[] = [];
+    const mediaRefs = Array.from({ length: 7 }, () => `work_${randomUUID()}`);
 
     try {
       const insertedUsers = await database
@@ -172,17 +174,22 @@ describePostgres('continue watching with PostgreSQL', () => {
       userIds.push(...insertedUsers.map(({ id }) => id));
       const [concurrentUser, independentUser] = insertedUsers;
       if (!concurrentUser || !independentUser) throw new Error('Expected two persisted users');
+      await database.insert(mediaWorks).values(
+        mediaRefs.map((mediaRef) => ({
+          mediaRef,
+          type: 'movie' as const,
+          slug: `progress-concurrent-${randomUUID()}`,
+        })),
+      );
 
       await database.insert(continueWatchingItems).values(
-        ['imdb:tt0000001', 'imdb:tt0000002', 'imdb:tt0000003', 'imdb:tt0000004'].map(
-          (mediaRef, index) => ({
-            userId: concurrentUser.id,
-            mediaRef,
-            sourceRef: `stream:test:seed-${index}`,
-            positionSeconds: index,
-            updatedAt: new Date(Date.UTC(2025, 0, 1, 0, 0, index)),
-          }),
-        ),
+        mediaRefs.slice(0, 4).map((mediaRef, index) => ({
+          userId: concurrentUser.id,
+          mediaRef,
+          sourceRef: `stream:test:seed-${index}`,
+          positionSeconds: index,
+          updatedAt: new Date(Date.UTC(2025, 0, 1, 0, 0, index)),
+        })),
       );
 
       const concurrentRepository = new ContinueWatchingRepository({
@@ -197,7 +204,7 @@ describePostgres('continue watching with PostgreSQL', () => {
       const blockerPid = blockerResult.rows[0]?.pid;
       if (!blockerPid) throw new Error('Expected the blocker connection pid');
 
-      sameUserWrites = ['imdb:tt0000005', 'imdb:tt0000006'].map((mediaRef, index) =>
+      sameUserWrites = mediaRefs.slice(4, 6).map((mediaRef, index) =>
         concurrentRepository.upsertAndTrim({
           userId: concurrentUser.id,
           mediaRef,
@@ -209,7 +216,7 @@ describePostgres('continue watching with PostgreSQL', () => {
 
       otherUserWrite = concurrentRepository.upsertAndTrim({
         userId: independentUser.id,
-        mediaRef: 'imdb:tt9999999',
+        mediaRef: mediaRefs[6],
         sourceRef: 'stream:test:independent',
         positionSeconds: 50,
       });
@@ -249,6 +256,7 @@ describePostgres('continue watching with PostgreSQL', () => {
       if (userIds.length > 0) {
         await database.delete(users).where(inArray(users.id, userIds));
       }
+      await database.delete(mediaWorks).where(inArray(mediaWorks.mediaRef, mediaRefs));
       blocker?.release();
       await pool.end();
     }

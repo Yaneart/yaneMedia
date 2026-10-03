@@ -3,14 +3,15 @@ import { isMediaRef } from '@/entities/media';
 import type { OpeningHistoryEntry } from './openingHistoryContext';
 
 const OPENING_HISTORY_STORAGE_KEY = 'yanemedia-opening-history';
-const OPENING_HISTORY_STORAGE_VERSION = 1;
+const OPENING_HISTORY_STORAGE_VERSION = 2;
+const LEGACY_OPENING_HISTORY_STORAGE_VERSION = 1;
 const OPENING_HISTORY_UNDO_STORAGE_KEY = 'yanemedia-opening-history-undo';
 const OPENING_HISTORY_UNDO_STORAGE_VERSION = 2;
 export const OPENING_HISTORY_UNDO_DURATION_MS = 3_000;
 export const OPENING_HISTORY_LIMIT = 100;
 
 type StoredOpeningHistory = {
-  version: typeof OPENING_HISTORY_STORAGE_VERSION;
+  version: typeof OPENING_HISTORY_STORAGE_VERSION | typeof LEGACY_OPENING_HISTORY_STORAGE_VERSION;
   entries: OpeningHistoryEntry[];
 };
 
@@ -45,7 +46,8 @@ function isOpeningHistoryEntry(value: unknown): value is OpeningHistoryEntry {
 function isStoredOpeningHistory(value: unknown): value is StoredOpeningHistory {
   return (
     isRecord(value) &&
-    value.version === OPENING_HISTORY_STORAGE_VERSION &&
+    (value.version === OPENING_HISTORY_STORAGE_VERSION ||
+      value.version === LEGACY_OPENING_HISTORY_STORAGE_VERSION) &&
     Array.isArray(value.entries) &&
     value.entries.every(isOpeningHistoryEntry)
   );
@@ -83,6 +85,18 @@ function normalizeOpeningHistory(entries: readonly OpeningHistoryEntry[]): Openi
   }
 
   return Array.from(uniqueEntries.values()).slice(0, OPENING_HISTORY_LIMIT);
+}
+
+export function canonicalizeOpeningHistory(
+  entries: readonly OpeningHistoryEntry[],
+  canonicalMediaRefs: ReadonlyMap<string, string>,
+): OpeningHistoryEntry[] {
+  return normalizeOpeningHistory(
+    entries.map((entry) => ({
+      ...entry,
+      mediaRef: canonicalMediaRefs.get(entry.mediaRef) ?? entry.mediaRef,
+    })),
+  );
 }
 
 export function restoreOpeningHistory(

@@ -23,6 +23,10 @@ describe('favorite media ref DTOs', () => {
       'shikimori:5114',
       'anilist:154587',
       'myanimelist:52991',
+      'tmdb:126308',
+      'tvdb:392573',
+      'wikidata:Q56276181',
+      'worldart:12345',
     ];
 
     await expect(transformBody({ mediaRefs, internal: true })).resolves.toEqual({ mediaRefs });

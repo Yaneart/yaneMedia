@@ -20,7 +20,11 @@ import {
   type FavoritePosition,
 } from './accountFavorites';
 import { FavoriteContext } from './favoriteContext';
-import { loadFavoriteMediaRefs, saveFavoriteMediaRefs } from './favoriteStorage';
+import {
+  canonicalizeFavoriteMediaRefs,
+  loadFavoriteMediaRefs,
+  saveFavoriteMediaRefs,
+} from './favoriteStorage';
 
 type FavoriteProviderProps = {
   children: ReactNode;
@@ -281,6 +285,17 @@ export function FavoriteProvider({ children }: FavoriteProviderProps) {
     (mediaRef: MediaRef) => updateFavorite(mediaRef, !favoriteMediaRefs.has(mediaRef)),
     [favoriteMediaRefs, updateFavorite],
   );
+  const canonicalizeFavorites = useCallback(
+    (canonicalMediaRefs: ReadonlyMap<MediaRef, MediaRef>) => {
+      setGuestMediaRefs((current) => {
+        const next = canonicalizeFavoriteMediaRefs(current, canonicalMediaRefs);
+        return next.size === current.size && [...next].every((mediaRef) => current.has(mediaRef))
+          ? current
+          : next;
+      });
+    },
+    [],
+  );
 
   return (
     <FavoriteContext
@@ -294,6 +309,7 @@ export function FavoriteProvider({ children }: FavoriteProviderProps) {
         addFavorite,
         removeFavorite,
         toggleFavorite,
+        canonicalizeFavorites,
         retry,
       }}
     >

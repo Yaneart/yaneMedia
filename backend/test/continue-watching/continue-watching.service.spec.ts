@@ -1,5 +1,6 @@
 import type { ContinueWatchingRepository } from '../../src/continue-watching/continue-watching.repository';
 import { ContinueWatchingService } from '../../src/continue-watching/continue-watching.service';
+import type { UserMediaCanonicalizationService } from '../../src/user-media/user-media-canonicalization.service';
 
 describe('ContinueWatchingService', () => {
   const userId = '93ea2794-e805-4f60-b14f-2005d2c61804';
@@ -30,13 +31,25 @@ describe('ContinueWatchingService', () => {
     const findByUserId = jest.fn().mockResolvedValue(storedEntries);
     const upsertAndTrim = jest.fn().mockResolvedValue(undefined);
     const remove = jest.fn().mockResolvedValue(undefined);
-    const service = new ContinueWatchingService({
+    const canonicalize = jest
+      .fn()
+      .mockImplementation((_userId: string, refs: string[]) =>
+        Promise.resolve(new Map(refs.map((mediaRef) => [mediaRef, mediaRef]))),
+      );
+    const canonicalizeRegistered = canonicalize;
+    const service = new ContinueWatchingService(
+      { findByUserId, upsertAndTrim, remove } as unknown as ContinueWatchingRepository,
+      { canonicalize, canonicalizeRegistered } as unknown as UserMediaCanonicalizationService,
+    );
+
+    return {
+      service,
       findByUserId,
       upsertAndTrim,
       remove,
-    } as unknown as ContinueWatchingRepository);
-
-    return { service, findByUserId, upsertAndTrim, remove };
+      canonicalize,
+      canonicalizeRegistered,
+    };
   }
 
   it('maps nullable episode columns and server timestamps to the API contract', async () => {

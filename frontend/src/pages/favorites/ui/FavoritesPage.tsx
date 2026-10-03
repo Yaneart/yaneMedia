@@ -17,7 +17,7 @@ import {
   LibraryStorageNotice,
   matchesLibraryQuery,
 } from '@/widgets/library-page';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 
 export function FavoritesPage() {
@@ -31,6 +31,7 @@ export function FavoritesPage() {
     hasSyncError,
     isFavorite,
     toggleFavorite,
+    canonicalizeFavorites,
     retry: retryFavorites,
   } = useFavorites();
   const {
@@ -39,6 +40,9 @@ export function FavoritesPage() {
     hasRefreshError,
     retry,
   } = useMediaSummaryResolution(Array.from(favoriteMediaRefs));
+  useEffect(() => {
+    if (resolution) canonicalizeFavorites(resolution.canonicalMediaRefs);
+  }, [canonicalizeFavorites, resolution]);
   const favoriteMedia = resolution?.items ?? [];
   const visibleFavoriteMedia = favoriteMedia.filter((media) => matchesLibraryQuery(media, query));
   const hasStoredFavorites = favoriteMediaRefs.size > 0;

@@ -1,10 +1,11 @@
 import { isMediaRef, type MediaRef } from '@/entities/media';
 
 const FAVORITES_STORAGE_KEY = 'yanemedia-favorites';
-const FAVORITES_STORAGE_VERSION = 1;
+const FAVORITES_STORAGE_VERSION = 2;
+const LEGACY_FAVORITES_STORAGE_VERSION = 1;
 
 type StoredFavorites = {
-  version: typeof FAVORITES_STORAGE_VERSION;
+  version: typeof FAVORITES_STORAGE_VERSION | typeof LEGACY_FAVORITES_STORAGE_VERSION;
   mediaRefs: MediaRef[];
 };
 
@@ -15,10 +16,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function isStoredFavorites(value: unknown): value is StoredFavorites {
   return (
     isRecord(value) &&
-    value.version === FAVORITES_STORAGE_VERSION &&
+    (value.version === FAVORITES_STORAGE_VERSION ||
+      value.version === LEGACY_FAVORITES_STORAGE_VERSION) &&
     Array.isArray(value.mediaRefs) &&
     value.mediaRefs.every(isMediaRef)
   );
+}
+
+export function canonicalizeFavoriteMediaRefs(
+  mediaRefs: ReadonlySet<MediaRef>,
+  canonicalMediaRefs: ReadonlyMap<MediaRef, MediaRef>,
+): Set<MediaRef> {
+  return new Set([...mediaRefs].map((mediaRef) => canonicalMediaRefs.get(mediaRef) ?? mediaRef));
 }
 
 export function loadFavoriteMediaRefs(): Set<MediaRef> {

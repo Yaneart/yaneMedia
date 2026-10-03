@@ -24,23 +24,36 @@ describe('canonical media summary resolution', () => {
         { requestIndex: 0, item },
         { requestIndex: 1, item },
         { requestIndex: 2, item },
+        { requestIndex: 3, item },
       ],
       partial: false,
       degraded: false,
       stale: false,
     };
 
-    const result = await resolveMediaSummaries([mediaRef, 'anilist:1535', 'shikimori:1535']);
+    const result = await resolveMediaSummaries([
+      mediaRef,
+      'anilist:1535',
+      'shikimori:1535',
+      'tmdb:126308',
+    ]);
 
     expect(result.items).toEqual([expect.objectContaining({ mediaRef, slug: 'death-note' })]);
     expect(result.matches).toEqual([
       expect.objectContaining({ requestedMediaRef: mediaRef }),
       expect.objectContaining({ requestedMediaRef: 'anilist:1535' }),
       expect.objectContaining({ requestedMediaRef: 'shikimori:1535' }),
+      expect.objectContaining({ requestedMediaRef: 'tmdb:126308' }),
+    ]);
+    expect([...result.canonicalMediaRefs]).toEqual([
+      [mediaRef, mediaRef],
+      ['anilist:1535', mediaRef],
+      ['shikimori:1535', mediaRef],
+      ['tmdb:126308', mediaRef],
     ]);
     expect(result.partial).toBe(false);
     expect(JSON.parse(String(apiRequest.mock.calls[0]?.[1]?.body))).toEqual({
-      mediaRefs: [mediaRef, 'anilist:1535', 'shikimori:1535'],
+      mediaRefs: [mediaRef, 'anilist:1535', 'shikimori:1535', 'tmdb:126308'],
     });
   });
 });

@@ -15,6 +15,7 @@ import {
 import { accountHistoryQueryKey, mergeHistoryEntries } from './accountHistory';
 import { OpeningHistoryContext, type OpeningHistoryEntry } from './openingHistoryContext';
 import {
+  canonicalizeOpeningHistory,
   loadOpeningHistory,
   loadOpeningHistoryUndo,
   OPENING_HISTORY_UNDO_DURATION_MS,
@@ -478,6 +479,20 @@ export function OpeningHistoryProvider({ children }: OpeningHistoryProviderProps
     if (accountUserId) void accountQuery.refetch();
   }, [accountQuery, accountUserId, authState.status, refreshAuth, runAccountMutation]);
 
+  const canonicalizeHistory = useCallback(
+    (canonicalMediaRefs: ReadonlyMap<MediaRef, MediaRef>) => {
+      setGuestEntries((current) => canonicalizeOpeningHistory(current, canonicalMediaRefs));
+      const currentUndo = historyUndoRef.current;
+      if (currentUndo) {
+        storeHistoryUndo({
+          ...currentUndo,
+          entries: canonicalizeOpeningHistory(currentUndo.entries, canonicalMediaRefs),
+        });
+      }
+    },
+    [storeHistoryUndo],
+  );
+
   return (
     <OpeningHistoryContext
       value={{
@@ -493,6 +508,7 @@ export function OpeningHistoryProvider({ children }: OpeningHistoryProviderProps
         removeOpening,
         clearHistory,
         undoClearHistory,
+        canonicalizeHistory,
         retry,
       }}
     >

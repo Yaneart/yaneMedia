@@ -9,6 +9,7 @@ const MEDIA_SUMMARY_RESOLUTION_LIMIT = 100;
 export interface MediaSummaryResolutionResult {
   items: MediaSummary[];
   matches: Array<{ requestedMediaRef: MediaRef; media: MediaSummary }>;
+  canonicalMediaRefs: ReadonlyMap<MediaRef, MediaRef>;
   partial: boolean;
   degraded: boolean;
   stale: boolean;
@@ -43,6 +44,7 @@ export async function resolveMediaSummaries(
     return {
       items: [],
       matches: [],
+      canonicalMediaRefs: new Map(),
       partial: prepared.hasInvalidMediaRefs,
       degraded: prepared.hasInvalidMediaRefs,
       stale: false,
@@ -89,6 +91,9 @@ export async function resolveMediaSummaries(
   return {
     items: uniqueItems,
     matches,
+    canonicalMediaRefs: new Map(
+      matches.map(({ requestedMediaRef, media }) => [requestedMediaRef, media.mediaRef]),
+    ),
     partial,
     degraded: degraded || partial,
     stale,

@@ -29,7 +29,10 @@ function expectUserMediaModel(
       foreignColumns: foreignKey.reference().foreignColumns.map(({ name }) => name),
       onDelete: foreignKey.onDelete,
     })),
-  ).toEqual([{ columns: ['user_id'], foreignColumns: ['id'], onDelete: 'cascade' }]);
+  ).toEqual([
+    { columns: ['user_id'], foreignColumns: ['id'], onDelete: 'cascade' },
+    { columns: ['media_ref'], foreignColumns: ['media_ref'], onDelete: 'no action' },
+  ]);
   expect(
     config.indexes.map(({ config: index }) => ({
       name: index.name,
@@ -76,7 +79,16 @@ describe('user data schema', () => {
     expect(config.primaryKeys.map(({ columns }) => columns.map(({ name }) => name))).toEqual([
       ['user_id', 'media_ref'],
     ]);
-    expect(config.foreignKeys[0]?.onDelete).toBe('cascade');
+    expect(
+      config.foreignKeys.map((foreignKey) => ({
+        columns: foreignKey.reference().columns.map(({ name }) => name),
+        foreignColumns: foreignKey.reference().foreignColumns.map(({ name }) => name),
+        onDelete: foreignKey.onDelete,
+      })),
+    ).toEqual([
+      { columns: ['user_id'], foreignColumns: ['id'], onDelete: 'cascade' },
+      { columns: ['media_ref'], foreignColumns: ['media_ref'], onDelete: 'no action' },
+    ]);
     expect(config.indexes[0]?.config.name).toBe('continue_watching_user_id_updated_at_index');
   });
 });

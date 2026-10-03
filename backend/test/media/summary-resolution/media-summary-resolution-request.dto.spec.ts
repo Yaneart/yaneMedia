@@ -21,6 +21,10 @@ describe('MediaSummaryResolutionRequestDto', () => {
       'shikimori:5114',
       'anilist:154587',
       'myanimelist:52991',
+      'tmdb:126308',
+      'tvdb:392573',
+      'wikidata:Q56276181',
+      'worldart:12345',
     ];
 
     await expect(transform({ mediaRefs, internal: 'remove-me' })).resolves.toEqual({

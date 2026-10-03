@@ -145,6 +145,7 @@ async function createMediaEngine() {
     AppLogger,
   ],
   exports: [
+    MediaRegistryService,
     MediaCatalogService,
     EditorialCatalogRepository,
     EditorialCatalogSyncService,

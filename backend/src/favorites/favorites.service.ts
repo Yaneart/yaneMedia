@@ -1,26 +1,35 @@
 import { Injectable } from '@nestjs/common';
-import { MediaCatalogService } from '../media/catalog/media-catalog.service';
 import { FavoritesRepository } from './favorites.repository';
+import { UserMediaCanonicalizationService } from '../user-media/user-media-canonicalization.service';
 
 @Injectable()
 export class FavoritesService {
   constructor(
     private readonly favoritesRepository: FavoritesRepository,
-    private readonly mediaCatalogService: MediaCatalogService,
+    private readonly userMediaCanonicalization: UserMediaCanonicalizationService,
   ) {}
 
-  listMediaRefs(userId: string): Promise<string[]> {
+  async listMediaRefs(userId: string): Promise<string[]> {
+    const mediaRefs = await this.favoritesRepository.findMediaRefsByUserId(userId);
+    await this.userMediaCanonicalization.canonicalize(userId, mediaRefs);
     return this.favoritesRepository.findMediaRefsByUserId(userId);
   }
 
   async addMediaRefs(userId: string, mediaRefs: readonly string[]): Promise<string[]> {
-    await this.mediaCatalogService.assertMediaRefsExist(mediaRefs);
-    await this.favoritesRepository.addMediaRefs(userId, mediaRefs);
+    const canonicalRefs = await this.userMediaCanonicalization.canonicalizeRegistered(
+      userId,
+      mediaRefs,
+    );
+    await this.favoritesRepository.addMediaRefs(
+      userId,
+      mediaRefs.map((mediaRef) => canonicalRefs.get(mediaRef) ?? mediaRef),
+    );
     return this.listMediaRefs(userId);
   }
 
   async removeMediaRef(userId: string, mediaRef: string): Promise<string[]> {
-    await this.favoritesRepository.removeMediaRef(userId, mediaRef);
+    const canonicalRefs = await this.userMediaCanonicalization.canonicalize(userId, [mediaRef]);
+    await this.favoritesRepository.removeMediaRef(userId, canonicalRefs.get(mediaRef) ?? mediaRef);
     return this.listMediaRefs(userId);
   }
 }
