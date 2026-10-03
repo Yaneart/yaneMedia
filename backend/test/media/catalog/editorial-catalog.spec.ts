@@ -86,14 +86,13 @@ describe('editorial catalog', () => {
     expect(movieAndSeriesEntries.every(({ mediaRef }) => mediaRef.startsWith('imdb:'))).toBe(true);
   });
 
-  it('keeps anime out of the home featured collection', () => {
+  it('keeps exactly ten movies and series in the home featured collection', () => {
     const featuredEntries = editorialCatalog.filter(({ collections }) =>
       (collections as readonly string[]).includes('featured'),
     );
 
-    expect(featuredEntries.length).toBeGreaterThan(0);
+    expect(featuredEntries).toHaveLength(10);
     expect(featuredEntries.every(({ type }) => type === 'movie' || type === 'series')).toBe(true);
-    expect(featuredEntries.every((entry) => editorialCatalog.indexOf(entry) < 10)).toBe(true);
   });
 
   it('accepts provenance-bearing IMDb and Kinopoisk anime identity overrides', () => {

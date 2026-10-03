@@ -1,5 +1,5 @@
 {
-  "version": 5,
+  "version": 6,
   "source": "yanemedia-editorial-v1",
   "identities": {
     "anilist:154587": {
@@ -204,7 +204,18 @@
     }
   },
   "identityOverrides": {},
-  "featuredMediaRefs": ["imdb:tt15239678", "imdb:tt15398776", "imdb:tt2788316", "imdb:tt2543164"],
+  "featuredMediaRefs": [
+    "imdb:tt1375666",
+    "imdb:tt0816692",
+    "imdb:tt6751668",
+    "imdb:tt0482571",
+    "imdb:tt9362722",
+    "imdb:tt0903747",
+    "imdb:tt7366338",
+    "imdb:tt3230854",
+    "imdb:tt11126994",
+    "imdb:tt5290382"
+  ],
   "artworkOverrides": {
     "imdb:tt2788316": {
       "backdropUrl": "https://live.metahub.space/background/medium/tt2788316/img"

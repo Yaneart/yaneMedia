@@ -267,6 +267,30 @@ describe('EditorialCatalogSyncService', () => {
     expect(repository.publishRevision).toHaveBeenCalledTimes(1);
   });
 
+  it('accepts a canonical work ref while preserving the editorial catalog ref', async () => {
+    const getSummaryByRef = jest.fn((mediaRef: string) => {
+      const resolved = summary(mediaRef);
+      return Promise.resolve({
+        summary: {
+          ...resolved,
+          mediaRef: 'work_00000000-0000-4000-8000-000000000001',
+        },
+        meta: {},
+      });
+    });
+    const { service, repository } = setup({ getSummaryByRef });
+
+    await expect(service.sync(manifest, noRetry)).resolves.toMatchObject({ skipped: false });
+    expect(repository.upsertStagingItems).toHaveBeenCalledWith(
+      'revision-1',
+      expect.arrayContaining([
+        expect.objectContaining({ mediaRef: 'imdb:tt0000001' }),
+        expect.objectContaining({ mediaRef: 'imdb:tt0000002' }),
+        expect.objectContaining({ mediaRef: 'anilist:199' }),
+      ]),
+    );
+  });
+
   it('reuses a matching persisted asset only when its local file still exists', async () => {
     const posterUrl = summary('imdb:tt0000001').poster!.url;
     const persisted = { id: 'existing-asset', ...storedAsset('poster', posterUrl) };

@@ -243,7 +243,7 @@ export class EditorialCatalogSyncService {
         item.externalIds,
       );
       if (!summary) throw new Error(`No metadata found for ${item.mediaRef}`);
-      if (summary.mediaRef !== item.mediaRef || summary.type !== item.type) {
+      if (summary.type !== item.type) {
         throw new Error(`Metadata identity mismatch for ${item.mediaRef}`);
       }
       const posterUrl =
