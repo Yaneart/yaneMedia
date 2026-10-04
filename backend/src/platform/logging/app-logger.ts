@@ -56,11 +56,17 @@ export type ProviderDiagnosticEvent = ProviderDiagnostic & { event: 'media.provi
 export class AppLogger {
   private readonly logger = new ConsoleLogger({ json: true });
 
+  private get diagnosticsEnabled(): boolean {
+    return process.env.YANEMEDIA_QUIET_DIAGNOSTICS !== '1';
+  }
+
   logPerformance(event: PerformanceEvent): void {
+    if (!this.diagnosticsEnabled) return;
     this.logger.log(event);
   }
 
   logProviderDiagnostic(event: ProviderDiagnosticEvent): void {
+    if (!this.diagnosticsEnabled) return;
     this.logger.log(event);
   }
 

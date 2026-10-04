@@ -19,14 +19,25 @@ import {
 } from './editorial-catalog.repository';
 
 const DEFAULT_CONCURRENCY = 3;
-const DEFAULT_RETRY_DELAYS_MS = [250, 1_000] as const;
+const DEFAULT_METADATA_RETRY_DELAYS_MS = [1_000, 10_000, 30_000] as const;
+const DEFAULT_ASSET_RETRY_DELAYS_MS = [250, 1_000] as const;
 const MIN_BACKDROP_WIDTH = 1_280;
 const MIN_BACKDROP_ASPECT_RATIO = 4 / 3;
 
 export interface EditorialCatalogSyncOptions {
   concurrency?: number;
+  /** @deprecated Prefer the phase-specific retry options. */
   retryDelaysMs?: readonly number[];
+  metadataRetryDelaysMs?: readonly number[];
+  assetRetryDelaysMs?: readonly number[];
   dryRun?: boolean;
+  onProgress?: (progress: EditorialCatalogSyncProgress) => void;
+}
+
+export interface EditorialCatalogSyncProgress {
+  phase: 'metadata' | 'assets' | 'publish';
+  completed: number;
+  total: number;
 }
 
 export interface EditorialCatalogRotationPlan {
@@ -113,26 +124,53 @@ export class EditorialCatalogSyncService {
     const revisionId =
       existingRevision?.id ?? (await this.repository.createStagingRevision(source));
     const concurrency = Math.max(1, Math.floor(options.concurrency ?? DEFAULT_CONCURRENCY));
-    const retryDelaysMs = options.retryDelaysMs ?? DEFAULT_RETRY_DELAYS_MS;
+    const metadataRetryDelaysMs =
+      options.metadataRetryDelaysMs ?? options.retryDelaysMs ?? DEFAULT_METADATA_RETRY_DELAYS_MS;
+    const assetRetryDelaysMs =
+      options.assetRetryDelaysMs ?? options.retryDelaysMs ?? DEFAULT_ASSET_RETRY_DELAYS_MS;
     const publishedArtwork = new Map(
       (await this.repository.findPublishedArtwork(items.map(({ mediaRef }) => mediaRef))).map(
         ({ mediaRef, ...artwork }) => [mediaRef, artwork],
       ),
     );
-    const resolvedItems = await this.runBounded(items, concurrency, (item, queuedAt) =>
-      this.resolveMetadata(item, publishedArtwork.get(item.mediaRef), queuedAt, retryDelaysMs),
+    options.onProgress?.({ phase: 'metadata', completed: 0, total: items.length });
+    const resolvedItems = await this.runBounded(
+      items,
+      concurrency,
+      (item, queuedAt) =>
+        this.resolveMetadata(
+          item,
+          publishedArtwork.get(item.mediaRef),
+          queuedAt,
+          metadataRetryDelaysMs,
+        ),
+      (completed) => options.onProgress?.({ phase: 'metadata', completed, total: items.length }),
     );
     const assetRequests = this.toAssetRequests(resolvedItems);
     const existingAssets = await this.findUsableAssets(assetRequests);
-    const resolvedAssets = await this.runBounded(assetRequests, concurrency, ({ kind, url }) => {
-      const existing = existingAssets.get(`${kind}:${url}`);
-      return existing
-        ? Promise.resolve({ asset: existing, reused: true })
-        : this.retry(() => this.assetStore.import(kind, url), retryDelaysMs).then((asset) => ({
-            asset,
-            reused: false,
-          }));
-    });
+    options.onProgress?.({ phase: 'assets', completed: 0, total: assetRequests.length });
+    const resolvedAssets = await this.runBounded(
+      assetRequests,
+      concurrency,
+      async ({ kind, url }) => {
+        const existing = existingAssets.get(`${kind}:${url}`);
+        if (existing) return { asset: existing, reused: true };
+
+        try {
+          const asset = await this.retry(
+            () => this.assetStore.import(kind, url),
+            assetRetryDelaysMs,
+          );
+          return { asset, reused: false };
+        } catch (error) {
+          throw new Error(`Failed to download ${kind} from ${url}: ${this.errorMessage(error)}`, {
+            cause: error,
+          });
+        }
+      },
+      (completed) =>
+        options.onProgress?.({ phase: 'assets', completed, total: assetRequests.length }),
+    );
     for (const { asset } of resolvedAssets) this.assertAssetQuality(asset);
     const assetsByRequest = new Map(
       assetRequests.map((request, index) => [
@@ -148,6 +186,7 @@ export class EditorialCatalogSyncService {
       storedAssets.map(({ checksum, id }) => [checksum, id] as const),
     );
 
+    options.onProgress?.({ phase: 'publish', completed: 0, total: 1 });
     await this.repository.upsertStagingItems(
       revisionId,
       resolvedItems.map((item) => this.toStagingItem(item, assetsByRequest, assetIdByChecksum)),
@@ -165,6 +204,7 @@ export class EditorialCatalogSyncService {
     );
     await this.storeCollections(revisionId, manifest);
     await this.repository.publishRevision(revisionId);
+    options.onProgress?.({ phase: 'publish', completed: 1, total: 1 });
 
     return {
       source,
@@ -263,11 +303,18 @@ export class EditorialCatalogSyncService {
       if (!resolvedSummary.poster) throw new Error(`Poster is required for ${item.mediaRef}`);
       if (!resolvedSummary.backdrop) throw new Error(`Backdrop is required for ${item.mediaRef}`);
       return { ...item, summary: resolvedSummary };
-    }, retryDelaysMs).finally(() => {
-      if (this.pendingMetadata.get(item.mediaRef) === resolution) {
-        this.pendingMetadata.delete(item.mediaRef);
-      }
-    });
+    }, retryDelaysMs)
+      .catch((error: unknown) => {
+        throw new Error(
+          `Failed to resolve metadata for ${item.mediaRef}: ${this.errorMessage(error)}`,
+          { cause: error },
+        );
+      })
+      .finally(() => {
+        if (this.pendingMetadata.get(item.mediaRef) === resolution) {
+          this.pendingMetadata.delete(item.mediaRef);
+        }
+      });
 
     this.pendingMetadata.set(item.mediaRef, resolution);
     return resolution;
@@ -408,17 +455,21 @@ export class EditorialCatalogSyncService {
     values: readonly T[],
     concurrency: number,
     run: (value: T, queuedAt: number) => Promise<R>,
+    onCompleted?: (completed: number) => void,
   ): Promise<R[]> {
     const results = new Array<R>(values.length);
     const queuedAt = performance.now();
     let nextIndex = 0;
     let failed = false;
     let failure: unknown;
+    let completed = 0;
     const worker = async () => {
       while (!failed && nextIndex < values.length) {
         const index = nextIndex++;
         try {
           results[index] = await run(values[index], queuedAt);
+          completed += 1;
+          onCompleted?.(completed);
         } catch (error) {
           if (!failed) {
             failed = true;
@@ -431,6 +482,10 @@ export class EditorialCatalogSyncService {
     await Promise.all(Array.from({ length: Math.min(concurrency, values.length) }, () => worker()));
     if (failed) throw failure;
     return results;
+  }
+
+  private errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
   }
 
   private async retry<T>(operation: () => Promise<T>, delays: readonly number[]): Promise<T> {

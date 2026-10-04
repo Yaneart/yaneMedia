@@ -306,6 +306,26 @@ describe('EditorialCatalogSyncService', () => {
     expect(assetImport).not.toHaveBeenCalledWith('poster', posterUrl);
   });
 
+  it('reports progress and identifies the failed artwork request', async () => {
+    const progress = jest.fn();
+    const { service, assetImport, repository } = setup({});
+    const posterUrl = summary('imdb:tt0000001').poster!.url;
+    assetImport.mockImplementation((kind: 'poster' | 'backdrop', url: string) => {
+      if (kind === 'poster' && url === posterUrl) {
+        return Promise.reject(new Error('blocked by DNS'));
+      }
+      return Promise.resolve(storedAsset(kind, url));
+    });
+
+    await expect(service.sync(manifest, { ...noRetry, onProgress: progress })).rejects.toThrow(
+      `Failed to download poster from ${posterUrl}: blocked by DNS`,
+    );
+    expect(progress).toHaveBeenCalledWith({ phase: 'metadata', completed: 0, total: 3 });
+    expect(progress).toHaveBeenCalledWith({ phase: 'metadata', completed: 3, total: 3 });
+    expect(progress).toHaveBeenCalledWith({ phase: 'assets', completed: 0, total: 6 });
+    expect(repository.publishRevision).not.toHaveBeenCalled();
+  });
+
   it('uses a validated manifest artwork override when providers omit a required poster', async () => {
     const overrideManifest = structuredClone(manifest);
     overrideManifest.artworkOverrides['anilist:199'] = {
@@ -413,7 +433,7 @@ describe('EditorialCatalogSyncService', () => {
     const { service, repository } = setup({ getSummaryByRef });
 
     await expect(service.sync(manifest, noRetry)).rejects.toThrow(
-      'No metadata found for imdb:tt0000002',
+      'Failed to resolve metadata for imdb:tt0000002: No metadata found for imdb:tt0000002',
     );
     expect(repository.createStagingRevision).toHaveBeenCalledTimes(1);
     expect(repository.upsertStagingItems).not.toHaveBeenCalled();
@@ -429,7 +449,7 @@ describe('EditorialCatalogSyncService', () => {
     const { service } = setup({ getSummaryByRef });
 
     await expect(service.sync(manifest, { concurrency: 1, retryDelaysMs: [] })).rejects.toThrow(
-      'first item failed',
+      'Failed to resolve metadata for imdb:tt0000001: first item failed',
     );
     expect(getSummaryByRef).toHaveBeenCalledTimes(1);
   });

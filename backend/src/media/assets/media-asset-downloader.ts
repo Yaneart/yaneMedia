@@ -71,8 +71,17 @@ export class MediaAssetDownloader {
     }
 
     const addresses = await this.resolve(url.hostname).catch(() => []);
-    if (addresses.length === 0 || addresses.some(({ address }) => !isPublicIpAddress(address))) {
-      throw new BadGatewayException('Unsafe media asset host');
+    if (addresses.length === 0) {
+      throw new BadGatewayException(
+        `Media asset host "${url.hostname}" could not be resolved by DNS`,
+      );
+    }
+
+    const blockedAddress = addresses.find(({ address }) => !isPublicIpAddress(address));
+    if (blockedAddress) {
+      throw new BadGatewayException(
+        `Unsafe media asset host "${url.hostname}": DNS resolved to blocked address ${blockedAddress.address}`,
+      );
     }
 
     return this.open(url, addresses[0]);

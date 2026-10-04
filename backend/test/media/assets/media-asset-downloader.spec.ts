@@ -110,6 +110,14 @@ describe('MediaAssetDownloader', () => {
     },
   );
 
+  it('reports the hostname and blocked DNS address for an unsafe host', async () => {
+    await expect(
+      new FakeNetworkDownloader().download('https://private.example/image'),
+    ).rejects.toThrow(
+      'Unsafe media asset host "private.example": DNS resolved to blocked address 127.0.0.1',
+    );
+  });
+
   it('classifies non-public network ranges', () => {
     expect(isPublicIpAddress('8.8.8.8')).toBe(true);
     expect(isPublicIpAddress('127.0.0.1')).toBe(false);
