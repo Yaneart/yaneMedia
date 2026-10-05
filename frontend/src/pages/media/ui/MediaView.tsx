@@ -73,7 +73,10 @@ const emptyAvailability: MediaAvailability = {
 
 function AvailabilityToolbarStatus() {
   return (
-    <div className="flex min-h-12 w-full items-center justify-center" aria-live="polite">
+    <div
+      className="col-span-2 flex min-h-12 w-full items-center justify-center 2xl:flex-1"
+      aria-live="polite"
+    >
       <Spinner size="medium" label="Подбираем варианты просмотра" />
     </div>
   );
@@ -683,7 +686,7 @@ export function MediaView({
       <div className="order-2 min-w-0 space-y-8 xl:order-none xl:col-start-2 xl:row-start-1">
         <div className="min-w-0">
           <div className="min-w-0 overflow-hidden rounded-card border border-context-border bg-surface shadow-surface">
-            <div className="flex min-w-0 flex-col gap-3 bg-surface-elevated px-4 py-3 sm:px-5 min-[70rem]:flex-row min-[70rem]:flex-nowrap min-[70rem]:items-center min-[70rem]:gap-x-3">
+            <div className="grid min-w-0 grid-cols-2 gap-3 bg-surface-elevated px-4 py-3 sm:px-5 2xl:flex 2xl:flex-nowrap 2xl:items-center 2xl:gap-x-3">
               {isToolbarLoading ? (
                 <AvailabilityToolbarStatus />
               ) : (
@@ -722,7 +725,7 @@ export function MediaView({
                     />
                   )}
 
-                  <div className="w-full min-[70rem]:ml-auto min-[70rem]:w-auto">
+                  <div className="col-span-2 w-full 2xl:ml-auto 2xl:w-auto">
                     <PlaybackSourcePicker
                       embedSources={catalog.embedSources}
                       directSources={currentDirectSources}

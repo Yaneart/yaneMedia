@@ -37,10 +37,17 @@ export function SeasonSelector({
         variant === 'section'
           ? 'border-b border-context-border bg-surface-elevated px-4 py-3 sm:px-5'
           : '',
-        compactDesktop ? 'min-[70rem]:shrink-0' : '',
+        compactDesktop ? '2xl:shrink-0' : '',
       ].join(' ')}
     >
-      <span className="shrink-0 text-caption text-text-secondary">Сезон</span>
+      <span
+        className={[
+          'shrink-0 text-caption text-text-secondary',
+          compactDesktop ? 'sr-only 2xl:not-sr-only' : '',
+        ].join(' ')}
+      >
+        Сезон
+      </span>
 
       <Select
         aria-label="Сезон для просмотра"
@@ -52,7 +59,7 @@ export function SeasonSelector({
         }}
         matchMenuWidth
         allowEmpty={false}
-        className={['w-full sm:w-40', compactDesktop ? 'min-[70rem]:w-40' : ''].join(' ')}
+        className={['w-full sm:w-40', compactDesktop ? 'sm:w-full 2xl:w-40' : ''].join(' ')}
       />
     </section>
   );

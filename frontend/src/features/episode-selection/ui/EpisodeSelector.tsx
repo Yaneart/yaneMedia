@@ -33,10 +33,17 @@ export function EpisodeSelector({
         variant === 'section'
           ? 'border-b border-context-border bg-surface-elevated px-4 py-3 sm:px-5'
           : '',
-        compactDesktop ? 'min-[70rem]:shrink-0' : '',
+        compactDesktop ? '2xl:shrink-0' : '',
       ].join(' ')}
     >
-      <span className="shrink-0 text-caption text-text-secondary">Серия</span>
+      <span
+        className={[
+          'shrink-0 text-caption text-text-secondary',
+          compactDesktop ? 'sr-only 2xl:not-sr-only' : '',
+        ].join(' ')}
+      >
+        Серия
+      </span>
 
       <Select
         aria-label="Серия для просмотра"
@@ -48,7 +55,10 @@ export function EpisodeSelector({
         }}
         matchMenuWidth
         allowEmpty={false}
-        className={['w-full min-w-0 sm:w-56', compactDesktop ? 'min-[70rem]:w-48' : ''].join(' ')}
+        className={[
+          'w-full min-w-0 sm:w-56',
+          compactDesktop ? 'sm:w-full 2xl:w-48' : '',
+        ].join(' ')}
       />
     </section>
   );

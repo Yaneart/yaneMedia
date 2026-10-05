@@ -112,9 +112,10 @@ export function PlaybackSourcePicker({
       triggerLabel={selectedLabel ?? labels.source}
       triggerVariant="secondary"
       triggerSize="custom"
-      triggerClassName="min-h-10 w-full justify-between rounded-control border border-border bg-control px-3 sm:w-auto sm:min-w-44"
+      triggerClassName="min-h-10 w-full justify-between rounded-control border border-border bg-control px-3 2xl:w-auto 2xl:min-w-44"
+      className="w-full min-w-0 2xl:w-auto"
       align={align}
-      panelClassName="w-[min(19rem,calc(100vw-2rem))] rounded-overlay bg-popover p-2.5"
+      panelClassName="max-h-[calc(100dvh-2rem)] w-[min(19rem,calc(100vw-2rem))] overflow-y-auto rounded-overlay bg-popover p-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
       {(close) => (
         <div>
