@@ -1,7 +1,7 @@
 import { AccountControl } from '@/features/account';
 import { ThemeToggle } from '@/features/theme';
 import { Logo, type IconProps } from '@/shared';
-import type { ComponentType } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 import { NavLink } from 'react-router';
 
 type DesktopNavigationItem = {
@@ -17,6 +17,7 @@ type DesktopNavigationProps = {
   primaryItems: readonly DesktopNavigationItem[];
   secondaryItems: readonly DesktopNavigationItem[];
   onItemIntent?: (path: string) => void;
+  playbackDock?: ReactNode;
 };
 
 function getLinkClassName({ isActive }: { isActive: boolean }) {
@@ -37,6 +38,7 @@ export function DesktopNavigation({
   secondaryItems,
   profilePath,
   onItemIntent,
+  playbackDock,
 }: DesktopNavigationProps) {
   return (
     <aside className="flex h-dvh w-64 shrink-0 flex-col px-5 py-6">
@@ -112,7 +114,9 @@ export function DesktopNavigation({
         </ul>
       </nav>
 
-      <div className="mt-auto flex items-center gap-2 px-2 pt-6">
+      <div className="mt-5 flex min-h-0 flex-1 items-center justify-center">{playbackDock}</div>
+
+      <div className="flex items-center gap-2 px-2 pt-5">
         <ThemeToggle />
 
         <AccountControl loginPath={profilePath} placement="top" />

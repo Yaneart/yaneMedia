@@ -178,6 +178,10 @@
     var(--watch-dock-accent, var(--theme-watermark)) 72%,
     var(--theme-text-primary)
   );
+  --theme-watch-dock-border: rgb(67 113 211 / 72%);
+  --theme-watch-dock-hover-border: rgb(88 139 242 / 95%);
+  --theme-watch-dock-hover-shadow:
+    0 0 0 1px rgb(88 139 242 / 24%), 0 0 22px rgb(49 95 189 / 48%), 0 12px 30px rgb(0 0 0 / 34%);
 
   --theme-hero-overlay-start: rgb(0 0 0 / 95%);
   --theme-hero-overlay-middle: rgb(0 0 0 / 55%);
@@ -243,6 +247,11 @@
     var(--watch-dock-accent, var(--theme-watermark)) 76%,
     var(--theme-text-primary)
   );
+  --theme-watch-dock-border: rgb(76 161 218 / 78%);
+  --theme-watch-dock-hover-border: rgb(93 190 242 / 96%);
+  --theme-watch-dock-hover-shadow:
+    0 0 0 1px rgb(93 190 242 / 28%), 0 0 20px rgb(76 161 218 / 42%),
+    0 12px 28px rgb(23 79 150 / 20%);
 
   --theme-hero-overlay-start: rgb(244 243 239 / 99%);
   --theme-hero-overlay-middle: rgb(244 243 239 / 5%);
@@ -261,6 +270,13 @@
   --theme-hero-overlay-start: rgb(241 240 235 / 96%);
   --theme-hero-overlay-middle: rgb(241 240 235 / 60%);
   --theme-hero-overlay-soft: rgb(241 240 235 / 8%);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .watch-dock-sidebar:hover {
+    border-color: var(--theme-watch-dock-hover-border);
+    box-shadow: var(--theme-watch-dock-hover-shadow);
+  }
 }
 
 .home-hero-overlay {

@@ -1,4 +1,4 @@
-import { Outlet, useLocation, useNavigate } from 'react-router';
+import { matchPath, Outlet, useLocation, useNavigate } from 'react-router';
 import { routePaths } from '../router/routes';
 import { primaryNavigationItems, secondaryNavigationItems } from '../router/navigation';
 import { preloadAnimePage, preloadMoviesPage, preloadSeriesPage } from '../router/lazyPages';
@@ -40,9 +40,10 @@ export function AppShell() {
 
   const isHomePage = pathname === routePaths.home;
 
-  const activeMediaPath = session ? `/media/${encodeURIComponent(session.mediaRef)}` : null;
   const normalizedPathname = pathname.replace(/\/+$/, '') || routePaths.home;
-  const isActiveMediaPage = activeMediaPath === normalizedPathname;
+  const isMediaPage = matchPath(routePaths.media, normalizedPathname) !== null;
+  const activeMediaPath = session ? `/media/${encodeURIComponent(session.mediaRef)}` : null;
+  const showWatchDock = session && activeMediaPath && !isMediaPage;
   const prefetchCatalog = (path: string) => {
     const type = catalogTypeByPath[path];
     const preloadPage = catalogPageLoaderByPath[path];
@@ -70,6 +71,18 @@ export function AppShell() {
             primaryItems={primaryNavigationItems}
             secondaryItems={secondaryNavigationItems}
             onItemIntent={prefetchCatalog}
+            playbackDock={
+              showWatchDock ? (
+                <WatchDock
+                  variant="sidebar"
+                  mediaTitle={session.mediaSnapshot.title}
+                  artwork={session.mediaSnapshot.artwork}
+                  session={session}
+                  onExpand={() => navigate(activeMediaPath)}
+                  onClose={endSession}
+                />
+              ) : null
+            }
           />
         </div>
       </div>
@@ -105,8 +118,8 @@ export function AppShell() {
             </div>
           </ScrollRestorationProvider>
         </main>
-        {session && activeMediaPath && !isActiveMediaPage && (
-          <div className="relative z-20 shrink-0 bg-surface px-1 pb-1 md:mr-4 md:mb-4 md:bg-transparent md:px-0 md:pb-0">
+        {showWatchDock && (
+          <div className="pointer-events-none absolute inset-x-4 bottom-[4.75rem] z-30 sm:inset-x-7 md:hidden">
             <WatchDock
               mediaTitle={session.mediaSnapshot.title}
               artwork={session.mediaSnapshot.artwork}
