@@ -15,6 +15,7 @@ import type { MediaType } from '@/entities/media';
 import { mainContentId } from '@/shared';
 import { claimIntentPrefetch } from '@/shared/lib/intentPrefetch';
 import { useRef } from 'react';
+import { isActivePlaybackMediaRoute } from './watchDockVisibility';
 
 const catalogTypeByPath: Partial<Record<string, MediaType>> = {
   [routePaths.movies]: 'movie',
@@ -41,9 +42,13 @@ export function AppShell() {
   const isHomePage = pathname === routePaths.home;
 
   const normalizedPathname = pathname.replace(/\/+$/, '') || routePaths.home;
-  const isMediaPage = matchPath(routePaths.media, normalizedPathname) !== null;
+  const mediaRouteMatch = matchPath(routePaths.media, normalizedPathname);
+  const isActivePlaybackMediaPage = isActivePlaybackMediaRoute(
+    session,
+    mediaRouteMatch?.params.mediaRef,
+  );
   const activeMediaPath = session ? `/media/${encodeURIComponent(session.mediaRef)}` : null;
-  const showWatchDock = session && activeMediaPath && !isMediaPage;
+  const showWatchDock = session && activeMediaPath && !isActivePlaybackMediaPage;
   const prefetchCatalog = (path: string) => {
     const type = catalogTypeByPath[path];
     const preloadPage = catalogPageLoaderByPath[path];

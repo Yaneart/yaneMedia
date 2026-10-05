@@ -232,6 +232,7 @@ export function HomePage() {
                     onContinue={() =>
                       restoreSession(media.mediaRef, {
                         title: media.title,
+                        slug: media.slug,
                         artwork: media.backdrop ?? media.poster,
                       })
                     }

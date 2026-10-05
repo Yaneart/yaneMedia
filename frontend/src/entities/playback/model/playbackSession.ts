@@ -15,6 +15,7 @@ export interface PlaybackArtworkSnapshot {
 
 export interface PlaybackMediaSnapshot {
   title: string;
+  slug?: string;
   artwork?: PlaybackArtworkSnapshot;
 }
 

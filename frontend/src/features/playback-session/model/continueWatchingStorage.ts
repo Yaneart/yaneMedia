@@ -58,7 +58,12 @@ function isArtworkSnapshot(value: unknown): boolean {
 }
 
 function isMediaSnapshot(value: unknown): boolean {
-  return isRecord(value) && isNonEmptyString(value.title) && isArtworkSnapshot(value.artwork);
+  return (
+    isRecord(value) &&
+    isNonEmptyString(value.title) &&
+    (value.slug === undefined || isNonEmptyString(value.slug)) &&
+    isArtworkSnapshot(value.artwork)
+  );
 }
 
 function isEpisodeSelection(value: unknown): boolean {

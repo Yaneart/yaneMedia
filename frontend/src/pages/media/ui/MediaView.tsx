@@ -337,8 +337,7 @@ export function MediaView({
   const hasPlaybackSources = hasEmbedMode || hasDirectMode;
   const directModePending = usesDirectEpisodes && episodeAvailabilityPending;
   const sourcesPending = availabilityPending || directModePending;
-  const hasToolbarControls =
-    hasPlaybackSources && (media.type === 'movie' || usesDirectEpisodes);
+  const hasToolbarControls = hasPlaybackSources && (media.type === 'movie' || usesDirectEpisodes);
   const initialToolbarLoadComplete = hasToolbarControls || !sourcesPending;
   const isToolbarLoading =
     toolbarResolvedMediaRef !== media.mediaRef && !initialToolbarLoadComplete;
@@ -466,9 +465,7 @@ export function MediaView({
   const selectedSourceRef = selectedSource?.sourceRef ?? null;
 
   const directTracks = getDirectTrackOptions(currentDirectSources);
-  const selectedDirectTrack = directTracks.find(
-    (track) => track.key === selectedDirectTrackKey,
-  );
+  const selectedDirectTrack = directTracks.find((track) => track.key === selectedDirectTrackKey);
   const directQualities = getDirectQualityOptions(selectedDirectTrack?.sources ?? []);
   const selectedDirectQualityKey = selectedDirectSource
     ? getDirectQualityKey(selectedDirectSource)
@@ -545,6 +542,7 @@ export function MediaView({
       mediaRef: media.mediaRef,
       mediaSnapshot: {
         title: media.title,
+        slug: media.slug,
         artwork: media.backdrop ?? media.poster,
       },
       sourceRef: source.sourceRef,
@@ -560,10 +558,7 @@ export function MediaView({
     setPlayerStatus('loading');
   };
 
-  const selectDirectSource = (
-    source: MediaSourceOption | undefined,
-    continuePlayback = false,
-  ) => {
+  const selectDirectSource = (source: MediaSourceOption | undefined, continuePlayback = false) => {
     if (!source || source.sourceRef === selectedDirectSource?.sourceRef) return;
 
     setSelectedDirectSourceRef(source.sourceRef);
@@ -614,10 +609,7 @@ export function MediaView({
     const track = directTracks.find((option) => option.key === trackKey);
 
     setPreferredDirectTrackKey(trackKey);
-    selectDirectSource(
-      getDirectQualityOptions(track?.sources ?? [])[0]?.source,
-      continuePlayback,
-    );
+    selectDirectSource(getDirectQualityOptions(track?.sources ?? [])[0]?.source, continuePlayback);
   };
 
   const selectNextEpisode = () => {
@@ -638,7 +630,6 @@ export function MediaView({
     }
   };
 
-
   const loadPlayer = () => {
     if (!selectedSource || getMediaSourcePlaybackIssue(selectedSource)) {
       return;
@@ -650,6 +641,7 @@ export function MediaView({
       mediaRef: media.mediaRef,
       mediaSnapshot: {
         title: media.title,
+        slug: media.slug,
         artwork: media.backdrop ?? media.poster,
       },
       sourceRef: selectedSource.sourceRef,
@@ -745,9 +737,7 @@ export function MediaView({
                           currentDirectSources.find((source) => source.sourceRef === sourceRef),
                         )
                       }
-                      isLoading={
-                        sourcesPending && sourceSearchSettledMediaRef !== media.mediaRef
-                      }
+                      isLoading={sourcesPending && sourceSearchSettledMediaRef !== media.mediaRef}
                       align="end"
                     />
                   </div>
