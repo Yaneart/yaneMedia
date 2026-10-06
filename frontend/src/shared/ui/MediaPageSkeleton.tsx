@@ -10,7 +10,10 @@ export function MediaPageSkeleton() {
         Загружаем произведение
       </p>
 
-      <div aria-hidden="true" className="order-2 min-w-0 space-y-8 xl:order-none xl:col-start-2 xl:row-start-1">
+      <div
+        aria-hidden="true"
+        className="order-2 min-w-0 space-y-8 xl:order-none xl:col-start-2 xl:row-start-1"
+      >
         <Skeleton className="aspect-video w-full rounded-card" />
       </div>
 

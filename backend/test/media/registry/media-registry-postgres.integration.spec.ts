@@ -65,11 +65,12 @@ describePostgres('media registry with PostgreSQL', () => {
       mediaRef: created.mediaRef,
       slug: `registry-fixture-${fixtureId}`,
     });
-    await expect(registry.resolve(`kinopoisk:${fixtureId}`)).resolves.toMatchObject({
+    const resolvedAlias = await registry.resolve(`kinopoisk:${fixtureId}`);
+    expect(resolvedAlias).toMatchObject({
       mediaRef: created.mediaRef,
       slug: `registry-fixture-${fixtureId}`,
-      ids: expect.objectContaining({ aniList: fixtureId, imdb: `tt${fixtureId}` }),
     });
+    expect(resolvedAlias?.ids).toMatchObject({ aniList: fixtureId, imdb: `tt${fixtureId}` });
     await expect(registry.resolve(`registry-fixture-${fixtureId}`)).resolves.toMatchObject({
       mediaRef: created.mediaRef,
     });
@@ -116,11 +117,8 @@ describePostgres('media registry with PostgreSQL', () => {
       title: `Anime Bridge ${animeBridgeId}`,
     });
 
-    expect(merged).toMatchObject({
-      mediaRef: anime.mediaRef,
-      type: 'anime',
-      ids: expect.objectContaining({ aniList: animeBridgeId, imdb: `tt${cinemaBridgeId}` }),
-    });
+    expect(merged).toMatchObject({ mediaRef: anime.mediaRef, type: 'anime' });
+    expect(merged.ids).toMatchObject({ aniList: animeBridgeId, imdb: `tt${cinemaBridgeId}` });
     await expect(registry.resolve(series.mediaRef)).resolves.toMatchObject({
       mediaRef: anime.mediaRef,
       slug: anime.slug,

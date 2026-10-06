@@ -3,7 +3,7 @@ import { ServiceUnavailableException } from '@nestjs/common';
 import type { MediaAvailabilityProgressDto } from '../../src/media/dto/media-availability.dto';
 import { MediaService } from '../../src/media/media.service';
 import type { EditorialCatalogRepository } from '../../src/media/catalog/editorial-catalog.repository';
-import { createMediaRegistryStub } from './media-registry.stub';
+import { canonicalMediaRef, createMediaRegistryStub } from './media-registry.stub';
 
 describe('MediaService', () => {
   const createProviderFailure = () =>
@@ -907,16 +907,25 @@ describe('MediaService', () => {
       sourceProviders: [],
       checkedAt: '2026-10-01T00:00:00.000Z',
     });
+    const currentMediaRef = canonicalMediaRef('shikimori:3');
     const service = new MediaService(
       {
         getDetails,
         getRelatedMedia,
         getAvailability,
       } as unknown as MediaEngine,
-      createMediaRegistryStub(),
+      createMediaRegistryStub({
+        resolve: jest.fn().mockResolvedValue({
+          mediaRef: currentMediaRef,
+          slug: 'season-2-part-2',
+          type: 'anime',
+          ids: { shikimori: '3' },
+          aliases: ['shikimori:3'],
+        }),
+      }),
     );
 
-    await service.getAvailabilityByRef('shikimori:3', undefined, {
+    await service.getAvailabilityByRef(currentMediaRef, undefined, {
       seasonNumber: 2,
       episodeNumber: 14,
       absoluteEpisodeNumber: 39,

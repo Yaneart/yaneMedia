@@ -190,12 +190,12 @@ export class MediaRegistryService {
             first.createdAt.getTime() - second.createdAt.getTime() ||
             first.mediaRef.localeCompare(second.mediaRef),
         )[0];
-        const redirectedRefs = matchedRefs.filter((mediaRef) => mediaRef !== work!.mediaRef);
+        const redirectedRefs = matchedRefs.filter((mediaRef) => mediaRef !== work.mediaRef);
         await canonicalizeUserMediaInTransaction(
           transaction,
           redirectedRefs.map((sourceMediaRef) => ({
             sourceMediaRef,
-            canonicalMediaRef: work!.mediaRef,
+            canonicalMediaRef: work.mediaRef,
           })),
         );
         await transaction

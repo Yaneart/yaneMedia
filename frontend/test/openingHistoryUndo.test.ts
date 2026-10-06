@@ -1,8 +1,7 @@
 import { afterEach, describe, expect, mock, test } from 'bun:test';
+import { isCanonicalMediaRef, isMediaRef } from '../src/entities/media/model/media';
 
-mock.module('@/entities/media', () => ({
-  isMediaRef: (value: unknown) => typeof value === 'string' && value.startsWith('imdb:tt'),
-}));
+mock.module('@/entities/media', () => ({ isCanonicalMediaRef, isMediaRef }));
 
 const { loadOpeningHistoryUndo, saveOpeningHistoryUndo } =
   await import('../src/features/opening-history/model/openingHistoryStorage');

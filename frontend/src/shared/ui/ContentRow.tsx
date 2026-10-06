@@ -144,12 +144,9 @@ export function ContentRow({
     const animate = (timestamp: number) => {
       const progress = Math.min((timestamp - startedAt) / SCROLL_ANIMATION_DURATION_MS, 1);
       const easedProgress =
-        progress < 0.5
-          ? 4 * Math.pow(progress, 3)
-          : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+        progress < 0.5 ? 4 * Math.pow(progress, 3) : 1 - Math.pow(-2 * progress + 2, 3) / 2;
 
-      row.scrollLeft =
-        startScrollLeft + (targetScrollLeft - startScrollLeft) * easedProgress;
+      row.scrollLeft = startScrollLeft + (targetScrollLeft - startScrollLeft) * easedProgress;
 
       if (progress < 1) {
         scrollAnimationFrameRef.current = window.requestAnimationFrame(animate);

@@ -463,8 +463,8 @@ export class EditorialCatalogRepository {
     return mediaRefs.flatMap((mediaRef) => {
       const row = rowsByMediaRef.get(mediaRef);
       if (!row) return [];
-      const { requestedMediaRef: _, ...item } = row;
-      return [{ requestedMediaRef: mediaRef, item }];
+      const { requestedMediaRef, ...item } = row;
+      return [{ requestedMediaRef, item }];
     });
   }
 

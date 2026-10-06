@@ -6,10 +6,7 @@ import {
 } from '@/entities/media-source';
 import { ErrorState, IconButton, PlayIcon, Spinner } from '@/shared';
 
-import {
-  MediaVideoRenderer,
-  type MediaVideoDirectControls,
-} from './MediaVideoRenderer';
+import { MediaVideoRenderer, type MediaVideoDirectControls } from './MediaVideoRenderer';
 
 export type MediaPlayerStatus = 'loading' | 'ready' | 'error';
 

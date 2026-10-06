@@ -6,14 +6,17 @@ import { getDirectTrackKey } from '../model/sourceSelection';
 
 const labels = {
   source: '\u0418\u0441\u0442\u043e\u0447\u043d\u0438\u043a',
-  chooseSource: '\u0412\u044b\u0431\u0440\u0430\u0442\u044c \u0438\u0441\u0442\u043e\u0447\u043d\u0438\u043a',
+  chooseSource:
+    '\u0412\u044b\u0431\u0440\u0430\u0442\u044c \u0438\u0441\u0442\u043e\u0447\u043d\u0438\u043a',
   players: '\u041f\u043b\u0435\u0435\u0440\u044b',
   selected: '\u0412\u044b\u0431\u0440\u0430\u043d\u043e',
-  directVideo: '\u041f\u0440\u044f\u043c\u043e\u0435 \u0432\u0438\u0434\u0435\u043e \u00b7 \u043e\u0437\u0432\u0443\u0447\u043a\u0430',
+  directVideo:
+    '\u041f\u0440\u044f\u043c\u043e\u0435 \u0432\u0438\u0434\u0435\u043e \u00b7 \u043e\u0437\u0432\u0443\u0447\u043a\u0430',
   original: '\u041e\u0440\u0438\u0433\u0438\u043d\u0430\u043b',
   auto: '\u0410\u0432\u0442\u043e',
   direct: '\u041f\u0440\u044f\u043c\u043e\u0435 \u0432\u0438\u0434\u0435\u043e',
-  loading: '\u0418\u0449\u0435\u043c \u0435\u0449\u0451 \u0432\u0430\u0440\u0438\u0430\u043d\u0442\u044b',
+  loading:
+    '\u0418\u0449\u0435\u043c \u0435\u0449\u0451 \u0432\u0430\u0440\u0438\u0430\u043d\u0442\u044b',
 };
 
 type PlaybackSourcePickerProps = {
@@ -92,11 +95,7 @@ export function PlaybackSourcePicker({
   const [activePanel, setActivePanel] = useState<'players' | 'direct'>(
     selectedSource?.kind === 'embed' ? 'players' : 'direct',
   );
-  const visiblePanel = showBothPanels
-    ? activePanel
-    : tracks.length > 0
-      ? 'direct'
-      : 'players';
+  const visiblePanel = showBothPanels ? activePanel : tracks.length > 0 ? 'direct' : 'players';
 
   return (
     <Popover
@@ -198,28 +197,33 @@ export function PlaybackSourcePicker({
                         className={`size-2 shrink-0 rounded-full ${getProviderAccent(source.provider)}`}
                       />
                       <span className="min-w-0 flex-1 truncate">
-                        {source.label} <span className="text-text-secondary">· {source.translation?.title ?? labels.original}</span>
+                        {source.label}{' '}
+                        <span className="text-text-secondary">
+                          · {source.translation?.title ?? labels.original}
+                        </span>
                       </span>
                     </Button>
                     {selectedTrackKey === trackKey && qualities.length > 1 && (
                       <div className="flex flex-wrap gap-1 px-2 pb-1 pt-1.5">
                         {qualities.map((qualitySource) => (
-                            <Button
-                              key={qualitySource.sourceRef}
-                              size="small"
-                              variant={
-                                selectedDirectSource?.sourceRef === qualitySource.sourceRef
-                                  ? 'primary'
-                                  : 'secondary'
-                              }
-                              aria-pressed={selectedDirectSource?.sourceRef === qualitySource.sourceRef}
-                              onClick={() => {
-                                onQualitySelect(qualitySource.sourceRef);
-                                close();
-                              }}
-                            >
-                              {qualitySource.quality?.label ?? labels.auto}
-                            </Button>
+                          <Button
+                            key={qualitySource.sourceRef}
+                            size="small"
+                            variant={
+                              selectedDirectSource?.sourceRef === qualitySource.sourceRef
+                                ? 'primary'
+                                : 'secondary'
+                            }
+                            aria-pressed={
+                              selectedDirectSource?.sourceRef === qualitySource.sourceRef
+                            }
+                            onClick={() => {
+                              onQualitySelect(qualitySource.sourceRef);
+                              close();
+                            }}
+                          >
+                            {qualitySource.quality?.label ?? labels.auto}
+                          </Button>
                         ))}
                       </div>
                     )}

@@ -55,10 +55,7 @@ export function EpisodeSelector({
         }}
         matchMenuWidth
         allowEmpty={false}
-        className={[
-          'w-full min-w-0 sm:w-56',
-          compactDesktop ? 'sm:w-full 2xl:w-48' : '',
-        ].join(' ')}
+        className={['w-full min-w-0 sm:w-56', compactDesktop ? 'sm:w-full 2xl:w-48' : ''].join(' ')}
       />
     </section>
   );
