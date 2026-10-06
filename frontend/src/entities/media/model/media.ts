@@ -1,10 +1,20 @@
-export type MediaRef = string;
+declare const canonicalMediaRefBrand: unique symbol;
+
+export type MediaLocator = string;
+export type MediaRef = MediaLocator;
+export type CanonicalMediaRef = string & { readonly [canonicalMediaRefBrand]: true };
 
 const mediaRefPattern =
   /^(?:work_[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|imdb:tt\d{7,12}|wikidata:q[1-9]\d{0,11}|(?:tmdb|kinopoisk|tvdb|shikimori|anilist|myanimelist|worldart):\d{1,12})$/i;
+const canonicalMediaRefPattern =
+  /^work_[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export function isMediaRef(value: unknown): value is MediaRef {
   return typeof value === 'string' && mediaRefPattern.test(value);
+}
+
+export function isCanonicalMediaRef(value: unknown): value is CanonicalMediaRef {
+  return typeof value === 'string' && canonicalMediaRefPattern.test(value);
 }
 
 export type MediaType = 'movie' | 'series' | 'anime';
@@ -22,7 +32,7 @@ export interface MediaRating {
 }
 
 export interface MediaSummary {
-  mediaRef: MediaRef;
+  mediaRef: CanonicalMediaRef;
   slug: string;
   type: MediaType;
   title: string;
@@ -106,7 +116,7 @@ export interface AnimeDetails extends BaseMediaDetails {
 export interface AnimeSeasonChainEntry {
   number: number;
   releaseIndex: number;
-  mediaRef: MediaRef;
+  mediaRef: CanonicalMediaRef;
   slug: string;
   title: string;
   year?: number;

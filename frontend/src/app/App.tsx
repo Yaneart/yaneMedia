@@ -3,6 +3,7 @@ import { PlaybackSessionProvider } from '@/features/playback-session';
 import { FavoriteProvider } from '@/features/favorite';
 import { OpeningHistoryProvider } from '@/features/opening-history';
 import { ThemeProvider } from '@/features/theme';
+import { UserMediaCanonicalization } from '@/features/user-media-canonicalization';
 import { AuthProvider } from '@/app/providers/AuthProvider';
 import { RouterProvider } from 'react-router';
 import { router } from './router/router';
@@ -31,6 +32,7 @@ function App() {
           <FavoriteProvider>
             <OpeningHistoryProvider>
               <PlaybackSessionProvider>
+                <UserMediaCanonicalization />
                 <RouterProvider router={router} />
               </PlaybackSessionProvider>
             </OpeningHistoryProvider>

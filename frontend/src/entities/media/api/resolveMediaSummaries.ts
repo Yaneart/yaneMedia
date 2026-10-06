@@ -1,6 +1,6 @@
 import { apiRequest } from '@/shared/api';
 
-import type { MediaRef, MediaSummary } from '../model/media';
+import type { CanonicalMediaRef, MediaLocator, MediaSummary } from '../model/media';
 import { isMediaRef } from '../model/media';
 import { mapMediaSummary } from './mapMediaSummary';
 import type { MediaSummaryResolutionResponseDto } from './mediaSummaryResolutionDto';
@@ -8,15 +8,15 @@ import type { MediaSummaryResolutionResponseDto } from './mediaSummaryResolution
 const MEDIA_SUMMARY_RESOLUTION_LIMIT = 100;
 export interface MediaSummaryResolutionResult {
   items: MediaSummary[];
-  matches: Array<{ requestedMediaRef: MediaRef; media: MediaSummary }>;
-  canonicalMediaRefs: ReadonlyMap<MediaRef, MediaRef>;
+  matches: Array<{ requestedMediaRef: MediaLocator; media: MediaSummary }>;
+  canonicalMediaRefs: ReadonlyMap<MediaLocator, CanonicalMediaRef>;
   partial: boolean;
   degraded: boolean;
   stale: boolean;
 }
 
-function prepareMediaRefs(mediaRefs: readonly MediaRef[]) {
-  const uniqueMediaRefs = new Set<MediaRef>();
+function prepareMediaRefs(mediaRefs: readonly MediaLocator[]) {
+  const uniqueMediaRefs = new Set<MediaLocator>();
   let hasInvalidMediaRefs = false;
 
   for (const mediaRef of mediaRefs) {
@@ -35,7 +35,7 @@ function prepareMediaRefs(mediaRefs: readonly MediaRef[]) {
 }
 
 export async function resolveMediaSummaries(
-  mediaRefs: readonly MediaRef[],
+  mediaRefs: readonly MediaLocator[],
   signal?: AbortSignal,
 ): Promise<MediaSummaryResolutionResult> {
   const prepared = prepareMediaRefs(mediaRefs);

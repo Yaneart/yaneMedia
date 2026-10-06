@@ -2,7 +2,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { clearAccountQueries, useAuth } from '@/entities/auth';
-import { isMediaRef, type MediaRef } from '@/entities/media';
+import {
+  isMediaRef,
+  type CanonicalMediaRef,
+  type MediaLocator,
+  type MediaRef,
+} from '@/entities/media';
 import { ApiClientError } from '@/shared/api';
 
 import {
@@ -480,7 +485,7 @@ export function OpeningHistoryProvider({ children }: OpeningHistoryProviderProps
   }, [accountQuery, accountUserId, authState.status, refreshAuth, runAccountMutation]);
 
   const canonicalizeHistory = useCallback(
-    (canonicalMediaRefs: ReadonlyMap<MediaRef, MediaRef>) => {
+    (canonicalMediaRefs: ReadonlyMap<MediaLocator, CanonicalMediaRef>) => {
       setGuestEntries((current) => canonicalizeOpeningHistory(current, canonicalMediaRefs));
       const currentUndo = historyUndoRef.current;
       if (currentUndo) {

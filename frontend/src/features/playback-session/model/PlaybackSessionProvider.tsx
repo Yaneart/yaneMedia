@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { clearAccountQueries, useAuth } from '@/entities/auth';
+import type { CanonicalMediaRef, MediaLocator } from '@/entities/media';
 import type {
   ContinueWatchingEntry,
   ContinueWatchingProgressEntry,
@@ -602,7 +603,7 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
   );
 
   const canonicalizeContinueWatching = useCallback(
-    (canonicalMediaRefs: ReadonlyMap<string, string>) => {
+    (canonicalMediaRefs: ReadonlyMap<MediaLocator, CanonicalMediaRef>) => {
       setGuestEntries((current) =>
         canonicalizeContinueWatchingEntries(current, canonicalMediaRefs),
       );

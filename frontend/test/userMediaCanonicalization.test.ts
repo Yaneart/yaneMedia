@@ -1,14 +1,21 @@
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, mock, test } from 'bun:test';
 
-import { canonicalizeFavoriteMediaRefs } from '../src/features/favorite/model/favoriteStorage';
-import { canonicalizeOpeningHistory } from '../src/features/opening-history/model/openingHistoryStorage';
-import { canonicalizeContinueWatchingEntries } from '../src/features/playback-session/model/continueWatchingStorage';
+import { isCanonicalMediaRef, isMediaRef } from '../src/entities/media/model/media';
+
+mock.module('@/entities/media', () => ({ isCanonicalMediaRef, isMediaRef }));
+
+const { canonicalizeFavoriteMediaRefs } =
+  await import('../src/features/favorite/model/favoriteStorage');
+const { canonicalizeOpeningHistory } =
+  await import('../src/features/opening-history/model/openingHistoryStorage');
+const { canonicalizeContinueWatchingEntries } =
+  await import('../src/features/playback-session/model/continueWatchingStorage');
 
 const canonicalRef = 'work_11111111-1111-4111-8111-111111111111';
 const mappings = new Map([
   ['anilist:1535', canonicalRef],
   ['shikimori:1535', canonicalRef],
-]);
+]) as Parameters<typeof canonicalizeFavoriteMediaRefs>[1];
 
 describe('guest user media canonicalization', () => {
   test('merges favorite aliases into one canonical work', () => {

@@ -1,9 +1,13 @@
-import { isMediaRef, type MediaRef } from '@/entities/media';
+import { isCanonicalMediaRef, type CanonicalMediaRef, type MediaLocator } from '@/entities/media';
 import type { ContinueWatchingProgressEntry, PlaybackEpisodeSelection } from '@/entities/playback';
 import { ApiClientError, apiRequest } from '@/shared/api';
 
 export type AccountContinueWatching = {
   entries: ContinueWatchingProgressEntry[];
+};
+
+export type CanonicalAccountContinueWatching = AccountContinueWatching & {
+  entries: Array<ContinueWatchingProgressEntry & { mediaRef: CanonicalMediaRef }>;
 };
 
 export type SaveAccountContinueWatching = Omit<
@@ -52,18 +56,18 @@ function isIsoTimestamp(value: unknown): value is string {
   return Number.isFinite(timestamp) && new Date(timestamp).toISOString() === value;
 }
 
-function parseAccountContinueWatching(value: unknown): AccountContinueWatching {
+function parseAccountContinueWatching(value: unknown): CanonicalAccountContinueWatching {
   if (!isRecord(value) || !Array.isArray(value.entries) || value.entries.length > 5) {
     throw new ApiClientError('Invalid continue watching response', 200, 'INVALID_RESPONSE');
   }
 
-  const entries: ContinueWatchingProgressEntry[] = [];
-  const seenMediaRefs = new Set<MediaRef>();
+  const entries: Array<ContinueWatchingProgressEntry & { mediaRef: CanonicalMediaRef }> = [];
+  const seenMediaRefs = new Set<CanonicalMediaRef>();
 
   for (const entry of value.entries) {
     if (
       !isRecord(entry) ||
-      !isMediaRef(entry.mediaRef) ||
+      !isCanonicalMediaRef(entry.mediaRef) ||
       typeof entry.sourceRef !== 'string' ||
       entry.sourceRef.length === 0 ||
       entry.sourceRef.length > 512 ||
@@ -100,16 +104,16 @@ function parseAccountContinueWatching(value: unknown): AccountContinueWatching {
 
 export async function getAccountContinueWatching(
   signal?: AbortSignal,
-): Promise<AccountContinueWatching> {
+): Promise<CanonicalAccountContinueWatching> {
   return parseAccountContinueWatching(
     await apiRequest<unknown>('/continue-watching', { credentials: 'include', signal }),
   );
 }
 
 export async function saveAccountContinueWatching(
-  mediaRef: MediaRef,
+  mediaRef: MediaLocator,
   entry: SaveAccountContinueWatching,
-): Promise<AccountContinueWatching> {
+): Promise<CanonicalAccountContinueWatching> {
   return parseAccountContinueWatching(
     await apiRequest<unknown>(`/continue-watching/${encodeURIComponent(mediaRef)}`, {
       method: 'PUT',
@@ -124,8 +128,8 @@ export async function saveAccountContinueWatching(
 }
 
 export async function deleteAccountContinueWatching(
-  mediaRef: MediaRef,
-): Promise<AccountContinueWatching> {
+  mediaRef: MediaLocator,
+): Promise<CanonicalAccountContinueWatching> {
   return parseAccountContinueWatching(
     await apiRequest<unknown>(`/continue-watching/${encodeURIComponent(mediaRef)}`, {
       method: 'DELETE',

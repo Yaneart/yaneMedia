@@ -1,4 +1,4 @@
-import type { MediaRef } from '@/entities/media';
+import type { CanonicalMediaRef, MediaLocator, MediaRef } from '@/entities/media';
 import { createContext } from 'react';
 
 export type FavoriteContextValue = {
@@ -11,7 +11,7 @@ export type FavoriteContextValue = {
   addFavorite: (mediaRef: MediaRef) => void;
   removeFavorite: (mediaRef: MediaRef) => void;
   toggleFavorite: (mediaRef: MediaRef) => void;
-  canonicalizeFavorites: (canonicalMediaRefs: ReadonlyMap<MediaRef, MediaRef>) => void;
+  canonicalizeFavorites: (canonicalMediaRefs: ReadonlyMap<MediaLocator, CanonicalMediaRef>) => void;
   retry: () => void;
 };
 

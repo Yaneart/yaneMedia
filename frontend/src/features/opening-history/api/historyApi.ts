@@ -1,10 +1,14 @@
-import { isMediaRef, type MediaRef } from '@/entities/media';
+import { isCanonicalMediaRef, type CanonicalMediaRef, type MediaLocator } from '@/entities/media';
 import { ApiClientError, apiRequest } from '@/shared/api';
 
 import type { OpeningHistoryEntry } from '../model/openingHistoryContext';
 
 export type AccountHistory = {
   entries: OpeningHistoryEntry[];
+};
+
+export type CanonicalAccountHistory = AccountHistory & {
+  entries: Array<OpeningHistoryEntry & { mediaRef: CanonicalMediaRef }>;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -18,16 +22,20 @@ function isIsoTimestamp(value: unknown): value is string {
   return Number.isFinite(timestamp) && new Date(timestamp).toISOString() === value;
 }
 
-function parseAccountHistory(value: unknown): AccountHistory {
+function parseAccountHistory(value: unknown): CanonicalAccountHistory {
   if (!isRecord(value) || !Array.isArray(value.entries)) {
     throw new ApiClientError('Invalid history response', 200, 'INVALID_RESPONSE');
   }
 
-  const entries: OpeningHistoryEntry[] = [];
-  const seenMediaRefs = new Set<MediaRef>();
+  const entries: Array<OpeningHistoryEntry & { mediaRef: CanonicalMediaRef }> = [];
+  const seenMediaRefs = new Set<CanonicalMediaRef>();
 
   for (const entry of value.entries) {
-    if (!isRecord(entry) || !isMediaRef(entry.mediaRef) || !isIsoTimestamp(entry.openedAt)) {
+    if (
+      !isRecord(entry) ||
+      !isCanonicalMediaRef(entry.mediaRef) ||
+      !isIsoTimestamp(entry.openedAt)
+    ) {
       throw new ApiClientError('Invalid history response', 200, 'INVALID_RESPONSE');
     }
 
@@ -40,13 +48,15 @@ function parseAccountHistory(value: unknown): AccountHistory {
   return { entries };
 }
 
-export async function getAccountHistory(signal?: AbortSignal): Promise<AccountHistory> {
+export async function getAccountHistory(signal?: AbortSignal): Promise<CanonicalAccountHistory> {
   return parseAccountHistory(
     await apiRequest<unknown>('/history', { credentials: 'include', signal }),
   );
 }
 
-export async function recordAccountOpening(mediaRef: MediaRef): Promise<AccountHistory> {
+export async function recordAccountOpening(
+  mediaRef: MediaLocator,
+): Promise<CanonicalAccountHistory> {
   return parseAccountHistory(
     await apiRequest<unknown>('/history', {
       method: 'POST',
@@ -60,7 +70,9 @@ export async function recordAccountOpening(mediaRef: MediaRef): Promise<AccountH
   );
 }
 
-export async function deleteAccountOpening(mediaRef: MediaRef): Promise<AccountHistory> {
+export async function deleteAccountOpening(
+  mediaRef: MediaLocator,
+): Promise<CanonicalAccountHistory> {
   return parseAccountHistory(
     await apiRequest<unknown>(`/history/${encodeURIComponent(mediaRef)}`, {
       method: 'DELETE',
@@ -70,7 +82,7 @@ export async function deleteAccountOpening(mediaRef: MediaRef): Promise<AccountH
   );
 }
 
-export async function clearAccountHistory(): Promise<AccountHistory> {
+export async function clearAccountHistory(): Promise<CanonicalAccountHistory> {
   return parseAccountHistory(
     await apiRequest<unknown>('/history', {
       method: 'DELETE',

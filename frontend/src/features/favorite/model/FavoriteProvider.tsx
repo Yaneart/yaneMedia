@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { clearAccountQueries, useAuth } from '@/entities/auth';
-import type { MediaRef } from '@/entities/media';
+import type { CanonicalMediaRef, MediaLocator, MediaRef } from '@/entities/media';
 import { ApiClientError } from '@/shared/api';
 import {
   addAccountFavorites,
@@ -286,7 +286,7 @@ export function FavoriteProvider({ children }: FavoriteProviderProps) {
     [favoriteMediaRefs, updateFavorite],
   );
   const canonicalizeFavorites = useCallback(
-    (canonicalMediaRefs: ReadonlyMap<MediaRef, MediaRef>) => {
+    (canonicalMediaRefs: ReadonlyMap<MediaLocator, CanonicalMediaRef>) => {
       setGuestMediaRefs((current) => {
         const next = canonicalizeFavoriteMediaRefs(current, canonicalMediaRefs);
         return next.size === current.size && [...next].every((mediaRef) => current.has(mediaRef))

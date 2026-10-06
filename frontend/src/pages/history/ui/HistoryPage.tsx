@@ -97,16 +97,12 @@ export function HistoryPage() {
     removeOpening,
     clearHistory,
     undoClearHistory,
-    canonicalizeHistory,
     retry: retryHistory,
   } = useOpeningHistory();
   const { isFavorite, toggleFavorite, canUpdateFavorites } = useFavorites();
   const { resolution, status, hasRefreshError, retry } = useMediaSummaryResolution(
     openingHistoryEntries.map((entry) => entry.mediaRef),
   );
-  useEffect(() => {
-    if (resolution) canonicalizeHistory(resolution.canonicalMediaRefs);
-  }, [canonicalizeHistory, resolution]);
   const mediaByRequestedRef = new Map(
     resolution?.matches.map(({ requestedMediaRef, media }) => [requestedMediaRef, media]) ?? [],
   );

@@ -1,5 +1,5 @@
 import type { ContinueWatchingEntry } from '@/entities/playback';
-import { isMediaRef } from '@/entities/media';
+import { isMediaRef, type CanonicalMediaRef, type MediaLocator } from '@/entities/media';
 
 const CONTINUE_WATCHING_STORAGE_KEY = 'yanemedia-continue-watching';
 const CONTINUE_WATCHING_STORAGE_VERSION = 2;
@@ -115,7 +115,7 @@ function isStoredContinueWatching(value: unknown): value is StoredContinueWatchi
 
 export function canonicalizeContinueWatchingEntries(
   entries: readonly ContinueWatchingEntry[],
-  canonicalMediaRefs: ReadonlyMap<string, string>,
+  canonicalMediaRefs: ReadonlyMap<MediaLocator, CanonicalMediaRef>,
 ): ContinueWatchingEntry[] {
   return normalizeEntries(
     entries.map((entry) => ({

@@ -2,6 +2,7 @@ export type {
   AnimeDetails,
   AnimeKind,
   AnimeSeasonChainEntry,
+  CanonicalMediaRef,
   MediaArtwork,
   MediaDetails,
   MediaEpisode,
@@ -9,6 +10,7 @@ export type {
   MediaPersonRole,
   MediaRating,
   MediaRef,
+  MediaLocator,
   MediaSeason,
   MediaStatus,
   MediaSummary,
@@ -16,7 +18,7 @@ export type {
   MovieDetails,
   SeriesDetails,
 } from './model/media';
-export { isMediaRef } from './model/media';
+export { isCanonicalMediaRef, isMediaRef } from './model/media';
 
 export { searchMedia } from './api/searchMedia';
 export { useMediaSearch } from './model/useMediaSearch';

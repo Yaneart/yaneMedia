@@ -1,4 +1,4 @@
-import { isMediaRef } from '@/entities/media';
+import { isMediaRef, type CanonicalMediaRef, type MediaLocator } from '@/entities/media';
 
 import type { OpeningHistoryEntry } from './openingHistoryContext';
 
@@ -89,7 +89,7 @@ function normalizeOpeningHistory(entries: readonly OpeningHistoryEntry[]): Openi
 
 export function canonicalizeOpeningHistory(
   entries: readonly OpeningHistoryEntry[],
-  canonicalMediaRefs: ReadonlyMap<string, string>,
+  canonicalMediaRefs: ReadonlyMap<MediaLocator, CanonicalMediaRef>,
 ): OpeningHistoryEntry[] {
   return normalizeOpeningHistory(
     entries.map((entry) => ({

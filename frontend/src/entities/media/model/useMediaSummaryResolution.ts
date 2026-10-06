@@ -4,7 +4,7 @@ import {
   resolveMediaSummaries,
   type MediaSummaryResolutionResult,
 } from '../api/resolveMediaSummaries';
-import type { MediaRef } from './media';
+import type { MediaLocator } from './media';
 
 export type MediaSummaryResolutionStatus = 'loading' | 'success' | 'empty' | 'error';
 
@@ -19,11 +19,11 @@ const emptyResolution: MediaSummaryResolutionResult = {
 
 const summaryStaleTimeMs = 15 * 60_000;
 
-export function mediaSummaryResolutionQueryKey(mediaRefs: readonly MediaRef[]) {
+export function mediaSummaryResolutionQueryKey(mediaRefs: readonly MediaLocator[]) {
   return ['media', 'summaries', Array.from(mediaRefs)] as const;
 }
 
-export function useMediaSummaryResolution(mediaRefs: readonly MediaRef[]) {
+export function useMediaSummaryResolution(mediaRefs: readonly MediaLocator[]) {
   const requestedMediaRefs = Array.from(mediaRefs);
   const query = useQuery({
     queryKey: mediaSummaryResolutionQueryKey(requestedMediaRefs),

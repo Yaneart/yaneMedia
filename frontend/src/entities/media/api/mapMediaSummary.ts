@@ -1,5 +1,5 @@
 import { API_BASE_URL } from '@/shared/api/apiConfig';
-import type { MediaArtwork, MediaSummary } from '../model/media';
+import { isCanonicalMediaRef, type MediaArtwork, type MediaSummary } from '../model/media';
 import type { MediaArtworkDto, MediaSummaryDto } from './mediaSummaryDto';
 
 export function mapMediaArtwork(dto: MediaArtworkDto): MediaArtwork {
@@ -11,6 +11,10 @@ export function mapMediaArtwork(dto: MediaArtworkDto): MediaArtwork {
 }
 
 export function mapMediaSummary(dto: MediaSummaryDto): MediaSummary {
+  if (!isCanonicalMediaRef(dto.mediaRef)) {
+    throw new TypeError(`Expected a canonical media reference, received ${dto.mediaRef}`);
+  }
+
   return {
     mediaRef: dto.mediaRef,
     slug: dto.slug,

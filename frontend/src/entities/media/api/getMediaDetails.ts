@@ -1,6 +1,6 @@
 import { apiRequest } from '@/shared/api';
 
-import type { AnimeSeasonChainEntry, MediaDetails } from '../model/media';
+import { isCanonicalMediaRef, type AnimeSeasonChainEntry, type MediaDetails } from '../model/media';
 import { mapMediaDetails } from './mapMediaDetails';
 import type { MediaDetailsResponseDto } from './mediaDetailsDto';
 
@@ -21,6 +21,11 @@ export async function getMediaDetails(
   return {
     details: mapMediaDetails(dto.details),
     degraded: dto.degraded,
-    animeSeasonChain: (dto.animeSeasonChain ?? []).map((entry) => ({ ...entry })),
+    animeSeasonChain: (dto.animeSeasonChain ?? []).map((entry) => {
+      if (!isCanonicalMediaRef(entry.mediaRef)) {
+        throw new TypeError(`Expected a canonical media reference, received ${entry.mediaRef}`);
+      }
+      return { ...entry, mediaRef: entry.mediaRef };
+    }),
   };
 }

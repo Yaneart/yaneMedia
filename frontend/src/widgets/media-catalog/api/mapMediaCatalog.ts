@@ -1,11 +1,11 @@
-import { mapMediaSummary } from '@/entities/media';
+import { mapMediaSummary, type MediaSummary } from '@/entities/media';
 
 import type { MediaCatalogPage } from '../model/mediaCatalog';
 import type { MediaCatalogResponseDto } from './mediaCatalogDto';
 
 export function mapMediaCatalog(dto: MediaCatalogResponseDto): MediaCatalogPage {
   const items = dto.items.map(mapMediaSummary);
-  const itemsByMediaRef = new Map(items.map((item) => [item.mediaRef, item]));
+  const itemsByMediaRef = new Map<string, MediaSummary>(items.map((item) => [item.mediaRef, item]));
 
   return {
     items,

@@ -1,4 +1,9 @@
-import { isMediaRef, type MediaRef } from '@/entities/media';
+import {
+  isMediaRef,
+  type CanonicalMediaRef,
+  type MediaLocator,
+  type MediaRef,
+} from '@/entities/media';
 
 const FAVORITES_STORAGE_KEY = 'yanemedia-favorites';
 const FAVORITES_STORAGE_VERSION = 2;
@@ -25,7 +30,7 @@ function isStoredFavorites(value: unknown): value is StoredFavorites {
 
 export function canonicalizeFavoriteMediaRefs(
   mediaRefs: ReadonlySet<MediaRef>,
-  canonicalMediaRefs: ReadonlyMap<MediaRef, MediaRef>,
+  canonicalMediaRefs: ReadonlyMap<MediaLocator, CanonicalMediaRef>,
 ): Set<MediaRef> {
   return new Set([...mediaRefs].map((mediaRef) => canonicalMediaRefs.get(mediaRef) ?? mediaRef));
 }

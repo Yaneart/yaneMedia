@@ -4,6 +4,7 @@ import type {
   PlaybackMediaSnapshot,
   PlaybackSession,
 } from '@/entities/playback';
+import type { CanonicalMediaRef, MediaLocator } from '@/entities/media';
 import { createContext } from 'react';
 
 export type StartPlaybackSessionInput = {
@@ -25,7 +26,9 @@ export type PlaybackSessionContextValue = {
   startSession: (input: StartPlaybackSessionInput) => void;
   restoreSession: (mediaRef: string, mediaSnapshot: PlaybackMediaSnapshot) => void;
   removeContinueWatchingEntry: (mediaRef: string) => void;
-  canonicalizeContinueWatching: (canonicalMediaRefs: ReadonlyMap<string, string>) => void;
+  canonicalizeContinueWatching: (
+    canonicalMediaRefs: ReadonlyMap<MediaLocator, CanonicalMediaRef>,
+  ) => void;
   pauseSession: () => void;
   resumeSession: () => void;
   updateProgress: (

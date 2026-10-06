@@ -1,4 +1,4 @@
-import type { MediaRef } from '@/entities/media';
+import type { CanonicalMediaRef, MediaLocator, MediaRef } from '@/entities/media';
 import { createContext } from 'react';
 
 export type OpeningHistoryEntry = {
@@ -18,7 +18,7 @@ export type OpeningHistoryContextValue = {
   removeOpening: (mediaRef: MediaRef) => void;
   clearHistory: () => void;
   undoClearHistory: () => void;
-  canonicalizeHistory: (canonicalMediaRefs: ReadonlyMap<MediaRef, MediaRef>) => void;
+  canonicalizeHistory: (canonicalMediaRefs: ReadonlyMap<MediaLocator, CanonicalMediaRef>) => void;
   retry: () => void;
 };
 

@@ -85,6 +85,13 @@
       "when": 1791005480113,
       "tag": "0011_even_gravity",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1791273356914,
+      "tag": "0012_canonical_user_media_refs",
+      "breakpoints": true
     }
   ]
 }

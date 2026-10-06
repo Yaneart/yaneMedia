@@ -1,18 +1,22 @@
-import type { MediaRef } from '@/entities/media';
-import { isMediaRef } from '@/entities/media';
+import type { CanonicalMediaRef, MediaLocator } from '@/entities/media';
+import { isCanonicalMediaRef } from '@/entities/media';
 import { ApiClientError, apiRequest } from '@/shared/api';
 
 export type AccountFavorites = {
-  mediaRefs: MediaRef[];
+  mediaRefs: MediaLocator[];
 };
 
-function parseAccountFavorites(value: unknown): AccountFavorites {
+export type CanonicalAccountFavorites = AccountFavorites & {
+  mediaRefs: CanonicalMediaRef[];
+};
+
+function parseAccountFavorites(value: unknown): CanonicalAccountFavorites {
   if (
     typeof value !== 'object' ||
     value === null ||
     !('mediaRefs' in value) ||
     !Array.isArray(value.mediaRefs) ||
-    !value.mediaRefs.every(isMediaRef)
+    !value.mediaRefs.every(isCanonicalMediaRef)
   ) {
     throw new ApiClientError('Invalid favorites response', 200, 'INVALID_RESPONSE');
   }
@@ -20,15 +24,17 @@ function parseAccountFavorites(value: unknown): AccountFavorites {
   return { mediaRefs: Array.from(new Set(value.mediaRefs)) };
 }
 
-export async function getAccountFavorites(signal?: AbortSignal): Promise<AccountFavorites> {
+export async function getAccountFavorites(
+  signal?: AbortSignal,
+): Promise<CanonicalAccountFavorites> {
   return parseAccountFavorites(
     await apiRequest<unknown>('/favorites', { credentials: 'include', signal }),
   );
 }
 
 export async function addAccountFavorites(
-  mediaRefs: readonly MediaRef[],
-): Promise<AccountFavorites> {
+  mediaRefs: readonly MediaLocator[],
+): Promise<CanonicalAccountFavorites> {
   return parseAccountFavorites(
     await apiRequest<unknown>('/favorites', {
       method: 'POST',
@@ -42,7 +48,9 @@ export async function addAccountFavorites(
   );
 }
 
-export async function deleteAccountFavorite(mediaRef: MediaRef): Promise<AccountFavorites> {
+export async function deleteAccountFavorite(
+  mediaRef: MediaLocator,
+): Promise<CanonicalAccountFavorites> {
   return parseAccountFavorites(
     await apiRequest<unknown>(`/favorites/${encodeURIComponent(mediaRef)}`, {
       method: 'DELETE',
