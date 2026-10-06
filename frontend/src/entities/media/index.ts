@@ -20,12 +20,10 @@ export type {
 } from './model/media';
 export { isCanonicalMediaRef, isMediaRef } from './model/media';
 
-export { searchMedia } from './api/searchMedia';
 export { useMediaSearch } from './model/useMediaSearch';
 export type { MediaSearchFilters, MediaSearchStatus } from './model/useMediaSearch';
 export { maximumMediaSearchQueryLength, normalizeMediaSearchQuery } from './model/mediaSearchQuery';
 
-export { resolveMediaSummaries } from './api/resolveMediaSummaries';
 export type { MediaSummaryResolutionResult } from './api/resolveMediaSummaries';
 export {
   mediaSummaryResolutionQueryKey,
@@ -36,15 +34,10 @@ export type { MediaSummaryResolutionStatus } from './model/useMediaSummaryResolu
 export { mapMediaSummary } from './api/mapMediaSummary';
 export type { MediaSummaryDto } from './api/mediaSummaryDto';
 
-export { mapMediaDetails } from './api/mapMediaDetails';
 export type { MediaDetailsDto, MediaDetailsResponseDto } from './api/mediaDetailsDto';
 
-export { getMediaDetails } from './api/getMediaDetails';
 export type { MediaDetailsResult } from './api/getMediaDetails';
 export { mediaDetailsQueryOptions } from './model/mediaDetailsQuery';
-export { getMediaSummary } from './api/getMediaSummary';
-export { mediaSummaryQueryKey, seedMediaSummary } from './model/mediaSummaryCache';
-export { mediaSummaryQueryOptions, mediaSummaryStaleTimeMs } from './model/mediaSummaryQuery';
 
 export { MediaCard } from './ui/MediaCard';
 export type { MediaCardProps } from './ui/MediaCard';
@@ -57,9 +50,6 @@ export type { LandscapeMediaCardProps } from './ui/LandscapeMediaCard';
 
 export { MediaPosterFallback } from './ui/MediaPosterFallback';
 export type { MediaPosterFallbackProps } from './ui/MediaPosterFallback';
-
-export { MediaLandscapeFallback } from './ui/MediaLandscapeFallback';
-export type { MediaLandscapeFallbackProps } from './ui/MediaLandscapeFallback';
 
 export { MediaLandscapeArtwork } from './ui/MediaLandscapeArtwork';
 export type { MediaLandscapeArtworkProps } from './ui/MediaLandscapeArtwork';

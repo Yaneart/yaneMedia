@@ -47,7 +47,7 @@ function collectionCardCount(value: unknown): number {
   );
 }
 
-export function summarizeDiscoveryResponse(path: string, value: unknown): DiscoveryResponseCounts {
+function summarizeDiscoveryResponse(path: string, value: unknown): DiscoveryResponseCounts {
   if (Array.isArray(value)) {
     return { cards: value.length, collections: 0 };
   }

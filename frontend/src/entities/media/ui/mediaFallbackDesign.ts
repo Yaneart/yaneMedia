@@ -6,7 +6,7 @@ export const mediaTypeLabels = {
   anime: 'Аниме',
 } satisfies Record<MediaType, string>;
 
-export const mediaFallbackVariants = [
+const mediaFallbackVariants = [
   {
     background: 'from-[#315fa8] via-[#263b73] to-[#131a2d]',
     mark: 'text-[#a9c7e8]/45',
@@ -57,7 +57,7 @@ export const mediaFallbackVariants = [
   },
 ] as const;
 
-export function hashMediaRef(mediaRef: MediaRef) {
+function hashMediaRef(mediaRef: MediaRef) {
   let hash = 0;
 
   for (const character of mediaRef) {

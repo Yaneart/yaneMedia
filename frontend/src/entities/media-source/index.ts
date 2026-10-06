@@ -10,32 +10,21 @@ export type {
   MediaTranslationType,
 } from './model/mediaSource';
 
-export { getMediaAvailability } from './api/getMediaAvailability';
-export { streamMediaAvailability } from './api/streamMediaAvailability';
 export type {
   MediaAvailabilityProgress,
   StreamMediaAvailabilityOptions,
 } from './api/streamMediaAvailability';
 
-export { mapMediaAvailability } from './api/mapMediaAvailability';
 export type { MediaAvailabilityDto } from './api/mediaAvailabilityDto';
 
-export {
-  getMediaAvailabilityExpirationDelay,
-  getMediaSourcePlaybackIssue,
-} from './model/mediaSourcePlayback';
+export { getMediaSourcePlaybackIssue } from './model/mediaSourcePlayback';
 export type { MediaSourcePlaybackIssue } from './model/mediaSourcePlayback';
 
 export {
-  mediaAvailabilityQueryKey,
   mediaAvailabilityQueryOptions,
   mediaEpisodeAvailabilityQueryKey,
   mediaEpisodeAvailabilityQueryOptions,
 } from './model/mediaAvailabilityQuery';
 export type { MediaAvailabilityQueryData } from './model/mediaAvailabilityQuery';
 
-export {
-  mergeProgressiveAvailability,
-  selectSettledAvailability,
-  selectUsableAvailability,
-} from './model/mediaAvailabilityProgress';
+export { selectUsableAvailability } from './model/mediaAvailabilityProgress';

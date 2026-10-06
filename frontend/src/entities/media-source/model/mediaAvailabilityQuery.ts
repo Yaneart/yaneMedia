@@ -17,7 +17,7 @@ export type MediaAvailabilityQueryData = {
 const availabilityFreshTimeMs = 15 * 60_000;
 const backgroundRetryDelaysMs = [35_000, 60_000, 120_000] as const;
 
-export function mediaAvailabilityQueryKey(mediaRef: string) {
+function mediaAvailabilityQueryKey(mediaRef: string) {
   return ['media', 'availability', mediaRef] as const;
 }
 

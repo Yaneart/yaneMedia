@@ -1,6 +1,6 @@
 import { isThemeMode, type ThemeMode } from './theme';
 
-export const THEME_STORAGE_KEY = 'yanemedia-theme';
+const THEME_STORAGE_KEY = 'yanemedia-theme';
 
 export function loadThemeMode(): ThemeMode {
   try {

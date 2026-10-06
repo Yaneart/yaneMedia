@@ -35,41 +35,7 @@ export type PlaybackSourceCatalog = {
   directEpisodes: readonly DirectEpisodeOption[];
 };
 
-const providerLabels: Readonly<Record<string, string>> = {
-  'kinobd-streaming': 'KinoBD',
-  'ddbb-streaming': 'DDBB',
-  'veoveo-streaming': 'VeoVeo',
-  'videohub-streaming': 'VideoHUB',
-  'aniliberty-streaming': 'AniLiberty',
-};
-
-export function getProviderLabel(provider: string) {
-  return providerLabels[provider] ?? provider;
-}
-
-function isSameLabel(first: string, second: string) {
-  return (
-    first.localeCompare(second, undefined, {
-      sensitivity: 'base',
-    }) === 0
-  );
-}
-
-export function getSourceLabel(source: MediaSourceOption, includeDetails = true) {
-  const providerLabel = getProviderLabel(source.provider);
-  const hasDistinctProviderLabel = !isSameLabel(providerLabel, source.label);
-
-  return [
-    source.label,
-    hasDistinctProviderLabel ? providerLabel : undefined,
-    includeDetails ? source.translation?.title : undefined,
-    includeDetails ? source.quality?.label : undefined,
-  ]
-    .filter(Boolean)
-    .join(' · ');
-}
-
-export function getDirectEpisodeKey(episode: MediaSourceEpisodeRef) {
+function getDirectEpisodeKey(episode: MediaSourceEpisodeRef) {
   if (episode.seasonNumber !== undefined && episode.episodeNumber !== undefined) {
     return `season:${episode.seasonNumber}:episode:${episode.episodeNumber}`;
   }

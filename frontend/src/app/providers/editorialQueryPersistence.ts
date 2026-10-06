@@ -84,7 +84,7 @@ export function isEditorialQueryKey(queryKey: readonly unknown[]): boolean {
   return queryKey.length === 3 && queryKey[1] === 'summary' && typeof queryKey[2] === 'string';
 }
 
-export function shouldPersistEditorialQuery(query: Query): boolean {
+function shouldPersistEditorialQuery(query: Query): boolean {
   return query.state.status === 'success' && isEditorialQueryKey(query.queryKey);
 }
 

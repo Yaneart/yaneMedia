@@ -8,7 +8,7 @@ export type MediaPersonRoleDto =
 
 export type AnimeKindDto = 'tv' | 'movie' | 'ova' | 'ona' | 'special' | 'music' | 'unknown';
 
-export class MediaPersonDto {
+class MediaPersonDto {
   name!: string;
   originalName?: string;
   photo?: MediaArtworkDto;
@@ -47,18 +47,18 @@ abstract class BaseMediaDetailsDto extends MediaSummaryDto {
   persons!: MediaPersonDto[];
 }
 
-export class MovieDetailsDto extends BaseMediaDetailsDto {
+class MovieDetailsDto extends BaseMediaDetailsDto {
   declare type: 'movie';
 }
 
-export class SeriesDetailsDto extends BaseMediaDetailsDto {
+class SeriesDetailsDto extends BaseMediaDetailsDto {
   declare type: 'series';
   seasons!: MediaSeasonDto[];
   episodesCount?: number;
   seasonsCount?: number;
 }
 
-export class AnimeDetailsDto extends BaseMediaDetailsDto {
+class AnimeDetailsDto extends BaseMediaDetailsDto {
   declare type: 'anime';
   animeKind?: AnimeKindDto;
   episodes!: MediaEpisodeDto[];

@@ -6,7 +6,6 @@ export type { YaneMarkProps } from './ui/YaneMark';
 export {
   AnimeIcon,
   AnimeFilledIcon,
-  CheckIcon,
   CloseIcon,
   DeleteIcon,
   DeviceIcon,
@@ -19,7 +18,6 @@ export {
   HistoryFilledIcon,
   HomeIcon,
   HomeFilledIcon,
-  LeftIcon,
   MoonIcon,
   MoonFilledIcon,
   MoreIcon,
@@ -28,7 +26,6 @@ export {
   PlayIcon,
   PauseIcon,
   ProfileIcon,
-  RightIcon,
   SearchIcon,
   SearchFilledIcon,
   SkipForwardIcon,
@@ -72,9 +69,6 @@ export type { EmptyStateProps } from './ui/EmptyState';
 
 export { ErrorState } from './ui/ErrorState';
 export type { ErrorStateProps, ErrorStateTone, ErrorStateVariant } from './ui/ErrorState';
-
-export { Modal } from './ui/Modal';
-export type { ModalProps } from './ui/Modal';
 
 export { Popover } from './ui/Popover';
 export type { PopoverAlign, PopoverProps } from './ui/Popover';

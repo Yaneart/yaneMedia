@@ -7,15 +7,6 @@ export interface HomeCollectionDto {
   total: number;
 }
 
-export interface HomeFeedDto {
-  featured: MediaSummaryDto;
-  featuredExpiresAt: string;
-  collections: HomeCollectionDto[];
-  partial: boolean;
-  degraded: boolean;
-  stale: boolean;
-}
-
 export interface HomeFeaturedDto {
   featured: MediaSummaryDto;
   featuredExpiresAt: string;

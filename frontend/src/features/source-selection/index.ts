@@ -1,9 +1,3 @@
-export { SourceSelector } from './ui/SourceSelector';
-export type { SourceSelectorProps } from './ui/SourceSelector';
-export { DirectSourceSelector } from './ui/DirectSourceSelector';
-export type { DirectSourceSelectorProps } from './ui/DirectSourceSelector';
-export { PlaybackModeSelector } from './ui/PlaybackModeSelector';
-export type { PlaybackModeSelectorProps } from './ui/PlaybackModeSelector';
 export { PlaybackSourcePicker } from './ui/PlaybackSourcePicker';
 
 export {
@@ -20,8 +14,6 @@ export {
   getDirectTrackKey,
   getDirectTrackOptions,
   getPreferredSource,
-  getProviderLabel,
-  getSourceLabel,
   isDirectMediaSource,
 } from './model/sourceSelection';
 export type {

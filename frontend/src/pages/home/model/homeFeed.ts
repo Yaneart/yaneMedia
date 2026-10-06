@@ -7,15 +7,6 @@ export interface HomeCollection {
   total: number;
 }
 
-export interface HomeFeed {
-  featured: MediaSummary;
-  featuredExpiresAt: string;
-  collections: HomeCollection[];
-  partial: boolean;
-  degraded: boolean;
-  stale: boolean;
-}
-
 export interface HomeFeatured {
   featured: MediaSummary;
   featuredExpiresAt: string;
