@@ -3,7 +3,7 @@ import { ServiceUnavailableException } from '@nestjs/common';
 import type { MediaAvailabilityProgressDto } from '../../src/media/dto/media-availability.dto';
 import { MediaService } from '../../src/media/media.service';
 import type { EditorialCatalogRepository } from '../../src/media/catalog/editorial-catalog.repository';
-import type { MediaRegistryService } from '../../src/media/registry/media-registry.service';
+import { createMediaRegistryStub } from './media-registry.stub';
 
 describe('MediaService', () => {
   const createProviderFailure = () =>
@@ -16,7 +16,7 @@ describe('MediaService', () => {
     mediaEngine: Partial<MediaEngine>,
     invoke: (service: MediaService) => Promise<unknown>,
   ) => {
-    const service = new MediaService(mediaEngine as MediaEngine);
+    const service = new MediaService(mediaEngine as MediaEngine, createMediaRegistryStub());
 
     await expect(invoke(service)).rejects.toBeInstanceOf(ServiceUnavailableException);
   };
@@ -36,12 +36,12 @@ describe('MediaService', () => {
   });
 
   const withCatalog = (engine: Partial<MediaEngine>, item = publishedItem()) =>
-    new MediaService(engine as MediaEngine, undefined, {
+    new MediaService(engine as MediaEngine, createMediaRegistryStub(), undefined, {
       findPublishedItems: jest.fn().mockResolvedValue([item]),
     } as unknown as EditorialCatalogRepository);
 
   const withAnimeIdentity = (engine: Partial<MediaEngine>) =>
-    new MediaService(engine as MediaEngine, undefined, {
+    new MediaService(engine as MediaEngine, createMediaRegistryStub(), undefined, {
       findPublishedIdentity: jest.fn().mockResolvedValue({
         mediaRef: 'anilist:154587',
         externalIds: {
@@ -181,11 +181,15 @@ describe('MediaService', () => {
     const mediaEngine = {
       search,
     } as unknown as MediaEngine;
-    const service = new MediaService(mediaEngine);
+    const service = new MediaService(mediaEngine, createMediaRegistryStub());
 
-    await expect(
-      service.searchMedia({ title: 'Fullmetal Alchemist', type: 'anime' }),
-    ).resolves.toEqual([expect.objectContaining({ mediaRef: 'shikimori:5114', type: 'anime' })]);
+    const [result] = await service.searchMedia({
+      title: 'Fullmetal Alchemist',
+      type: 'anime',
+    });
+
+    expect(result).toEqual(expect.objectContaining({ type: 'anime' }));
+    expect(result?.mediaRef).toMatch(/^work_/);
     expect(search).toHaveBeenCalledWith({
       language: 'ru',
       title: 'Fullmetal Alchemist',
@@ -207,9 +211,10 @@ describe('MediaService', () => {
       mediaRef: 'work_11111111-1111-4111-8111-111111111111',
       slug: 'death-note',
     });
-    const service = new MediaService({ search } as unknown as MediaEngine, undefined, undefined, {
-      resolveOrMergeVerified,
-    } as unknown as MediaRegistryService);
+    const service = new MediaService(
+      { search } as unknown as MediaEngine,
+      createMediaRegistryStub({ resolveOrMergeVerified }),
+    );
 
     await expect(service.searchMedia({ title: 'Death Note', type: 'anime' })).resolves.toEqual([
       expect.objectContaining({
@@ -245,9 +250,7 @@ describe('MediaService', () => {
     });
     const service = new MediaService(
       { search: jest.fn().mockResolvedValue({ results: [{ item }] }) } as unknown as MediaEngine,
-      undefined,
-      undefined,
-      { resolveOrMergeVerified } as unknown as MediaRegistryService,
+      createMediaRegistryStub({ resolveOrMergeVerified }),
     );
 
     await service.searchMedia({ title: 'Spirited Away', type: 'anime' });
@@ -257,7 +260,10 @@ describe('MediaService', () => {
 
   it('forwards title-independent catalog filters with a wider bounded limit', async () => {
     const search = jest.fn().mockResolvedValue({ results: [] });
-    const service = new MediaService({ search } as unknown as MediaEngine);
+    const service = new MediaService(
+      { search } as unknown as MediaEngine,
+      createMediaRegistryStub(),
+    );
 
     await expect(
       service.searchMedia({
@@ -279,7 +285,10 @@ describe('MediaService', () => {
 
   it('forwards a stable bounded search page to the media engine', async () => {
     const search = jest.fn().mockResolvedValue({ results: [] });
-    const service = new MediaService({ search } as unknown as MediaEngine);
+    const service = new MediaService(
+      { search } as unknown as MediaEngine,
+      createMediaRegistryStub(),
+    );
 
     await expect(
       service.searchMedia({ type: 'series', genre: 'Mystery', offset: 48, limit: 49 }),
@@ -295,7 +304,10 @@ describe('MediaService', () => {
 
   it('keeps the final search page inside the engine window', async () => {
     const search = jest.fn().mockResolvedValue({ results: [] });
-    const service = new MediaService({ search } as unknown as MediaEngine);
+    const service = new MediaService(
+      { search } as unknown as MediaEngine,
+      createMediaRegistryStub(),
+    );
 
     await service.searchMedia({ type: 'movie', genre: 'Drama', offset: 240, limit: 49 });
 
@@ -381,15 +393,27 @@ describe('MediaService', () => {
         meta: { providers: { requested: [], successful: [], failed: [] } },
       }),
     );
-    const service = new MediaService({ getDetails, getRelatedMedia } as unknown as MediaEngine);
+    const service = new MediaService(
+      { getDetails, getRelatedMedia } as unknown as MediaEngine,
+      createMediaRegistryStub(),
+    );
 
     const first = await service.getDetailsByRef('shikimori:59978');
     const second = await service.getDetailsByRef('shikimori:59978');
 
     expect(first.animeSeasonChain).toEqual([
-      expect.objectContaining({ number: 1, mediaRef: 'shikimori:52991', episodesCount: 28 }),
-      expect.objectContaining({ number: 2, mediaRef: 'shikimori:59978', episodesCount: 10 }),
+      expect.objectContaining({
+        number: 1,
+        episodesCount: 28,
+      }),
+      expect.objectContaining({
+        number: 2,
+        episodesCount: 10,
+      }),
     ]);
+    for (const entry of first.animeSeasonChain ?? []) {
+      expect(entry.mediaRef).toMatch(/^work_/);
+    }
     expect(second.animeSeasonChain).toEqual(first.animeSeasonChain);
     expect(getRelatedMedia).toHaveBeenCalledTimes(2);
   });
@@ -406,7 +430,10 @@ describe('MediaService', () => {
       },
       meta: { providers: { succeeded: [], failed: [] } },
     });
-    const service = new MediaService({ getDetails } as unknown as MediaEngine);
+    const service = new MediaService(
+      { getDetails } as unknown as MediaEngine,
+      createMediaRegistryStub(),
+    );
 
     const response = await service.getDetailsByRef('imdb:tt5753856');
 
@@ -435,7 +462,10 @@ describe('MediaService', () => {
       },
       meta: { providers: { succeeded: [], failed: [] } },
     });
-    const service = new MediaService({ getDetails } as unknown as MediaEngine);
+    const service = new MediaService(
+      { getDetails } as unknown as MediaEngine,
+      createMediaRegistryStub(),
+    );
 
     const response = await service.getDetailsByRef('imdb:tt1160419');
 
@@ -495,7 +525,7 @@ describe('MediaService', () => {
         ],
       }),
     } as unknown as MediaEngine;
-    const service = new MediaService(mediaEngine);
+    const service = new MediaService(mediaEngine, createMediaRegistryStub());
 
     const results = await service.searchMedia({ title: 'Poster' });
 
@@ -535,7 +565,7 @@ describe('MediaService', () => {
       getDetails,
       getAvailability,
     } as unknown as MediaEngine;
-    const service = new MediaService(mediaEngine);
+    const service = new MediaService(mediaEngine, createMediaRegistryStub());
 
     await expect(
       service.getAvailabilityByRef('imdb:tt0816692', 'browser-user-agent'),
@@ -584,7 +614,10 @@ describe('MediaService', () => {
       sourceProviders: [],
       checkedAt: '2026-09-29T00:00:00.000Z',
     });
-    const service = new MediaService({ getDetails, getAvailability } as unknown as MediaEngine);
+    const service = new MediaService(
+      { getDetails, getAvailability } as unknown as MediaEngine,
+      createMediaRegistryStub(),
+    );
 
     await service.getAvailabilityByRef('anilist:199');
 
@@ -645,10 +678,13 @@ describe('MediaService', () => {
         pendingProviders: [],
       };
     });
-    const service = new MediaService({
-      getDetails,
-      getAvailabilityProgressively,
-    } as unknown as MediaEngine);
+    const service = new MediaService(
+      {
+        getDetails,
+        getAvailabilityProgressively,
+      } as unknown as MediaEngine,
+      createMediaRegistryStub(),
+    );
     const controller = new AbortController();
     const snapshots = await service.getAvailabilityProgressivelyByRef(
       'imdb:tt1160419',
@@ -698,17 +734,20 @@ describe('MediaService', () => {
 
       yield { availability: null, state: 'complete' as const, pendingProviders: [] };
     });
-    const service = new MediaService({
-      getDetails: jest.fn().mockResolvedValue({
-        details: {
-          id: 'dune',
-          type: 'movie',
-          title: 'Dune',
-          ids: { imdb: 'tt1160419' },
-        },
-      }),
-      getAvailabilityProgressively,
-    } as unknown as MediaEngine);
+    const service = new MediaService(
+      {
+        getDetails: jest.fn().mockResolvedValue({
+          details: {
+            id: 'dune',
+            type: 'movie',
+            title: 'Dune',
+            ids: { imdb: 'tt1160419' },
+          },
+        }),
+        getAvailabilityProgressively,
+      } as unknown as MediaEngine,
+      createMediaRegistryStub(),
+    );
     const snapshots = await service.getAvailabilityProgressivelyByRef('imdb:tt1160419');
 
     const consume = async () => {
@@ -768,20 +807,23 @@ describe('MediaService', () => {
       getAvailability,
       search,
     } as unknown as MediaEngine;
-    const service = new MediaService(mediaEngine, undefined, undefined, {
-      resolve: jest.fn().mockResolvedValue({
-        mediaRef: 'work_11111111-1111-4111-8111-111111111113',
-        slug: 'frieren',
-        type: 'anime',
-        ids: {
-          aniList: '154587',
-          shikimori: '52991',
-          myAnimeList: '52991',
-          kinopoisk: '5401195',
-        },
-        aliases: [],
+    const service = new MediaService(
+      mediaEngine,
+      createMediaRegistryStub({
+        resolve: jest.fn().mockResolvedValue({
+          mediaRef: 'work_11111111-1111-4111-8111-111111111113',
+          slug: 'frieren',
+          type: 'anime',
+          ids: {
+            aniList: '154587',
+            shikimori: '52991',
+            myAnimeList: '52991',
+            kinopoisk: '5401195',
+          },
+          aliases: [],
+        }),
       }),
-    } as unknown as MediaRegistryService);
+    );
 
     const result = await service.getAvailabilityByRef('anilist:154587', 'browser-user-agent', {
       seasonNumber: 2,
@@ -865,11 +907,14 @@ describe('MediaService', () => {
       sourceProviders: [],
       checkedAt: '2026-10-01T00:00:00.000Z',
     });
-    const service = new MediaService({
-      getDetails,
-      getRelatedMedia,
-      getAvailability,
-    } as unknown as MediaEngine);
+    const service = new MediaService(
+      {
+        getDetails,
+        getRelatedMedia,
+        getAvailability,
+      } as unknown as MediaEngine,
+      createMediaRegistryStub(),
+    );
 
     await service.getAvailabilityByRef('shikimori:3', undefined, {
       seasonNumber: 2,
@@ -909,9 +954,10 @@ describe('MediaService', () => {
       sourceProviders: [],
       checkedAt: '2026-08-30T00:00:00.000Z',
     });
+    const search = jest.fn().mockRejectedValue(createProviderFailure());
     const mediaEngine = {
       getDetails,
-      search: jest.fn().mockRejectedValue(createProviderFailure()),
+      search,
       getAvailability,
     } as unknown as MediaEngine;
     const service = withAnimeIdentity(mediaEngine);
@@ -937,7 +983,7 @@ describe('MediaService', () => {
       }),
       { playbackUserAgent: 'browser-user-agent' },
     );
-    expect(mediaEngine.search).not.toHaveBeenCalled();
+    expect(search).not.toHaveBeenCalled();
   });
 
   it('does not infer episodic anime cinema identity from ambiguous titles', async () => {
@@ -968,11 +1014,14 @@ describe('MediaService', () => {
       sourceProviders: [],
       checkedAt: '2026-08-30T00:00:00.000Z',
     });
-    const service = new MediaService({
-      getDetails,
-      search,
-      getAvailability,
-    } as unknown as MediaEngine);
+    const service = new MediaService(
+      {
+        getDetails,
+        search,
+        getAvailability,
+      } as unknown as MediaEngine,
+      createMediaRegistryStub(),
+    );
 
     await service.getAvailabilityByRef('anilist:100', undefined, {
       absoluteEpisodeNumber: 1,
@@ -992,7 +1041,7 @@ describe('MediaService', () => {
       getDetails,
       getAvailability,
     } as unknown as MediaEngine;
-    const service = new MediaService(mediaEngine);
+    const service = new MediaService(mediaEngine, createMediaRegistryStub());
 
     await expect(service.getAvailabilityByRef('imdb:tt0000000')).resolves.toBeNull();
     expect(getAvailability).not.toHaveBeenCalled();
@@ -1005,7 +1054,7 @@ describe('MediaService', () => {
       getDetails,
       getAvailability,
     } as unknown as MediaEngine;
-    const service = new MediaService(mediaEngine);
+    const service = new MediaService(mediaEngine, createMediaRegistryStub());
 
     await expect(service.getAvailabilityByRef('invalid:ref')).rejects.toThrow(
       'Invalid media reference',
@@ -1051,7 +1100,7 @@ describe('MediaService', () => {
     const mediaEngine = {
       search: jest.fn().mockRejectedValue(unexpectedError),
     } as unknown as MediaEngine;
-    const service = new MediaService(mediaEngine);
+    const service = new MediaService(mediaEngine, createMediaRegistryStub());
 
     await expect(service.searchMedia({ title: 'Interstellar' })).rejects.toBe(unexpectedError);
   });

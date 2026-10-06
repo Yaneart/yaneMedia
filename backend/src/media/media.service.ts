@@ -26,7 +26,7 @@ import {
   Injectable,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { createMediaRef, resolveMediaRef, type MediaExternalIds } from './media-ref';
+import { resolveMediaRef, type MediaExternalIds } from './media-ref';
 import { mapMediaAvailability, selectMediaAvailabilityEpisode } from './media-availability.mapper';
 import { AppLogger } from '../platform/logging/app-logger';
 import { buildAnimeSeasonChain, type AnimeSeasonChainEntry } from './anime-season-chain';
@@ -90,9 +90,9 @@ export class MediaService {
 
   constructor(
     @Inject(MEDIA_ENGINE) private readonly mediaEngine: MediaEngine,
+    private readonly mediaRegistry: MediaRegistryService,
     private readonly logger?: AppLogger,
     private readonly catalogRepository?: EditorialCatalogRepository,
-    private readonly mediaRegistry?: MediaRegistryService,
   ) {}
 
   async searchMedia(options: MediaSearchOptions): Promise<MediaSummaryDto[]> {
@@ -152,8 +152,7 @@ export class MediaService {
       return { details: null, meta: response.meta };
     }
 
-    const identity = await this.registerIdentity(trustedDetails, engineIds);
-    const route = identity ? this.toPublicRoute(identity) : this.legacyRoute(mediaRef);
+    const route = await this.registerIdentity(trustedDetails, engineIds);
     const animeSeasonChain = await this.getAnimeSeasonChain(
       route.mediaRef,
       trustedDetails,
@@ -222,17 +221,19 @@ export class MediaService {
     )
       .then((entries) =>
         Promise.all(
-          entries.map(async ({ ids, ...entry }) => ({
-            ...entry,
-            ...(ids
-              ? await this.registerRoute({
-                  type: 'anime',
-                  ids: this.toRegistryIds('anime', 'tv', ids),
-                  title: entry.title,
-                  year: entry.year,
-                })
-              : this.legacyRoute(entry.mediaRef)),
-          })),
+          entries.map(async ({ ids, ...entry }) => {
+            if (!ids) throw new BadRequestException('Invalid media identity');
+
+            return {
+              ...entry,
+              ...(await this.registerRoute({
+                type: 'anime',
+                ids: this.toRegistryIds('anime', 'tv', ids),
+                title: entry.title,
+                year: entry.year,
+              })),
+            };
+          }),
         ),
       )
       .catch((error: unknown) => {
@@ -483,7 +484,6 @@ export class MediaService {
 
   private async toMediaSummary(item: MediaItem): Promise<MediaSummaryDto | undefined> {
     if (!item.ids || Object.keys(item.ids).length === 0) return undefined;
-    if (!this.mediaRegistry && !createMediaRef(item.ids, item.type)) return undefined;
     return this.buildMediaSummary(item, await this.registerIdentity(item));
   }
 
@@ -605,17 +605,7 @@ export class MediaService {
     originalTitle?: string;
     year?: number;
   }): Promise<Pick<CanonicalMediaIdentity, 'mediaRef' | 'slug'>> {
-    if (this.mediaRegistry) {
-      return this.toPublicRoute(await this.mediaRegistry.resolveOrMergeVerified(input));
-    }
-
-    const mediaRef = createMediaRef(input.ids as MediaExternalIds, input.type);
-    if (!mediaRef) throw new BadRequestException('Invalid media identity');
-    return this.legacyRoute(mediaRef);
-  }
-
-  private legacyRoute(mediaRef: string) {
-    return { mediaRef, slug: mediaRef };
+    return this.toPublicRoute(await this.mediaRegistry.resolveOrMergeVerified(input));
   }
 
   private toPublicRoute(identity: Pick<CanonicalMediaIdentity, 'mediaRef' | 'slug'>) {
@@ -623,7 +613,7 @@ export class MediaService {
   }
 
   private async resolveMediaRefOrThrow(mediaRef: string, providedIds?: MediaExternalIds) {
-    const canonicalIdentity = providedIds ? undefined : await this.mediaRegistry?.resolve(mediaRef);
+    const canonicalIdentity = providedIds ? undefined : await this.mediaRegistry.resolve(mediaRef);
     const editorialIdentity =
       providedIds || canonicalIdentity
         ? undefined
@@ -654,7 +644,8 @@ export class MediaService {
     // for anime identity resolution, so do not let the redundant MAL alias reject
     // otherwise compatible IMDb/Kinopoisk claims.
     if (ids.shikimori && ids.myAnimeList) {
-      const { myAnimeList: _redundantMyAnimeList, ...releaseIds } = ids;
+      const releaseIds = { ...ids };
+      delete releaseIds.myAnimeList;
       return releaseIds;
     }
 

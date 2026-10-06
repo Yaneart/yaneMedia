@@ -7,6 +7,7 @@ import type { EditorialCatalogRepository } from '../../../src/media/catalog/edit
 import { MediaCatalogService } from '../../../src/media/catalog/media-catalog.service';
 import type { MediaDetailsDto } from '../../../src/media/dto/media-details.dto';
 import { MediaService } from '../../../src/media/media.service';
+import { createMediaRegistryStub } from '../../media/media-registry.stub';
 import {
   DiscoveryResponseMetricsInterceptor,
   discoveryPerformanceMiddleware,
@@ -52,7 +53,7 @@ describe('discovery performance instrumentation', () => {
     const mediaEngine = {
       getDetails: jest.fn().mockResolvedValue({ details: null, meta }),
     } as unknown as MediaEngine;
-    const service = new MediaService(mediaEngine, logger);
+    const service = new MediaService(mediaEngine, createMediaRegistryStub(), logger);
 
     await service.getDetailsByRef('imdb:tt15239678', 7.6);
 
@@ -107,7 +108,12 @@ describe('discovery performance instrumentation', () => {
         },
       ]),
     } as unknown as EditorialCatalogRepository;
-    const service = new MediaCatalogService(mediaService, repository, logger);
+    const service = new MediaCatalogService(
+      mediaService,
+      repository,
+      createMediaRegistryStub(),
+      logger,
+    );
 
     await service.getCatalog('movie');
 

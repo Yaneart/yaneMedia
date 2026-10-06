@@ -7,6 +7,7 @@ import {
   withProviderCounts,
 } from '../../src/media/media-provider-diagnostics';
 import type { AppLogger } from '../../src/platform/logging/app-logger';
+import { createMediaRegistryStub } from './media-registry.stub';
 
 const meta: ResponseMeta = {
   providers: {
@@ -178,7 +179,7 @@ describe('provider diagnostics', () => {
           },
         }),
     };
-    const service = new MediaService(engine as never, logger);
+    const service = new MediaService(engine as never, createMediaRegistryStub(), logger);
 
     await service.getAvailabilityByRef('imdb:tt1160419');
 
@@ -210,7 +211,7 @@ describe('provider diagnostics', () => {
           }),
         ),
     };
-    const service = new MediaService(engine as never, logger);
+    const service = new MediaService(engine as never, createMediaRegistryStub(), logger);
 
     await expect(service.getDetailsByRef('imdb:tt2788316')).rejects.toBeInstanceOf(
       ServiceUnavailableException,

@@ -6,8 +6,10 @@ import { MediaCatalogService } from '../../../src/media/catalog/media-catalog.se
 import { HomeFeedService } from '../../../src/media/home/home-feed.service';
 import { MediaController } from '../../../src/media/media.controller';
 import { MediaService } from '../../../src/media/media.service';
+import { MediaRegistryService } from '../../../src/media/registry/media-registry.service';
 import { ApiResponseInterceptor } from '../../../src/platform/http/api-response/api-response.interceptor';
 import { AppLogger } from '../../../src/platform/logging/app-logger';
+import { canonicalMediaRef, createMediaRegistryStub } from '../media-registry.stub';
 
 describe('editorial catalog HTTP', () => {
   let app: INestApplication;
@@ -48,6 +50,7 @@ describe('editorial catalog HTTP', () => {
           provide: MediaService,
           useValue: { searchMedia, getDetailsByRef, getAvailabilityByRef },
         },
+        { provide: MediaRegistryService, useValue: createMediaRegistryStub() },
         {
           provide: EditorialCatalogRepository,
           useValue: {
@@ -62,6 +65,13 @@ describe('editorial catalog HTTP', () => {
                 Promise.resolve(offset === 2 ? [] : [row]),
               ),
             countPublishedCollections: jest.fn().mockResolvedValue(1),
+            findPublishedIdentities: jest.fn().mockResolvedValue([
+              {
+                mediaRef: row.mediaRef,
+                externalIds: { imdb: 'tt15239678' },
+                provenance: ['test'],
+              },
+            ]),
           },
         },
         {
@@ -108,7 +118,7 @@ describe('editorial catalog HTTP', () => {
     expect(response.status).toBe(200);
     expect(body.data.items).toEqual([
       expect.objectContaining({
-        mediaRef: 'imdb:tt15239678',
+        mediaRef: canonicalMediaRef('imdb:tt15239678'),
         poster: {
           url: `/api/v1/media/assets/poster/${'a'.repeat(64)}.jpg`,
           width: 600,
@@ -180,7 +190,7 @@ describe('editorial catalog HTTP', () => {
     };
 
     expect(response.status).toBe(200);
-    expect(body.data.mediaRef).toBe('imdb:tt15239678');
+    expect(body.data.mediaRef).toBe(canonicalMediaRef('imdb:tt15239678'));
     expect(body.data.title).toBe('Dune: Part Two');
     expect(body.data.backdrop.url).toContain('/backdrop/');
     expect(getDetailsByRef).not.toHaveBeenCalled();

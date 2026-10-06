@@ -58,8 +58,8 @@ export class MediaCatalogService {
   constructor(
     private readonly mediaService: MediaService,
     private readonly repository: EditorialCatalogRepository,
+    private readonly mediaRegistry: MediaRegistryService,
     private readonly logger?: AppLogger,
-    private readonly mediaRegistry?: MediaRegistryService,
   ) {}
 
   async getCatalog(
@@ -140,7 +140,7 @@ export class MediaCatalogService {
   }
 
   async getPublishedSummary(mediaRef: string): Promise<MediaSummaryDto> {
-    const identity = await this.mediaRegistry?.resolve(mediaRef);
+    const identity = await this.mediaRegistry.resolve(mediaRef);
     const [row] = await this.repository.findPublishedItems(identity?.aliases ?? [mediaRef]);
 
     if (!row) throw new NotFoundException('Media not found');
@@ -191,10 +191,9 @@ export class MediaCatalogService {
   }
 
   private async resolveRequestedRefs(mediaRefs: readonly string[]): Promise<SummaryResolution[]> {
-    const registry = this.mediaRegistry;
-    const requestedIdentities = registry
-      ? await Promise.all(mediaRefs.map((mediaRef) => registry.resolve(mediaRef)))
-      : mediaRefs.map(() => undefined);
+    const requestedIdentities = await Promise.all(
+      mediaRefs.map((mediaRef) => this.mediaRegistry.resolve(mediaRef)),
+    );
     const aliasesByRequestedRef = new Map(
       mediaRefs.map((mediaRef, index) => [
         mediaRef,
@@ -210,16 +209,20 @@ export class MediaCatalogService {
       ...new Map(publishedMatches.map(({ item }) => [item.mediaRef, item])).values(),
     ];
     const routes =
-      matchedRows.length > 0 ? await this.registerPublishedRows(matchedRows) : new Map();
+      matchedRows.length > 0
+        ? await this.registerPublishedRows(matchedRows)
+        : new Map<string, MediaRoute>();
     const publishedByRef = new Map(
       mediaRefs.flatMap((mediaRef) => {
         const item = aliasesByRequestedRef
           .get(mediaRef)
           ?.map((alias) => publishedByAlias.get(alias))
           .find((candidate) => candidate !== undefined);
-        return item
-          ? [[mediaRef, this.toMediaSummary(item, routes.get(item.mediaRef)!)] as const]
-          : [];
+        if (!item) return [];
+
+        const route = routes.get(item.mediaRef);
+        if (!route) throw new NotFoundException('Media identity is unavailable');
+        return [[mediaRef, this.toMediaSummary(item, route)] as const];
       }),
     );
     const missingRefs = [...new Set(mediaRefs.filter((mediaRef) => !publishedByRef.has(mediaRef)))];
@@ -314,12 +317,6 @@ export class MediaCatalogService {
     rows: readonly PublishedItemRow[],
   ): Promise<Map<string, MediaRoute>> {
     const uniqueRows = [...new Map(rows.map((row) => [row.mediaRef, row])).values()];
-    if (!this.mediaRegistry) {
-      return new Map(
-        uniqueRows.map((row) => [row.mediaRef, { mediaRef: row.mediaRef, slug: row.mediaRef }]),
-      );
-    }
-
     const identities = this.repository.findPublishedIdentities
       ? await this.repository.findPublishedIdentities(uniqueRows.map(({ mediaRef }) => mediaRef))
       : [];
@@ -330,7 +327,7 @@ export class MediaCatalogService {
       uniqueRows.map(async (row) => {
         const ids = idsByMediaRef.get(row.mediaRef) ?? resolveMediaRef(row.mediaRef);
         if (!ids) throw new NotFoundException('Media identity is unavailable');
-        const identity = await this.mediaRegistry!.resolveOrCreate({
+        const identity = await this.mediaRegistry.resolveOrCreate({
           type: row.type,
           ids,
           title: row.title,

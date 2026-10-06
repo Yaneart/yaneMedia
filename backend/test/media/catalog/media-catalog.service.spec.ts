@@ -2,9 +2,12 @@ import type { DetailsResponse } from '@media-engine/core';
 import { NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import type { EditorialCatalogRepository } from '../../../src/media/catalog/editorial-catalog.repository';
 import { MediaCatalogService } from '../../../src/media/catalog/media-catalog.service';
+import { resolveMediaRef } from '../../../src/media/media-ref';
 import type { MediaService } from '../../../src/media/media.service';
+import { canonicalMediaRef, createMediaRegistryStub } from '../media-registry.stub';
 
 describe('MediaCatalogService', () => {
+  const unknownCanonicalRef = 'work_99999999-9999-4999-8999-999999999999';
   const healthyMeta = {
     providers: { requested: ['provider'], successful: ['provider'], failed: [] },
     cached: false,
@@ -79,9 +82,21 @@ describe('MediaCatalogService', () => {
       findPublishedCollectionItems,
       countPublishedCollections,
       countPublishedItems: jest.fn().mockResolvedValue(150),
+      findPublishedIdentities: jest.fn().mockImplementation((mediaRefs: string[]) =>
+        Promise.resolve(
+          mediaRefs.flatMap((mediaRef) => {
+            const externalIds = resolveMediaRef(mediaRef);
+            return externalIds ? [{ mediaRef, externalIds, provenance: ['test'] }] : [];
+          }),
+        ),
+      ),
     } as unknown as EditorialCatalogRepository;
     return {
-      service: new MediaCatalogService({ getDetailsByRef } as unknown as MediaService, repository),
+      service: new MediaCatalogService(
+        { getDetailsByRef } as unknown as MediaService,
+        repository,
+        createMediaRegistryStub(),
+      ),
       getDetailsByRef,
       repository,
       findPublishedItems,
@@ -102,18 +117,26 @@ describe('MediaCatalogService', () => {
     await expect(service.getCatalog('movie')).resolves.toEqual({
       items: [
         expect.objectContaining({
-          mediaRef: 'imdb:tt0000001',
+          mediaRef: canonicalMediaRef('imdb:tt0000001'),
           poster: {
             url: `/api/v1/media/assets/poster/${'a'.repeat(64)}.jpg`,
             width: 600,
             height: 900,
           },
         }),
-        expect.objectContaining({ mediaRef: 'imdb:tt0000002' }),
+        expect.objectContaining({ mediaRef: canonicalMediaRef('imdb:tt0000002') }),
       ],
       collections: [
-        { id: 'editorial-picks', title: 'movie-editorial-picks', mediaRefs: ['imdb:tt0000001'] },
-        { id: 'classics', title: 'movie-classics', mediaRefs: ['imdb:tt0000002'] },
+        {
+          id: 'editorial-picks',
+          title: 'movie-editorial-picks',
+          mediaRefs: [canonicalMediaRef('imdb:tt0000001')],
+        },
+        {
+          id: 'classics',
+          title: 'movie-classics',
+          mediaRefs: [canonicalMediaRef('imdb:tt0000002')],
+        },
       ],
       partial: false,
       degraded: false,
@@ -140,8 +163,8 @@ describe('MediaCatalogService', () => {
 
     expect(result.collections.map(({ id }) => id)).toEqual(['first', 'second']);
     expect(result.items.map(({ mediaRef }) => mediaRef)).toEqual([
-      'imdb:tt0000001',
-      'imdb:tt0000002',
+      canonicalMediaRef('imdb:tt0000001'),
+      canonicalMediaRef('imdb:tt0000002'),
     ]);
     expect(result).toEqual(expect.objectContaining({ offset: 0, limit: 2, total: 5 }));
     expect(findPublishedCollectionItems).toHaveBeenCalledWith({
@@ -179,7 +202,7 @@ describe('MediaCatalogService', () => {
 
     const result = await service.getPublishedSummary('imdb:tt0000001');
 
-    expect(result.mediaRef).toBe('imdb:tt0000001');
+    expect(result.mediaRef).toBe(canonicalMediaRef('imdb:tt0000001'));
     expect(result.title).toBe('imdb:tt0000001');
     expect(result.poster?.url).toContain('/media/assets/poster/');
     expect(result.backdrop?.url).toContain('/media/assets/backdrop/');
@@ -199,21 +222,21 @@ describe('MediaCatalogService', () => {
   it('builds the combined editorial collection in movie-series-anime order', async () => {
     const rows = [
       createCollectionRow('anilist:1', 'anime', 'anime-editorial-picks', 1, 1),
-      createCollectionRow('imdb:movie1', 'movie', 'movie-editorial-picks', 1, 1),
-      createCollectionRow('imdb:series1', 'series', 'series-editorial-picks', 1, 1),
+      createCollectionRow('imdb:tt0000003', 'movie', 'movie-editorial-picks', 1, 1),
+      createCollectionRow('imdb:tt0000004', 'series', 'series-editorial-picks', 1, 1),
       createCollectionRow('anilist:2', 'anime', 'anime-modern', 2, 1),
-      createCollectionRow('imdb:movie2', 'movie', 'movie-modern', 2, 1),
-      createCollectionRow('imdb:series2', 'series', 'series-modern', 2, 1),
+      createCollectionRow('imdb:tt0000005', 'movie', 'movie-modern', 2, 1),
+      createCollectionRow('imdb:tt0000006', 'series', 'series-modern', 2, 1),
     ];
     const { service, getDetailsByRef } = createService({ collectionRows: rows });
 
     const result = await service.getCollection('editorial-picks', 1, 4);
 
     expect(result.items.map(({ mediaRef }) => mediaRef)).toEqual([
-      'imdb:series1',
-      'anilist:1',
-      'imdb:movie2',
-      'imdb:series2',
+      canonicalMediaRef('imdb:tt0000004'),
+      canonicalMediaRef('aniList:1'),
+      canonicalMediaRef('imdb:tt0000005'),
+      canonicalMediaRef('imdb:tt0000006'),
     ]);
     expect(result).toEqual(expect.objectContaining({ total: 6, offset: 1, limit: 4 }));
     expect(getDetailsByRef).not.toHaveBeenCalled();
@@ -223,7 +246,8 @@ describe('MediaCatalogService', () => {
     const known = createRow('imdb:tt0000001', 'movie');
     const getDetailsByRef = jest.fn().mockResolvedValue({
       details: {
-        mediaRef: 'imdb:tt9999999',
+        mediaRef: unknownCanonicalRef,
+        slug: 'external-title',
         type: 'movie',
         title: 'External title',
         genres: [],
@@ -238,8 +262,8 @@ describe('MediaCatalogService', () => {
     const result = await service.resolveMediaRefs(['imdb:tt0000001', 'imdb:tt9999999']);
 
     expect(result.items.map(({ mediaRef }) => mediaRef)).toEqual([
-      'imdb:tt0000001',
-      'imdb:tt9999999',
+      canonicalMediaRef('imdb:tt0000001'),
+      unknownCanonicalRef,
     ]);
     expect(getDetailsByRef).toHaveBeenCalledTimes(1);
     expect(getDetailsByRef).toHaveBeenCalledWith('imdb:tt9999999');
@@ -255,7 +279,7 @@ describe('MediaCatalogService', () => {
 
     await expect(service.resolveMediaRefs(['shikimori:52991'])).resolves.toEqual(
       expect.objectContaining({
-        items: [expect.objectContaining({ mediaRef: 'anilist:154587' })],
+        items: [expect.objectContaining({ mediaRef: canonicalMediaRef('aniList:154587') })],
         partial: false,
       }),
     );
@@ -273,7 +297,7 @@ describe('MediaCatalogService', () => {
 
     await expect(service.resolveMediaRefs(['anilist:154587', 'shikimori:52991'])).resolves.toEqual(
       expect.objectContaining({
-        items: [expect.objectContaining({ mediaRef: 'anilist:154587' })],
+        items: [expect.objectContaining({ mediaRef: canonicalMediaRef('aniList:154587') })],
         matches: [
           expect.objectContaining({ requestIndex: 0 }),
           expect.objectContaining({ requestIndex: 1 }),
@@ -296,11 +320,12 @@ describe('MediaCatalogService', () => {
     const first = service.resolveMediaRefs(['imdb:tt9999999']);
     const second = service.resolveMediaRefs(['imdb:tt9999999']);
 
-    await Promise.resolve();
+    await new Promise<void>((resolve) => setImmediate(resolve));
     expect(getDetailsByRef).toHaveBeenCalledTimes(1);
     complete?.({
       details: {
-        mediaRef: 'imdb:tt9999999',
+        mediaRef: unknownCanonicalRef,
+        slug: 'external-title',
         type: 'movie',
         title: 'External title',
         genres: [],
@@ -339,7 +364,9 @@ describe('MediaCatalogService', () => {
     const available = createService({ collectionRows: [row], getDetailsByRef: providerFailure });
 
     await expect(available.service.getCatalog('movie')).resolves.toEqual(
-      expect.objectContaining({ items: [expect.objectContaining({ mediaRef: 'imdb:tt0000001' })] }),
+      expect.objectContaining({
+        items: [expect.objectContaining({ mediaRef: canonicalMediaRef('imdb:tt0000001') })],
+      }),
     );
     expect(providerFailure).not.toHaveBeenCalled();
 
