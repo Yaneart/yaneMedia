@@ -62,6 +62,7 @@ function mapSourceOptions(
   fallbackEpisode?: MediaSourceEpisodeRefDto,
 ): SourcesMappingResult {
   const sourcesByKey = new Map<string, MediaSourceOptionDto>();
+  const discoveryByKey = new Map<string, StreamOption['discovery']>();
   let hasExpiredSources = false;
 
   for (const option of options) {
@@ -72,11 +73,17 @@ function mapSourceOptions(
       continue;
     }
 
-    const key = createSourceKey(mapped.source);
+    const key = createSourceKey(mapped.source, option);
     const existing = sourcesByKey.get(key);
+    const existingDiscovery = discoveryByKey.get(key);
 
-    if (!existing || (!existing.browserSupported && mapped.source.browserSupported)) {
+    if (
+      !existing ||
+      (!existing.browserSupported && mapped.source.browserSupported) ||
+      (option.discovery === 'direct' && existingDiscovery !== 'direct')
+    ) {
       sourcesByKey.set(key, mapped.source);
+      discoveryByKey.set(key, option.discovery);
     }
   }
 
@@ -171,9 +178,15 @@ function mapEpisodeRef(
   return Object.values(mapped).some((value) => value !== undefined) ? mapped : undefined;
 }
 
-function createSourceKey(source: MediaSourceOptionDto): string {
+function createSourceKey(source: MediaSourceOptionDto, option: StreamOption): string {
+  const playerProvider = normalizeOptionalString(option.player.provider)?.toLowerCase();
+  const target =
+    source.kind === 'embed' && playerProvider === 'kodik'
+      ? `embedded-player:${playerProvider}`
+      : source.url;
+
   return [
-    source.url,
+    target,
     source.episode?.seasonNumber ?? '',
     source.episode?.episodeNumber ?? '',
     source.episode?.absoluteEpisodeNumber ?? '',

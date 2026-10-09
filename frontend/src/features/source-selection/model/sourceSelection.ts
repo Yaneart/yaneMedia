@@ -6,6 +6,7 @@ import type {
 } from '@/entities/media-source';
 
 export type PlaybackMode = 'embed' | 'direct';
+export type PlaybackSourcePanel = 'players' | 'direct';
 
 export type DirectEpisodeOption = {
   key: string;
@@ -55,6 +56,10 @@ export function isDirectMediaSource(source: MediaSourceOption) {
   return source.kind === 'hls' || source.kind === 'mp4';
 }
 
+export function getPlaybackSourcePanel(source: MediaSourceOption | undefined): PlaybackSourcePanel {
+  return source?.kind === 'embed' ? 'players' : 'direct';
+}
+
 function toDirectEpisodeOption(episode: MediaAvailabilityEpisode): DirectEpisodeOption | null {
   const key = getDirectEpisodeKey(episode);
   const sources = episode.sources.filter(isDirectMediaSource);
@@ -75,14 +80,57 @@ function toDirectEpisodeOption(episode: MediaAvailabilityEpisode): DirectEpisode
 
 export function createPlaybackSourceCatalog(
   availability: MediaAvailability,
+  flattenEpisodeSources = false,
 ): PlaybackSourceCatalog {
+  const sources = flattenEpisodeSources
+    ? [
+        ...new Map(
+          [
+            ...availability.sources,
+            ...availability.episodes.flatMap((episode) => episode.sources),
+          ].map((source) => [source.sourceRef, source]),
+        ).values(),
+      ]
+    : availability.sources;
+
   return {
-    embedSources: availability.sources.filter((source) => source.kind === 'embed'),
-    directSources: availability.sources.filter(isDirectMediaSource),
-    directEpisodes: availability.episodes
-      .map(toDirectEpisodeOption)
-      .filter((episode): episode is DirectEpisodeOption => episode !== null),
+    embedSources: sources.filter((source) => source.kind === 'embed'),
+    directSources: sources.filter(isDirectMediaSource),
+    directEpisodes: flattenEpisodeSources
+      ? []
+      : availability.episodes
+          .map(toDirectEpisodeOption)
+          .filter((episode): episode is DirectEpisodeOption => episode !== null),
   };
+}
+
+export function mergeEpisodeEmbedSources(
+  baseSources: readonly MediaSourceOption[],
+  availability: MediaAvailability | null,
+  episodeRef: MediaSourceEpisodeRef | null,
+): readonly MediaSourceOption[] {
+  if (!availability || !episodeRef) return baseSources;
+
+  const episodeSources = availability.episodes
+    .filter((episode) => {
+      const matchesSeasonEpisode =
+        episodeRef.episodeNumber !== undefined &&
+        episode.episodeNumber === episodeRef.episodeNumber &&
+        (episodeRef.seasonNumber === undefined || episode.seasonNumber === episodeRef.seasonNumber);
+      const matchesAbsoluteEpisode =
+        episodeRef.absoluteEpisodeNumber !== undefined &&
+        episode.absoluteEpisodeNumber === episodeRef.absoluteEpisodeNumber;
+
+      return matchesSeasonEpisode || matchesAbsoluteEpisode;
+    })
+    .flatMap((episode) => episode.sources)
+    .filter((source) => source.kind === 'embed');
+
+  return [
+    ...new Map(
+      [...baseSources, ...episodeSources].map((source) => [source.sourceRef, source]),
+    ).values(),
+  ];
 }
 
 export function getPreferredSource(sources: readonly MediaSourceOption[]) {

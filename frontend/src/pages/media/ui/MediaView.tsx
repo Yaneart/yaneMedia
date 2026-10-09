@@ -26,6 +26,7 @@ import {
   getPreferredSource,
   getDirectSourceForTrackPreference,
   isDirectMediaSource,
+  mergeEpisodeEmbedSources,
   type DirectEpisodeOption,
   type PlaybackMode,
 } from '@/features/source-selection';
@@ -49,8 +50,12 @@ import {
 import {
   createAnimePlaybackEpisodes,
   getAvailabilityEpisode,
+  usesEpisodePlayback,
 } from '../model/animeEpisodeAvailability';
-import { resolveAvailablePlaybackMode } from '../model/playbackModeResolution';
+import {
+  resolveAvailablePlaybackMode,
+  shouldShowLocalEpisodeControls,
+} from '../model/playbackModeResolution';
 
 export type MediaViewProps = {
   media: MediaDetails;
@@ -239,7 +244,10 @@ export function MediaView({
   const mediaIsFavorite = isFavorite(media.mediaRef);
   const mediaSession = session?.mediaRef === media.mediaRef ? session : null;
 
-  const catalog = createPlaybackSourceCatalog(availability ?? emptyAvailability);
+  const catalog = createPlaybackSourceCatalog(
+    availability ?? emptyAvailability,
+    !usesEpisodePlayback(media),
+  );
   const currentAnimeSeason = animeSeasonChain.find((season) => season.mediaRef === media.mediaRef);
   const animeReleaseCoordinates =
     media.type === 'anime'
@@ -255,12 +263,12 @@ export function MediaView({
     animeReleaseCoordinates,
   );
   const animeSeasonSelector = createAnimeSeasonSelectorState(animeSeasonChain, media.mediaRef);
-  const usesDirectEpisodes = media.type !== 'movie' && directEpisodes.length > 0;
-  const hasEmbedMode = catalog.embedSources.length > 0;
+  const usesDirectEpisodes = usesEpisodePlayback(media) && directEpisodes.length > 0;
+  const hasInitialEmbedMode = catalog.embedSources.length > 0;
   const hasInitialDirectMode = usesDirectEpisodes
     ? catalog.directEpisodes.length > 0
     : catalog.directSources.length > 0;
-  const hasInitialPlaybackSources = hasEmbedMode || hasInitialDirectMode;
+  const hasInitialPlaybackSources = hasInitialEmbedMode || hasInitialDirectMode;
 
   const sessionEmbedSource = catalog.embedSources.find(
     (source) => source.sourceRef === mediaSession?.sourceRef,
@@ -277,7 +285,7 @@ export function MediaView({
     ? 'embed'
     : sessionDirectSource || (sessionDirectEpisode && mediaSession)
       ? 'direct'
-      : hasEmbedMode
+      : hasInitialEmbedMode
         ? 'embed'
         : 'direct';
   const requestedAnimeEpisode =
@@ -315,10 +323,6 @@ export function MediaView({
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
   const playbackMode = isPlaybackModeInitialized ? selectedPlaybackMode : initialMode;
 
-  const selectedEmbedSource =
-    catalog.embedSources.find((source) => source.sourceRef === selectedEmbedSourceRef) ??
-    sessionEmbedSource ??
-    getPreferredSource(catalog.embedSources);
   const selectedDirectEpisode = usesDirectEpisodes
     ? (directEpisodes.find((episode) => episode.key === selectedDirectEpisodeKey) ??
       initialDirectEpisode)
@@ -326,6 +330,17 @@ export function MediaView({
   const availabilityEpisode = getAvailabilityEpisode(media, selectedDirectEpisode);
   const { availability: episodeAvailability, isPending: episodeAvailabilityPending } =
     useMediaEpisodeAvailability(media.mediaRef, availabilityEpisode);
+  const hasPlayerManagedEpisodeEmbed = catalog.embedSources.some(
+    (source) => source.provider === 'kodik-streaming',
+  );
+  const currentEmbedSources = hasPlayerManagedEpisodeEmbed
+    ? catalog.embedSources
+    : mergeEpisodeEmbedSources(catalog.embedSources, episodeAvailability, availabilityEpisode);
+  const hasEmbedMode = currentEmbedSources.length > 0;
+  const selectedEmbedSource =
+    currentEmbedSources.find((source) => source.sourceRef === selectedEmbedSourceRef) ??
+    sessionEmbedSource ??
+    getPreferredSource(currentEmbedSources);
   const currentDirectSources = usesDirectEpisodes
     ? mergeEpisodeSources(
         selectedDirectEpisode?.sources ?? [],
@@ -335,6 +350,11 @@ export function MediaView({
     : catalog.directSources;
   const hasDirectMode = currentDirectSources.length > 0;
   const hasPlaybackSources = hasEmbedMode || hasDirectMode;
+  const showLocalEpisodeControls = shouldShowLocalEpisodeControls(
+    playbackMode,
+    usesDirectEpisodes,
+    hasPlayerManagedEpisodeEmbed,
+  );
   const directModePending = usesDirectEpisodes && episodeAvailabilityPending;
   const sourcesPending = availabilityPending || directModePending;
   const hasToolbarControls = hasPlaybackSources && (media.type === 'movie' || usesDirectEpisodes);
@@ -683,7 +703,7 @@ export function MediaView({
                 <AvailabilityToolbarStatus />
               ) : (
                 <>
-                  {animeSeasonSelector && (
+                  {showLocalEpisodeControls && animeSeasonSelector && (
                     <SeasonSelector
                       seasons={animeSeasonSelector.options}
                       selectedSeasonNumber={animeSeasonSelector.selectedSeasonNumber}
@@ -693,17 +713,19 @@ export function MediaView({
                     />
                   )}
 
-                  {usesDirectEpisodes && !animeSeasonSelector && directSeasonNumbers.length > 0 && (
-                    <SeasonSelector
-                      seasons={directSeasons}
-                      selectedSeasonNumber={selectedDirectEpisode?.seasonNumber ?? null}
-                      onSeasonChange={selectSeason}
-                      variant="inline"
-                      compactDesktop
-                    />
-                  )}
+                  {showLocalEpisodeControls &&
+                    !animeSeasonSelector &&
+                    directSeasonNumbers.length > 0 && (
+                      <SeasonSelector
+                        seasons={directSeasons}
+                        selectedSeasonNumber={selectedDirectEpisode?.seasonNumber ?? null}
+                        onSeasonChange={selectSeason}
+                        variant="inline"
+                        compactDesktop
+                      />
+                    )}
 
-                  {usesDirectEpisodes && (
+                  {showLocalEpisodeControls && (
                     <EpisodeSelector
                       episodes={directEpisodeOptions}
                       selectedEpisodeNumber={
@@ -719,7 +741,7 @@ export function MediaView({
 
                   <div className="col-span-2 w-full 2xl:ml-auto 2xl:w-auto">
                     <PlaybackSourcePicker
-                      embedSources={catalog.embedSources}
+                      embedSources={currentEmbedSources}
                       directSources={currentDirectSources}
                       selectedSource={selectedSource}
                       selectedDirectSource={selectedDirectSource}

@@ -91,12 +91,14 @@ describe('MediaCatalogService', () => {
         ),
       ),
     } as unknown as EditorialCatalogRepository;
+    const mediaRegistry = createMediaRegistryStub();
     return {
       service: new MediaCatalogService(
         { getDetailsByRef } as unknown as MediaService,
         repository,
-        createMediaRegistryStub(),
+        mediaRegistry,
       ),
+      mediaRegistry,
       getDetailsByRef,
       repository,
       findPublishedItems,
@@ -104,6 +106,20 @@ describe('MediaCatalogService', () => {
       countPublishedCollections,
     };
   }
+
+  it('registers curated catalog identities as verified mappings', async () => {
+    const row = createCollectionRow('anilist:199', 'anime', 'featured', 1, 1);
+    const { service, mediaRegistry } = createService({ collectionRows: [row] });
+
+    await expect(service.getHomeCollections()).resolves.toHaveLength(1);
+    // Jest replaces both methods with context-free mock functions.
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(mediaRegistry.resolveOrMergeVerified).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'anime', ids: { aniList: '199' } }),
+    );
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(mediaRegistry.resolveOrCreate).not.toHaveBeenCalled();
+  });
 
   it('serves a catalog from the published revision with local artwork URLs', async () => {
     const rows = [

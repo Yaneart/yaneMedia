@@ -1,5 +1,13 @@
 import type { PlaybackMode } from '../../../features/source-selection';
 
+export function shouldShowLocalEpisodeControls(
+  playbackMode: PlaybackMode,
+  usesDirectEpisodes: boolean,
+  hasPlayerManagedEpisodeEmbed: boolean,
+) {
+  return usesDirectEpisodes && (playbackMode === 'direct' || !hasPlayerManagedEpisodeEmbed);
+}
+
 export function resolveAvailablePlaybackMode(
   currentMode: PlaybackMode,
   hasEmbedMode: boolean,

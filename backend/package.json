@@ -24,13 +24,14 @@
     "probe:discovery": "node scripts/probe-discovery.mjs",
     "probe:media-providers": "node scripts/probe-media-providers.mjs",
     "probe:media-platform": "node scripts/probe-media-platform.mjs",
+    "probe:kodik-coverage": "node scripts/probe-kodik-coverage.mjs",
     "probe:anime-matrix": "node scripts/probe-anime-matrix.mjs",
     "catalog:sync": "node dist/scripts/sync-editorial-catalog.js",
     "catalog:assets:cleanup": "node dist/scripts/cleanup-editorial-assets.js"
   },
   "dependencies": {
-    "@media-engine/core": "1.12.0",
-    "@media-engine/providers": "1.12.0",
+    "@media-engine/core": "1.13.1",
+    "@media-engine/providers": "1.13.1",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.4",
     "@nestjs/core": "^11.0.1",
@@ -74,7 +75,7 @@
     "typescript-eslint": "^8.20.0"
   },
   "overrides": {
-    "@media-engine/core": "1.12.0"
+    "@media-engine/core": "1.13.1"
   },
   "jest": {
     "moduleFileExtensions": [

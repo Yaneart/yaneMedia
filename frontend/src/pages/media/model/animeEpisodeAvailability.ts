@@ -2,6 +2,10 @@ import type { AnimeSeasonChainEntry, MediaDetails, MediaEpisode } from '../../..
 import type { MediaSourceEpisodeRef } from '../../../entities/media-source';
 import type { DirectEpisodeOption } from '../../../features/source-selection';
 
+export function usesEpisodePlayback(media: MediaDetails) {
+  return media.type === 'series' || (media.type === 'anime' && media.animeKind !== 'movie');
+}
+
 function matchesLocalEpisode(option: DirectEpisodeOption, episode: MediaEpisode) {
   return episode.absoluteEpisodeNumber !== undefined
     ? option.absoluteEpisodeNumber === episode.absoluteEpisodeNumber
@@ -14,6 +18,7 @@ export function createAnimePlaybackEpisodes(
   release?: Pick<AnimeSeasonChainEntry, 'number' | 'seasonEpisodeOffset' | 'absoluteEpisodeOffset'>,
 ): readonly DirectEpisodeOption[] {
   if (media.type !== 'anime') return directEpisodes;
+  if (!usesEpisodePlayback(media)) return [];
 
   const matched = new Set<DirectEpisodeOption>();
   const episodes = media.episodes.flatMap((episode) => {
@@ -56,7 +61,7 @@ export function getAvailabilityEpisode(
   media: MediaDetails,
   episode: DirectEpisodeOption | undefined,
 ): MediaSourceEpisodeRef | null {
-  if (!episode || media.type === 'movie') return null;
+  if (!episode || !usesEpisodePlayback(media)) return null;
 
   if (media.type === 'anime') {
     return episode.seasonNumber === undefined ||

@@ -1,8 +1,8 @@
 import type { MediaSourceOption } from '@/entities/media-source';
 import { Button, DownIcon, Popover } from '@/shared';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
-import { getDirectTrackKey } from '../model/sourceSelection';
+import { getDirectTrackKey, getPlaybackSourcePanel } from '../model/sourceSelection';
 
 const labels = {
   source: '\u0418\u0441\u0442\u043e\u0447\u043d\u0438\u043a',
@@ -92,10 +92,14 @@ export function PlaybackSourcePicker({
     new Map(directSources.map((source) => [getDirectTrackKey(source), source])).entries(),
   );
   const showBothPanels = embedSources.length > 0 && tracks.length > 0;
-  const [activePanel, setActivePanel] = useState<'players' | 'direct'>(
-    selectedSource?.kind === 'embed' ? 'players' : 'direct',
+  const [activePanel, setActivePanel] = useState<'players' | 'direct'>(() =>
+    getPlaybackSourcePanel(selectedSource),
   );
   const visiblePanel = showBothPanels ? activePanel : tracks.length > 0 ? 'direct' : 'players';
+
+  useEffect(() => {
+    setActivePanel(getPlaybackSourcePanel(selectedSource));
+  }, [selectedSource]);
 
   return (
     <Popover

@@ -22,6 +22,7 @@ import type {
 } from './dto/media-availability.dto';
 import {
   BadRequestException,
+  ConflictException,
   Inject,
   Injectable,
   ServiceUnavailableException,
@@ -484,7 +485,13 @@ export class MediaService {
 
   private async toMediaSummary(item: MediaItem): Promise<MediaSummaryDto | undefined> {
     if (!item.ids || Object.keys(item.ids).length === 0) return undefined;
-    return this.buildMediaSummary(item, await this.registerIdentity(item));
+
+    try {
+      return this.buildMediaSummary(item, await this.registerIdentity(item));
+    } catch (error) {
+      if (error instanceof ConflictException) return undefined;
+      throw error;
+    }
   }
 
   private buildMediaSummary(

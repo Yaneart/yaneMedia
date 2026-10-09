@@ -3,6 +3,7 @@ import type { DirectEpisodeOption } from '../src/features/source-selection';
 import {
   createAnimePlaybackEpisodes,
   getAvailabilityEpisode,
+  usesEpisodePlayback,
 } from '../src/pages/media/model/animeEpisodeAvailability';
 
 describe('episodic anime availability selection', () => {
@@ -20,6 +21,18 @@ describe('episodic anime availability selection', () => {
     seasonEpisodeOffset: 13,
     absoluteEpisodeOffset: 38,
   };
+
+  it('keeps anime movies in non-episodic playback despite a technical episode row', () => {
+    const movie = {
+      ...media,
+      animeKind: 'movie' as const,
+      episodes: [{ episodeNumber: 1, absoluteEpisodeNumber: 1 }],
+    };
+
+    expect(usesEpisodePlayback(movie)).toBe(false);
+    expect(createAnimePlaybackEpisodes(movie, [episode], release)).toEqual([]);
+    expect(getAvailabilityEpisode(movie, episode)).toBeNull();
+  });
 
   it('combines the season, local episode and absolute episode coordinates', () => {
     const [canonicalEpisode] = createAnimePlaybackEpisodes(media, [episode], release);

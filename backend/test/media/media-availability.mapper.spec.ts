@@ -44,6 +44,22 @@ describe('mapMediaAvailability', () => {
     const availability = createAvailability({
       options: [
         createOption({
+          discovery: 'direct',
+          attributions: [
+            {
+              provider: 'aggregate-provider',
+              optionId: 'private-aggregate-option',
+              discovery: 'aggregate',
+              playerProvider: 'upstream-player',
+              sourceUrl: 'https://aggregate.example/private-source',
+            },
+          ],
+          player: {
+            kind: 'embed',
+            label: 'Player',
+            provider: 'upstream-player',
+            providerPlayerId: 'internal-player-id',
+          },
           translation: {
             id: 'internal-translation-id',
             title: ' Дублированный ',
@@ -115,6 +131,9 @@ describe('mapMediaAvailability', () => {
     expect(serialized).not.toContain('internal-translation-id');
     expect(serialized).not.toContain('private provider failure');
     expect(serialized).not.toContain('internal-source');
+    expect(serialized).not.toContain('private-aggregate-option');
+    expect(serialized).not.toContain('aggregate.example');
+    expect(serialized).not.toContain('upstream-player');
   });
 
   it('removes expired and unsafe sources while reporting expiration', () => {
@@ -180,6 +199,49 @@ describe('mapMediaAvailability', () => {
         browserSupported: true,
       }),
     );
+  });
+
+  it('shows one direct Kodik embed when the player owns translation selection', () => {
+    const availability = createAvailability({
+      options: [
+        createOption({
+          id: 'aggregate-kodik',
+          provider: 'kinobd-streaming',
+          discovery: 'aggregate',
+          player: { kind: 'embed', label: 'Kodik', provider: 'kodik' },
+          translation: { title: 'Aggregate voice', type: 'dub' },
+          access: { url: 'https://kodik.example/aggregate' },
+        }),
+        createOption({
+          id: 'direct-kodik-one',
+          provider: 'kodik-streaming',
+          discovery: 'direct',
+          player: { kind: 'embed', label: 'Kodik', provider: 'kodik' },
+          translation: { title: 'Direct voice one', type: 'dub' },
+          access: { url: 'https://kodik.example/direct-one' },
+        }),
+        createOption({
+          id: 'direct-kodik-two',
+          provider: 'kodik-streaming',
+          discovery: 'direct',
+          player: { kind: 'embed', label: 'Kodik', provider: 'kodik' },
+          translation: { title: 'Direct voice two', type: 'voiceover' },
+          access: { url: 'https://kodik.example/direct-two' },
+        }),
+      ],
+    });
+
+    const sources = mapMediaAvailability(availability, NOW).sources;
+
+    expect(sources).toHaveLength(1);
+    expect(sources[0]).toEqual(
+      expect.objectContaining({
+        sourceRef: 'stream:kodik-streaming:direct-kodik-one',
+        provider: 'kodik-streaming',
+        label: 'Kodik',
+      }),
+    );
+    expect(sources[0].translation?.title).toBe('Direct voice one');
   });
 
   it('keeps the same URL for different episodes and attaches episode identity', () => {

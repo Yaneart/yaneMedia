@@ -1,5 +1,5 @@
 import type { MediaEngine } from '@media-engine/core';
-import { ServiceUnavailableException } from '@nestjs/common';
+import { ConflictException, ServiceUnavailableException } from '@nestjs/common';
 import type { MediaAvailabilityProgressDto } from '../../src/media/dto/media-availability.dto';
 import { MediaService } from '../../src/media/media.service';
 import type { EditorialCatalogRepository } from '../../src/media/catalog/editorial-catalog.repository';
@@ -256,6 +256,39 @@ describe('MediaService', () => {
     await service.searchMedia({ title: 'Spirited Away', type: 'anime' });
 
     expect(resolveOrMergeVerified).toHaveBeenCalledWith(expect.objectContaining({ ids: item.ids }));
+  });
+
+  it('drops an ambiguous search result without failing the remaining results', async () => {
+    const results = [
+      {
+        item: {
+          id: 'the-expanse',
+          type: 'series' as const,
+          title: 'The Expanse',
+          ids: { imdb: 'tt3230854', tmdb: '63639' },
+        },
+      },
+      {
+        item: {
+          id: 'spaced',
+          type: 'series' as const,
+          title: 'Spaced',
+          ids: { imdb: 'tt0187664', tmdb: '745' },
+        },
+      },
+    ];
+    const resolveOrMergeVerified = jest
+      .fn()
+      .mockResolvedValueOnce({ mediaRef: canonicalMediaRef, slug: 'the-expanse' })
+      .mockRejectedValueOnce(new ConflictException('Conflicting media aliases'));
+    const service = new MediaService(
+      { search: jest.fn().mockResolvedValue({ results }) } as unknown as MediaEngine,
+      createMediaRegistryStub({ resolveOrMergeVerified }),
+    );
+
+    await expect(service.searchMedia({ title: 'space', type: 'series' })).resolves.toEqual([
+      expect.objectContaining({ mediaRef: canonicalMediaRef, slug: 'the-expanse' }),
+    ]);
   });
 
   it('forwards title-independent catalog filters with a wider bounded limit', async () => {

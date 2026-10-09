@@ -327,7 +327,7 @@ export class MediaCatalogService {
       uniqueRows.map(async (row) => {
         const ids = idsByMediaRef.get(row.mediaRef) ?? resolveMediaRef(row.mediaRef);
         if (!ids) throw new NotFoundException('Media identity is unavailable');
-        const identity = await this.mediaRegistry.resolveOrCreate({
+        const identity = await this.mediaRegistry.resolveOrMergeVerified({
           type: row.type,
           ids,
           title: row.title,
