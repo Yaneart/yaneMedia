@@ -22,7 +22,7 @@ const searchSuggestions = ['Дюна', 'Игра престолов', 'Фрир�
 
 export function SearchPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { isFavorite, toggleFavorite, canUpdateFavorites } = useFavorites();
+  const { isFavorite, isFavoriteUpdating, toggleFavorite, canUpdateFavorites } = useFavorites();
 
   const submittedQuery = normalizeMediaSearchQuery(searchParams.get('q'));
   const [query, setQuery] = useState(submittedQuery);
@@ -237,7 +237,7 @@ export function SearchPage() {
                 key={media.mediaRef}
                 media={media}
                 isFavorite={isFavorite(media.mediaRef)}
-                favoriteDisabled={!canUpdateFavorites}
+                favoriteDisabled={!canUpdateFavorites || isFavoriteUpdating(media.mediaRef)}
                 onFavoriteChange={() => toggleFavorite(media.mediaRef)}
               />
             ))}

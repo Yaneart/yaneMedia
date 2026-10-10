@@ -56,7 +56,7 @@ export function MediaCatalog({ type, title, filters }: MediaCatalogProps) {
     loadMore: loadMoreCatalogCollections,
     retry,
   } = useMediaCatalog(type);
-  const { isFavorite, toggleFavorite, canUpdateFavorites } = useFavorites();
+  const { isFavorite, isFavoriteUpdating, toggleFavorite, canUpdateFavorites } = useFavorites();
   const filtersPanelId = useId();
 
   const urlFilters = useMemo(
@@ -386,7 +386,7 @@ export function MediaCatalog({ type, title, filters }: MediaCatalogProps) {
                   key={item.mediaRef}
                   media={item}
                   isFavorite={isFavorite(item.mediaRef)}
-                  favoriteDisabled={!canUpdateFavorites}
+                  favoriteDisabled={!canUpdateFavorites || isFavoriteUpdating(item.mediaRef)}
                   onFavoriteChange={() => toggleFavorite(item.mediaRef)}
                 />
               ))}
@@ -466,7 +466,7 @@ export function MediaCatalog({ type, title, filters }: MediaCatalogProps) {
                     key={item.mediaRef}
                     media={item}
                     isFavorite={isFavorite(item.mediaRef)}
-                    favoriteDisabled={!canUpdateFavorites}
+                    favoriteDisabled={!canUpdateFavorites || isFavoriteUpdating(item.mediaRef)}
                     onFavoriteChange={() => toggleFavorite(item.mediaRef)}
                   />
                 ))}

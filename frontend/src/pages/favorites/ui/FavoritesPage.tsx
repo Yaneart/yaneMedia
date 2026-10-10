@@ -30,6 +30,7 @@ export function FavoritesPage() {
     canUpdateFavorites,
     hasSyncError,
     isFavorite,
+    isFavoriteUpdating,
     toggleFavorite,
     retry: retryFavorites,
   } = useFavorites();
@@ -130,7 +131,7 @@ export function FavoritesPage() {
               key={media.mediaRef}
               media={media}
               isFavorite={isFavorite(media.mediaRef)}
-              favoriteDisabled={!canUpdateFavorites}
+              favoriteDisabled={!canUpdateFavorites || isFavoriteUpdating(media.mediaRef)}
               onFavoriteChange={() => toggleFavorite(media.mediaRef)}
             />
           ))}

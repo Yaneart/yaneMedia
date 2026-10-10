@@ -54,7 +54,7 @@ export function HomePage() {
     onLoadMore: loadMoreCollections,
   });
   const [continueWatchingAnnouncement, setContinueWatchingAnnouncement] = useState('');
-  const { isFavorite, toggleFavorite, canUpdateFavorites } = useFavorites();
+  const { isFavorite, isFavoriteUpdating, toggleFavorite, canUpdateFavorites } = useFavorites();
   const {
     continueWatchingEntries,
     status: continueWatchingStatus,
@@ -259,7 +259,7 @@ export function HomePage() {
                   key={media.mediaRef}
                   media={media}
                   isFavorite={isFavorite(media.mediaRef)}
-                  favoriteDisabled={!canUpdateFavorites}
+                  favoriteDisabled={!canUpdateFavorites || isFavoriteUpdating(media.mediaRef)}
                   onFavoriteChange={() => toggleFavorite(media.mediaRef)}
                 />
               ))}

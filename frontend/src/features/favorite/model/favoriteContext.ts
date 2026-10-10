@@ -8,6 +8,7 @@ export type FavoriteContextValue = {
   canUpdateFavorites: boolean;
   hasSyncError: boolean;
   isFavorite: (mediaRef: MediaRef) => boolean;
+  isFavoriteUpdating: (mediaRef: MediaRef) => boolean;
   addFavorite: (mediaRef: MediaRef) => void;
   removeFavorite: (mediaRef: MediaRef) => void;
   toggleFavorite: (mediaRef: MediaRef) => void;

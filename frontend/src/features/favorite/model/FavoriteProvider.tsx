@@ -66,9 +66,10 @@ export function FavoriteProvider({ children }: FavoriteProviderProps) {
   const accountUserId = authState.status === 'authenticated' ? authState.user.id : null;
   const currentUserIdRef = useRef(accountUserId);
   const renderedUserIdRef = useRef(accountUserId);
-  const mutationActiveRef = useRef(false);
+  const activeAccountMutationsRef = useRef(0);
   const migrationAttemptRef = useRef<string | null>(null);
   const failedMutationRef = useRef<AccountFavoriteMutation | null>(null);
+  const [updatingMediaRefs, setUpdatingMediaRefs] = useState<ReadonlySet<MediaRef>>(new Set());
 
   currentUserIdRef.current = accountUserId;
 
@@ -99,6 +100,13 @@ export function FavoriteProvider({ children }: FavoriteProviderProps) {
   >({
     mutationFn: executeAccountMutation,
     onMutate: async (variables) => {
+      activeAccountMutationsRef.current += 1;
+      setUpdatingMediaRefs((current) => {
+        const next = new Set(current);
+        variables.change.mediaRefs.forEach((mediaRef) => next.add(mediaRef));
+        return next;
+      });
+
       const queryKey = accountFavoritesQueryKey(variables.userId);
       await queryClient.cancelQueries({ queryKey, exact: true });
 
@@ -113,7 +121,13 @@ export function FavoriteProvider({ children }: FavoriteProviderProps) {
     onSuccess: (result, variables) => {
       if (currentUserIdRef.current !== variables.userId) return;
 
-      queryClient.setQueryData(accountFavoritesQueryKey(variables.userId), result);
+      queryClient.setQueryData<AccountFavorites>(
+        accountFavoritesQueryKey(variables.userId),
+        (current) =>
+          variables.origin === 'migration'
+            ? result
+            : applyFavoriteChange(current ?? result, variables.change),
+      );
       failedMutationRef.current = null;
 
       if (variables.origin === 'migration' || variables.change.type === 'remove') {
@@ -150,17 +164,31 @@ export function FavoriteProvider({ children }: FavoriteProviderProps) {
         });
       }
     },
-    onSettled: () => {
-      mutationActiveRef.current = false;
+    onSettled: (_result, _error, variables) => {
+      activeAccountMutationsRef.current = Math.max(0, activeAccountMutationsRef.current - 1);
+      setUpdatingMediaRefs((current) => {
+        const next = new Set(current);
+        variables.change.mediaRefs.forEach((mediaRef) => next.delete(mediaRef));
+        return next;
+      });
+
+      if (
+        activeAccountMutationsRef.current === 0 &&
+        currentUserIdRef.current === variables.userId
+      ) {
+        void queryClient.invalidateQueries({
+          queryKey: accountFavoritesQueryKey(variables.userId),
+          exact: true,
+        });
+      }
     },
   });
-  const { isError: isMutationError, isPending: isMutationPending, mutate, reset } = mutation;
+  const { isError: isMutationError, mutate, reset } = mutation;
 
   const runAccountMutation = useCallback(
     (change: FavoriteChange, origin: AccountFavoriteMutation['origin']): boolean => {
-      if (!accountUserId || mutationActiveRef.current) return false;
+      if (!accountUserId) return false;
 
-      mutationActiveRef.current = true;
       reset();
       mutate({ userId: accountUserId, change, origin });
       return true;
@@ -214,9 +242,7 @@ export function FavoriteProvider({ children }: FavoriteProviderProps) {
             ? 'loading'
             : 'error';
   const canUpdateFavorites =
-    status === 'ready' &&
-    !isMutationPending &&
-    (storageMode === 'guest' || accountQuery.data !== undefined);
+    status === 'ready' && (storageMode === 'guest' || accountQuery.data !== undefined);
   const hasSyncError =
     storageMode === 'account' &&
     ((accountQuery.isError && accountQuery.data !== undefined) || isMutationError);
@@ -273,6 +299,10 @@ export function FavoriteProvider({ children }: FavoriteProviderProps) {
     (mediaRef: MediaRef) => favoriteMediaRefs.has(mediaRef),
     [favoriteMediaRefs],
   );
+  const isFavoriteUpdating = useCallback(
+    (mediaRef: MediaRef) => updatingMediaRefs.has(mediaRef),
+    [updatingMediaRefs],
+  );
   const addFavorite = useCallback(
     (mediaRef: MediaRef) => updateFavorite(mediaRef, true),
     [updateFavorite],
@@ -306,6 +336,7 @@ export function FavoriteProvider({ children }: FavoriteProviderProps) {
         canUpdateFavorites,
         hasSyncError,
         isFavorite,
+        isFavoriteUpdating,
         addFavorite,
         removeFavorite,
         toggleFavorite,
