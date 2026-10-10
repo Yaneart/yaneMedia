@@ -2,8 +2,12 @@ import { ConfigService } from '@nestjs/config';
 import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import sharp from 'sharp';
 import { MediaAssetDownloader } from '../../../src/media/assets/media-asset-downloader';
-import { MediaAssetStore } from '../../../src/media/assets/media-asset-store';
+import {
+  MEDIA_ASSET_MAX_DIMENSIONS,
+  MediaAssetStore,
+} from '../../../src/media/assets/media-asset-store';
 
 const PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
@@ -40,16 +44,47 @@ describe('MediaAssetStore', () => {
 
     await expect(concurrent).resolves.toEqual(second);
     expect(second.objectKey).toBe(first.objectKey);
-    expect(first).toMatchObject({
-      mimeType: 'image/png',
-      width: 1,
-      height: 1,
-      byteSize: PNG.length,
-    });
-    expect(await readFile(join(root, 'posters', first.objectKey))).toEqual(PNG);
+    expect(first).toMatchObject({ mimeType: 'image/webp', width: 1, height: 1 });
+    expect(first.objectKey).toMatch(/^[a-f0-9]{64}\.webp$/);
+    expect(await readFile(join(root, 'posters', first.objectKey))).toHaveLength(first.byteSize);
     expect(await readdir(join(root, 'posters'))).toEqual([first.objectKey]);
     expect(await readdir(join(root, 'backdrops'))).toEqual([]);
     expect(downloader.calls).toBe(2);
+  });
+
+  it('normalizes catalog artwork to bounded WebP dimensions without enlargement', async () => {
+    const posterSource = await sharp({
+      create: { width: 1200, height: 1800, channels: 3, background: '#336699' },
+    })
+      .png()
+      .toBuffer();
+    const backdropSource = await sharp({
+      create: { width: 2400, height: 1350, channels: 3, background: '#663399' },
+    })
+      .jpeg()
+      .toBuffer();
+    downloader.download = (sourceUrl) => {
+      const isPoster = sourceUrl.endsWith('/poster');
+      return Promise.resolve({
+        bytes: isPoster ? posterSource : backdropSource,
+        contentType: isPoster ? 'image/png' : 'image/jpeg',
+        sourceUrl,
+      });
+    };
+
+    const poster = await store.import('poster', 'https://images.example/poster');
+    const backdrop = await store.import('backdrop', 'https://images.example/backdrop');
+
+    expect(poster).toMatchObject({
+      mimeType: 'image/webp',
+      ...MEDIA_ASSET_MAX_DIMENSIONS.poster,
+    });
+    expect(backdrop).toMatchObject({
+      mimeType: 'image/webp',
+      ...MEDIA_ASSET_MAX_DIMENSIONS.backdrop,
+    });
+    expect(poster.byteSize).toBeLessThan(posterSource.length);
+    expect(backdrop.byteSize).toBeLessThan(backdropSource.length);
   });
 
   it('rejects mismatched and unsupported content without leaving a file', async () => {
@@ -102,7 +137,7 @@ describe('MediaAssetStore', () => {
     downloader.download = (sourceUrl) =>
       Promise.resolve({ bytes: PNG, contentType: 'image/png', sourceUrl });
     await expect(store.import('poster', 'https://images.example/retry')).resolves.toMatchObject({
-      mimeType: 'image/png',
+      mimeType: 'image/webp',
     });
     expect((await readdir(join(root, 'posters'))).filter((name) => name.endsWith('.tmp'))).toEqual(
       [],

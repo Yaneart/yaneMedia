@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 export type MediaCardProps = {
   media: MediaSummary;
   isFavorite: boolean;
+  imageLoading?: 'eager' | 'lazy';
   favoriteDisabled?: boolean;
   onFavoriteChange: () => void;
 };
@@ -14,6 +15,7 @@ export type MediaCardProps = {
 export function MediaCard({
   media,
   isFavorite,
+  imageLoading = 'lazy',
   favoriteDisabled = false,
   onFavoriteChange,
 }: MediaCardProps) {
@@ -51,7 +53,7 @@ export function MediaCard({
               alt=""
               width={poster.width}
               height={poster.height}
-              loading="lazy"
+              loading={imageLoading}
               decoding="async"
               className={[
                 'size-full object-cover transition-transform duration-300 ease-out',

@@ -466,6 +466,7 @@ export function MediaCatalog({ type, title, filters }: MediaCatalogProps) {
                     key={item.mediaRef}
                     media={item}
                     isFavorite={isFavorite(item.mediaRef)}
+                    imageLoading="eager"
                     favoriteDisabled={!canUpdateFavorites || isFavoriteUpdating(item.mediaRef)}
                     onFavoriteChange={() => toggleFavorite(item.mediaRef)}
                   />

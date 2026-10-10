@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { createHash, randomUUID } from 'node:crypto';
 import { access, mkdir, readdir, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve } from 'node:path';
+import sharp from 'sharp';
 import { inspectImage } from './image-metadata';
 import { MediaAssetDownloader } from './media-asset-downloader';
 
@@ -27,6 +28,12 @@ const KIND_DIRECTORIES: Record<MediaAssetKind, string> = {
   poster: 'posters',
   backdrop: 'backdrops',
 };
+export const MEDIA_ASSET_MAX_DIMENSIONS: Record<MediaAssetKind, { width: number; height: number }> =
+  {
+    poster: { width: 640, height: 960 },
+    backdrop: { width: 1920, height: 1080 },
+  };
+const MEDIA_ASSET_WEBP_QUALITY = 82;
 
 @Injectable()
 export class MediaAssetStore implements OnModuleInit {
@@ -76,8 +83,19 @@ export class MediaAssetStore implements OnModuleInit {
       throw new Error('Downloaded media asset is not a supported image');
     }
 
-    const checksum = createHash('sha256').update(download.bytes).digest('hex');
-    const objectKey = `${checksum}.${image.extension}`;
+    const dimensions = MEDIA_ASSET_MAX_DIMENSIONS[kind];
+    const normalizedBytes = await sharp(download.bytes)
+      .rotate()
+      .resize({ ...dimensions, fit: 'inside', withoutEnlargement: true })
+      .webp({ quality: MEDIA_ASSET_WEBP_QUALITY, effort: 4, smartSubsample: true })
+      .toBuffer();
+    const normalizedImage = inspectImage(normalizedBytes);
+    if (!normalizedImage || normalizedImage.mimeType !== 'image/webp') {
+      throw new Error('Failed to normalize media asset');
+    }
+
+    const checksum = createHash('sha256').update(normalizedBytes).digest('hex');
+    const objectKey = `${checksum}.webp`;
     const directory = join(this.root, KIND_DIRECTORIES[kind]);
     const destination = join(directory, objectKey);
 
@@ -87,7 +105,7 @@ export class MediaAssetStore implements OnModuleInit {
     } catch {
       const temporary = join(directory, `.${objectKey}.${randomUUID()}.tmp`);
       try {
-        await writeFile(temporary, download.bytes, { flag: 'wx' });
+        await writeFile(temporary, normalizedBytes, { flag: 'wx' });
         await rename(temporary, destination);
       } finally {
         await unlink(temporary).catch(() => undefined);
@@ -97,10 +115,10 @@ export class MediaAssetStore implements OnModuleInit {
     return {
       kind,
       objectKey,
-      mimeType: image.mimeType,
-      width: image.width,
-      height: image.height,
-      byteSize: download.bytes.length,
+      mimeType: normalizedImage.mimeType,
+      width: normalizedImage.width,
+      height: normalizedImage.height,
+      byteSize: normalizedBytes.length,
       checksum,
       sourceUrl: download.sourceUrl,
     };

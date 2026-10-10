@@ -18,10 +18,6 @@ import { ContinueWatchingCard } from '@/widgets/continue-watching-card';
 import { LibraryDataNotice } from '@/widgets/library-page';
 import { EmptyState, ErrorState, Skeleton, YaneMark } from '@/shared';
 import { useHomeFeed } from '../model/useHomeFeed';
-import {
-  shouldEnableHomeCollectionsSentinel,
-  useHomeCollectionsSentinel,
-} from '../model/useHomeCollectionsSentinel';
 import { HomeCollectionsSkeleton } from './HomeCollectionsSkeleton';
 import { HomeHeroSkeleton } from './HomeHeroSkeleton';
 
@@ -35,24 +31,9 @@ export function HomePage() {
     collections,
     areCollectionsLoading,
     areCollectionsPaused,
-    isCollectionsPaused,
-    areMoreCollectionsLoading,
     isCollectionsError,
-    isMoreCollectionsError,
-    hasMoreCollections,
-    loadMoreCollections,
     retryCollections,
   } = useHomeFeed();
-  const homeCollectionsSentinelRef = useHomeCollectionsSentinel({
-    enabled: shouldEnableHomeCollectionsSentinel({
-      hasCollections: collections.length > 0,
-      hasMore: hasMoreCollections,
-      isLoadingMore: areMoreCollectionsLoading,
-      hasLoadMoreError: isMoreCollectionsError,
-      isPaused: isCollectionsPaused,
-    }),
-    onLoadMore: loadMoreCollections,
-  });
   const [continueWatchingAnnouncement, setContinueWatchingAnnouncement] = useState('');
   const { isFavorite, isFavoriteUpdating, toggleFavorite, canUpdateFavorites } = useFavorites();
   const {
@@ -259,6 +240,7 @@ export function HomePage() {
                   key={media.mediaRef}
                   media={media}
                   isFavorite={isFavorite(media.mediaRef)}
+                  imageLoading="eager"
                   favoriteDisabled={!canUpdateFavorites || isFavoriteUpdating(media.mediaRef)}
                   onFavoriteChange={() => toggleFavorite(media.mediaRef)}
                 />
@@ -313,27 +295,12 @@ export function HomePage() {
           <ErrorState
             variant="section"
             title="Не удалось загрузить подборки"
-            description="Попробуйте восстановить подборки ещё раз. Hero и локальный прогресс продолжат работать отдельно."
+            description="Попробуйте загрузить главную ещё раз. Локальный прогресс продолжит работать отдельно."
             retryLabel="Повторить"
             onRetry={retryCollections}
             className="min-h-64 rounded-card bg-surface-elevated"
           />
         )}
-
-        {areMoreCollectionsLoading && collections.length > 0 && <HomeCollectionsSkeleton />}
-
-        {isMoreCollectionsError && (
-          <ErrorState
-            variant="section"
-            title="Не удалось загрузить остальные подборки"
-            description="Уже загруженная часть главной останется доступной. Попробуйте загрузить нижние подборки ещё раз."
-            retryLabel="Повторить"
-            onRetry={retryCollections}
-            className="min-h-64 rounded-card bg-surface-elevated"
-          />
-        )}
-
-        <div ref={homeCollectionsSentinelRef} aria-hidden="true" className="h-px" />
       </div>
     </div>
   );

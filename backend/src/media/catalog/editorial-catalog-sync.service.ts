@@ -3,6 +3,7 @@ import type { MediaSummaryDto } from '../dto/media-summary.dto';
 import type { MediaExternalIds, MediaRefType } from '../media-ref';
 import { MediaService } from '../media.service';
 import {
+  MEDIA_ASSET_MAX_DIMENSIONS,
   MediaAssetStore,
   type MediaAssetKind,
   type StoredMediaAsset,
@@ -317,6 +318,10 @@ export class EditorialCatalogSyncService {
   }
 
   private assertAssetQuality(asset: StoredMediaAsset): void {
+    if (!this.matchesAssetProfile(asset)) {
+      throw new Error(`Asset does not match the catalog profile: ${asset.sourceUrl}`);
+    }
+
     if (
       asset.kind === 'backdrop' &&
       (asset.width < MIN_BACKDROP_WIDTH || asset.width / asset.height < MIN_BACKDROP_ASPECT_RATIO)
@@ -331,12 +336,24 @@ export class EditorialCatalogSyncService {
 
     await Promise.all(
       rows.map(async (asset) => {
-        if (await this.assetStore.getPublicAsset(asset.kind, asset.objectKey)) {
+        if (
+          this.matchesAssetProfile(asset) &&
+          (await this.assetStore.getPublicAsset(asset.kind, asset.objectKey))
+        ) {
           usable.set(`${asset.kind}:${asset.sourceUrl}`, asset);
         }
       }),
     );
     return usable;
+  }
+
+  private matchesAssetProfile(asset: StoredMediaAsset): boolean {
+    const maximum = MEDIA_ASSET_MAX_DIMENSIONS[asset.kind];
+    return (
+      asset.mimeType === 'image/webp' &&
+      asset.width <= maximum.width &&
+      asset.height <= maximum.height
+    );
   }
 
   private toStagingItem(

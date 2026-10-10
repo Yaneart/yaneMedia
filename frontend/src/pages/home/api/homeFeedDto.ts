@@ -15,12 +15,7 @@ export interface HomeFeaturedDto {
   stale: boolean;
 }
 
-export interface HomeCollectionsPageDto {
+export interface HomeFeedDto extends HomeFeaturedDto {
   collections: HomeCollectionDto[];
-  offset: number;
-  limit: number;
-  total: number;
-  partial: boolean;
-  degraded: boolean;
-  stale: boolean;
+  continueWatching: unknown[];
 }

@@ -3,7 +3,7 @@ import type { DehydratedState, Query } from '@tanstack/react-query';
 const dayMs = 24 * 60 * 60_000;
 
 export const editorialQueryCacheStorageKey = 'yanemedia-editorial-query-cache';
-export const editorialQueryCacheBuster = 'editorial-query-cache-v1';
+export const editorialQueryCacheBuster = 'editorial-query-cache-v2';
 export const editorialQueryCacheMaxAgeMs = dayMs;
 export const editorialQueryCacheMaxBytes = 512 * 1024;
 
@@ -50,16 +50,7 @@ function removeStoredClient(storage: EditorialQueryCacheStorage | undefined): vo
 export function isEditorialQueryKey(queryKey: readonly unknown[]): boolean {
   if (queryKey[0] !== 'media') return false;
 
-  if (queryKey.length === 3 && queryKey[1] === 'home' && queryKey[2] === 'featured') {
-    return true;
-  }
-
-  if (
-    queryKey.length === 4 &&
-    queryKey[1] === 'home' &&
-    queryKey[2] === 'collections' &&
-    hasExactNumberProperty(queryKey[3], 'initialLimit', 2)
-  ) {
+  if (queryKey.length === 2 && queryKey[1] === 'home') {
     return true;
   }
 

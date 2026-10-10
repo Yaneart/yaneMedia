@@ -21,9 +21,9 @@ export type ContentRowProps = ComponentPropsWithRef<'div'> & {
 
 const variantClasses: Record<ContentRowVariant, string> = {
   continuation:
-    'grid-flow-col auto-cols-[88%] overflow-x-auto snap-x snap-proximity scroll-px-1 sm:auto-cols-[68%] md:auto-cols-[52%] xl:auto-cols-[38%] 2xl:auto-cols-[31%] [&>*]:snap-start',
+    'grid-flow-col auto-cols-[88%] overflow-x-auto sm:auto-cols-[68%] md:auto-cols-[52%] xl:auto-cols-[38%] 2xl:auto-cols-[31%]',
   collection:
-    'grid-cols-2 gap-y-6 sm:grid-flow-col sm:grid-cols-none sm:auto-cols-[calc((100%_-_1rem)/2)] sm:gap-y-4 sm:overflow-x-auto sm:snap-x sm:snap-proximity sm:scroll-px-1 md:auto-cols-[calc((100%_-_2rem)/3)] xl:auto-cols-[calc((100%_-_4rem)/5)] 2xl:auto-cols-[calc((100%_-_5rem)/6)] sm:[&>*]:snap-start',
+    'grid-cols-2 gap-y-6 sm:grid-flow-col sm:grid-cols-none sm:auto-cols-[calc((100%_-_1rem)/2)] sm:gap-y-4 sm:overflow-x-auto md:auto-cols-[calc((100%_-_2rem)/3)] xl:auto-cols-[calc((100%_-_4rem)/5)] 2xl:auto-cols-[calc((100%_-_5rem)/6)]',
 };
 
 const DRAG_THRESHOLD_PX = 6;
@@ -52,8 +52,12 @@ export function ContentRow({
 }: ContentRowProps) {
   const rowRef = useRef<HTMLDivElement | null>(null);
   const dragStateRef = useRef<DragState | null>(null);
+  const dragAnimationFrameRef = useRef<number | null>(null);
+  const pendingDragScrollLeftRef = useRef<number | null>(null);
   const scrollAnimationFrameRef = useRef<number | null>(null);
   const suppressClickRef = useRef(false);
+  const canScrollBackRef = useRef(false);
+  const canScrollForwardRef = useRef(false);
   const [isDragging, setIsDragging] = useState(false);
   const [canScrollBack, setCanScrollBack] = useState(false);
   const [canScrollForward, setCanScrollForward] = useState(false);
@@ -81,21 +85,26 @@ export function ContentRow({
 
     const maximumScrollLeft = row.scrollWidth - row.clientWidth;
 
-    setCanScrollBack(row.scrollLeft > SCROLL_EDGE_TOLERANCE_PX);
-    setCanScrollForward(
+    const nextCanScrollBack = row.scrollLeft > SCROLL_EDGE_TOLERANCE_PX;
+    const nextCanScrollForward =
       maximumScrollLeft > SCROLL_EDGE_TOLERANCE_PX &&
-        row.scrollLeft < maximumScrollLeft - SCROLL_EDGE_TOLERANCE_PX,
-    );
+      row.scrollLeft < maximumScrollLeft - SCROLL_EDGE_TOLERANCE_PX;
+
+    if (nextCanScrollBack !== canScrollBackRef.current) {
+      canScrollBackRef.current = nextCanScrollBack;
+      setCanScrollBack(nextCanScrollBack);
+    }
+
+    if (nextCanScrollForward !== canScrollForwardRef.current) {
+      canScrollForwardRef.current = nextCanScrollForward;
+      setCanScrollForward(nextCanScrollForward);
+    }
   }, []);
 
   const cancelScrollAnimation = useCallback(() => {
     if (scrollAnimationFrameRef.current !== null) {
       window.cancelAnimationFrame(scrollAnimationFrameRef.current);
       scrollAnimationFrameRef.current = null;
-    }
-
-    if (rowRef.current) {
-      rowRef.current.style.scrollSnapType = '';
     }
   }, []);
 
@@ -114,7 +123,16 @@ export function ContentRow({
     return () => observer.disconnect();
   }, [children, updateScrollState]);
 
-  useEffect(() => cancelScrollAnimation, [cancelScrollAnimation]);
+  useEffect(
+    () => () => {
+      cancelScrollAnimation();
+
+      if (dragAnimationFrameRef.current !== null) {
+        window.cancelAnimationFrame(dragAnimationFrameRef.current);
+      }
+    },
+    [cancelScrollAnimation],
+  );
 
   const scrollByPage = (direction: -1 | 1) => {
     const row = rowRef.current;
@@ -139,8 +157,6 @@ export function ContentRow({
     }
 
     const startedAt = performance.now();
-    row.style.scrollSnapType = 'none';
-
     const animate = (timestamp: number) => {
       const progress = Math.min((timestamp - startedAt) / SCROLL_ANIMATION_DURATION_MS, 1);
       const easedProgress =
@@ -154,7 +170,6 @@ export function ContentRow({
       }
 
       scrollAnimationFrameRef.current = null;
-      row.style.scrollSnapType = '';
       updateScrollState();
     };
 
@@ -165,11 +180,20 @@ export function ContentRow({
     const row = event.currentTarget;
     const dragState = dragStateRef.current;
 
+    if (dragAnimationFrameRef.current !== null) {
+      window.cancelAnimationFrame(dragAnimationFrameRef.current);
+      dragAnimationFrameRef.current = null;
+    }
+
+    if (pendingDragScrollLeftRef.current !== null) {
+      row.scrollLeft = pendingDragScrollLeftRef.current;
+      pendingDragScrollLeftRef.current = null;
+    }
+
     if (dragState && row.hasPointerCapture(dragState.pointerId)) {
       row.releasePointerCapture(dragState.pointerId);
     }
 
-    row.style.scrollSnapType = '';
     dragStateRef.current = null;
     setIsDragging(false);
     updateScrollState();
@@ -188,6 +212,7 @@ export function ContentRow({
     }
 
     cancelScrollAnimation();
+    pendingDragScrollLeftRef.current = null;
     suppressClickRef.current = false;
     dragStateRef.current = {
       pointerId: event.pointerId,
@@ -214,12 +239,22 @@ export function ContentRow({
     if (!suppressClickRef.current) {
       suppressClickRef.current = true;
       event.currentTarget.setPointerCapture(event.pointerId);
-      event.currentTarget.style.scrollSnapType = 'none';
       setIsDragging(true);
     }
 
     event.preventDefault();
-    event.currentTarget.scrollLeft = dragState.startScrollLeft - distance;
+    pendingDragScrollLeftRef.current = dragState.startScrollLeft - distance;
+
+    if (dragAnimationFrameRef.current === null) {
+      dragAnimationFrameRef.current = window.requestAnimationFrame(() => {
+        dragAnimationFrameRef.current = null;
+
+        if (rowRef.current && pendingDragScrollLeftRef.current !== null) {
+          rowRef.current.scrollLeft = pendingDragScrollLeftRef.current;
+          pendingDragScrollLeftRef.current = null;
+        }
+      });
+    }
   };
 
   const handlePointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -263,7 +298,11 @@ export function ContentRow({
         ref={setRowRef}
         className={[
           'yane-content-scrollbar grid gap-4 pb-2 sm:select-none',
-          canScroll ? (isDragging ? 'sm:cursor-grabbing' : 'sm:cursor-grab') : '',
+          canScroll
+            ? isDragging
+              ? 'sm:cursor-grabbing [&>*]:pointer-events-none'
+              : 'sm:cursor-grab'
+            : '',
           variantClasses[variant],
           className,
         ].join(' ')}
@@ -283,7 +322,7 @@ export function ContentRow({
           variant="bare"
           size="custom"
           aria-label="Прокрутить подборку назад"
-          className="absolute top-1/2 left-2 z-10 hidden size-11 -translate-y-1/2 rounded-full border border-white/15 bg-black/75 text-white shadow-lg backdrop-blur-sm hover:bg-black/90 sm:flex"
+          className="yane-content-row-arrow absolute top-1/2 left-2 z-10 size-11 -translate-y-1/2 rounded-full border border-white/15 bg-black/90 text-white shadow-lg hover:bg-black"
           onClick={() => scrollByPage(-1)}
         >
           <LeftIcon className="size-6" />
@@ -295,7 +334,7 @@ export function ContentRow({
           variant="bare"
           size="custom"
           aria-label="Прокрутить подборку вперёд"
-          className="absolute top-1/2 right-2 z-10 hidden size-11 -translate-y-1/2 rounded-full border border-white/15 bg-black/75 text-white shadow-lg backdrop-blur-sm hover:bg-black/90 sm:flex"
+          className="yane-content-row-arrow absolute top-1/2 right-2 z-10 size-11 -translate-y-1/2 rounded-full border border-white/15 bg-black/90 text-white shadow-lg hover:bg-black"
           onClick={() => scrollByPage(1)}
         >
           <RightIcon className="size-6" />

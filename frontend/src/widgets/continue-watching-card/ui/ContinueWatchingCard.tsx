@@ -94,7 +94,7 @@ export function ContinueWatchingCard({
             'motion-reduce:transform-none motion-reduce:transition-none',
           ].join(' ')}
         >
-          <MediaLandscapeArtwork media={media} />
+          <MediaLandscapeArtwork media={media} loading="eager" />
         </div>
 
         <div className="absolute inset-0 bg-linear-to-t from-black/95 via-black/25 to-transparent" />

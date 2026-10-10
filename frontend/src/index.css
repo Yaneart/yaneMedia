@@ -316,6 +316,16 @@
   display: none;
 }
 
+.yane-content-row-arrow {
+  display: none;
+}
+
+@media (any-hover: hover) and (any-pointer: fine) {
+  .yane-content-row-arrow {
+    display: flex;
+  }
+}
+
 @layer base {
   html {
     min-width: 320px;

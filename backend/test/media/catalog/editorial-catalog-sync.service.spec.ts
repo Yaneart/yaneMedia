@@ -92,8 +92,8 @@ function storedAsset(kind: 'poster' | 'backdrop', sourceUrl: string): StoredMedi
     kind,
     sourceUrl,
     checksum,
-    objectKey: `${checksum}.jpg`,
-    mimeType: 'image/jpeg',
+    objectKey: `${checksum}.webp`,
+    mimeType: 'image/webp',
     width: kind === 'backdrop' ? 1920 : 600,
     height: kind === 'backdrop' ? 1080 : 900,
     byteSize: 1000,
@@ -302,6 +302,26 @@ describe('EditorialCatalogSyncService', () => {
       reusedAssets: 1,
     });
     expect(assetImport).not.toHaveBeenCalledWith('poster', posterUrl);
+  });
+
+  it('replaces a persisted asset that does not match the catalog image profile', async () => {
+    const posterUrl = summary('imdb:tt0000001').poster!.url;
+    const persisted = {
+      id: 'legacy-asset',
+      ...storedAsset('poster', posterUrl),
+      width: 2000,
+      height: 3000,
+    };
+    const { service, assetImport, getPublicAsset } = setup({
+      findAssetsBySourceUrls: jest.fn().mockResolvedValue([persisted]),
+    });
+
+    await expect(service.sync(manifest, noRetry)).resolves.toMatchObject({
+      downloadedAssets: 6,
+      reusedAssets: 0,
+    });
+    expect(assetImport).toHaveBeenCalledWith('poster', posterUrl);
+    expect(getPublicAsset).not.toHaveBeenCalled();
   });
 
   it('reports progress and identifies the failed artwork request', async () => {

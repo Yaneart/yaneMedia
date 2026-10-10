@@ -1,7 +1,7 @@
 import { mapMediaSummary } from '@/entities/media';
 
-import type { HomeCollection, HomeCollectionsPage, HomeFeatured } from '../model/homeFeed';
-import type { HomeCollectionDto, HomeCollectionsPageDto, HomeFeaturedDto } from './homeFeedDto';
+import type { HomeCollection, HomeFeed } from '../model/homeFeed';
+import type { HomeCollectionDto, HomeFeedDto } from './homeFeedDto';
 
 function mapHomeCollection(collection: HomeCollectionDto): HomeCollection {
   return {
@@ -12,16 +12,13 @@ function mapHomeCollection(collection: HomeCollectionDto): HomeCollection {
   };
 }
 
-export function mapHomeFeatured(dto: HomeFeaturedDto): HomeFeatured {
+export function mapHomeFeed(dto: HomeFeedDto): HomeFeed {
   return {
-    ...dto,
     featured: mapMediaSummary(dto.featured),
-  };
-}
-
-export function mapHomeCollectionsPage(dto: HomeCollectionsPageDto): HomeCollectionsPage {
-  return {
-    ...dto,
+    featuredExpiresAt: dto.featuredExpiresAt,
     collections: dto.collections.map(mapHomeCollection),
+    partial: dto.partial,
+    degraded: dto.degraded,
+    stale: dto.stale,
   };
 }

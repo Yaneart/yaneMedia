@@ -41,8 +41,7 @@ describe('editorial query persistence', () => {
   test('dehydrates only successful public editorial query keys', () => {
     const queryClient = new QueryClient();
     const includedKeys = [
-      ['media', 'home', 'featured'],
-      ['media', 'home', 'collections', { initialLimit: 2 }],
+      ['media', 'home'],
       ['media', 'catalog', 'movie', { limit: 2 }],
       ['media', 'collection', 'editorial-picks', { limit: 20 }],
       ['media', 'summary', 'imdb:tt1234567'],
@@ -123,5 +122,6 @@ describe('editorial query persistence', () => {
 
   test('uses a namespaced storage key', () => {
     expect(editorialQueryCacheStorageKey).toBe('yanemedia-editorial-query-cache');
+    expect(editorialQueryCacheBuster).toBe('editorial-query-cache-v2');
   });
 });

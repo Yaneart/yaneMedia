@@ -15,12 +15,6 @@ export interface HomeFeatured {
   stale: boolean;
 }
 
-export interface HomeCollectionsPage {
+export interface HomeFeed extends HomeFeatured {
   collections: HomeCollection[];
-  offset: number;
-  limit: number;
-  total: number;
-  partial: boolean;
-  degraded: boolean;
-  stale: boolean;
 }

@@ -1,13 +1,7 @@
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 
-import { getHomeCollectionsPage, getHomeFeatured } from '../api/getHomeFeed';
+import { getHomeFeed } from '../api/getHomeFeed';
 import type { HomeFeatured } from './homeFeed';
-import {
-  getHomeCollectionsQueryKey,
-  getNextHomeCollectionsPageParam,
-  homeCollectionsStaleTimeMs,
-  initialHomeCollectionsPageParam,
-} from './homeFeedPagination';
 
 const homeStaleTimeMs = 5 * 60_000;
 const backgroundRetryDelayMs = 60_000;
@@ -29,9 +23,9 @@ function getFeaturedStaleTime(featured: HomeFeatured | undefined, dataUpdatedAt:
 }
 
 export function useHomeFeed() {
-  const featuredQuery = useQuery({
-    queryKey: ['media', 'home', 'featured'],
-    queryFn: ({ signal }) => getHomeFeatured(signal),
+  const homeQuery = useQuery({
+    queryKey: ['media', 'home'],
+    queryFn: ({ signal }) => getHomeFeed(signal),
     staleTime: (query) => getFeaturedStaleTime(query.state.data, query.state.dataUpdatedAt),
     refetchInterval: (query) => {
       if (query.state.data === undefined) {
@@ -49,49 +43,19 @@ export function useHomeFeed() {
     refetchOnWindowFocus: (query) =>
       query.state.status !== 'error' && getFeaturedRefreshDelay(query.state.data, Date.now()) === 0,
   });
-  const collectionsQuery = useInfiniteQuery({
-    queryKey: getHomeCollectionsQueryKey(),
-    queryFn: ({ pageParam, signal }) => getHomeCollectionsPage(pageParam, signal),
-    initialPageParam: initialHomeCollectionsPageParam,
-    getNextPageParam: getNextHomeCollectionsPageParam,
-    staleTime: homeCollectionsStaleTimeMs,
-  });
-  const {
-    fetchNextPage,
-    hasNextPage,
-    isError: hasCollectionsError,
-    isFetchNextPageError,
-    isFetchingNextPage,
-  } = collectionsQuery;
-
-  const collectionPages = collectionsQuery.data?.pages ?? [];
-  const collections = collectionPages.flatMap((page) => page.collections);
-
   return {
-    featured: featuredQuery.data?.featured,
-    isFeaturedError: featuredQuery.isError,
-    isFeaturedPaused: featuredQuery.isPaused,
+    featured: homeQuery.data?.featured,
+    isFeaturedError: homeQuery.isError,
+    isFeaturedPaused: homeQuery.isPaused,
     retryFeatured: () => {
-      void featuredQuery.refetch({ cancelRefetch: false });
+      void homeQuery.refetch({ cancelRefetch: false });
     },
-    collections,
-    areCollectionsLoading: collectionsQuery.isPending && !collectionsQuery.isPaused,
-    areCollectionsPaused: collectionsQuery.isPaused && collectionPages.length === 0,
-    areMoreCollectionsLoading: isFetchingNextPage,
-    isCollectionsError: hasCollectionsError && collectionPages.length === 0,
-    isMoreCollectionsError: isFetchNextPageError && collectionPages.length > 0,
-    hasMoreCollections: hasNextPage,
-    isCollectionsPaused: collectionsQuery.isPaused,
-    loadMoreCollections: () => {
-      void fetchNextPage({ cancelRefetch: false });
-    },
+    collections: homeQuery.data?.collections ?? [],
+    areCollectionsLoading: homeQuery.isPending && !homeQuery.isPaused,
+    areCollectionsPaused: homeQuery.isPaused && homeQuery.data === undefined,
+    isCollectionsError: homeQuery.isError && homeQuery.data === undefined,
     retryCollections: () => {
-      if (collectionPages.length > 0) {
-        void fetchNextPage({ cancelRefetch: false });
-        return;
-      }
-
-      void collectionsQuery.refetch({ cancelRefetch: false });
+      void homeQuery.refetch({ cancelRefetch: false });
     },
   };
 }

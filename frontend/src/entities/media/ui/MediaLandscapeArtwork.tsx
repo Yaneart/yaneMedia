@@ -6,6 +6,7 @@ import { MediaLandscapeFallback } from './MediaLandscapeFallback';
 
 export type MediaLandscapeArtworkProps = {
   backdropClassName?: string;
+  loading?: 'eager' | 'lazy';
   media: Pick<MediaSummary, 'backdrop' | 'mediaRef' | 'poster' | 'title' | 'type'>;
   variant?: 'card' | 'hero';
 };
@@ -13,12 +14,13 @@ export type MediaLandscapeArtworkProps = {
 const FAILED_BACKDROP_RETRY_DELAY_MS = 30_000;
 
 type PosterCompositionProps = {
+  loading: 'eager' | 'lazy';
   onError: () => void;
   poster: MediaArtwork;
   variant: 'card' | 'hero';
 };
 
-function PosterComposition({ onError, poster, variant }: PosterCompositionProps) {
+function PosterComposition({ loading, onError, poster, variant }: PosterCompositionProps) {
   const isHero = variant === 'hero';
 
   return (
@@ -28,7 +30,7 @@ function PosterComposition({ onError, poster, variant }: PosterCompositionProps)
         alt=""
         width={poster.width}
         height={poster.height}
-        loading={isHero ? 'eager' : 'lazy'}
+        loading={loading}
         fetchPriority={isHero ? 'high' : 'auto'}
         decoding="async"
         className="absolute inset-0 size-full scale-115 object-cover opacity-80 blur-2xl saturate-125"
@@ -63,7 +65,7 @@ function PosterComposition({ onError, poster, variant }: PosterCompositionProps)
             alt=""
             width={poster.width}
             height={poster.height}
-            loading="lazy"
+            loading={loading}
             decoding="async"
             className="size-full object-cover object-center saturate-110"
             onError={onError}
@@ -76,6 +78,7 @@ function PosterComposition({ onError, poster, variant }: PosterCompositionProps)
 
 export function MediaLandscapeArtwork({
   backdropClassName,
+  loading,
   media,
   variant = 'card',
 }: MediaLandscapeArtworkProps) {
@@ -85,6 +88,7 @@ export function MediaLandscapeArtwork({
   const backdropRetryTimerRef = useRef<number | undefined>(undefined);
   const backdrop = media.backdrop;
   const poster = media.poster;
+  const imageLoading = variant === 'hero' ? 'eager' : (loading ?? 'lazy');
   const canShowBackdrop = backdrop !== undefined && backdrop.url !== failedBackdropUrl;
   const canShowPoster = poster !== undefined && poster.url !== failedPosterUrl;
   const shouldUsePosterComposition =
@@ -122,14 +126,19 @@ export function MediaLandscapeArtwork({
     return (
       <div className="relative size-full overflow-hidden bg-black">
         {canShowPoster && (
-          <PosterComposition poster={poster} variant={variant} onError={handlePosterError} />
+          <PosterComposition
+            loading={imageLoading}
+            poster={poster}
+            variant={variant}
+            onError={handlePosterError}
+          />
         )}
 
         <MediaBackdropArtwork
           artwork={backdrop}
           className="absolute inset-0 size-full"
           imageClassName={backdropClassName}
-          loading={variant === 'hero' ? 'eager' : 'lazy'}
+          loading={imageLoading}
           fetchPriority={variant === 'hero' ? 'high' : 'auto'}
           transparentBackground={canShowPoster}
           onError={handleBackdropError}
@@ -142,7 +151,14 @@ export function MediaLandscapeArtwork({
   }
 
   if (canShowPoster) {
-    return <PosterComposition poster={poster} variant={variant} onError={handlePosterError} />;
+    return (
+      <PosterComposition
+        loading={imageLoading}
+        poster={poster}
+        variant={variant}
+        onError={handlePosterError}
+      />
+    );
   }
 
   return (
