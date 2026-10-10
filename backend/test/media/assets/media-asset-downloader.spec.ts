@@ -26,9 +26,11 @@ class FakeNetworkDownloader extends MediaAssetDownloader {
 describe('MediaAssetDownloader', () => {
   let server: ReturnType<typeof createServer>;
   let origin: string;
+  let receivedAccept: string | undefined;
 
   beforeAll(async () => {
     server = createServer((request, response) => {
+      receivedAccept = request.headers.accept;
       if (request.url === '/redirect') {
         response.writeHead(302, { Location: '/image' }).end();
         return;
@@ -47,6 +49,10 @@ describe('MediaAssetDownloader', () => {
       }
       if (request.url === '/svg') {
         response.writeHead(200, { 'Content-Type': 'image/svg+xml' }).end('<svg/>');
+        return;
+      }
+      if (request.url === '/missing-type') {
+        response.writeHead(200, { 'Content-Length': PNG.length }).end(PNG);
         return;
       }
       if (request.url === '/large') {
@@ -85,6 +91,14 @@ describe('MediaAssetDownloader', () => {
   it('downloads an allowlisted image and follows a bounded safe redirect', async () => {
     const result = await new FakeNetworkDownloader().download(`${origin}/redirect`);
     expect(result).toEqual({ bytes: PNG, contentType: 'image/png', sourceUrl: `${origin}/image` });
+    expect(receivedAccept).toBe('image/webp,image/png,image/jpeg');
+  });
+
+  it('allows a missing content type so the asset store can inspect the bytes', async () => {
+    await expect(new FakeNetworkDownloader().download(`${origin}/missing-type`)).resolves.toEqual({
+      bytes: PNG,
+      sourceUrl: `${origin}/missing-type`,
+    });
   });
 
   it.each([

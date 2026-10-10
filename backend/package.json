@@ -27,6 +27,7 @@
     "probe:kodik-coverage": "node scripts/probe-kodik-coverage.mjs",
     "probe:anime-matrix": "node scripts/probe-anime-matrix.mjs",
     "catalog:sync": "node dist/scripts/sync-editorial-catalog.js",
+    "catalog:rebuild": "node dist/scripts/sync-editorial-catalog.js --rebuild",
     "catalog:assets:cleanup": "node dist/scripts/cleanup-editorial-assets.js"
   },
   "dependencies": {

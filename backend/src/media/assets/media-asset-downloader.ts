@@ -9,7 +9,7 @@ const MAX_BYTES = 10 * 1024 * 1024;
 const TIMEOUT_MS = 10_000;
 const ALLOWED_CONTENT_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
-export type DownloadedAsset = { bytes: Buffer; contentType: string; sourceUrl: string };
+export type DownloadedAsset = { bytes: Buffer; contentType?: string; sourceUrl: string };
 
 @Injectable()
 export class MediaAssetDownloader {
@@ -40,7 +40,7 @@ export class MediaAssetDownloader {
       }
 
       const contentType = response.headers['content-type']?.split(';', 1)[0]?.trim().toLowerCase();
-      if (!contentType || !ALLOWED_CONTENT_TYPES.has(contentType)) {
+      if (contentType && !ALLOWED_CONTENT_TYPES.has(contentType)) {
         response.resume();
         throw new BadGatewayException('Unsupported media asset content type');
       }
@@ -53,7 +53,7 @@ export class MediaAssetDownloader {
 
       return {
         bytes: await this.readBody(response),
-        contentType,
+        ...(contentType ? { contentType } : {}),
         sourceUrl: url.toString(),
       };
     }
@@ -95,7 +95,7 @@ export class MediaAssetDownloader {
       port: url.port || undefined,
       path: `${url.pathname}${url.search}`,
       method: 'GET',
-      headers: { Accept: 'image/avif,image/webp,image/png,image/jpeg', Host: url.host },
+      headers: { Accept: 'image/webp,image/png,image/jpeg', Host: url.host },
       servername: url.hostname,
     };
 

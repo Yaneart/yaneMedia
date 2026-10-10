@@ -62,16 +62,10 @@ interface ManifestItem {
   type: MediaRefType;
   externalIds: MediaExternalIds;
   identities: readonly ResolvedIdentityRef[];
-  artworkOverride?: { posterUrl?: string; backdropUrl?: string };
 }
 
 interface ResolvedItem extends ManifestItem {
   summary: MediaSummaryDto;
-}
-
-interface PublishedArtwork {
-  posterSourceUrl: string | null;
-  backdropSourceUrl: string | null;
 }
 
 @Injectable()
@@ -128,22 +122,11 @@ export class EditorialCatalogSyncService {
       options.metadataRetryDelaysMs ?? options.retryDelaysMs ?? DEFAULT_METADATA_RETRY_DELAYS_MS;
     const assetRetryDelaysMs =
       options.assetRetryDelaysMs ?? options.retryDelaysMs ?? DEFAULT_ASSET_RETRY_DELAYS_MS;
-    const publishedArtwork = new Map(
-      (await this.repository.findPublishedArtwork(items.map(({ mediaRef }) => mediaRef))).map(
-        ({ mediaRef, ...artwork }) => [mediaRef, artwork],
-      ),
-    );
     options.onProgress?.({ phase: 'metadata', completed: 0, total: items.length });
     const resolvedItems = await this.runBounded(
       items,
       concurrency,
-      (item, queuedAt) =>
-        this.resolveMetadata(
-          item,
-          publishedArtwork.get(item.mediaRef),
-          queuedAt,
-          metadataRetryDelaysMs,
-        ),
+      (item, queuedAt) => this.resolveMetadata(item, queuedAt, metadataRetryDelaysMs),
       (completed) => options.onProgress?.({ phase: 'metadata', completed, total: items.length }),
     );
     const assetRequests = this.toAssetRequests(resolvedItems);
@@ -259,7 +242,6 @@ export class EditorialCatalogSyncService {
             type,
             externalIds: identity.externalIds,
             identities,
-            artworkOverride: manifest.artworkOverrides[mediaRef],
           };
         }),
       ),
@@ -269,7 +251,6 @@ export class EditorialCatalogSyncService {
 
   private resolveMetadata(
     item: ManifestItem,
-    publishedArtwork: PublishedArtwork | undefined,
     queuedAt: number,
     retryDelaysMs: readonly number[],
   ): Promise<ResolvedItem> {
@@ -286,23 +267,14 @@ export class EditorialCatalogSyncService {
       if (summary.type !== item.type) {
         throw new Error(`Metadata identity mismatch for ${item.mediaRef}`);
       }
-      const posterUrl =
-        item.artworkOverride?.posterUrl ?? summary.poster?.url ?? publishedArtwork?.posterSourceUrl;
-      const backdropUrl =
-        item.artworkOverride?.backdropUrl ??
-        summary.backdrop?.url ??
-        publishedArtwork?.backdropSourceUrl;
-      const resolvedSummary: MediaSummaryDto = {
-        ...summary,
-        ...(posterUrl ? { poster: { url: posterUrl } } : {}),
-        ...(backdropUrl ? { backdrop: { url: backdropUrl } } : {}),
-      };
-      if (!resolvedSummary.title.trim() || resolvedSummary.title.length > 300) {
+      if (!summary.title.trim() || summary.title.length > 300) {
         throw new Error(`Invalid title for ${item.mediaRef}`);
       }
-      if (!resolvedSummary.poster) throw new Error(`Poster is required for ${item.mediaRef}`);
-      if (!resolvedSummary.backdrop) throw new Error(`Backdrop is required for ${item.mediaRef}`);
-      return { ...item, summary: resolvedSummary };
+      if (!summary.poster) throw new Error(`Poster is required for ${item.mediaRef}`);
+      if (!summary.backdrop) throw new Error(`Backdrop is required for ${item.mediaRef}`);
+      this.assertArtworkSource(item, summary.poster.url);
+      this.assertArtworkSource(item, summary.backdrop.url);
+      return { ...item, summary };
     }, retryDelaysMs)
       .catch((error: unknown) => {
         throw new Error(
@@ -318,6 +290,19 @@ export class EditorialCatalogSyncService {
 
     this.pendingMetadata.set(item.mediaRef, resolution);
     return resolution;
+  }
+
+  private assertArtworkSource(item: ManifestItem, sourceUrl: string): void {
+    const expectedHost = item.type === 'anime' ? 'shikimori.io' : 'image.tmdb.org';
+    let host: string;
+    try {
+      host = new URL(sourceUrl).hostname;
+    } catch {
+      throw new Error(`Invalid artwork URL for ${item.mediaRef}`);
+    }
+    if (host !== expectedHost) {
+      throw new Error(`Unexpected artwork source for ${item.mediaRef}: ${host}`);
+    }
   }
 
   private toAssetRequests(items: readonly ResolvedItem[]) {

@@ -107,27 +107,6 @@ export class EditorialCatalogRepository {
       .where(eq(catalogRevisions.status, 'published'));
   }
 
-  async findPublishedArtwork(mediaRefs: readonly string[]) {
-    if (mediaRefs.length === 0) return [];
-
-    return await this.databaseService.db
-      .select({
-        mediaRef: mediaCatalogItems.mediaRef,
-        posterSourceUrl: posterAssets.sourceUrl,
-        backdropSourceUrl: backdropAssets.sourceUrl,
-      })
-      .from(mediaCatalogItems)
-      .innerJoin(catalogRevisions, eq(catalogRevisions.id, mediaCatalogItems.revisionId))
-      .leftJoin(posterAssets, eq(posterAssets.id, mediaCatalogItems.posterAssetId))
-      .leftJoin(backdropAssets, eq(backdropAssets.id, mediaCatalogItems.backdropAssetId))
-      .where(
-        and(
-          eq(catalogRevisions.status, 'published'),
-          inArray(mediaCatalogItems.mediaRef, [...new Set(mediaRefs)]),
-        ),
-      );
-  }
-
   async findAssetsBySourceUrls(
     sourceUrls: readonly string[],
   ): Promise<
@@ -426,6 +405,13 @@ export class EditorialCatalogRepository {
       )
       .returning({ id: mediaAssets.id });
     return deleted !== undefined;
+  }
+
+  async resetCatalog(): Promise<void> {
+    await this.databaseService.db.transaction(async (transaction) => {
+      await transaction.delete(catalogRevisions);
+      await transaction.delete(mediaAssets);
+    });
   }
 
   async findPublishedItems(mediaRefs: readonly string[]) {

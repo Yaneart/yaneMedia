@@ -131,4 +131,19 @@ describe('EditorialCatalogRepository', () => {
     expect(updates[1]).toMatchObject({ status: 'published' });
     expect(returning).toHaveBeenCalledTimes(1);
   });
+
+  it('clears catalog revisions and assets in one transaction', async () => {
+    const remove = jest.fn().mockResolvedValue(undefined);
+    const transaction = jest.fn(async (callback: (tx: unknown) => Promise<void>) =>
+      callback({ delete: remove }),
+    );
+    const repository = new EditorialCatalogRepository({
+      db: { transaction },
+    } as unknown as DatabaseService);
+
+    await repository.resetCatalog();
+
+    expect(transaction).toHaveBeenCalledTimes(1);
+    expect(remove).toHaveBeenCalledTimes(2);
+  });
 });

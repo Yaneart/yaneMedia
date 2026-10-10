@@ -67,7 +67,12 @@ export class MediaAssetStore implements OnModuleInit {
   ): Promise<StoredMediaAsset> {
     const download = await this.downloader.download(sourceUrl);
     const image = inspectImage(download.bytes);
-    if (!image || image.mimeType !== download.contentType || image.width < 1 || image.height < 1) {
+    if (
+      !image ||
+      (download.contentType && image.mimeType !== download.contentType) ||
+      image.width < 1 ||
+      image.height < 1
+    ) {
       throw new Error('Downloaded media asset is not a supported image');
     }
 
@@ -145,6 +150,15 @@ export class MediaAssetStore implements OnModuleInit {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
       throw error;
     }
+  }
+
+  async clear(): Promise<number> {
+    const assets = await this.listStoredAssets();
+    const deleted = await Promise.all(
+      assets.map(({ kind, objectKey }) => this.delete(kind, objectKey)),
+    );
+    this.sourceImports.clear();
+    return deleted.filter(Boolean).length;
   }
 
   private resolveAssetPath(kindValue: string, objectKey: string): string | undefined {

@@ -1,5 +1,5 @@
 {
-  "version": 6,
+  "version": 7,
   "source": "yanemedia-editorial-v1",
   "identities": {
     "anilist:154587": {
@@ -205,169 +205,17 @@
   },
   "identityOverrides": {},
   "featuredMediaRefs": [
-    "imdb:tt1375666",
-    "imdb:tt0816692",
-    "imdb:tt6751668",
-    "imdb:tt0482571",
-    "imdb:tt9362722",
-    "imdb:tt0903747",
-    "imdb:tt7366338",
-    "imdb:tt3230854",
-    "imdb:tt11126994",
-    "imdb:tt5290382"
+    "imdb:tt15239678",
+    "imdb:tt15398776",
+    "imdb:tt14230458",
+    "imdb:tt13238346",
+    "imdb:tt14849194",
+    "imdb:tt2788316",
+    "imdb:tt12637874",
+    "imdb:tt11280740",
+    "imdb:tt3581920",
+    "imdb:tt14688458"
   ],
-  "artworkOverrides": {
-    "imdb:tt2788316": {
-      "backdropUrl": "https://live.metahub.space/background/medium/tt2788316/img"
-    },
-    "imdb:tt9253284": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt9253284/img"
-    },
-    "imdb:tt4288182": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt4288182/img"
-    },
-    "imdb:tt2243973": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt2243973/img"
-    },
-    "imdb:tt14403178": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt14403178/img"
-    },
-    "imdb:tt7120662": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt7120662/img"
-    },
-    "imdb:tt8888462": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt8888462/img"
-    },
-    "imdb:tt4786824": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt4786824/img"
-    },
-    "imdb:tt3032476": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt3032476/img"
-    },
-    "imdb:tt0903747": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt0903747/img"
-    },
-    "imdb:tt10155688": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt10155688/img"
-    },
-    "imdb:tt7660850": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt7660850/img"
-    },
-    "imdb:tt2442560": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt2442560/img"
-    },
-    "imdb:tt3230854": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt3230854/img"
-    },
-    "imdb:tt5290382": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt5290382/img"
-    },
-    "imdb:tt4955642": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt4955642/img"
-    },
-    "imdb:tt11280740": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt11280740/img"
-    },
-    "imdb:tt11016042": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt11016042/img"
-    },
-    "imdb:tt10986410": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt10986410/img"
-    },
-    "imdb:tt14688458": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt14688458/img"
-    },
-    "imdb:tt2802850": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt2802850/img"
-    },
-    "imdb:tt12637874": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt12637874/img"
-    },
-    "imdb:tt7366338": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt7366338/img"
-    },
-    "imdb:tt0185906": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt0185906/img"
-    },
-    "imdb:tt0306414": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt0306414/img"
-    },
-    "imdb:tt0348914": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt0348914/img"
-    },
-    "imdb:tt0384766": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt0384766/img"
-    },
-    "imdb:tt0475784": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt0475784/img"
-    },
-    "imdb:tt0979432": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt0979432/img"
-    },
-    "imdb:tt11126994": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt11126994/img"
-    },
-    "imdb:tt11815682": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt11815682/img"
-    },
-    "imdb:tt13016388": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt13016388/img"
-    },
-    "imdb:tt14452776": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt14452776/img"
-    },
-    "imdb:tt15677150": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt15677150/img"
-    },
-    "imdb:tt2085059": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt2085059/img"
-    },
-    "imdb:tt2249364": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt2249364/img"
-    },
-    "imdb:tt2306299": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt2306299/img"
-    },
-    "imdb:tt2356777": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt2356777/img"
-    },
-    "imdb:tt2401256": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt2401256/img"
-    },
-    "imdb:tt2699128": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt2699128/img"
-    },
-    "imdb:tt2708480": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt2708480/img"
-    },
-    "imdb:tt3581920": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt3581920/img"
-    },
-    "imdb:tt4158110": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt4158110/img"
-    },
-    "imdb:tt4179452": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt4179452/img"
-    },
-    "imdb:tt5348176": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt5348176/img"
-    },
-    "imdb:tt5687612": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt5687612/img"
-    },
-    "imdb:tt5753856": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt5753856/img"
-    },
-    "imdb:tt5875444": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt5875444/img"
-    },
-    "imdb:tt7908628": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt7908628/img"
-    },
-    "imdb:tt9813792": {
-      "backdropUrl": "https://images.metahub.space/background/medium/tt9813792/img"
-    }
-  },
   "catalogs": {
     "movie": [
       {

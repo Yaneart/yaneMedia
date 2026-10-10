@@ -84,6 +84,15 @@ describe('MediaAssetStore', () => {
     await expect(store.delete('backdrop', `${'d'.repeat(64)}.jpg`)).resolves.toBe(false);
   });
 
+  it('clears all stored posters and backdrops', async () => {
+    await store.import('poster', 'https://image.tmdb.org/poster');
+    await store.import('backdrop', 'https://image.tmdb.org/backdrop');
+
+    await expect(store.clear()).resolves.toBe(2);
+    expect(await readdir(join(root, 'posters'))).toEqual([]);
+    expect(await readdir(join(root, 'backdrops'))).toEqual([]);
+  });
+
   it('leaves no file and permits retry when a download is interrupted', async () => {
     downloader.download = () => Promise.reject(new Error('interrupted'));
     await expect(store.import('poster', 'https://images.example/retry')).rejects.toThrow(

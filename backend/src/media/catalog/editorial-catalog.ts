@@ -33,7 +33,6 @@ export interface EditorialCatalogManifest {
   identities: Readonly<Record<string, EditorialMediaIdentity>>;
   identityOverrides: Readonly<Record<string, EditorialIdentityOverride>>;
   featuredMediaRefs: readonly string[];
-  artworkOverrides: Readonly<Record<string, { posterUrl?: string; backdropUrl?: string }>>;
   catalogs: Record<MediaRefType, readonly MediaCatalogCollectionDefinition[]>;
   homeCollections: readonly HomeCollectionManifest[];
 }
@@ -73,20 +72,6 @@ function readStableId(value: unknown, path: string): string {
   const id = readString(value, path, 100);
   if (!stableIdPattern.test(id)) fail(path, 'expected a lowercase kebab-case identifier');
   return id;
-}
-
-function readArtworkUrl(value: unknown, path: string): string {
-  const url = readString(value, path, 2_048);
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    fail(path, 'expected an absolute URL');
-  }
-  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    fail(path, 'expected an HTTP(S) URL');
-  }
-  return url;
 }
 
 function readMediaRefs(value: unknown, path: string, knownRefs?: Set<string>): string[] {
@@ -209,26 +194,6 @@ export function parseEditorialCatalogManifest(value: unknown): EditorialCatalogM
   );
 
   const featuredMediaRefs = readMediaRefs(root.featuredMediaRefs, '$.featuredMediaRefs', knownRefs);
-  const rawArtworkOverrides = readRecord(root.artworkOverrides ?? {}, '$.artworkOverrides');
-  const artworkOverrides = Object.fromEntries(
-    Object.entries(rawArtworkOverrides).map(([mediaRef, value]) => {
-      if (!knownRefs.has(mediaRef)) {
-        fail('$.artworkOverrides', `contains unknown media reference ${mediaRef}`);
-      }
-      const path = `$.artworkOverrides.${mediaRef}`;
-      const record = readRecord(value, path);
-      const posterUrl =
-        record.posterUrl === undefined
-          ? undefined
-          : readArtworkUrl(record.posterUrl, `${path}.posterUrl`);
-      const backdropUrl =
-        record.backdropUrl === undefined
-          ? undefined
-          : readArtworkUrl(record.backdropUrl, `${path}.backdropUrl`);
-      if (!posterUrl && !backdropUrl) fail(path, 'expected at least one artwork URL');
-      return [mediaRef, { posterUrl, backdropUrl }];
-    }),
-  );
   const rawHomeCollections = root.homeCollections;
   if (!Array.isArray(rawHomeCollections) || rawHomeCollections.length === 0) {
     fail('$.homeCollections', 'expected a non-empty array');
@@ -262,7 +227,6 @@ export function parseEditorialCatalogManifest(value: unknown): EditorialCatalogM
     identities,
     identityOverrides,
     featuredMediaRefs,
-    artworkOverrides,
     catalogs,
     homeCollections,
   };

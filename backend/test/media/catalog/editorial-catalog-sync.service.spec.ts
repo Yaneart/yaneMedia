@@ -33,7 +33,6 @@ const manifest: EditorialCatalogManifest = {
     },
   },
   featuredMediaRefs: ['imdb:tt0000001'],
-  artworkOverrides: {},
   catalogs: {
     movie: [
       {
@@ -75,14 +74,15 @@ const typesByRef = new Map([
 function summary(mediaRef: string): MediaSummaryDto {
   const type = typesByRef.get(mediaRef);
   if (!type) throw new Error('Unknown test media ref');
+  const artworkHost = type === 'anime' ? 'shikimori.io' : 'image.tmdb.org';
 
   return {
     mediaRef,
     type,
     title: mediaRef,
     genres: ['Drama'],
-    poster: { url: `https://images.example/${mediaRef}/poster.jpg` },
-    backdrop: { url: `https://images.example/${mediaRef}/backdrop.jpg` },
+    poster: { url: `https://${artworkHost}/${mediaRef}/poster.jpg` },
+    backdrop: { url: `https://${artworkHost}/${mediaRef}/backdrop.jpg` },
   };
 }
 
@@ -105,7 +105,6 @@ function setup(options: {
   findReusableRevision?: jest.Mock;
   findAssetsBySourceUrls?: jest.Mock;
   findPublishedItemStates?: jest.Mock;
-  findPublishedArtwork?: jest.Mock;
 }) {
   const getSummaryByRef =
     options.getSummaryByRef ??
@@ -122,7 +121,6 @@ function setup(options: {
   const repository = {
     findReusableRevision: options.findReusableRevision ?? jest.fn().mockResolvedValue(undefined),
     findPublishedItemStates: options.findPublishedItemStates ?? jest.fn().mockResolvedValue([]),
-    findPublishedArtwork: options.findPublishedArtwork ?? jest.fn().mockResolvedValue([]),
     createStagingRevision: jest.fn().mockResolvedValue('revision-1'),
     findAssetsBySourceUrls: options.findAssetsBySourceUrls ?? jest.fn().mockResolvedValue([]),
     upsertAssets,
@@ -326,28 +324,23 @@ describe('EditorialCatalogSyncService', () => {
     expect(repository.publishRevision).not.toHaveBeenCalled();
   });
 
-  it('uses a validated manifest artwork override when providers omit a required poster', async () => {
-    const overrideManifest = structuredClone(manifest);
-    overrideManifest.artworkOverrides['anilist:199'] = {
-      posterUrl: 'https://images.example/anime/poster-override.jpg',
-    };
+  it('rejects artwork outside TMDB and Shikimori', async () => {
     const getSummaryByRef = jest.fn((mediaRef: string) => {
       const resolved = summary(mediaRef);
-      if (mediaRef === 'anilist:199') delete resolved.poster;
+      if (mediaRef === 'imdb:tt0000001') {
+        resolved.poster = { url: 'https://images.example/poster.jpg' };
+      }
       return Promise.resolve({ summary: resolved, meta: {} });
     });
-    const { service, assetImport } = setup({ getSummaryByRef });
+    const { service, repository } = setup({ getSummaryByRef });
 
-    await expect(service.sync(overrideManifest, noRetry)).resolves.toMatchObject({
-      skipped: false,
-    });
-    expect(assetImport).toHaveBeenCalledWith(
-      'poster',
-      'https://images.example/anime/poster-override.jpg',
+    await expect(service.sync(manifest, noRetry)).rejects.toThrow(
+      'Unexpected artwork source for imdb:tt0000001: images.example',
     );
+    expect(repository.publishRevision).not.toHaveBeenCalled();
   });
 
-  it('requires a backdrop for every catalog item and accepts an explicit override', async () => {
+  it('requires a backdrop for every catalog item', async () => {
     const getSummaryByRef = jest.fn((mediaRef: string) => {
       const resolved = summary(mediaRef);
       if (mediaRef === 'imdb:tt0000002') delete resolved.backdrop;
@@ -359,42 +352,6 @@ describe('EditorialCatalogSyncService', () => {
       'Backdrop is required for imdb:tt0000002',
     );
     expect(failed.repository.publishRevision).not.toHaveBeenCalled();
-
-    const overrideManifest = structuredClone(manifest);
-    overrideManifest.artworkOverrides['imdb:tt0000002'] = {
-      backdropUrl: 'https://images.example/series/backdrop-override.jpg',
-    };
-    const accepted = setup({ getSummaryByRef });
-
-    await expect(accepted.service.sync(overrideManifest, noRetry)).resolves.toMatchObject({
-      skipped: false,
-    });
-    expect(accepted.assetImport).toHaveBeenCalledWith(
-      'backdrop',
-      'https://images.example/series/backdrop-override.jpg',
-    );
-  });
-
-  it('reuses published artwork when a provider temporarily omits it', async () => {
-    const getSummaryByRef = jest.fn((mediaRef: string) => {
-      const resolved = summary(mediaRef);
-      if (mediaRef === 'imdb:tt0000002') delete resolved.backdrop;
-      return Promise.resolve({ summary: resolved, meta: {} });
-    });
-    const fallbackUrl = 'https://images.example/published-series-backdrop.jpg';
-    const { service, assetImport } = setup({
-      getSummaryByRef,
-      findPublishedArtwork: jest.fn().mockResolvedValue([
-        {
-          mediaRef: 'imdb:tt0000002',
-          posterSourceUrl: null,
-          backdropSourceUrl: fallbackUrl,
-        },
-      ]),
-    });
-
-    await expect(service.sync(manifest, noRetry)).resolves.toMatchObject({ items: 3 });
-    expect(assetImport).toHaveBeenCalledWith('backdrop', fallbackUrl);
   });
 
   it('rejects a low-resolution backdrop before publishing the revision', async () => {

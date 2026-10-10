@@ -2,7 +2,7 @@ import { FavoriteFilledIcon, FavoriteIcon, IconButton } from '@/shared';
 import { MediaPosterFallback } from './MediaPosterFallback';
 import { MediaLink } from './MediaLink';
 import type { MediaSummary } from '../model/media';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 export type MediaCardProps = {
   media: MediaSummary;
@@ -18,6 +18,12 @@ export function MediaCard({
   onFavoriteChange,
 }: MediaCardProps) {
   const [failedPosterUrl, setFailedPosterUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!failedPosterUrl) return;
+    const retry = window.setTimeout(() => setFailedPosterUrl(null), 10_000);
+    return () => window.clearTimeout(retry);
+  }, [failedPosterUrl]);
 
   const poster = media.poster;
   const canShowPoster = poster !== undefined && poster.url !== failedPosterUrl;
