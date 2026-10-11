@@ -28,6 +28,7 @@ import {
 import { HomePage } from '@/pages/home';
 import { MediaCatalogSkeleton } from '@/widgets/media-catalog';
 import { LibraryPageSkeleton } from '@/widgets/library-page';
+import { AuthFormLayoutSkeleton } from '@/widgets/auth-form-layout';
 
 function lazyRoute(page: ReactNode, fallback?: ReactNode) {
   return (
@@ -49,13 +50,14 @@ export const router = createBrowserRouter([
             registerPath={routePaths.register}
             forgotPasswordPath={routePaths.forgotPassword}
           />,
-          <LoadingState label="Загружаем страницу" variant="page" className="!min-h-dvh" />,
+          <AuthFormLayoutSkeleton variant="login" />,
         ),
       },
       {
         path: routePaths.register,
         element: lazyRoute(
           <RegisterPage homePath={routePaths.home} loginPath={routePaths.login} />,
+          <AuthFormLayoutSkeleton variant="register" />,
         ),
       },
       {
