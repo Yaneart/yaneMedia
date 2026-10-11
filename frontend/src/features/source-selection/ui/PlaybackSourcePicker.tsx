@@ -32,45 +32,27 @@ type PlaybackSourcePickerProps = {
   isLoading?: boolean;
 };
 
-const providerStyles: Record<string, { accent: string; surface: string }> = {
-  'aderom-streaming': {
-    accent: 'bg-blue-300',
-    surface: 'border-blue-300/20 bg-blue-400/10 hover:bg-blue-400/15',
-  },
-  'initem-streaming': {
-    accent: 'bg-cyan-300',
-    surface: 'border-cyan-300/20 bg-cyan-400/10 hover:bg-cyan-400/15',
-  },
-  'ddbb-streaming': {
-    accent: 'bg-rose-300',
-    surface: 'border-rose-300/20 bg-rose-400/10 hover:bg-rose-400/15',
-  },
-  'kinobd-streaming': {
-    accent: 'bg-sky-300',
-    surface: 'border-sky-300/20 bg-sky-400/10 hover:bg-sky-400/15',
-  },
-  'veoveo-streaming': {
-    accent: 'bg-violet-300',
-    surface: 'border-violet-300/20 bg-violet-400/10 hover:bg-violet-400/15',
-  },
-  'videohub-streaming': {
-    accent: 'bg-emerald-300',
-    surface: 'border-emerald-300/20 bg-emerald-400/10 hover:bg-emerald-400/15',
-  },
-  'aniliberty-streaming': {
-    accent: 'bg-pink-300',
-    surface: 'border-pink-300/20 bg-pink-400/10 hover:bg-pink-400/15',
-  },
+const providerStyles: Record<string, string> = {
+  'aderom-streaming': 'playback-source-blue',
+  'initem-streaming': 'playback-source-cyan',
+  'ddbb-streaming': 'playback-source-rose',
+  'kinobd-streaming': 'playback-source-sky',
+  'veoveo-streaming': 'playback-source-violet',
+  'videohub-streaming': 'playback-source-emerald',
+  'aniliberty-streaming': 'playback-source-pink',
 };
 
 function getProviderAccent(provider: string) {
-  return providerStyles[provider]?.accent ?? 'bg-text-secondary';
+  const providerStyle = providerStyles[provider];
+
+  return providerStyle ? `playback-source-accent ${providerStyle}` : 'bg-text-secondary';
 }
 
 function getSourceButtonStyle(provider: string, selected: boolean) {
-  const surface =
-    providerStyles[provider]?.surface ??
-    'border-border bg-control hover:border-text-secondary/40 hover:bg-control-hover';
+  const providerStyle = providerStyles[provider];
+  const surface = providerStyle
+    ? `playback-source-surface ${providerStyle}`
+    : 'border-border bg-control hover:border-text-secondary/40 hover:bg-control-hover';
 
   return `${surface} ${selected ? 'ring-1 ring-inset ring-white/30' : ''}`;
 }

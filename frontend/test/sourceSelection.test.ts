@@ -2,6 +2,9 @@ import { describe, expect, it } from 'bun:test';
 import { selectUsableAvailability } from '../src/entities/media-source/model/mediaAvailabilityProgress';
 import {
   createPlaybackSourceCatalog,
+  getAvailableDirectSourceForPlaybackPreference,
+  getDirectQualityKey,
+  getDirectTrackKey,
   getPlaybackSourcePanel,
   mergeEpisodeEmbedSources,
 } from '../src/features/source-selection/model/sourceSelection';
@@ -215,5 +218,37 @@ describe('source-less episode catalogs', () => {
         absoluteEpisodeNumber: 1,
       }).map(({ sourceRef }) => sourceRef),
     ).toEqual(['stream:test:base', 'stream:test:episode-1']);
+  });
+
+  it('keeps the selected direct track and quality across episodes', () => {
+    const source = (sourceRef: string, provider: string, translation: string, height: number) => ({
+      sourceRef,
+      provider,
+      kind: 'hls' as const,
+      label: provider,
+      translation: {
+        title: translation,
+        type: 'dub' as const,
+        language: 'ru',
+      },
+      quality: { label: `${height}p`, height },
+      url: `https://video.example/${sourceRef}.m3u8`,
+      availability: 'available' as const,
+      browserSupported: true,
+    });
+    const currentSource = source('episode-1-alexfilm-1080', 'videohub-streaming', 'AlexFilm', 1080);
+    const nextSources = [
+      source('episode-2-original-1080', 'veoveo-streaming', 'Оригинал', 1080),
+      source('episode-2-alexfilm-720', 'videohub-streaming', 'AlexFilm', 720),
+      source('episode-2-alexfilm-1080', 'videohub-streaming', 'AlexFilm', 1080),
+    ];
+
+    expect(
+      getAvailableDirectSourceForPlaybackPreference(
+        nextSources,
+        getDirectTrackKey(currentSource),
+        getDirectQualityKey(currentSource),
+      )?.sourceRef,
+    ).toBe('episode-2-alexfilm-1080');
   });
 });

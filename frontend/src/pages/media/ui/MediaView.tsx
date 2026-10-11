@@ -16,6 +16,7 @@ import {
   findDirectEpisodeByRef,
   findDirectEpisodeBySourceRef,
   getAdjacentDirectEpisodes,
+  getAvailableDirectSourceForPlaybackPreference,
   getAvailableDirectSourceForTrack,
   getDirectEpisodeDisplayNumber,
   getDirectQualityKey,
@@ -66,6 +67,13 @@ export type MediaViewProps = {
   availability: MediaAvailability | null;
   availabilityPending: boolean;
   availabilityStatus: MediaAvailabilityStatus;
+};
+
+type PendingDirectEpisodeTransition = {
+  episodeKey: string;
+  trackKey: string | null;
+  qualityKey: string | null;
+  continuePlayback: boolean;
 };
 
 const emptyAvailability: MediaAvailability = {
@@ -316,6 +324,8 @@ export function MediaView({
   const [preferredDirectTrackKey, setPreferredDirectTrackKey] = useState<string | null>(
     sessionDirectSource ? getDirectTrackKey(sessionDirectSource) : null,
   );
+  const [pendingDirectEpisodeTransition, setPendingDirectEpisodeTransition] =
+    useState<PendingDirectEpisodeTransition | null>(null);
   const [toolbarResolvedMediaRef, setToolbarResolvedMediaRef] = useState<string | null>(null);
   const [sourceSearchSettledMediaRef, setSourceSearchSettledMediaRef] = useState<string | null>(
     null,
@@ -529,17 +539,18 @@ export function MediaView({
     mediaSession?.sourceRef === selectedSourceRef &&
     (playbackMode === 'embed' || hasSameEpisode(sessionPlaybackEpisode, selectedPlaybackEpisode));
 
-  const resetPlayer = () => {
+  const resetPlayer = useCallback(() => {
     if (mediaSession) {
       endSession();
     }
 
     setPlayerStatus('ready');
-  };
+  }, [endSession, mediaSession]);
 
   const selectPlaybackMode = (mode: PlaybackMode) => {
     if (mode === playbackMode) return;
 
+    setPendingDirectEpisodeTransition(null);
     setSelectedPlaybackMode(mode);
     setIsPlaybackModeInitialized(true);
     resetPlayer();
@@ -552,36 +563,40 @@ export function MediaView({
     resetPlayer();
   };
 
-  const startDirectPlayback = (
-    source: MediaSourceOption,
-    episode: DirectEpisodeOption | undefined,
-    positionSeconds: number,
-  ) => {
-    const episodeMetadata = findEpisodeMetadata(media, episode);
+  const startDirectPlayback = useCallback(
+    (
+      source: MediaSourceOption,
+      episode: DirectEpisodeOption | undefined,
+      positionSeconds: number,
+    ) => {
+      const episodeMetadata = findEpisodeMetadata(media, episode);
 
-    startSession({
-      mediaRef: media.mediaRef,
-      mediaSnapshot: {
-        title: media.title,
-        slug: media.slug,
-        artwork: media.backdrop ?? media.poster,
-      },
-      sourceRef: source.sourceRef,
-      episode: usesDirectEpisodes ? getPlaybackEpisode(episode) : null,
-      positionSeconds,
-      durationSeconds:
-        episodeMetadata?.runtimeMinutes !== undefined
-          ? episodeMetadata.runtimeMinutes * 60
-          : media.runtimeMinutes !== undefined
-            ? media.runtimeMinutes * 60
-            : null,
-    });
-    setPlayerStatus('loading');
-  };
+      startSession({
+        mediaRef: media.mediaRef,
+        mediaSnapshot: {
+          title: media.title,
+          slug: media.slug,
+          artwork: media.backdrop ?? media.poster,
+        },
+        sourceRef: source.sourceRef,
+        episode: usesDirectEpisodes ? getPlaybackEpisode(episode) : null,
+        positionSeconds,
+        durationSeconds:
+          episodeMetadata?.runtimeMinutes !== undefined
+            ? episodeMetadata.runtimeMinutes * 60
+            : media.runtimeMinutes !== undefined
+              ? media.runtimeMinutes * 60
+              : null,
+      });
+      setPlayerStatus('loading');
+    },
+    [media, startSession, usesDirectEpisodes],
+  );
 
   const selectDirectSource = (source: MediaSourceOption | undefined, continuePlayback = false) => {
     if (!source || source.sourceRef === selectedDirectSource?.sourceRef) return;
 
+    setPendingDirectEpisodeTransition(null);
     setSelectedDirectSourceRef(source.sourceRef);
     if (continuePlayback && isPlayerStarted) {
       startDirectPlayback(source, selectedDirectEpisode, mediaSession?.positionSeconds ?? 0);
@@ -591,6 +606,7 @@ export function MediaView({
   };
 
   const selectDirectEpisode = (episode: DirectEpisodeOption) => {
+    setPendingDirectEpisodeTransition(null);
     setSelectedDirectEpisodeKey(episode.key);
     setSelectedDirectSourceRef(
       getDirectSourceForTrackPreference(episode.sources, preferredDirectTrackKey)?.sourceRef ??
@@ -635,21 +651,57 @@ export function MediaView({
 
   const selectNextEpisode = () => {
     if (nextDirectEpisode) {
-      const nextSource = getDirectSourceForTrackPreference(
-        nextDirectEpisode.sources,
-        preferredDirectTrackKey,
-      );
-
-      if (!nextSource || !isPlayerStarted) {
-        selectDirectEpisode(nextDirectEpisode);
-        return;
-      }
-
       setSelectedDirectEpisodeKey(nextDirectEpisode.key);
-      setSelectedDirectSourceRef(nextSource.sourceRef);
-      startDirectPlayback(nextSource, nextDirectEpisode, 0);
+      setSelectedDirectSourceRef(null);
+      setPendingDirectEpisodeTransition({
+        episodeKey: nextDirectEpisode.key,
+        trackKey: selectedDirectTrackKey ?? preferredDirectTrackKey,
+        qualityKey: selectedDirectQualityKey,
+        continuePlayback: isPlayerStarted,
+      });
     }
   };
+
+  useEffect(() => {
+    if (
+      !pendingDirectEpisodeTransition ||
+      selectedDirectEpisode?.key !== pendingDirectEpisodeTransition.episodeKey
+    ) {
+      return;
+    }
+
+    const preferredSource = getAvailableDirectSourceForPlaybackPreference(
+      currentDirectSources,
+      pendingDirectEpisodeTransition.trackKey,
+      pendingDirectEpisodeTransition.qualityKey,
+    );
+
+    if (!preferredSource && directModePending) return;
+
+    const nextSource = preferredSource ?? getPreferredSource(currentDirectSources);
+
+    setPendingDirectEpisodeTransition(null);
+
+    if (!nextSource) {
+      resetPlayer();
+      return;
+    }
+
+    setSelectedDirectSourceRef(nextSource.sourceRef);
+
+    if (pendingDirectEpisodeTransition.continuePlayback) {
+      startDirectPlayback(nextSource, selectedDirectEpisode, 0);
+    } else {
+      resetPlayer();
+    }
+  }, [
+    currentDirectSources,
+    directModePending,
+    pendingDirectEpisodeTransition,
+    resetPlayer,
+    selectedDirectEpisode,
+    startDirectPlayback,
+  ]);
 
   const loadPlayer = () => {
     if (!selectedSource || getMediaSourcePlaybackIssue(selectedSource)) {

@@ -5,6 +5,7 @@ export {
   findDirectEpisodeByRef,
   findDirectEpisodeBySourceRef,
   getAdjacentDirectEpisodes,
+  getAvailableDirectSourceForPlaybackPreference,
   getAvailableDirectSourceForTrack,
   getDirectSourceForTrackPreference,
   getDirectEpisodeDisplayNumber,

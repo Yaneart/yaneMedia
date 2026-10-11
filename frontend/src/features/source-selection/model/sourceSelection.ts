@@ -154,6 +154,29 @@ export function getAvailableDirectSourceForTrack(
   );
 }
 
+export function getAvailableDirectSourceForPlaybackPreference(
+  sources: readonly MediaSourceOption[],
+  trackKey: string | null,
+  qualityKey: string | null,
+) {
+  if (!trackKey) return undefined;
+
+  const trackSources = sources.filter(
+    (source) =>
+      getDirectTrackKey(source) === trackKey &&
+      source.availability === 'available' &&
+      source.browserSupported,
+  );
+
+  if (qualityKey) {
+    const qualityMatch = trackSources.find((source) => getDirectQualityKey(source) === qualityKey);
+
+    if (qualityMatch) return qualityMatch;
+  }
+
+  return getDirectQualityOptions(trackSources)[0]?.source;
+}
+
 export function getDirectSourceForTrackPreference(
   sources: readonly MediaSourceOption[],
   preferredTrackKey: string | null,

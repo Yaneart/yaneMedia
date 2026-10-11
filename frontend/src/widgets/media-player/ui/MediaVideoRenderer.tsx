@@ -11,7 +11,7 @@ import {
   VolumeMuteIcon,
   type SelectOption,
 } from '@/shared';
-import { useEffect, useRef, useState, type SyntheticEvent } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type SyntheticEvent } from 'react';
 
 export type MediaVideoDirectControls = {
   tracks: readonly SelectOption[];
@@ -54,6 +54,12 @@ function formatPlaybackTime(value: number) {
   return hours > 0
     ? `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
     : `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
+function getRangeProgress(value: number, max: number) {
+  if (!Number.isFinite(value) || !Number.isFinite(max) || max <= 0) return '0%';
+
+  return `${Math.min(100, Math.max(0, (value / max) * 100))}%`;
 }
 
 export function MediaVideoRenderer({
@@ -298,7 +304,7 @@ export function MediaVideoRenderer({
         onError={onError}
       />
 
-      <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/95 via-black/65 to-transparent px-3 pb-3 pt-10 text-white sm:px-4">
+      <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black via-black/80 to-transparent px-3 pb-3 pt-16 text-white sm:px-4 sm:pb-4">
         <input
           type="range"
           aria-label="Позиция воспроизведения"
@@ -306,7 +312,12 @@ export function MediaVideoRenderer({
           max={durationSeconds || 0}
           step={0.1}
           value={Math.min(positionSeconds, durationSeconds || 0)}
-          className="h-1 w-full cursor-pointer accent-action"
+          className="media-player-range w-full cursor-pointer"
+          style={
+            {
+              '--media-range-progress': getRangeProgress(positionSeconds, durationSeconds),
+            } as CSSProperties
+          }
           onChange={(event) => {
             const video = videoRef.current;
             const nextPosition = Number(event.currentTarget.value);
@@ -317,18 +328,18 @@ export function MediaVideoRenderer({
           }}
         />
 
-        <div className="mt-2 flex min-w-0 items-center gap-2">
+        <div className="mt-2.5 flex min-w-0 items-center gap-2">
           <IconButton
             size="small"
             variant="bare"
             aria-label={isPlaying ? 'Пауза' : 'Воспроизвести'}
-            className="text-white hover:bg-white/10"
+            className="bg-white/10 text-white hover:bg-white/20"
             onClick={togglePlayback}
           >
             {isPlaying ? <PauseIcon className="size-5" /> : <PlayIcon className="size-5" />}
           </IconButton>
 
-          <span className="shrink-0 text-xs tabular-nums text-white/80">
+          <span className="shrink-0 text-xs font-medium tabular-nums text-white/80">
             {formatPlaybackTime(positionSeconds)} / {formatPlaybackTime(durationSeconds)}
           </span>
 
@@ -342,7 +353,7 @@ export function MediaVideoRenderer({
                 allowEmpty={false}
                 matchMenuWidth
                 menuPlacement="top"
-                className="w-44 [&>button]:min-h-9 [&>button]:border-white/15 [&>button]:bg-black/55 [&>button]:text-xs"
+                className="media-player-select w-44 [&>button]:min-h-9 [&>button]:text-xs"
                 onChange={(value) => {
                   if (value !== null) directControls.onTrackChange(value);
                 }}
@@ -358,7 +369,7 @@ export function MediaVideoRenderer({
                 allowEmpty={false}
                 matchMenuWidth
                 menuPlacement="top"
-                className="w-32 [&>button]:min-h-9 [&>button]:min-w-0 [&>button]:border-white/15 [&>button]:bg-black/55 [&>button]:text-xs"
+                className="media-player-select w-32 [&>button]:min-h-9 [&>button]:min-w-0 [&>button]:text-xs"
                 onChange={(value) => {
                   if (value !== null) directControls.onQualityChange(value);
                 }}
@@ -373,7 +384,7 @@ export function MediaVideoRenderer({
                 variant="bare"
                 aria-label="Следующая серия"
                 title="Следующая серия"
-                className="text-white hover:bg-white/10"
+                className="text-white/90 hover:bg-white/15 hover:text-white"
                 onClick={directControls.onNextEpisode}
               >
                 <SkipForwardIcon className="size-5" />
@@ -384,7 +395,7 @@ export function MediaVideoRenderer({
               size="small"
               variant="bare"
               aria-label={isMuted ? 'Включить звук' : 'Выключить звук'}
-              className="text-white hover:bg-white/10"
+              className="text-white/90 hover:bg-white/15 hover:text-white"
               onClick={toggleMute}
             >
               {isMuted || volume === 0 ? (
@@ -401,7 +412,12 @@ export function MediaVideoRenderer({
               max={1}
               step={0.05}
               value={isMuted ? 0 : volume}
-              className="hidden h-1 w-20 cursor-pointer accent-action md:block"
+              className="media-player-range hidden w-20 cursor-pointer md:block"
+              style={
+                {
+                  '--media-range-progress': getRangeProgress(isMuted ? 0 : volume, 1),
+                } as CSSProperties
+              }
               onChange={(event) => {
                 const video = videoRef.current;
                 const nextVolume = Number(event.currentTarget.value);
@@ -418,7 +434,7 @@ export function MediaVideoRenderer({
               size="small"
               variant="bare"
               aria-label={isFullscreen ? 'Выйти из полноэкранного режима' : 'На весь экран'}
-              className="text-white hover:bg-white/10"
+              className="text-white/90 hover:bg-white/15 hover:text-white"
               onClick={() => void toggleFullscreen()}
             >
               {isFullscreen ? (
