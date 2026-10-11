@@ -118,9 +118,7 @@ export function AppShell() {
               ref={contentRef}
               className={[
                 'pb-[calc(env(safe-area-inset-bottom)+4rem)] md:pb-0',
-                isHomePage
-                  ? ''
-                  : `pt-[calc(env(safe-area-inset-top)+4rem)] ${mediaRouteMatch ? 'md:pt-0' : ''}`,
+                isHomePage ? '' : 'pt-[calc(env(safe-area-inset-top)+4rem)] md:pt-0',
               ].join(' ')}
             >
               <Outlet />

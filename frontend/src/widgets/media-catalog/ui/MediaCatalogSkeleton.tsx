@@ -7,7 +7,13 @@ export function MediaCatalogSkeleton({ title }: { title: string }) {
         Загружаем каталог «{title}»
       </p>
 
-      <div aria-hidden="true" className="rounded-card bg-surface-elevated p-6">
+      <div
+        aria-hidden="true"
+        className={[
+          'rounded-card border border-border bg-linear-to-br',
+          'from-watermark/50 via-surface-elevated to-surface-elevated p-6 shadow-sm',
+        ].join(' ')}
+      >
         <Skeleton className="h-8 w-40" />
         <Skeleton className="mt-4 h-5 w-2/3" />
         <Skeleton className="mt-5 h-11 w-full" />

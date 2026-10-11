@@ -1,5 +1,5 @@
 import { LandscapeMediaCard } from '@/entities/media';
-import { Button, ErrorState, LoadingState, YaneMark } from '@/shared';
+import { ErrorState, LoadMoreButton, LoadingState, YaneMark } from '@/shared';
 
 import { useEditorialCollection } from '../model/useEditorialCollection';
 
@@ -102,15 +102,7 @@ export function EditorialCollectionPage() {
             </p>
           )}
 
-          <Button
-            variant="secondary"
-            size="large"
-            disabled={isLoadingMore}
-            className="min-w-52 border-context-border bg-watermark/15 text-accent-text hover:bg-watermark/25"
-            onClick={() => void loadMore()}
-          >
-            {isLoadingMore ? 'Загружаем…' : loadMoreFailed ? 'Повторить' : 'Показать ещё'}
-          </Button>
+          <LoadMoreButton isLoading={isLoadingMore} hasError={loadMoreFailed} onClick={loadMore} />
         </div>
       )}
     </section>

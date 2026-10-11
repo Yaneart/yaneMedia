@@ -6,6 +6,7 @@ import {
   DownIcon,
   EmptyState,
   ErrorState,
+  LoadMoreButton,
   LoadingState,
   MediaGrid,
   SearchInput,
@@ -399,13 +400,12 @@ export function MediaCatalog({ type, title, filters }: MediaCatalogProps) {
                     Не удалось загрузить следующую страницу.
                   </p>
                 )}
-                <Button disabled={isLoadingMore || isSearchUpdating} onClick={loadMore}>
-                  {isLoadingMore
-                    ? 'Загружаем…'
-                    : loadMoreError
-                      ? 'Попробовать снова'
-                      : 'Показать ещё'}
-                </Button>
+                <LoadMoreButton
+                  isLoading={isLoadingMore}
+                  hasError={loadMoreError}
+                  disabled={isSearchUpdating}
+                  onClick={loadMore}
+                />
               </div>
             )}
           </div>
@@ -485,17 +485,12 @@ export function MediaCatalog({ type, title, filters }: MediaCatalogProps) {
                   Не удалось загрузить следующие подборки.
                 </p>
               )}
-              <Button
-                variant="secondary"
+              <LoadMoreButton
+                isLoading={areMoreCatalogCollectionsLoading}
+                hasError={hasMoreCatalogCollectionsError}
                 disabled={areMoreCatalogCollectionsLoading || isPaused}
                 onClick={loadMoreCatalogCollections}
-              >
-                {areMoreCatalogCollectionsLoading
-                  ? 'Загружаем…'
-                  : hasMoreCatalogCollectionsError
-                    ? 'Попробовать снова'
-                    : 'Показать ещё'}
-              </Button>
+              />
             </div>
           )}
         </div>

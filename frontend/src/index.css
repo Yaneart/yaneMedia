@@ -248,10 +248,10 @@
     var(--theme-text-primary)
   );
   --theme-watch-dock-border: rgb(76 161 218 / 78%);
-  --theme-watch-dock-hover-border: rgb(93 190 242 / 96%);
+  --theme-watch-dock-hover-border: rgb(35 91 163 / 96%);
   --theme-watch-dock-hover-shadow:
-    0 0 0 1px rgb(93 190 242 / 28%), 0 0 20px rgb(76 161 218 / 42%),
-    0 12px 28px rgb(23 79 150 / 20%);
+    0 0 0 1px rgb(23 79 150 / 34%), 0 0 14px rgb(23 79 150 / 46%), 0 0 30px rgb(23 79 150 / 24%),
+    0 12px 28px rgb(24 25 26 / 18%);
 
   --theme-hero-overlay-start: rgb(244 243 239 / 99%);
   --theme-hero-overlay-middle: rgb(244 243 239 / 5%);
@@ -434,7 +434,21 @@
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .watch-dock-sidebar:hover {
+  [data-theme='light'] :is(.watch-dock-sidebar, .load-more-button) {
+    box-shadow:
+      0 0 0 1px rgb(23 79 150 / 0%),
+      0 0 14px rgb(23 79 150 / 0%),
+      0 0 30px rgb(23 79 150 / 0%),
+      0 12px 28px rgb(24 25 26 / 10%);
+    transition-duration: 500ms;
+    transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  :is(.watch-dock-sidebar, .load-more-button) {
+    transition-duration: 300ms;
+  }
+
+  :is(.watch-dock-sidebar, .load-more-button):hover {
     border-color: var(--theme-watch-dock-hover-border);
     box-shadow: var(--theme-watch-dock-hover-shadow);
   }

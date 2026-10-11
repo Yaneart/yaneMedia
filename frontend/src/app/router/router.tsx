@@ -19,9 +19,15 @@ import {
 } from './lazyPages';
 import { routePaths } from './routes';
 import { RouteAccessibility } from './RouteAccessibility';
-import { LoadingState, MediaPageSkeleton } from '@/shared';
+import {
+  EditorialCollectionPageSkeleton,
+  LoadingState,
+  MediaPageSkeleton,
+  SearchPageSkeleton,
+} from '@/shared';
 import { HomePage } from '@/pages/home';
 import { MediaCatalogSkeleton } from '@/widgets/media-catalog';
+import { LibraryPageSkeleton } from '@/widgets/library-page';
 
 function lazyRoute(page: ReactNode, fallback?: ReactNode) {
   return (
@@ -83,7 +89,7 @@ export const router = createBrowserRouter([
           },
           {
             path: routePaths.search,
-            element: lazyRoute(<SearchPage />),
+            element: lazyRoute(<SearchPage />, <SearchPageSkeleton />),
           },
           {
             path: routePaths.movies,
@@ -99,7 +105,7 @@ export const router = createBrowserRouter([
           },
           {
             path: routePaths.editorialPicks,
-            element: lazyRoute(<EditorialCollectionPage />),
+            element: lazyRoute(<EditorialCollectionPage />, <EditorialCollectionPageSkeleton />),
           },
           {
             path: routePaths.media,
@@ -107,11 +113,11 @@ export const router = createBrowserRouter([
           },
           {
             path: routePaths.favorites,
-            element: lazyRoute(<FavoritesPage />),
+            element: lazyRoute(<FavoritesPage />, <LibraryPageSkeleton variant="favorites" />),
           },
           {
             path: routePaths.history,
-            element: lazyRoute(<HistoryPage />),
+            element: lazyRoute(<HistoryPage />, <LibraryPageSkeleton variant="history" />),
           },
           {
             path: routePaths.notFound,
