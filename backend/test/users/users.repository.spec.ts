@@ -1,13 +1,19 @@
 import type { SQL } from 'drizzle-orm';
 import { PgDialect } from 'drizzle-orm/pg-core';
 import type { DatabaseService } from '../../src/database/database.service';
-import { users, type NewUser, type User } from '../../src/users/entities/user.entity';
-import { UsersRepository } from '../../src/users/users.repository';
+import { users, type User } from '../../src/users/entities/user.entity';
+import { createInitialHandle } from '../../src/users/handle';
+import { type CreateUser, UsersRepository } from '../../src/users/users.repository';
 
 describe('UsersRepository', () => {
   const user: User = {
     id: '93ea2794-e805-4f60-b14f-2005d2c61804',
+    handle: 'yaneart',
     displayName: 'Артём',
+    bio: '',
+    avatarAssetId: null,
+    ratingsPublic: false,
+    favoritesPublic: false,
     email: 'artem@example.com',
     passwordHash: 'test-password-hash',
     createdAt: new Date('2026-09-04T08:00:00.000Z'),
@@ -40,7 +46,8 @@ describe('UsersRepository', () => {
     const values = jest.fn().mockReturnValue({ returning });
     const insert = jest.fn().mockReturnValue({ values });
     const repository = new UsersRepository({ db: { insert } } as unknown as DatabaseService);
-    const data: NewUser = {
+    const data: CreateUser = {
+      id: user.id,
       displayName: 'Артём',
       email: '  ARTEM@Example.com  ',
       passwordHash: user.passwordHash,
@@ -51,6 +58,8 @@ describe('UsersRepository', () => {
     expect(values).toHaveBeenCalledWith({
       displayName: 'Артём',
       email: 'artem@example.com',
+      handle: createInitialHandle(user.id),
+      id: user.id,
       passwordHash: user.passwordHash,
     });
   });
@@ -93,5 +102,16 @@ describe('UsersRepository', () => {
     const query = new PgDialect().sqlToQuery(getCondition());
     expect(query.sql).toContain('lower("users"."email") = $1');
     expect(query.params).toEqual(['missing@example.com']);
+  });
+
+  it('normalizes handle lookup and uses the case-insensitive indexed expression', async () => {
+    const { databaseService, getCondition } = createSelectDatabase([user]);
+    const repository = new UsersRepository(databaseService);
+
+    await expect(repository.findByHandle('  YaneArt ')).resolves.toBe(user);
+
+    const query = new PgDialect().sqlToQuery(getCondition());
+    expect(query.sql).toContain('lower("users"."handle") = $1');
+    expect(query.params).toEqual(['yaneart']);
   });
 });

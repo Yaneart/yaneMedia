@@ -13,7 +13,7 @@ import { ApiExceptionFilter } from '../../src/platform/http/api-error/api-except
 import { ApiResponseInterceptor } from '../../src/platform/http/api-response/api-response.interceptor';
 import type { AppLogger } from '../../src/platform/logging/app-logger';
 import { UsersService } from '../../src/users/users.service';
-import type { NewUser } from '../../src/users/entities/user.entity';
+import type { User } from '../../src/users/entities/user.entity';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import type { NextFunction, Request, Response } from 'express';
 import cookieParser from 'cookie-parser';
@@ -27,7 +27,7 @@ describe('auth HTTP contract', () => {
   const id = '93ea2794-e805-4f60-b14f-2005d2c61804';
   const createdAt = new Date('2026-09-05T10:00:00.000Z');
   const findByEmail = jest.fn<ReturnType<UsersService['findByEmail']>, [string]>();
-  const create = jest.fn<ReturnType<UsersService['create']>, [NewUser]>();
+  const create = jest.fn<ReturnType<UsersService['create']>, Parameters<UsersService['create']>>();
   const createSession = jest.fn<
     ReturnType<AuthRepository['create']>,
     Parameters<AuthRepository['create']>
@@ -103,9 +103,14 @@ describe('auth HTTP contract', () => {
       Promise.resolve({
         ...data,
         id,
+        handle: 'yaneart',
+        bio: '',
+        avatarAssetId: null,
+        ratingsPublic: false,
+        favoritesPublic: false,
         createdAt,
         updatedAt: createdAt,
-      }),
+      } as User),
     );
   });
 
@@ -238,6 +243,11 @@ describe('auth HTTP contract', () => {
       };
       findByEmail.mockResolvedValue({
         ...publicUser,
+        handle: 'yaneart',
+        bio: '',
+        avatarAssetId: null,
+        ratingsPublic: false,
+        favoritesPublic: false,
         emailVerifiedAt: createdAt,
         passwordHash,
         createdAt,

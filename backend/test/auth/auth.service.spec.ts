@@ -15,7 +15,12 @@ describe('AuthService', () => {
   const createdAt = new Date('2026-09-05T10:00:00.000Z');
   const user: User = {
     id: '93ea2794-e805-4f60-b14f-2005d2c61804',
+    handle: 'yaneart',
     displayName: dto.displayName,
+    bio: '',
+    avatarAssetId: null,
+    ratingsPublic: false,
+    favoritesPublic: false,
     email: dto.email,
     emailVerifiedAt: createdAt,
     passwordHash: 'encoded-test-hash',

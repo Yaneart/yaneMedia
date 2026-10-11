@@ -1,11 +1,16 @@
-import type { NewUser, User } from '../../src/users/entities/user.entity';
-import type { UsersRepository } from '../../src/users/users.repository';
+import type { User } from '../../src/users/entities/user.entity';
+import type { CreateUser, UsersRepository } from '../../src/users/users.repository';
 import { UsersService } from '../../src/users/users.service';
 
 describe('UsersService', () => {
   const user: User = {
     id: '93ea2794-e805-4f60-b14f-2005d2c61804',
+    handle: 'yaneart',
     displayName: 'Артём',
+    bio: '',
+    avatarAssetId: null,
+    ratingsPublic: false,
+    favoritesPublic: false,
     email: 'artem@example.com',
     passwordHash: 'test-password-hash',
     createdAt: new Date('2026-09-04T08:00:00.000Z'),
@@ -22,15 +27,23 @@ describe('UsersService', () => {
     const findByEmail = jest.fn().mockResolvedValue(user) as jest.MockedFunction<
       UsersRepository['findByEmail']
     >;
-    const repository = { create, findById, findByEmail } as unknown as UsersRepository;
+    const findByHandle = jest.fn().mockResolvedValue(user) as jest.MockedFunction<
+      UsersRepository['findByHandle']
+    >;
+    const repository = {
+      create,
+      findById,
+      findByEmail,
+      findByHandle,
+    } as unknown as UsersRepository;
 
-    return { repository, create, findById, findByEmail };
+    return { repository, create, findById, findByEmail, findByHandle };
   };
 
   it('delegates user creation to the repository', async () => {
     const { repository, create } = createRepository();
     const service = new UsersService(repository);
-    const data: NewUser = {
+    const data: CreateUser = {
       displayName: 'Артём',
       email: 'artem@example.com',
       passwordHash: user.passwordHash,
@@ -54,5 +67,13 @@ describe('UsersService', () => {
 
     await expect(service.findByEmail(user.email)).resolves.toBe(user);
     expect(findByEmail).toHaveBeenCalledWith(user.email);
+  });
+
+  it('delegates handle lookup to the repository', async () => {
+    const { repository, findByHandle } = createRepository();
+    const service = new UsersService(repository);
+
+    await expect(service.findByHandle(user.handle)).resolves.toBe(user);
+    expect(findByHandle).toHaveBeenCalledWith(user.handle);
   });
 });
