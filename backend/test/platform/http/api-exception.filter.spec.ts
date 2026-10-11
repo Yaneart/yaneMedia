@@ -26,7 +26,7 @@ describe('ApiExceptionFilter', () => {
     expect(status).toHaveBeenCalledWith(503);
     expect(json).toHaveBeenCalledWith({
       error: {
-        code: 'SERVICE_UNAVAILABLE',
+        code: 'UPSTREAM_UNAVAILABLE',
         message: 'Media providers are temporarily unavailable',
       },
     });

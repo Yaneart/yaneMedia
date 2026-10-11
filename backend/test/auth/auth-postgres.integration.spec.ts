@@ -109,7 +109,7 @@ describePostgres('auth with PostgreSQL', () => {
     const raced = await register(duplicate);
     expect(raced.status).toBe(409);
     expect(await raced.json()).toEqual({
-      error: { code: 'CONFLICT', message: 'Этот email уже занят' },
+      error: { code: 'RESOURCE_CONFLICT', message: 'Этот email уже занят' },
     });
     await client.query('ROLLBACK TO SAVEPOINT duplicate_probe');
     const count = await client.query<{ count: string }>(
@@ -205,7 +205,7 @@ describePostgres('auth with PostgreSQL', () => {
       const response = await login(body);
       expect(response.status).toBe(401);
       expect(await response.json()).toEqual({
-        error: { code: 'UNAUTHORIZED', message: 'Неверный email или пароль' },
+        error: { code: 'AUTH_REQUIRED', message: 'Неверный email или пароль' },
       });
       expect(response.headers.get('set-cookie')).toBeNull();
     }

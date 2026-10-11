@@ -21,7 +21,13 @@ async function bootstrap() {
   app.use(discoveryPerformanceMiddleware(app.get(AppLogger)));
 
   app.use(
-    ['/api/v1/auth', '/api/v1/favorites', '/api/v1/history', '/api/v1/continue-watching'],
+    [
+      '/api/v1/auth',
+      '/api/v1/favorites',
+      '/api/v1/history',
+      '/api/v1/continue-watching',
+      '/api/v1/profile',
+    ],
     (_request: Request, response: Response, next: NextFunction) => {
       response.setHeader('Cache-Control', 'no-store');
       next();

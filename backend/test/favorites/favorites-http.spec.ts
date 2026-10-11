@@ -81,7 +81,7 @@ describe('favorites HTTP contract', () => {
     expect(response.status).toBe(401);
     expect(response.headers.get('cache-control')).toBe('no-store');
     expect(await response.json()).toEqual({
-      error: { code: 'UNAUTHORIZED', message: 'Необходим вход в аккаунт' },
+      error: { code: 'AUTH_REQUIRED', message: 'Необходим вход в аккаунт' },
     });
     expect(listMediaRefs).not.toHaveBeenCalled();
   });

@@ -164,7 +164,7 @@ describe('auth HTTP contract', () => {
     const response = await register(dto);
     expect(response.status).toBe(409);
     expect(await response.json()).toEqual({
-      error: { code: 'CONFLICT', message: 'Этот email уже занят' },
+      error: { code: 'RESOURCE_CONFLICT', message: 'Этот email уже занят' },
     });
   });
 
@@ -173,7 +173,7 @@ describe('auth HTTP contract', () => {
     const response = await register(dto);
     expect(response.status).toBe(500);
     expect(await response.json()).toEqual({
-      error: { code: 'INTERNAL_SERVER_ERROR', message: 'Internal server error' },
+      error: { code: 'INTERNAL_ERROR', message: 'Internal server error' },
     });
   });
 
@@ -289,7 +289,7 @@ describe('auth HTTP contract', () => {
 
     expect(response.status).toBe(401);
     expect(await response.json()).toEqual({
-      error: { code: 'UNAUTHORIZED', message: 'Неверный email или пароль' },
+      error: { code: 'AUTH_REQUIRED', message: 'Неверный email или пароль' },
     });
     expect(response.headers.get('set-cookie')).toBeNull();
     expect(createSession).not.toHaveBeenCalled();
