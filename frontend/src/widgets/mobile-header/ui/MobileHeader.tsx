@@ -33,7 +33,7 @@ export function MobileHeader({
     <header
       className={[
         'pt-[env(safe-area-inset-top)]',
-        overlay ? 'home-mobile-header-overlay' : 'bg-surface',
+        overlay ? 'home-mobile-header-overlay' : 'bg-[var(--theme-home-background)]',
       ].join(' ')}
     >
       <div className="flex min-h-16 items-center justify-between gap-4 px-page">

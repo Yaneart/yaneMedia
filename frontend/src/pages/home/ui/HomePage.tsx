@@ -252,7 +252,8 @@ export function HomePage() {
                     to="/collections/editorial-picks"
                     aria-label={`Открыть все ${collection.total} произведений из выбора редакции`}
                     className={[
-                      'group relative aspect-2/3 w-full overflow-hidden rounded-card',
+                      'group relative col-span-2 aspect-video w-full overflow-hidden rounded-card',
+                      'md:col-span-1 md:aspect-2/3',
                       'border border-context-border bg-linear-to-br',
                       'from-watermark/35 via-watermark/15 to-surface-elevated text-left',
                       'transition-[transform,border-color] duration-200 ease-out',

@@ -23,7 +23,7 @@ const variantClasses: Record<ContentRowVariant, string> = {
   continuation:
     'grid-flow-col auto-cols-[88%] overflow-x-auto sm:auto-cols-[68%] md:auto-cols-[52%] xl:auto-cols-[38%] 2xl:auto-cols-[31%]',
   collection:
-    'grid-cols-2 gap-y-6 sm:grid-flow-col sm:grid-cols-none sm:auto-cols-[calc((100%_-_1rem)/2)] sm:gap-y-4 sm:overflow-x-auto md:auto-cols-[calc((100%_-_2rem)/3)] xl:auto-cols-[calc((100%_-_4rem)/5)] 2xl:auto-cols-[calc((100%_-_5rem)/6)]',
+    'grid-cols-2 gap-y-6 md:grid-flow-col md:grid-cols-none md:auto-cols-[calc((100%_-_2rem)/3)] md:gap-y-4 md:overflow-x-auto xl:auto-cols-[calc((100%_-_4rem)/5)] 2xl:auto-cols-[calc((100%_-_5rem)/6)]',
 };
 
 const DRAG_THRESHOLD_PX = 6;

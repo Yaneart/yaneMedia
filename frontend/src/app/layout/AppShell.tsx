@@ -93,11 +93,7 @@ export function AppShell() {
       </div>
       <div className="relative z-10 flex min-w-0 flex-1 flex-col">
         <AppShellWatermarks area="frame" />
-        <div
-          className={['z-20 md:hidden', isHomePage ? 'absolute inset-x-0 top-0' : 'shrink-0'].join(
-            ' ',
-          )}
-        >
+        <div className="absolute inset-x-0 top-0 z-20 md:hidden">
           <MobileHeader
             homePath={routePaths.home}
             favoritesPath={routePaths.favorites}
@@ -118,7 +114,13 @@ export function AppShell() {
           onWheelCapture={cancelPendingRestoration}
         >
           <ScrollRestorationProvider value={rowScrollRestoration}>
-            <div ref={contentRef}>
+            <div
+              ref={contentRef}
+              className={[
+                'pb-[calc(env(safe-area-inset-bottom)+4rem)] md:pb-0',
+                isHomePage ? '' : 'pt-[calc(env(safe-area-inset-top)+4rem)]',
+              ].join(' ')}
+            >
               <Outlet />
             </div>
           </ScrollRestorationProvider>
@@ -134,7 +136,7 @@ export function AppShell() {
             />
           </div>
         )}
-        <div className="shrink-0 bg-surface md:hidden pl-1 pr-1">
+        <div className="absolute inset-x-0 bottom-0 z-20 bg-transparent px-1 md:hidden">
           <MobileNavigation
             homePath={routePaths.home}
             items={primaryNavigationItems}
