@@ -6,6 +6,8 @@ import type { DatabaseService } from '../../src/database/database.service';
 import { ProfileRepository } from '../../src/profile/profile.repository';
 import { profileAssets } from '../../src/profile/profile-asset.entity';
 import { users } from '../../src/users/entities/user.entity';
+import { favorites } from '../../src/favorites/entities/favorite.entity';
+import { mediaWorks } from '../../src/media/registry/media-registry.schema';
 
 const describePostgres = process.env.PROFILE_POSTGRES_TEST === '1' ? describe : describe.skip;
 
@@ -14,6 +16,7 @@ describePostgres('profile with PostgreSQL', () => {
   let repository: ProfileRepository;
   const userIds: string[] = [];
   const assetIds: string[] = [];
+  const mediaRefs: string[] = [];
 
   beforeAll(() => {
     if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required');
@@ -26,6 +29,9 @@ describePostgres('profile with PostgreSQL', () => {
       if (userIds.length > 0) await drizzle(pool).delete(users).where(inArray(users.id, userIds));
       if (assetIds.length > 0) {
         await drizzle(pool).delete(profileAssets).where(inArray(profileAssets.id, assetIds));
+      }
+      if (mediaRefs.length > 0) {
+        await drizzle(pool).delete(mediaWorks).where(inArray(mediaWorks.mediaRef, mediaRefs));
       }
     } finally {
       await pool?.end();
@@ -148,5 +154,56 @@ describePostgres('profile with PostgreSQL', () => {
     await expect(
       Promise.all(assets.map(({ id }) => repository.deleteAssetIfUnreferenced(id))),
     ).resolves.toEqual([true, true, true]);
+  });
+
+  it('paginates public favorites without duplicates across equal timestamps', async () => {
+    const suffix = randomUUID().replaceAll('-', '').slice(0, 12);
+    const [created] = await drizzle(pool)
+      .insert(users)
+      .values({
+        handle: `favorites_${suffix}`,
+        displayName: 'Favorites profile probe',
+        email: `profile-favorites-${suffix}@example.com`,
+        passwordHash: 'unused',
+        favoritesPublic: true,
+      })
+      .returning({ id: users.id });
+    if (!created) throw new Error('Expected a favorites profile probe user');
+    userIds.push(created.id);
+
+    const refs = Array.from({ length: 5 }, () => `work_${randomUUID()}`).sort((left, right) =>
+      right.localeCompare(left),
+    );
+    mediaRefs.push(...refs);
+    await drizzle(pool)
+      .insert(mediaWorks)
+      .values(
+        refs.map((mediaRef, index) => ({
+          mediaRef,
+          type: 'movie' as const,
+          slug: `favorites-probe-${suffix}-${index}`,
+        })),
+      );
+    const newest = new Date('2026-10-12T12:00:00.000Z');
+    const oldest = new Date('2026-10-11T12:00:00.000Z');
+    await drizzle(pool)
+      .insert(favorites)
+      .values(
+        refs.map((mediaRef, index) => ({
+          userId: created.id,
+          mediaRef,
+          addedAt: index < 4 ? newest : oldest,
+        })),
+      );
+
+    await expect(
+      repository.findPublicCollectionOwner(`favorites_${suffix}`),
+    ).resolves.toMatchObject({ id: created.id, favoritesPublic: true });
+    const first = await repository.findPublicFavoritesPage(created.id, undefined, 3);
+    const second = await repository.findPublicFavoritesPage(created.id, first.at(-1), 3);
+
+    expect(first.map(({ mediaRef }) => mediaRef)).toEqual(refs.slice(0, 3));
+    expect(second.map(({ mediaRef }) => mediaRef)).toEqual(refs.slice(3));
+    expect(new Set([...first, ...second].map(({ mediaRef }) => mediaRef)).size).toBe(5);
   });
 });

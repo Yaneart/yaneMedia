@@ -76,6 +76,65 @@ describe('ProfileRepository', () => {
     expect(query.params).toEqual(['yaneart']);
   });
 
+  it('reads only the public collection owner fields by normalized handle', async () => {
+    let condition: SQL | undefined;
+    const owner = {
+      id: user.id,
+      handle: user.handle,
+      ratingsPublic: false,
+      favoritesPublic: true,
+    };
+    const limit = jest.fn().mockResolvedValue([owner]);
+    const where = jest.fn((value: SQL) => {
+      condition = value;
+      return { limit };
+    });
+    const from = jest.fn().mockReturnValue({ where });
+    const select = jest.fn().mockReturnValue({ from });
+    const repository = new ProfileRepository({ db: { select } } as unknown as DatabaseService);
+
+    await expect(repository.findPublicCollectionOwner('yaneart')).resolves.toEqual(owner);
+    if (!condition) throw new Error('Expected a collection owner condition');
+    expect(new PgDialect().sqlToQuery(condition)).toMatchObject({
+      sql: 'lower("users"."handle") = $1',
+      params: ['yaneart'],
+    });
+  });
+
+  it('paginates favorites after a deterministic descending tuple boundary', async () => {
+    let condition: SQL | undefined;
+    const boundary = {
+      addedAt: new Date('2026-09-04T08:00:00.000Z'),
+      mediaRef: 'work_00000000-0000-4000-8000-000000000001',
+    };
+    const limit = jest.fn().mockResolvedValue([]);
+    const orderBy = jest.fn().mockReturnValue({ limit });
+    const where = jest.fn((value: SQL) => {
+      condition = value;
+      return { orderBy };
+    });
+    const from = jest.fn().mockReturnValue({ where });
+    const select = jest.fn().mockReturnValue({ from });
+    const repository = new ProfileRepository({ db: { select } } as unknown as DatabaseService);
+
+    await repository.findPublicFavoritesPage(user.id, boundary, 21);
+
+    if (!condition) throw new Error('Expected a favorites page condition');
+    const query = new PgDialect().sqlToQuery(condition);
+    expect(query.sql).toContain('"favorites"."user_id" = $1');
+    expect(query.sql).toContain('"favorites"."added_at" < $2');
+    expect(query.sql).toContain('"favorites"."added_at" = $3');
+    expect(query.sql).toContain('"favorites"."media_ref" < $4');
+    expect(query.params).toEqual([
+      user.id,
+      boundary.addedAt.toISOString(),
+      boundary.addedAt.toISOString(),
+      boundary.mediaRef,
+    ]);
+    expect(orderBy).toHaveBeenCalledTimes(1);
+    expect(limit).toHaveBeenCalledWith(21);
+  });
+
   it('changes all submitted fields with one atomic update statement', async () => {
     const returning = jest.fn().mockResolvedValue([{ ...user, handle: 'new_handle' }]);
     const where = jest.fn().mockReturnValue({ returning });

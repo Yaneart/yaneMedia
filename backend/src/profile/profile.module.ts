@@ -12,12 +12,15 @@ import { ProfileService } from './profile.service';
 import { StrictBodyFieldsGuard, StrictQueryFieldsGuard } from './strict-body-fields.guard';
 import { AppLogger } from '../platform/logging/app-logger';
 import { PublicProfilesController } from './public-profiles.controller';
+import { MediaModule } from '../media/media.module';
+import { ProfileCollectionCursorService } from './profile-collection-cursor.service';
 
 @Module({
   imports: [
     AuthModule,
     AppConfigModule,
     DatabaseModule,
+    MediaModule,
     ThrottlerModule.forRoot({ throttlers: [{ limit: 5, ttl: 60_000 }] }),
   ],
   controllers: [ProfileController, ProfileAssetsController, PublicProfilesController],
@@ -29,6 +32,7 @@ import { PublicProfilesController } from './public-profiles.controller';
     StrictBodyFieldsGuard,
     StrictQueryFieldsGuard,
     AppLogger,
+    ProfileCollectionCursorService,
   ],
 })
 export class ProfileModule {}

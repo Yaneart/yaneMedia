@@ -7,6 +7,8 @@ import {
 import { DrizzleQueryError } from 'drizzle-orm';
 import { DatabaseError } from 'pg';
 import type { User } from '../users/entities/user.entity';
+import type { MediaSummaryDto } from '../media/dto/media-summary.dto';
+import { MediaCatalogService } from '../media/catalog/media-catalog.service';
 import { AppLogger } from '../platform/logging/app-logger';
 import type {
   HandleAvailabilityDto,
@@ -14,11 +16,14 @@ import type {
   ProfileSettingsDto,
   PublicProfileDto,
 } from './dto/profile.dto';
+import type { CursorPageDto, PublicRatingDto } from './dto/public-profile-collection.dto';
+import type { PublicProfileCollectionQueryDto } from './dto/public-profile-collection-query.dto';
 import type { UpdateProfileDto } from './dto/update-profile.dto';
 import type { UpdateProfileSettingsDto } from './dto/update-profile-settings.dto';
 import { ProfileRepository, type ProfileUpdate } from './profile.repository';
 import { ProfileAssetStore } from './profile-asset.store';
 import { isHandleAllowed, normalizeHandle } from '../users/handle';
+import { ProfileCollectionCursorService } from './profile-collection-cursor.service';
 
 export type UploadedAvatar = {
   buffer: Buffer;
@@ -31,6 +36,8 @@ export class ProfileService {
     private readonly profileRepository: ProfileRepository,
     private readonly profileAssetStore: ProfileAssetStore,
     private readonly logger: AppLogger,
+    private readonly mediaCatalogService: MediaCatalogService,
+    private readonly cursorService: ProfileCollectionCursorService,
   ) {}
 
   async getProfile(userId: string): Promise<PrivateProfileDto> {
@@ -73,6 +80,45 @@ export class ProfileService {
         favorites: profile.favoritesCount,
       },
     };
+  }
+
+  async getPublicFavorites(
+    rawHandle: string,
+    query: PublicProfileCollectionQueryDto,
+  ): Promise<CursorPageDto<MediaSummaryDto>> {
+    const owner = await this.requirePublicCollectionOwner(rawHandle, 'favorites');
+    const boundary = query.cursor
+      ? this.cursorService.decode(query.cursor, 'favorites', owner.handle)
+      : undefined;
+    const rows = await this.profileRepository.findPublicFavoritesPage(
+      owner.id,
+      boundary,
+      query.limit + 1,
+    );
+    const hasNextPage = rows.length > query.limit;
+    const pageRows = rows.slice(0, query.limit);
+    const resolution = await this.mediaCatalogService.resolveMediaRefs(
+      pageRows.map(({ mediaRef }) => mediaRef),
+    );
+    const items = resolution.matches
+      .sort((left, right) => left.requestIndex - right.requestIndex)
+      .map(({ item }) => item);
+    const last = pageRows.at(-1);
+
+    return {
+      items,
+      nextCursor:
+        hasNextPage && last ? this.cursorService.encode('favorites', owner.handle, last) : null,
+    };
+  }
+
+  async getPublicRatings(
+    rawHandle: string,
+    query: PublicProfileCollectionQueryDto,
+  ): Promise<CursorPageDto<PublicRatingDto>> {
+    const owner = await this.requirePublicCollectionOwner(rawHandle, 'ratings');
+    if (query.cursor) this.cursorService.decode(query.cursor, 'ratings', owner.handle);
+    return { items: [], nextCursor: null };
   }
 
   async updateProfile(userId: string, dto: UpdateProfileDto): Promise<PrivateProfileDto> {
@@ -164,6 +210,20 @@ export class ProfileService {
     return user;
   }
 
+  private async requirePublicCollectionOwner(
+    rawHandle: string,
+    collection: 'favorites' | 'ratings',
+  ) {
+    const handle = normalizeHandle(rawHandle);
+    const owner = isHandleAllowed(handle)
+      ? await this.profileRepository.findPublicCollectionOwner(handle)
+      : undefined;
+    if (!owner || !owner[collection === 'favorites' ? 'favoritesPublic' : 'ratingsPublic']) {
+      throwProfileNotFound();
+    }
+    return owner;
+  }
+
   private async cleanupPreviousAsset(
     asset: Awaited<ReturnType<ProfileRepository['findAssetByObjectKey']>>,
   ): Promise<void> {
@@ -177,6 +237,13 @@ export class ProfileService {
       this.logger.logUnexpectedError('ProfileService.cleanupPreviousAsset');
     }
   }
+}
+
+function throwProfileNotFound(): never {
+  throw new NotFoundException({
+    code: 'PROFILE_NOT_FOUND',
+    message: 'Публичный профиль не найден',
+  });
 }
 
 function requireChanges(dto: object): void {

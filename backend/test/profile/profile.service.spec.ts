@@ -6,6 +6,8 @@ import { ProfileService } from '../../src/profile/profile.service';
 import type { ProfileAssetStore } from '../../src/profile/profile-asset.store';
 import type { AppLogger } from '../../src/platform/logging/app-logger';
 import type { User } from '../../src/users/entities/user.entity';
+import type { MediaCatalogService } from '../../src/media/catalog/media-catalog.service';
+import type { ProfileCollectionCursorService } from '../../src/profile/profile-collection-cursor.service';
 
 describe('ProfileService', () => {
   const user: User = {
@@ -27,6 +29,12 @@ describe('ProfileService', () => {
     ProfileRepository['findPublicByHandle']
   >;
   const countFavorites = jest.fn() as jest.MockedFunction<ProfileRepository['countFavorites']>;
+  const findPublicCollectionOwner = jest.fn() as jest.MockedFunction<
+    ProfileRepository['findPublicCollectionOwner']
+  >;
+  const findPublicFavoritesPage = jest.fn() as jest.MockedFunction<
+    ProfileRepository['findPublicFavoritesPage']
+  >;
   const isHandleAvailable = jest.fn() as jest.MockedFunction<
     ProfileRepository['isHandleAvailable']
   >;
@@ -43,6 +51,8 @@ describe('ProfileService', () => {
     findById,
     findPublicByHandle,
     countFavorites,
+    findPublicCollectionOwner,
+    findPublicFavoritesPage,
     isHandleAvailable,
     update,
     replaceAvatar,
@@ -50,9 +60,23 @@ describe('ProfileService', () => {
     deleteAssetIfUnreferenced,
   } as unknown as ProfileRepository;
   const store = { save: saveAsset, delete: deleteAsset } as unknown as ProfileAssetStore;
-  const service = new ProfileService(repository, store, {
-    logUnexpectedError,
-  } as unknown as AppLogger);
+  const resolveMediaRefs = jest.fn() as jest.MockedFunction<
+    MediaCatalogService['resolveMediaRefs']
+  >;
+  const encodeCursor = jest.fn() as jest.MockedFunction<ProfileCollectionCursorService['encode']>;
+  const decodeCursor = jest.fn() as jest.MockedFunction<ProfileCollectionCursorService['decode']>;
+  const service = new ProfileService(
+    repository,
+    store,
+    {
+      logUnexpectedError,
+    } as unknown as AppLogger,
+    { resolveMediaRefs } as unknown as MediaCatalogService,
+    {
+      encode: encodeCursor,
+      decode: decodeCursor,
+    } as unknown as ProfileCollectionCursorService,
+  );
 
   beforeEach(() => {
     findById.mockReset().mockResolvedValue(user);
@@ -67,6 +91,25 @@ describe('ProfileService', () => {
       favoritesCount: 12,
     });
     countFavorites.mockReset().mockResolvedValue(12);
+    findPublicCollectionOwner.mockReset().mockResolvedValue({
+      id: user.id,
+      handle: user.handle,
+      ratingsPublic: true,
+      favoritesPublic: true,
+    });
+    findPublicFavoritesPage.mockReset().mockResolvedValue([]);
+    resolveMediaRefs.mockReset().mockResolvedValue({
+      items: [],
+      matches: [],
+      partial: false,
+      degraded: false,
+      stale: false,
+    });
+    encodeCursor.mockReset().mockReturnValue('next-cursor');
+    decodeCursor.mockReset().mockReturnValue({
+      addedAt: new Date('2026-09-01T00:00:00.000Z'),
+      mediaRef: 'work_00000000-0000-4000-8000-000000000001',
+    });
     isHandleAvailable.mockReset().mockResolvedValue(true);
     update.mockReset().mockResolvedValue(user);
     replaceAvatar.mockReset();
@@ -133,6 +176,89 @@ describe('ProfileService', () => {
       });
     },
   );
+
+  it('returns favorite summaries in database order and creates a cursor from the page boundary', async () => {
+    const first = {
+      mediaRef: 'work_00000000-0000-4000-8000-000000000001',
+      addedAt: new Date('2026-09-03T00:00:00.000Z'),
+    };
+    const second = {
+      mediaRef: 'work_00000000-0000-4000-8000-000000000002',
+      addedAt: new Date('2026-09-02T00:00:00.000Z'),
+    };
+    const extra = {
+      mediaRef: 'work_00000000-0000-4000-8000-000000000003',
+      addedAt: new Date('2026-09-01T00:00:00.000Z'),
+    };
+    findPublicFavoritesPage.mockResolvedValue([first, second, extra]);
+    resolveMediaRefs.mockResolvedValue({
+      items: [],
+      matches: [
+        { requestIndex: 1, item: mediaSummary(second.mediaRef, 'Second') },
+        { requestIndex: 0, item: mediaSummary(first.mediaRef, 'First') },
+      ],
+      partial: false,
+      degraded: false,
+      stale: false,
+    });
+
+    await expect(service.getPublicFavorites(' YANEART ', { limit: 2 })).resolves.toEqual({
+      items: [mediaSummary(first.mediaRef, 'First'), mediaSummary(second.mediaRef, 'Second')],
+      nextCursor: 'next-cursor',
+    });
+    expect(findPublicCollectionOwner).toHaveBeenCalledWith('yaneart');
+    expect(findPublicFavoritesPage).toHaveBeenCalledWith(user.id, undefined, 3);
+    expect(resolveMediaRefs).toHaveBeenCalledWith([first.mediaRef, second.mediaRef]);
+    expect(encodeCursor).toHaveBeenCalledWith('favorites', user.handle, second);
+  });
+
+  it.each([
+    ['missing owner', undefined],
+    [
+      'private favorites',
+      { id: user.id, handle: user.handle, ratingsPublic: true, favoritesPublic: false },
+    ],
+  ])('does not distinguish %s from a missing public profile', async (_label, owner) => {
+    findPublicCollectionOwner.mockResolvedValue(owner);
+
+    await expect(service.getPublicFavorites(user.handle, { limit: 20 })).rejects.toMatchObject({
+      response: { code: 'PROFILE_NOT_FOUND' },
+    });
+    expect(findPublicFavoritesPage).not.toHaveBeenCalled();
+    expect(resolveMediaRefs).not.toHaveBeenCalled();
+  });
+
+  it('rechecks visibility before every page and rejects an old cursor after the collection closes', async () => {
+    findPublicCollectionOwner
+      .mockResolvedValueOnce({
+        id: user.id,
+        handle: user.handle,
+        ratingsPublic: true,
+        favoritesPublic: true,
+      })
+      .mockResolvedValueOnce({
+        id: user.id,
+        handle: user.handle,
+        ratingsPublic: true,
+        favoritesPublic: false,
+      });
+
+    await expect(service.getPublicFavorites(user.handle, { limit: 20 })).resolves.toEqual({
+      items: [],
+      nextCursor: null,
+    });
+    await expect(
+      service.getPublicFavorites(user.handle, { limit: 20, cursor: 'old-cursor' }),
+    ).rejects.toMatchObject({ response: { code: 'PROFILE_NOT_FOUND' } });
+    expect(decodeCursor).not.toHaveBeenCalled();
+  });
+
+  it('returns an empty public ratings page until the rating model is introduced', async () => {
+    await expect(service.getPublicRatings(user.handle, { limit: 20 })).resolves.toEqual({
+      items: [],
+      nextCursor: null,
+    });
+  });
 
   it('updates all submitted profile fields in one repository call', async () => {
     const changes = { displayName: 'Новое имя', handle: 'new_handle', bio: '' };
@@ -273,3 +399,13 @@ describe('ProfileService', () => {
     expect(deleteAsset).toHaveBeenCalledWith(previousAsset.objectKey);
   });
 });
+
+function mediaSummary(mediaRef: string, title: string) {
+  return {
+    mediaRef,
+    slug: title.toLowerCase(),
+    type: 'movie' as const,
+    title,
+    genres: [],
+  };
+}

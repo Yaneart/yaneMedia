@@ -5,7 +5,7 @@ import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 import { ApiResponseInterceptor } from './platform/http/api-response/api-response.interceptor';
 import { ApiExceptionFilter } from './platform/http/api-error/api-exception/api-exception.filter';
-import type { NextFunction, Response, Request } from 'express';
+import type { Express, NextFunction, Response, Request } from 'express';
 import { AppLogger } from './platform/logging/app-logger';
 import {
   DiscoveryResponseMetricsInterceptor,
@@ -15,6 +15,9 @@ import {
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
+  const expressApplication = app.getHttpAdapter().getInstance() as Express;
+
+  expressApplication.disable('etag');
 
   app.setGlobalPrefix('api/v1');
 

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { and, count, eq, lte, sql } from 'drizzle-orm';
+import { and, count, desc, eq, lt, lte, or, sql } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
 import { favorites } from '../favorites/entities/favorite.entity';
 import { users, type User } from '../users/entities/user.entity';
@@ -26,6 +26,16 @@ export type PublicProfileRecord = Pick<
 > & {
   favoritesCount: number | null;
 };
+
+export type PublicCollectionOwner = Pick<
+  User,
+  'id' | 'handle' | 'favoritesPublic' | 'ratingsPublic'
+>;
+
+export interface FavoritePageRow {
+  mediaRef: string;
+  addedAt: Date;
+}
 
 @Injectable()
 export class ProfileRepository {
@@ -63,6 +73,47 @@ export class ProfileRepository {
       .limit(1);
 
     return profile;
+  }
+
+  async findPublicCollectionOwner(handle: string): Promise<PublicCollectionOwner | undefined> {
+    const [owner] = await this.databaseService.db
+      .select({
+        id: users.id,
+        handle: users.handle,
+        ratingsPublic: users.ratingsPublic,
+        favoritesPublic: users.favoritesPublic,
+      })
+      .from(users)
+      .where(sql`lower(${users.handle}) = ${handle}`)
+      .limit(1);
+
+    return owner;
+  }
+
+  async findPublicFavoritesPage(
+    userId: string,
+    boundary: FavoritePageRow | undefined,
+    limit: number,
+  ): Promise<FavoritePageRow[]> {
+    return this.databaseService.db
+      .select({ mediaRef: favorites.mediaRef, addedAt: favorites.addedAt })
+      .from(favorites)
+      .where(
+        and(
+          eq(favorites.userId, userId),
+          boundary
+            ? or(
+                lt(favorites.addedAt, boundary.addedAt),
+                and(
+                  eq(favorites.addedAt, boundary.addedAt),
+                  lt(favorites.mediaRef, boundary.mediaRef),
+                ),
+              )
+            : undefined,
+        ),
+      )
+      .orderBy(desc(favorites.addedAt), desc(favorites.mediaRef))
+      .limit(limit);
   }
 
   async countFavorites(userId: string): Promise<number> {
