@@ -7,6 +7,8 @@ export { passwordResetTokens } from '../auth/entities/password-reset-token.entit
 export { favorites } from '../favorites/entities/favorite.entity';
 export { historyItems } from '../history/entities/history-item.entity';
 export { continueWatchingItems } from '../continue-watching/entities/continue-watching-item.entity';
+export { ratings } from '../ratings/entities/rating.entity';
+export { reviewPublicationState, reviews } from '../reviews/entities/review.entity';
 export {
   catalogRevisionStatus,
   catalogRevisions,
