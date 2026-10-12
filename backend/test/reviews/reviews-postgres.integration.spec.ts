@@ -6,6 +6,7 @@ import type { DatabaseService } from '../../src/database/database.service';
 import { mediaWorks } from '../../src/media/registry/media-registry.schema';
 import { ratings } from '../../src/ratings/entities/rating.entity';
 import { reviews } from '../../src/reviews/entities/review.entity';
+import type { Review } from '../../src/reviews/entities/review.entity';
 import { ReviewsRepository } from '../../src/reviews/reviews.repository';
 import { users } from '../../src/users/entities/user.entity';
 
@@ -16,6 +17,7 @@ describePostgres('reviews with PostgreSQL', () => {
   let workerClients: Client[];
   let userId: string | undefined;
   const extraUserIds: string[] = [];
+  const extraMediaRefs: string[] = [];
   const mediaRef = `work_${randomUUID()}`;
 
   beforeAll(async () => {
@@ -48,8 +50,14 @@ describePostgres('reviews with PostgreSQL', () => {
     try {
       const db = drizzle(setupClient);
       await db.delete(reviews).where(eq(reviews.mediaRef, mediaRef));
+      if (extraMediaRefs.length > 0) {
+        await db.delete(reviews).where(inArray(reviews.mediaRef, extraMediaRefs));
+      }
       if (extraUserIds.length > 0) await db.delete(users).where(inArray(users.id, extraUserIds));
       if (userId) await db.delete(users).where(eq(users.id, userId));
+      if (extraMediaRefs.length > 0) {
+        await db.delete(mediaWorks).where(inArray(mediaWorks.mediaRef, extraMediaRefs));
+      }
       await db.delete(mediaWorks).where(eq(mediaWorks.mediaRef, mediaRef));
     } finally {
       await Promise.all(workerClients.map((client) => client.end()));
@@ -94,6 +102,7 @@ describePostgres('reviews with PostgreSQL', () => {
 
     await repository.softDelete(original.reviewId, userId);
     await repository.softDelete(original.reviewId, userId);
+    await expect(repository.findPublicById(original.reviewId)).resolves.toBeUndefined();
     const replacement = await repository.create({
       userId,
       mediaRef,
@@ -158,5 +167,75 @@ describePostgres('reviews with PostgreSQL', () => {
     const nextPage = await repository.findPublicSnapshotPage(snapshot.id, 1, 2);
     expect(nextPage).toHaveLength(1);
     expect(nextPage[0]).toMatchObject({ userId: extraUserIds[1], rating: 10, position: 2 });
+  });
+
+  it('pages a public author feed and keeps review ids stable across a handle change', async () => {
+    const db = drizzle(setupClient);
+    const originalHandle = `review_${randomUUID().slice(0, 8)}`;
+    const [author] = await db
+      .insert(users)
+      .values({
+        handle: originalHandle,
+        displayName: 'Profile review probe',
+        email: `review-${randomUUID()}@example.com`,
+        emailVerifiedAt: new Date(),
+        passwordHash: 'unused',
+      })
+      .returning({ id: users.id });
+    if (!author) throw new Error('Expected profile review author');
+    extraUserIds.push(author.id);
+
+    const createdAt = [
+      new Date('2026-10-12T10:03:00.000Z'),
+      new Date('2026-10-12T10:02:00.000Z'),
+      new Date('2026-10-12T10:01:00.000Z'),
+      new Date('2026-10-12T10:00:00.000Z'),
+    ];
+    const inserted: Review[] = [];
+    for (const [index, timestamp] of createdAt.entries()) {
+      const reviewMediaRef = `work_${randomUUID()}`;
+      extraMediaRefs.push(reviewMediaRef);
+      await db.insert(mediaWorks).values({
+        mediaRef: reviewMediaRef,
+        type: 'movie',
+        slug: `profile-review-${randomUUID()}`,
+      });
+      const [review] = await db
+        .insert(reviews)
+        .values({
+          userId: author.id,
+          mediaRef: reviewMediaRef,
+          title: `Profile review ${index}`,
+          body: 'This profile review body is long enough for the database constraint.',
+          publicationState: index === 3 ? 'moderation_hidden' : 'published',
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        })
+        .returning();
+      if (!review) throw new Error('Expected profile review');
+      inserted.push(review);
+    }
+
+    const repository = new ReviewsRepository({ db } as unknown as DatabaseService);
+    const owner = await repository.findPublicProfileOwner(originalHandle);
+    expect(owner?.id).toBe(author.id);
+    const firstPage = await repository.findPublicProfilePage(author.id, undefined, 2);
+    expect(firstPage.map(({ reviewId }) => reviewId)).toEqual(
+      inserted.slice(0, 2).map(({ reviewId }) => reviewId),
+    );
+    const secondPage = await repository.findPublicProfilePage(author.id, firstPage[1], 2);
+    expect(secondPage.map(({ reviewId }) => reviewId)).toEqual([inserted[2]?.reviewId]);
+
+    const changedHandle = `changed_${randomUUID().slice(0, 8)}`;
+    await db.update(users).set({ handle: changedHandle }).where(eq(users.id, author.id));
+    await expect(repository.findPublicProfileOwner(originalHandle)).resolves.toBeUndefined();
+    await expect(repository.findPublicProfileOwner(changedHandle)).resolves.toMatchObject({
+      id: author.id,
+    });
+    await expect(repository.findPublicById(inserted[0].reviewId)).resolves.toMatchObject({
+      reviewId: inserted[0].reviewId,
+      authorHandle: changedHandle,
+    });
+    await expect(repository.findPublicById(inserted[3].reviewId)).resolves.toBeUndefined();
   });
 });

@@ -4,6 +4,7 @@ import { DatabaseError } from 'pg';
 import type { MediaCatalogService } from '../../src/media/catalog/media-catalog.service';
 import type { Review } from '../../src/reviews/entities/review.entity';
 import type { ReviewListCursorService } from '../../src/reviews/review-list-cursor.service';
+import type { ProfileReviewCursorService } from '../../src/reviews/profile-review-cursor.service';
 import type { ReviewsRepository } from '../../src/reviews/reviews.repository';
 import { ReviewsService } from '../../src/reviews/reviews.service';
 
@@ -39,6 +40,9 @@ describe('ReviewsService', () => {
   const create = jest.fn();
   const findById = jest.fn();
   const findRating = jest.fn();
+  const findPublicById = jest.fn();
+  const findPublicProfileOwner = jest.fn();
+  const findPublicProfilePage = jest.fn();
   const update = jest.fn();
   const softDelete = jest.fn();
   const createListSnapshot = jest.fn();
@@ -47,12 +51,17 @@ describe('ReviewsService', () => {
   const resolveMediaRefs = jest.fn();
   const encode = jest.fn();
   const decode = jest.fn();
+  const profileEncode = jest.fn();
+  const profileDecode = jest.fn();
   const service = new ReviewsService(
     {
       findAuthor,
       create,
       findById,
       findRating,
+      findPublicById,
+      findPublicProfileOwner,
+      findPublicProfilePage,
       update,
       softDelete,
       createListSnapshot,
@@ -61,6 +70,7 @@ describe('ReviewsService', () => {
     } as unknown as ReviewsRepository,
     { resolveMediaRefs } as unknown as MediaCatalogService,
     { encode, decode } as unknown as ReviewListCursorService,
+    { encode: profileEncode, decode: profileDecode } as unknown as ProfileReviewCursorService,
   );
 
   beforeEach(() => {
@@ -68,6 +78,15 @@ describe('ReviewsService', () => {
     create.mockReset().mockResolvedValue(review);
     findById.mockReset().mockResolvedValue(review);
     findRating.mockReset().mockResolvedValue(9);
+    findPublicById.mockReset().mockResolvedValue({
+      ...review,
+      authorHandle: author.handle,
+      authorDisplayName: author.displayName,
+      authorAvatarAssetId: author.avatarAssetId,
+      rating: 9,
+    });
+    findPublicProfileOwner.mockReset().mockResolvedValue(author);
+    findPublicProfilePage.mockReset().mockResolvedValue([]);
     update.mockReset().mockResolvedValue({ ...review, isSpoiler: false });
     softDelete.mockReset().mockResolvedValue(undefined);
     createListSnapshot.mockReset().mockResolvedValue({
@@ -81,6 +100,8 @@ describe('ReviewsService', () => {
     findPublicSnapshotPage.mockReset().mockResolvedValue([]);
     encode.mockReset().mockReturnValue('next-cursor');
     decode.mockReset();
+    profileEncode.mockReset().mockReturnValue('profile-next-cursor');
+    profileDecode.mockReset();
     resolveMediaRefs.mockReset().mockResolvedValue({
       items: [media],
       matches: [{ requestIndex: 0, item: media }],
@@ -195,6 +216,97 @@ describe('ReviewsService', () => {
       viewerActions: { canEdit: true, canDelete: true, canReport: false },
     });
     expect(create).toHaveBeenCalledWith(expect.objectContaining({ mediaRef: media.mediaRef }));
+  });
+
+  it('reads public detail and reveals spoiler content only through the explicit endpoint', async () => {
+    await expect(service.get(review.reviewId, userId)).resolves.toMatchObject({
+      reviewId: review.reviewId,
+      body: null,
+      bodyState: 'spoiler-hidden',
+      rating: 9,
+      viewerActions: { canEdit: true, canDelete: true, canComment: true, canReport: false },
+    });
+    await expect(service.getContent(review.reviewId)).resolves.toEqual({ body: review.body });
+  });
+
+  it('uses one indistinguishable not-found response for unavailable public reviews', async () => {
+    findPublicById.mockResolvedValue(undefined);
+    await expect(service.get(review.reviewId)).rejects.toMatchObject({
+      response: { code: 'REVIEW_NOT_FOUND' },
+    });
+    await expect(service.getContent(review.reviewId)).rejects.toMatchObject({
+      response: { code: 'REVIEW_NOT_FOUND' },
+    });
+  });
+
+  it('anonymizes a retained review after its author account is deleted', async () => {
+    findPublicById.mockResolvedValue({
+      ...review,
+      userId: null,
+      authorHandle: null,
+      authorDisplayName: null,
+      authorAvatarAssetId: null,
+      rating: null,
+    });
+    await expect(service.get(review.reviewId)).resolves.toMatchObject({
+      author: { state: 'deleted', label: 'Удалённый пользователь' },
+      rating: null,
+      viewerActions: { canEdit: false, canDelete: false, canReport: false },
+    });
+  });
+
+  it('lists an author profile by publication order with current media and viewer actions', async () => {
+    findPublicProfilePage.mockResolvedValue([
+      {
+        ...review,
+        authorHandle: author.handle,
+        authorDisplayName: author.displayName,
+        authorAvatarAssetId: author.avatarAssetId,
+        rating: 9,
+      },
+      {
+        ...review,
+        reviewId: 'review_00000000-0000-4000-8000-000000000002',
+        mediaRef: 'work_00000000-0000-4000-8000-000000000002',
+        authorHandle: author.handle,
+        authorDisplayName: author.displayName,
+        authorAvatarAssetId: null,
+        rating: null,
+      },
+    ]);
+    resolveMediaRefs.mockResolvedValue({
+      items: [media, { ...media, mediaRef: 'work_00000000-0000-4000-8000-000000000002' }],
+      matches: [
+        { requestIndex: 0, item: media },
+        {
+          requestIndex: 1,
+          item: { ...media, mediaRef: 'work_00000000-0000-4000-8000-000000000002' },
+        },
+      ],
+      partial: false,
+      degraded: false,
+      stale: false,
+    });
+
+    const result = await service.listProfile('YaneArt', { limit: 1 }, userId);
+    expect(result).toMatchObject({
+      items: [{ reviewId: review.reviewId, media, rating: 9 }],
+      nextCursor: 'profile-next-cursor',
+    });
+    expect(findPublicProfileOwner).toHaveBeenCalledWith('yaneart');
+    expect(findPublicProfilePage).toHaveBeenCalledWith(userId, undefined, 2);
+    expect(profileEncode).toHaveBeenCalledWith(
+      userId,
+      expect.objectContaining({
+        reviewId: review.reviewId,
+      }),
+    );
+  });
+
+  it('keeps profile cursors bound to the account across a handle change', async () => {
+    profileDecode.mockReturnValue({ createdAt: review.createdAt, reviewId: review.reviewId });
+    await service.listProfile('newhandle', { limit: 20, cursor: 'cursor' });
+    expect(profileDecode).toHaveBeenCalledWith('cursor', userId);
   });
 
   it('requires a verified author before inserting', async () => {

@@ -1,9 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { and, asc, desc, eq, gte, isNull, lt, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, isNull, lt, or, sql } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
 import { ratings } from '../ratings/entities/rating.entity';
 import { users, type User } from '../users/entities/user.entity';
 import type { ReviewSort } from './dto/review.dto';
+import type { ProfileReviewBoundary } from './profile-review-cursor.service';
 import {
   reviewListSnapshotItems,
   reviewListSnapshots,
@@ -18,12 +19,15 @@ export type ReviewAuthor = Pick<
 
 export type ReviewChanges = Partial<Pick<Review, 'body' | 'isSpoiler' | 'title'>>;
 
-export interface PublicReviewPageRow extends Review {
-  position: number;
+export interface PublicReviewRow extends Review {
   authorHandle: string | null;
   authorDisplayName: string | null;
   authorAvatarAssetId: string | null;
   rating: number | null;
+}
+
+export interface PublicReviewPageRow extends PublicReviewRow {
+  position: number;
 }
 
 @Injectable()
@@ -62,6 +66,60 @@ export class ReviewsRepository {
       .where(eq(reviews.reviewId, reviewId))
       .limit(1);
     return review;
+  }
+
+  async findPublicById(reviewId: string): Promise<PublicReviewRow | undefined> {
+    const [review] = await this.publicReviewQuery()
+      .where(
+        and(
+          eq(reviews.reviewId, reviewId),
+          eq(reviews.publicationState, 'published'),
+          isNull(reviews.deletedAt),
+        ),
+      )
+      .limit(1);
+    return review;
+  }
+
+  async findPublicProfileOwner(handle: string): Promise<ReviewAuthor | undefined> {
+    const [author] = await this.databaseService.db
+      .select({
+        id: users.id,
+        handle: users.handle,
+        displayName: users.displayName,
+        avatarAssetId: users.avatarAssetId,
+        emailVerifiedAt: users.emailVerifiedAt,
+      })
+      .from(users)
+      .where(sql`lower(${users.handle}) = ${handle}`)
+      .limit(1);
+    return author;
+  }
+
+  async findPublicProfilePage(
+    userId: string,
+    boundary: ProfileReviewBoundary | undefined,
+    limit: number,
+  ): Promise<PublicReviewRow[]> {
+    return this.publicReviewQuery()
+      .where(
+        and(
+          eq(reviews.userId, userId),
+          eq(reviews.publicationState, 'published'),
+          isNull(reviews.deletedAt),
+          boundary
+            ? or(
+                lt(reviews.createdAt, boundary.createdAt),
+                and(
+                  eq(reviews.createdAt, boundary.createdAt),
+                  lt(reviews.reviewId, boundary.reviewId),
+                ),
+              )
+            : undefined,
+        ),
+      )
+      .orderBy(desc(reviews.createdAt), desc(reviews.reviewId))
+      .limit(limit);
   }
 
   async findRating(userId: string, mediaRef: string): Promise<number | null> {
@@ -216,6 +274,32 @@ export class ReviewsRepository {
       .set({ deletedAt: new Date() })
       .where(
         and(eq(reviews.reviewId, reviewId), eq(reviews.userId, userId), isNull(reviews.deletedAt)),
+      );
+  }
+
+  private publicReviewQuery() {
+    return this.databaseService.db
+      .select({
+        reviewId: reviews.reviewId,
+        userId: reviews.userId,
+        mediaRef: reviews.mediaRef,
+        title: reviews.title,
+        body: reviews.body,
+        isSpoiler: reviews.isSpoiler,
+        publicationState: reviews.publicationState,
+        deletedAt: reviews.deletedAt,
+        createdAt: reviews.createdAt,
+        updatedAt: reviews.updatedAt,
+        authorHandle: users.handle,
+        authorDisplayName: users.displayName,
+        authorAvatarAssetId: users.avatarAssetId,
+        rating: ratings.value,
+      })
+      .from(reviews)
+      .leftJoin(users, eq(users.id, reviews.userId))
+      .leftJoin(
+        ratings,
+        and(eq(ratings.userId, reviews.userId), eq(ratings.mediaRef, reviews.mediaRef)),
       );
   }
 }

@@ -9,8 +9,11 @@ import { DrizzleQueryError } from 'drizzle-orm';
 import { DatabaseError } from 'pg';
 import { MediaCatalogService } from '../media/catalog/media-catalog.service';
 import type { MediaSummaryDto } from '../media/dto/media-summary.dto';
+import type { PublicProfileCollectionQueryDto } from '../profile/dto/public-profile-collection-query.dto';
+import { isHandleAllowed, normalizeHandle } from '../users/handle';
 import type {
   CreateReviewDto,
+  ReviewContentDto,
   ReviewCursorPageDto,
   ReviewDetailDto,
   ReviewListQueryDto,
@@ -21,10 +24,11 @@ import type { Review } from './entities/review.entity';
 import type { ReviewListSnapshot } from './entities/review-list-snapshot.entity';
 import {
   ReviewsRepository,
-  type PublicReviewPageRow,
+  type PublicReviewRow,
   type ReviewAuthor,
   type ReviewChanges,
 } from './reviews.repository';
+import { ProfileReviewCursorService } from './profile-review-cursor.service';
 import {
   REVIEW_LIST_SNAPSHOT_TTL_MS,
   ReviewListCursorService,
@@ -37,6 +41,7 @@ export class ReviewsService {
     private readonly reviewsRepository: ReviewsRepository,
     private readonly mediaCatalogService: MediaCatalogService,
     private readonly cursorService: ReviewListCursorService,
+    private readonly profileCursorService: ProfileReviewCursorService,
   ) {}
 
   async list(
@@ -124,6 +129,62 @@ export class ReviewsService {
 
     const rating = await this.reviewsRepository.findRating(userId, media.mediaRef);
     return toReviewDetail(review, media, author, rating);
+  }
+
+  async get(reviewId: string, viewerId?: string): Promise<ReviewDetailDto> {
+    const review = await this.reviewsRepository.findPublicById(reviewId);
+    if (!review) throwReviewNotFound();
+
+    const [media, viewer] = await Promise.all([
+      this.requireMedia(review.mediaRef),
+      viewerId ? this.reviewsRepository.findAuthor(viewerId) : undefined,
+    ]);
+    return toPublicReviewDetail(review, media, viewerId, Boolean(viewer?.emailVerifiedAt));
+  }
+
+  async getContent(reviewId: string): Promise<ReviewContentDto> {
+    const review = await this.reviewsRepository.findPublicById(reviewId);
+    if (!review) throwReviewNotFound();
+    return { body: review.body };
+  }
+
+  async listProfile(
+    rawHandle: string,
+    query: PublicProfileCollectionQueryDto,
+    viewerId?: string,
+  ): Promise<ReviewCursorPageDto> {
+    const handle = normalizeHandle(rawHandle);
+    const owner = isHandleAllowed(handle)
+      ? await this.reviewsRepository.findPublicProfileOwner(handle)
+      : undefined;
+    if (!owner) throwProfileNotFound();
+
+    const boundary = query.cursor
+      ? this.profileCursorService.decode(query.cursor, owner.id)
+      : undefined;
+    const [rows, viewer] = await Promise.all([
+      this.reviewsRepository.findPublicProfilePage(owner.id, boundary, query.limit + 1),
+      viewerId ? this.reviewsRepository.findAuthor(viewerId) : undefined,
+    ]);
+    const hasNextPage = rows.length > query.limit;
+    const pageRows = rows.slice(0, query.limit);
+    const resolution = await this.mediaCatalogService.resolveMediaRefs(
+      pageRows.map(({ mediaRef }) => mediaRef),
+    );
+    const mediaByIndex = new Map(
+      resolution.matches.map(({ requestIndex, item }) => [requestIndex, item]),
+    );
+    const items = pageRows.map((row, index) => {
+      const media = mediaByIndex.get(index);
+      if (!media) throw new Error(`Canonical review media was not resolved: ${row.mediaRef}`);
+      return toReviewSummary(row, media, viewerId, Boolean(viewer?.emailVerifiedAt));
+    });
+    const last = pageRows.at(-1);
+
+    return {
+      items,
+      nextCursor: hasNextPage && last ? this.profileCursorService.encode(owner.id, last) : null,
+    };
   }
 
   async update(userId: string, reviewId: string, dto: UpdateReviewDto): Promise<ReviewDetailDto> {
@@ -252,30 +313,16 @@ function toReviewDetail(
 }
 
 function toReviewSummary(
-  review: PublicReviewPageRow,
+  review: PublicReviewRow,
   media: MediaSummaryDto,
   viewerId: string | undefined,
   viewerCanPublish: boolean,
 ): ReviewSummaryDto {
   const isOwner = viewerId !== undefined && review.userId === viewerId;
-  const activeAuthor =
-    review.userId && review.authorHandle && review.authorDisplayName
-      ? {
-          state: 'active' as const,
-          user: {
-            handle: review.authorHandle,
-            displayName: review.authorDisplayName,
-            avatarUrl: review.authorAvatarAssetId
-              ? `/api/v1/profile-assets/avatar_${review.authorAvatarAssetId}.webp`
-              : null,
-          },
-        }
-      : { state: 'deleted' as const, label: 'Удалённый пользователь' as const };
-
   return {
     reviewId: review.reviewId,
     media,
-    author: activeAuthor,
+    author: toPublicAuthor(review),
     title: review.title,
     excerpt: review.isSpoiler ? null : Array.from(review.body).slice(0, 280).join(''),
     bodyState: review.isSpoiler ? 'spoiler-hidden' : 'excerpt',
@@ -294,12 +341,63 @@ function toReviewSummary(
   };
 }
 
+function toPublicReviewDetail(
+  review: PublicReviewRow,
+  media: MediaSummaryDto,
+  viewerId: string | undefined,
+  viewerCanPublish: boolean,
+): ReviewDetailDto {
+  const isOwner = viewerId !== undefined && review.userId === viewerId;
+  return {
+    reviewId: review.reviewId,
+    media,
+    author: toPublicAuthor(review),
+    title: review.title,
+    body: review.isSpoiler ? null : review.body,
+    bodyState: review.isSpoiler ? 'spoiler-hidden' : 'visible',
+    isSpoiler: review.isSpoiler,
+    rating: review.rating,
+    commentCount: 0,
+    createdAt: review.createdAt.toISOString(),
+    updatedAt: review.updatedAt.toISOString(),
+    viewerActions: {
+      canEdit: isOwner,
+      canDelete: isOwner,
+      canComment: viewerCanPublish,
+      canReport: viewerCanPublish && !isOwner,
+      canModerate: false,
+    },
+  };
+}
+
+function toPublicAuthor(review: PublicReviewRow): ReviewDetailDto['author'] {
+  return review.userId && review.authorHandle && review.authorDisplayName
+    ? {
+        state: 'active',
+        user: {
+          handle: review.authorHandle,
+          displayName: review.authorDisplayName,
+          avatarUrl: review.authorAvatarAssetId
+            ? `/api/v1/profile-assets/avatar_${review.authorAvatarAssetId}.webp`
+            : null,
+        },
+      }
+    : { state: 'deleted', label: 'Удалённый пользователь' };
+}
+
 function throwMediaNotFound(): never {
   throw new NotFoundException({ code: 'MEDIA_NOT_FOUND', message: 'Произведение не найдено' });
 }
 
 function throwReviewNotFound(): never {
   throw new NotFoundException({ code: 'REVIEW_NOT_FOUND', message: 'Рецензия не найдена' });
+}
+
+function throwProfileNotFound(): never {
+  throw new NotFoundException({
+    code: 'PROFILE_NOT_FOUND',
+    message: 'Публичный профиль не найден',
+  });
 }
 
 function throwEditConflict(): never {

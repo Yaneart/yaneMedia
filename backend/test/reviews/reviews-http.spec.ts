@@ -14,7 +14,11 @@ import {
   StrictBodyFieldsGuard,
   StrictQueryFieldsGuard,
 } from '../../src/profile/strict-body-fields.guard';
-import { MediaReviewsController, ReviewsController } from '../../src/reviews/reviews.controller';
+import {
+  MediaReviewsController,
+  ProfileReviewsController,
+  ReviewsController,
+} from '../../src/reviews/reviews.controller';
 import { ReviewsService } from '../../src/reviews/reviews.service';
 
 describe('reviews HTTP contract', () => {
@@ -45,12 +49,15 @@ describe('reviews HTTP contract', () => {
   const list = jest.fn();
   const update = jest.fn();
   const remove = jest.fn();
+  const get = jest.fn();
+  const getContent = jest.fn();
+  const listProfile = jest.fn();
   const findUserBySessionHash = jest.fn();
   const deleteExpiredByTokenHash = jest.fn();
 
   beforeAll(async () => {
     const module = await Test.createTestingModule({
-      controllers: [MediaReviewsController, ReviewsController],
+      controllers: [MediaReviewsController, ReviewsController, ProfileReviewsController],
       providers: [
         SessionGuard,
         OptionalSessionGuard,
@@ -61,7 +68,10 @@ describe('reviews HTTP contract', () => {
           provide: ConfigService,
           useValue: new ConfigService({ FRONTEND_ORIGIN: 'http://localhost:5173' }),
         },
-        { provide: ReviewsService, useValue: { list, create, update, delete: remove } },
+        {
+          provide: ReviewsService,
+          useValue: { list, create, get, getContent, listProfile, update, delete: remove },
+        },
         {
           provide: AuthRepository,
           useValue: { findUserBySessionHash, deleteExpiredByTokenHash },
@@ -86,6 +96,9 @@ describe('reviews HTTP contract', () => {
     list.mockReset().mockResolvedValue({ items: [], nextCursor: null });
     update.mockReset().mockResolvedValue(detail);
     remove.mockReset().mockResolvedValue(undefined);
+    get.mockReset().mockResolvedValue(detail);
+    getContent.mockReset().mockResolvedValue({ body: detail.body });
+    listProfile.mockReset().mockResolvedValue({ items: [], nextCursor: null });
     findUserBySessionHash.mockReset().mockResolvedValue(user);
     deleteExpiredByTokenHash.mockReset().mockResolvedValue(undefined);
   });
@@ -139,6 +152,32 @@ describe('reviews HTTP contract', () => {
       }),
     ).toMatchObject({ status: 403 });
     expect(create).not.toHaveBeenCalled();
+  });
+
+  it('serves public detail, explicit spoiler content, and an author feed without caching', async () => {
+    const detailResponse = await fetch(`${baseUrl}/reviews/${reviewId}`);
+    expect(detailResponse.status).toBe(200);
+    expect(detailResponse.headers.get('cache-control')).toBe('no-store');
+    expect(get).toHaveBeenCalledWith(reviewId, undefined);
+
+    const contentResponse = await fetch(`${baseUrl}/reviews/${reviewId}/content`);
+    expect(contentResponse.status).toBe(200);
+    expect(contentResponse.headers.get('cache-control')).toBe('private, no-store');
+    expect(await contentResponse.json()).toEqual({ data: { body: detail.body } });
+
+    const profileResponse = await fetch(`${baseUrl}/profiles/YaneArt/reviews?limit=10`);
+    expect(profileResponse.status).toBe(200);
+    expect(profileResponse.headers.get('cache-control')).toBe('no-store');
+    expect(listProfile).toHaveBeenCalledWith('YaneArt', { limit: 10 }, undefined);
+  });
+
+  it('rejects invalid public review identifiers and profile list queries', async () => {
+    expect(await fetch(`${baseUrl}/reviews/not-a-review`)).toMatchObject({ status: 400 });
+    expect(await fetch(`${baseUrl}/profiles/yaneart/reviews?offset=1`)).toMatchObject({
+      status: 400,
+    });
+    expect(get).not.toHaveBeenCalled();
+    expect(listProfile).not.toHaveBeenCalled();
   });
 
   it('creates a normalized review with 201 and no-store', async () => {

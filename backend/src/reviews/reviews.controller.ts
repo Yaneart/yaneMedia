@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   HttpCode,
   Param,
   Patch,
@@ -26,6 +27,7 @@ import {
 import {
   CreateReviewDto,
   type ReviewCursorPageDto,
+  type ReviewContentDto,
   type ReviewDetailDto,
   ReviewIdDto,
   ReviewListQueryDto,
@@ -33,6 +35,7 @@ import {
   UpdateReviewDto,
 } from './dto/review.dto';
 import { ReviewsService } from './reviews.service';
+import { PublicProfileCollectionQueryDto } from '../profile/dto/public-profile-collection-query.dto';
 
 const strictValidation = new ValidationPipe({
   transform: true,
@@ -73,6 +76,22 @@ export class MediaReviewsController {
 export class ReviewsController {
   constructor(private readonly reviewsService: ReviewsService) {}
 
+  @Get(':reviewId')
+  @NoStore()
+  @UseGuards(OptionalSessionGuard)
+  get(
+    @OptionalCurrentUser() user: AuthUserDto | undefined,
+    @Param(strictValidation) { reviewId }: ReviewIdDto,
+  ): Promise<ReviewDetailDto> {
+    return this.reviewsService.get(reviewId, user?.id);
+  }
+
+  @Get(':reviewId/content')
+  @Header('Cache-Control', 'private, no-store')
+  getContent(@Param(strictValidation) { reviewId }: ReviewIdDto): Promise<ReviewContentDto> {
+    return this.reviewsService.getContent(reviewId);
+  }
+
   @Patch(':reviewId')
   @NoStore()
   @UseGuards(SessionGuard, CsrfGuard, StrictBodyFieldsGuard)
@@ -94,5 +113,22 @@ export class ReviewsController {
     @Param(strictValidation) { reviewId }: ReviewIdDto,
   ): Promise<void> {
     return this.reviewsService.delete(user.id, reviewId);
+  }
+}
+
+@Controller('profiles')
+export class ProfileReviewsController {
+  constructor(private readonly reviewsService: ReviewsService) {}
+
+  @Get(':handle/reviews')
+  @NoStore()
+  @UseGuards(OptionalSessionGuard, StrictQueryFieldsGuard)
+  @StrictQueryFields('cursor', 'limit')
+  list(
+    @OptionalCurrentUser() user: AuthUserDto | undefined,
+    @Param('handle') handle: string,
+    @Query(strictValidation) query: PublicProfileCollectionQueryDto,
+  ): Promise<ReviewCursorPageDto> {
+    return this.reviewsService.listProfile(handle, query, user?.id);
   }
 }

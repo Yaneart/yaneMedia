@@ -6,18 +6,24 @@ import { DatabaseModule } from '../database/database.module';
 import { MediaModule } from '../media/media.module';
 import { OptionalSessionGuard } from '../auth/guards/optional-session.guard';
 import { StrictBodyFieldsGuard, StrictQueryFieldsGuard } from '../profile/strict-body-fields.guard';
-import { MediaReviewsController, ReviewsController } from './reviews.controller';
+import {
+  MediaReviewsController,
+  ProfileReviewsController,
+  ReviewsController,
+} from './reviews.controller';
+import { ProfileReviewCursorService } from './profile-review-cursor.service';
 import { ReviewListCursorService } from './review-list-cursor.service';
 import { ReviewsRepository } from './reviews.repository';
 import { ReviewsService } from './reviews.service';
 
 @Module({
   imports: [AuthModule, AppConfigModule, DatabaseModule, MediaModule],
-  controllers: [MediaReviewsController, ReviewsController],
+  controllers: [MediaReviewsController, ReviewsController, ProfileReviewsController],
   providers: [
     ReviewsRepository,
     ReviewsService,
     ReviewListCursorService,
+    ProfileReviewCursorService,
     OptionalSessionGuard,
     StrictBodyFieldsGuard,
     StrictQueryFieldsGuard,
@@ -30,6 +36,6 @@ export class ReviewsModule implements NestModule {
         response.setHeader('Cache-Control', 'no-store');
         next();
       })
-      .forRoutes(MediaReviewsController, ReviewsController);
+      .forRoutes(MediaReviewsController, ReviewsController, ProfileReviewsController);
   }
 }

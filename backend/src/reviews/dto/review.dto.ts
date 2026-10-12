@@ -115,7 +115,7 @@ export class ViewerActionsDto {
 export class ReviewDetailDto {
   reviewId!: string;
   media!: MediaSummaryDto;
-  author!: ActiveAuthorDto;
+  author!: ActiveAuthorDto | DeletedAuthorDto;
   title!: string;
   body!: string | null;
   bodyState!: 'visible' | 'spoiler-hidden';
@@ -145,6 +145,10 @@ export class ReviewSummaryDto {
 export class ReviewCursorPageDto {
   items!: ReviewSummaryDto[];
   nextCursor!: string | null;
+}
+
+export class ReviewContentDto {
+  body!: string;
 }
 
 function normalizeTitle(value: unknown): unknown {
