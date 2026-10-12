@@ -11,6 +11,7 @@ import { FavoritesModule } from './favorites/favorites.module';
 import { HistoryModule } from './history/history.module';
 import { ContinueWatchingModule } from './continue-watching/continue-watching.module';
 import { ProfileModule } from './profile/profile.module';
+import { RatingsModule } from './ratings/ratings.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { ProfileModule } from './profile/profile.module';
     FavoritesModule,
     HistoryModule,
     ContinueWatchingModule,
+    RatingsModule,
     ProfileModule,
   ],
   providers: [AppLogger, ApiExceptionFilter],

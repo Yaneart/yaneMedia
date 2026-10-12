@@ -80,6 +80,7 @@ describePostgres('profile with PostgreSQL', () => {
       ratingsPublic: true,
       favoritesPublic: true,
       favoritesCount: 0,
+      ratingsCount: 0,
     });
 
     const contestedHandle = `claimed_${suffix}`;

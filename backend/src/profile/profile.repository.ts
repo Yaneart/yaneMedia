@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { and, count, desc, eq, lt, lte, or, sql } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
 import { favorites } from '../favorites/entities/favorite.entity';
+import { ratings } from '../ratings/entities/rating.entity';
 import { users, type User } from '../users/entities/user.entity';
 import { profileAssets, type NewProfileAsset, type ProfileAsset } from './profile-asset.entity';
 
@@ -25,6 +26,7 @@ export type PublicProfileRecord = Pick<
   | 'ratingsPublic'
 > & {
   favoritesCount: number | null;
+  ratingsCount: number | null;
 };
 
 export type PublicCollectionOwner = Pick<
@@ -35,6 +37,13 @@ export type PublicCollectionOwner = Pick<
 export interface FavoritePageRow {
   mediaRef: string;
   addedAt: Date;
+}
+
+export interface RatingPageRow {
+  mediaRef: string;
+  value: number;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 @Injectable()
@@ -62,14 +71,20 @@ export class ProfileRepository {
         ratingsPublic: users.ratingsPublic,
         favoritesPublic: users.favoritesPublic,
         favoritesCount: sql<number | null>`case
-          when ${users.favoritesPublic} then count(${favorites.mediaRef})::int
+          when ${users.favoritesPublic} then (
+            select count(*)::int from ${favorites} where ${favorites.userId} = ${users.id}
+          )
+          else null
+        end`,
+        ratingsCount: sql<number | null>`case
+          when ${users.ratingsPublic} then (
+            select count(*)::int from ${ratings} where ${ratings.userId} = ${users.id}
+          )
           else null
         end`,
       })
       .from(users)
-      .leftJoin(favorites, eq(favorites.userId, users.id))
       .where(sql`lower(${users.handle}) = ${handle}`)
-      .groupBy(users.id)
       .limit(1);
 
     return profile;
@@ -116,11 +131,51 @@ export class ProfileRepository {
       .limit(limit);
   }
 
+  async findRatingsPage(
+    userId: string,
+    boundary: FavoritePageRow | undefined,
+    limit: number,
+  ): Promise<RatingPageRow[]> {
+    return this.databaseService.db
+      .select({
+        mediaRef: ratings.mediaRef,
+        value: ratings.value,
+        createdAt: ratings.createdAt,
+        updatedAt: ratings.updatedAt,
+      })
+      .from(ratings)
+      .where(
+        and(
+          eq(ratings.userId, userId),
+          boundary
+            ? or(
+                lt(ratings.createdAt, boundary.addedAt),
+                and(
+                  eq(ratings.createdAt, boundary.addedAt),
+                  lt(ratings.mediaRef, boundary.mediaRef),
+                ),
+              )
+            : undefined,
+        ),
+      )
+      .orderBy(desc(ratings.createdAt), desc(ratings.mediaRef))
+      .limit(limit);
+  }
+
   async countFavorites(userId: string): Promise<number> {
     const [result] = await this.databaseService.db
       .select({ value: count() })
       .from(favorites)
       .where(eq(favorites.userId, userId));
+
+    return result?.value ?? 0;
+  }
+
+  async countRatings(userId: string): Promise<number> {
+    const [result] = await this.databaseService.db
+      .select({ value: count() })
+      .from(ratings)
+      .where(eq(ratings.userId, userId));
 
     return result?.value ?? 0;
   }

@@ -42,6 +42,7 @@ describe('profile HTTP contract', () => {
   const getProfile = jest.fn();
   const updateProfile = jest.fn();
   const getSettings = jest.fn();
+  const getOwnRatings = jest.fn();
   const updateSettings = jest.fn();
   const getHandleAvailability = jest.fn();
   const updateAvatar = jest.fn();
@@ -69,6 +70,7 @@ describe('profile HTTP contract', () => {
             getProfile,
             updateProfile,
             getSettings,
+            getOwnRatings,
             updateSettings,
             getHandleAvailability,
             updateAvatar,
@@ -107,6 +109,7 @@ describe('profile HTTP contract', () => {
     getSettings
       .mockReset()
       .mockResolvedValue({ ratingsVisibility: 'private', favoritesVisibility: 'private' });
+    getOwnRatings.mockReset().mockResolvedValue({ items: [], nextCursor: null });
     updateSettings
       .mockReset()
       .mockResolvedValue({ ratingsVisibility: 'public', favoritesVisibility: 'private' });
@@ -147,6 +150,14 @@ describe('profile HTTP contract', () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ data: profile });
     expect(getProfile).toHaveBeenCalledWith(user.id);
+  });
+
+  it('returns the owner ratings regardless of public visibility', async () => {
+    const response = await fetch(`${url}/ratings?limit=10`, { headers: authHeaders() });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ data: { items: [], nextCursor: null } });
+    expect(getOwnRatings).toHaveBeenCalledWith(user.id, expect.objectContaining({ limit: 10 }));
   });
 
   it('requires CSRF and forwards normalized profile fields', async () => {

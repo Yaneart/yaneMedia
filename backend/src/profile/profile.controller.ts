@@ -19,6 +19,8 @@ import type { AuthUserDto } from '../auth/dto/auth-user.dto';
 import { CsrfGuard } from '../auth/guards/csrf.guard';
 import { SessionGuard } from '../auth/guards/session.guard';
 import { HandleAvailabilityQueryDto } from './dto/handle-availability-query.dto';
+import type { CursorPageDto, PublicRatingDto } from './dto/public-profile-collection.dto';
+import { PublicProfileCollectionQueryDto } from './dto/public-profile-collection-query.dto';
 import type {
   HandleAvailabilityDto,
   PrivateProfileDto,
@@ -65,6 +67,16 @@ export class ProfileController {
   @Get('settings')
   getSettings(@CurrentUser() user: AuthUserDto): Promise<ProfileSettingsDto> {
     return this.profileService.getSettings(user.id);
+  }
+
+  @Get('ratings')
+  @UseGuards(StrictQueryFieldsGuard)
+  @StrictQueryFields('cursor', 'limit')
+  getRatings(
+    @CurrentUser() user: AuthUserDto,
+    @Query(strictValidation) query: PublicProfileCollectionQueryDto,
+  ): Promise<CursorPageDto<PublicRatingDto>> {
+    return this.profileService.getOwnRatings(user.id, query);
   }
 
   @Patch('settings')

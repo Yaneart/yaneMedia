@@ -29,12 +29,14 @@ describe('ProfileService', () => {
     ProfileRepository['findPublicByHandle']
   >;
   const countFavorites = jest.fn() as jest.MockedFunction<ProfileRepository['countFavorites']>;
+  const countRatings = jest.fn() as jest.MockedFunction<ProfileRepository['countRatings']>;
   const findPublicCollectionOwner = jest.fn() as jest.MockedFunction<
     ProfileRepository['findPublicCollectionOwner']
   >;
   const findPublicFavoritesPage = jest.fn() as jest.MockedFunction<
     ProfileRepository['findPublicFavoritesPage']
   >;
+  const findRatingsPage = jest.fn() as jest.MockedFunction<ProfileRepository['findRatingsPage']>;
   const isHandleAvailable = jest.fn() as jest.MockedFunction<
     ProfileRepository['isHandleAvailable']
   >;
@@ -51,8 +53,10 @@ describe('ProfileService', () => {
     findById,
     findPublicByHandle,
     countFavorites,
+    countRatings,
     findPublicCollectionOwner,
     findPublicFavoritesPage,
+    findRatingsPage,
     isHandleAvailable,
     update,
     replaceAvatar,
@@ -89,8 +93,10 @@ describe('ProfileService', () => {
       favoritesPublic: user.favoritesPublic,
       createdAt: user.createdAt,
       favoritesCount: 12,
+      ratingsCount: null,
     });
     countFavorites.mockReset().mockResolvedValue(12);
+    countRatings.mockReset().mockResolvedValue(3);
     findPublicCollectionOwner.mockReset().mockResolvedValue({
       id: user.id,
       handle: user.handle,
@@ -98,6 +104,7 @@ describe('ProfileService', () => {
       favoritesPublic: true,
     });
     findPublicFavoritesPage.mockReset().mockResolvedValue([]);
+    findRatingsPage.mockReset().mockResolvedValue([]);
     resolveMediaRefs.mockReset().mockResolvedValue({
       items: [],
       matches: [],
@@ -128,7 +135,7 @@ describe('ProfileService', () => {
       bio: 'Смотрю кино.',
       joinedAt: '2026-09-04T08:00:00.000Z',
       visibility: { ratings: false, favorites: true },
-      counts: { reviews: 0, comments: 0, ratings: 0, favorites: 12 },
+      counts: { reviews: 0, comments: 0, ratings: 3, favorites: 12 },
       email: 'artem@example.com',
       emailVerified: true,
     });
@@ -144,6 +151,7 @@ describe('ProfileService', () => {
       favoritesPublic: false,
       createdAt: user.createdAt,
       favoritesCount: null,
+      ratingsCount: null,
     });
 
     await expect(service.getPublicProfile('  YANEART  ')).resolves.toEqual({
@@ -253,10 +261,58 @@ describe('ProfileService', () => {
     expect(decodeCursor).not.toHaveBeenCalled();
   });
 
-  it('returns an empty public ratings page until the rating model is introduced', async () => {
-    await expect(service.getPublicRatings(user.handle, { limit: 20 })).resolves.toEqual({
+  it('returns public ratings with media details in deterministic order', async () => {
+    const first = {
+      mediaRef: 'work_00000000-0000-4000-8000-000000000001',
+      value: 9,
+      createdAt: new Date('2026-09-03T00:00:00.000Z'),
+      updatedAt: new Date('2026-09-04T00:00:00.000Z'),
+    };
+    const second = {
+      mediaRef: 'work_00000000-0000-4000-8000-000000000002',
+      value: 7,
+      createdAt: new Date('2026-09-02T00:00:00.000Z'),
+      updatedAt: new Date('2026-09-02T00:00:00.000Z'),
+    };
+    const extra = {
+      mediaRef: 'work_00000000-0000-4000-8000-000000000003',
+      value: 5,
+      createdAt: new Date('2026-09-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-09-01T00:00:00.000Z'),
+    };
+    findRatingsPage.mockResolvedValue([first, second, extra]);
+    resolveMediaRefs.mockResolvedValue({
       items: [],
-      nextCursor: null,
+      matches: [
+        { requestIndex: 1, item: mediaSummary(second.mediaRef, 'Second') },
+        { requestIndex: 0, item: mediaSummary(first.mediaRef, 'First') },
+      ],
+      partial: false,
+      degraded: false,
+      stale: false,
+    });
+
+    await expect(service.getPublicRatings(user.handle, { limit: 2 })).resolves.toEqual({
+      items: [
+        {
+          media: mediaSummary(first.mediaRef, 'First'),
+          value: 9,
+          createdAt: first.createdAt.toISOString(),
+          updatedAt: first.updatedAt.toISOString(),
+        },
+        {
+          media: mediaSummary(second.mediaRef, 'Second'),
+          value: 7,
+          createdAt: second.createdAt.toISOString(),
+          updatedAt: second.updatedAt.toISOString(),
+        },
+      ],
+      nextCursor: 'next-cursor',
+    });
+    expect(findRatingsPage).toHaveBeenCalledWith(user.id, undefined, 3);
+    expect(encodeCursor).toHaveBeenCalledWith('ratings', user.handle, {
+      addedAt: second.createdAt,
+      mediaRef: second.mediaRef,
     });
   });
 

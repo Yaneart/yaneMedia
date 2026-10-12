@@ -41,12 +41,13 @@ export class ProfileService {
   ) {}
 
   async getProfile(userId: string): Promise<PrivateProfileDto> {
-    const [user, favoritesCount] = await Promise.all([
+    const [user, favoritesCount, ratingsCount] = await Promise.all([
       this.requireUser(userId),
       this.profileRepository.countFavorites(userId),
+      this.profileRepository.countRatings(userId),
     ]);
 
-    return toPrivateProfile(user, favoritesCount);
+    return toPrivateProfile(user, favoritesCount, ratingsCount);
   }
 
   async getPublicProfile(rawHandle: string): Promise<PublicProfileDto> {
@@ -76,7 +77,7 @@ export class ProfileService {
       counts: {
         reviews: 0,
         comments: 0,
-        ratings: profile.ratingsPublic ? 0 : null,
+        ratings: profile.ratingsCount,
         favorites: profile.favoritesCount,
       },
     };
@@ -117,8 +118,14 @@ export class ProfileService {
     query: PublicProfileCollectionQueryDto,
   ): Promise<CursorPageDto<PublicRatingDto>> {
     const owner = await this.requirePublicCollectionOwner(rawHandle, 'ratings');
-    if (query.cursor) this.cursorService.decode(query.cursor, 'ratings', owner.handle);
-    return { items: [], nextCursor: null };
+    return this.getRatingsPage(owner.id, owner.handle, query);
+  }
+
+  getOwnRatings(
+    userId: string,
+    query: PublicProfileCollectionQueryDto,
+  ): Promise<CursorPageDto<PublicRatingDto>> {
+    return this.getRatingsPage(userId, `owner:${userId}`, query);
   }
 
   async updateProfile(userId: string, dto: UpdateProfileDto): Promise<PrivateProfileDto> {
@@ -164,7 +171,7 @@ export class ProfileService {
     }
 
     await this.cleanupPreviousAsset(change.previousAsset);
-    return toPrivateProfile(change.user, await this.profileRepository.countFavorites(userId));
+    return this.toPrivateProfileWithCounts(change.user);
   }
 
   async deleteAvatar(userId: string): Promise<PrivateProfileDto> {
@@ -172,12 +179,59 @@ export class ProfileService {
     if (!change) throw new Error('Authenticated user no longer exists');
 
     await this.cleanupPreviousAsset(change.previousAsset);
-    return toPrivateProfile(change.user, await this.profileRepository.countFavorites(userId));
+    return this.toPrivateProfileWithCounts(change.user);
   }
 
   private async updateAndRead(userId: string, changes: ProfileUpdate): Promise<PrivateProfileDto> {
     const user = await this.updateUser(userId, changes);
-    return toPrivateProfile(user, await this.profileRepository.countFavorites(userId));
+    return this.toPrivateProfileWithCounts(user);
+  }
+
+  private async toPrivateProfileWithCounts(user: User): Promise<PrivateProfileDto> {
+    const [favoritesCount, ratingsCount] = await Promise.all([
+      this.profileRepository.countFavorites(user.id),
+      this.profileRepository.countRatings(user.id),
+    ]);
+    return toPrivateProfile(user, favoritesCount, ratingsCount);
+  }
+
+  private async getRatingsPage(
+    userId: string,
+    cursorOwner: string,
+    query: PublicProfileCollectionQueryDto,
+  ): Promise<CursorPageDto<PublicRatingDto>> {
+    const boundary = query.cursor
+      ? this.cursorService.decode(query.cursor, 'ratings', cursorOwner)
+      : undefined;
+    const rows = await this.profileRepository.findRatingsPage(userId, boundary, query.limit + 1);
+    const hasNextPage = rows.length > query.limit;
+    const pageRows = rows.slice(0, query.limit);
+    const resolution = await this.mediaCatalogService.resolveMediaRefs(
+      pageRows.map(({ mediaRef }) => mediaRef),
+    );
+    const items = resolution.matches
+      .sort((left, right) => left.requestIndex - right.requestIndex)
+      .map(({ item, requestIndex }) => {
+        const row = pageRows[requestIndex];
+        return {
+          media: item,
+          value: row.value,
+          createdAt: row.createdAt.toISOString(),
+          updatedAt: row.updatedAt.toISOString(),
+        };
+      });
+    const last = pageRows.at(-1);
+
+    return {
+      items,
+      nextCursor:
+        hasNextPage && last
+          ? this.cursorService.encode('ratings', cursorOwner, {
+              addedAt: last.createdAt,
+              mediaRef: last.mediaRef,
+            })
+          : null,
+    };
   }
 
   private async updateUser(userId: string, changes: ProfileUpdate): Promise<User> {
@@ -252,7 +306,11 @@ function requireChanges(dto: object): void {
   }
 }
 
-function toPrivateProfile(user: User, favoritesCount: number): PrivateProfileDto {
+function toPrivateProfile(
+  user: User,
+  favoritesCount: number,
+  ratingsCount: number,
+): PrivateProfileDto {
   return {
     handle: user.handle,
     displayName: user.displayName,
@@ -265,7 +323,7 @@ function toPrivateProfile(user: User, favoritesCount: number): PrivateProfileDto
       ratings: user.ratingsPublic,
       favorites: user.favoritesPublic,
     },
-    counts: { reviews: 0, comments: 0, ratings: 0, favorites: favoritesCount },
+    counts: { reviews: 0, comments: 0, ratings: ratingsCount, favorites: favoritesCount },
     email: user.email,
     emailVerified: user.emailVerifiedAt !== null,
   };
