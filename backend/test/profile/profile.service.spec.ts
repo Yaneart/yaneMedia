@@ -3,6 +3,8 @@ import { DrizzleQueryError } from 'drizzle-orm';
 import { DatabaseError } from 'pg';
 import type { ProfileRepository } from '../../src/profile/profile.repository';
 import { ProfileService } from '../../src/profile/profile.service';
+import type { ProfileAssetStore } from '../../src/profile/profile-asset.store';
+import type { AppLogger } from '../../src/platform/logging/app-logger';
 import type { User } from '../../src/users/entities/user.entity';
 
 describe('ProfileService', () => {
@@ -26,18 +28,39 @@ describe('ProfileService', () => {
     ProfileRepository['isHandleAvailable']
   >;
   const update = jest.fn() as jest.MockedFunction<ProfileRepository['update']>;
-  const service = new ProfileService({
+  const replaceAvatar = jest.fn() as jest.MockedFunction<ProfileRepository['replaceAvatar']>;
+  const clearAvatar = jest.fn() as jest.MockedFunction<ProfileRepository['clearAvatar']>;
+  const deleteAssetIfUnreferenced = jest.fn() as jest.MockedFunction<
+    ProfileRepository['deleteAssetIfUnreferenced']
+  >;
+  const saveAsset = jest.fn() as jest.MockedFunction<ProfileAssetStore['save']>;
+  const deleteAsset = jest.fn() as jest.MockedFunction<ProfileAssetStore['delete']>;
+  const logUnexpectedError = jest.fn();
+  const repository = {
     findById,
     countFavorites,
     isHandleAvailable,
     update,
-  } as unknown as ProfileRepository);
+    replaceAvatar,
+    clearAvatar,
+    deleteAssetIfUnreferenced,
+  } as unknown as ProfileRepository;
+  const store = { save: saveAsset, delete: deleteAsset } as unknown as ProfileAssetStore;
+  const service = new ProfileService(repository, store, {
+    logUnexpectedError,
+  } as unknown as AppLogger);
 
   beforeEach(() => {
     findById.mockReset().mockResolvedValue(user);
     countFavorites.mockReset().mockResolvedValue(12);
     isHandleAvailable.mockReset().mockResolvedValue(true);
     update.mockReset().mockResolvedValue(user);
+    replaceAvatar.mockReset();
+    clearAvatar.mockReset();
+    deleteAssetIfUnreferenced.mockReset().mockResolvedValue(true);
+    saveAsset.mockReset();
+    deleteAsset.mockReset().mockResolvedValue(true);
+    logUnexpectedError.mockReset();
   });
 
   it('returns the private owner projection without password or internal ID', async () => {
@@ -121,5 +144,75 @@ describe('ProfileService', () => {
     const error = new Error('connection unavailable');
     update.mockRejectedValue(error);
     await expect(service.updateProfile(user.id, { handle: 'available' })).rejects.toBe(error);
+  });
+
+  it('publishes a new avatar before switching the user and then removes the previous asset', async () => {
+    const asset = {
+      id: '28b47aca-2c26-482e-bcb8-2f438bb53072',
+      objectKey: 'avatar_28b47aca-2c26-482e-bcb8-2f438bb53072.webp',
+      mimeType: 'image/webp' as const,
+      width: 512,
+      height: 512,
+      byteSize: 123,
+      checksum: 'a'.repeat(64),
+    };
+    const previousAsset = {
+      ...asset,
+      id: '0a3c4b69-5016-4cc4-be89-1a25530014cd',
+      objectKey: 'avatar_0a3c4b69-5016-4cc4-be89-1a25530014cd.webp',
+      createdAt: new Date(),
+    };
+    saveAsset.mockResolvedValue(asset);
+    replaceAvatar.mockResolvedValue({
+      user: { ...user, avatarAssetId: asset.id },
+      previousAsset,
+    });
+
+    await expect(
+      service.updateAvatar(user.id, { buffer: Buffer.from('image'), mimetype: 'image/png' }),
+    ).resolves.toMatchObject({
+      avatarUrl: `/api/v1/profile-assets/${asset.objectKey}`,
+    });
+    expect(replaceAvatar).toHaveBeenCalledWith(user.id, asset);
+    expect(deleteAssetIfUnreferenced).toHaveBeenCalledWith(previousAsset.id);
+    expect(deleteAsset).toHaveBeenCalledWith(previousAsset.objectKey);
+  });
+
+  it('removes a newly published file when the database switch fails', async () => {
+    const asset = {
+      id: '28b47aca-2c26-482e-bcb8-2f438bb53072',
+      objectKey: 'avatar_28b47aca-2c26-482e-bcb8-2f438bb53072.webp',
+      mimeType: 'image/webp' as const,
+      width: 512,
+      height: 512,
+      byteSize: 123,
+      checksum: 'a'.repeat(64),
+    };
+    const error = new Error('database unavailable');
+    saveAsset.mockResolvedValue(asset);
+    replaceAvatar.mockRejectedValue(error);
+
+    await expect(
+      service.updateAvatar(user.id, { buffer: Buffer.from('image'), mimetype: 'image/png' }),
+    ).rejects.toBe(error);
+    expect(deleteAsset).toHaveBeenCalledWith(asset.objectKey);
+  });
+
+  it('clears the avatar idempotently and removes the detached managed asset', async () => {
+    const previousAsset = {
+      id: '0a3c4b69-5016-4cc4-be89-1a25530014cd',
+      objectKey: 'avatar_0a3c4b69-5016-4cc4-be89-1a25530014cd.webp',
+      mimeType: 'image/webp',
+      width: 512,
+      height: 512,
+      byteSize: 123,
+      checksum: 'a'.repeat(64),
+      createdAt: new Date(),
+    };
+    clearAvatar.mockResolvedValue({ user, previousAsset });
+
+    await expect(service.deleteAvatar(user.id)).resolves.toMatchObject({ avatarUrl: null });
+    expect(deleteAssetIfUnreferenced).toHaveBeenCalledWith(previousAsset.id);
+    expect(deleteAsset).toHaveBeenCalledWith(previousAsset.objectKey);
   });
 });

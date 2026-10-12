@@ -1,12 +1,18 @@
 import { Injectable } from '@nestjs/common';
-import { count, eq, sql } from 'drizzle-orm';
+import { and, count, eq, lte, sql } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
 import { favorites } from '../favorites/entities/favorite.entity';
 import { users, type User } from '../users/entities/user.entity';
+import { profileAssets, type NewProfileAsset, type ProfileAsset } from './profile-asset.entity';
 
 export type ProfileUpdate = Partial<
   Pick<User, 'bio' | 'displayName' | 'favoritesPublic' | 'handle' | 'ratingsPublic'>
 >;
+
+export type AvatarChange = {
+  user: User;
+  previousAsset?: ProfileAsset;
+};
 
 @Injectable()
 export class ProfileRepository {
@@ -50,4 +56,112 @@ export class ProfileRepository {
 
     return user;
   }
+
+  async replaceAvatar(userId: string, asset: NewProfileAsset): Promise<AvatarChange | undefined> {
+    return this.databaseService.db.transaction(async (transaction) => {
+      const [current] = await transaction
+        .select({ avatarAssetId: users.avatarAssetId })
+        .from(users)
+        .where(eq(users.id, userId))
+        .for('update');
+      if (!current) return undefined;
+
+      await transaction.insert(profileAssets).values(asset);
+      const [user] = await transaction
+        .update(users)
+        .set({ avatarAssetId: asset.id, updatedAt: new Date() })
+        .where(eq(users.id, userId))
+        .returning();
+      if (!user) throw new Error('Locked user disappeared while replacing avatar');
+
+      return {
+        user,
+        previousAsset: current.avatarAssetId
+          ? await findAsset(transaction, current.avatarAssetId)
+          : undefined,
+      };
+    });
+  }
+
+  async clearAvatar(userId: string): Promise<AvatarChange | undefined> {
+    return this.databaseService.db.transaction(async (transaction) => {
+      const [current] = await transaction
+        .select({ avatarAssetId: users.avatarAssetId })
+        .from(users)
+        .where(eq(users.id, userId))
+        .for('update');
+      if (!current) return undefined;
+
+      const [user] = current.avatarAssetId
+        ? await transaction
+            .update(users)
+            .set({ avatarAssetId: null, updatedAt: new Date() })
+            .where(eq(users.id, userId))
+            .returning()
+        : await transaction.select().from(users).where(eq(users.id, userId)).limit(1);
+      if (!user) throw new Error('Locked user disappeared while clearing avatar');
+
+      return {
+        user,
+        previousAsset: current.avatarAssetId
+          ? await findAsset(transaction, current.avatarAssetId)
+          : undefined,
+      };
+    });
+  }
+
+  async findAssetByObjectKey(objectKey: string): Promise<ProfileAsset | undefined> {
+    const [asset] = await this.databaseService.db
+      .select()
+      .from(profileAssets)
+      .where(eq(profileAssets.objectKey, objectKey))
+      .limit(1);
+    return asset;
+  }
+
+  async findUnreferencedAssets(cutoff: Date): Promise<ProfileAsset[]> {
+    return this.databaseService.db
+      .select()
+      .from(profileAssets)
+      .where(
+        and(
+          lte(profileAssets.createdAt, cutoff),
+          sql`not exists (select 1 from ${users} where ${users.avatarAssetId} = ${profileAssets.id})`,
+        ),
+      );
+  }
+
+  async findAssetObjectKeys(): Promise<string[]> {
+    return this.databaseService.db
+      .select({ objectKey: profileAssets.objectKey })
+      .from(profileAssets)
+      .then((rows) => rows.map(({ objectKey }) => objectKey));
+  }
+
+  async deleteAssetIfUnreferenced(assetId: string): Promise<boolean> {
+    const deleted = await this.databaseService.db
+      .delete(profileAssets)
+      .where(
+        and(
+          eq(profileAssets.id, assetId),
+          sql`not exists (select 1 from ${users} where ${users.avatarAssetId} = ${profileAssets.id})`,
+        ),
+      )
+      .returning({ id: profileAssets.id });
+    return deleted.length > 0;
+  }
+}
+
+type ProfileTransaction = Parameters<Parameters<DatabaseService['db']['transaction']>[0]>[0];
+
+async function findAsset(
+  transaction: ProfileTransaction,
+  assetId: string,
+): Promise<ProfileAsset | undefined> {
+  const [asset] = await transaction
+    .select()
+    .from(profileAssets)
+    .where(eq(profileAssets.id, assetId))
+    .limit(1);
+  return asset;
 }

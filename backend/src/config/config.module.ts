@@ -18,6 +18,8 @@ import Joi from 'joi';
         MAIL_FROM: Joi.string().trim().required(),
         MEDIA_ASSETS_ROOT: Joi.string().trim().min(1).default('./storage/media-assets'),
         MEDIA_ASSET_CLEANUP_GRACE_DAYS: Joi.number().integer().min(1).max(3650).default(30),
+        PROFILE_ASSETS_ROOT: Joi.string().trim().min(1).default('./storage/profile-assets'),
+        PROFILE_ASSET_CLEANUP_GRACE_HOURS: Joi.number().integer().min(1).max(8760).default(24),
         TMDB_API_KEY: Joi.string().trim().max(4096).allow('').optional(),
         MEDIA_ENGINE_SHIKIMORI_USER_AGENT: Joi.string().trim().max(512).allow('').optional(),
         KODIK_API_KEY: Joi.string().trim().max(4096).allow('').optional(),

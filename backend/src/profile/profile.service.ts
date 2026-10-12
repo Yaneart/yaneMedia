@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, Injectable } from '@nestjs/comm
 import { DrizzleQueryError } from 'drizzle-orm';
 import { DatabaseError } from 'pg';
 import type { User } from '../users/entities/user.entity';
+import { AppLogger } from '../platform/logging/app-logger';
 import type {
   HandleAvailabilityDto,
   PrivateProfileDto,
@@ -10,10 +11,20 @@ import type {
 import type { UpdateProfileDto } from './dto/update-profile.dto';
 import type { UpdateProfileSettingsDto } from './dto/update-profile-settings.dto';
 import { ProfileRepository, type ProfileUpdate } from './profile.repository';
+import { ProfileAssetStore } from './profile-asset.store';
+
+export type UploadedAvatar = {
+  buffer: Buffer;
+  mimetype: string;
+};
 
 @Injectable()
 export class ProfileService {
-  constructor(private readonly profileRepository: ProfileRepository) {}
+  constructor(
+    private readonly profileRepository: ProfileRepository,
+    private readonly profileAssetStore: ProfileAssetStore,
+    private readonly logger: AppLogger,
+  ) {}
 
   async getProfile(userId: string): Promise<PrivateProfileDto> {
     const [user, favoritesCount] = await Promise.all([
@@ -51,6 +62,33 @@ export class ProfileService {
     };
   }
 
+  async updateAvatar(userId: string, upload: UploadedAvatar): Promise<PrivateProfileDto> {
+    const asset = await this.profileAssetStore.save(upload.buffer, upload.mimetype);
+    let change: Awaited<ReturnType<ProfileRepository['replaceAvatar']>>;
+    try {
+      change = await this.profileRepository.replaceAvatar(userId, asset);
+    } catch (error: unknown) {
+      await this.profileAssetStore.delete(asset.objectKey).catch(() => undefined);
+      throw error;
+    }
+
+    if (!change) {
+      await this.profileAssetStore.delete(asset.objectKey).catch(() => undefined);
+      throw new Error('Authenticated user no longer exists');
+    }
+
+    await this.cleanupPreviousAsset(change.previousAsset);
+    return toPrivateProfile(change.user, await this.profileRepository.countFavorites(userId));
+  }
+
+  async deleteAvatar(userId: string): Promise<PrivateProfileDto> {
+    const change = await this.profileRepository.clearAvatar(userId);
+    if (!change) throw new Error('Authenticated user no longer exists');
+
+    await this.cleanupPreviousAsset(change.previousAsset);
+    return toPrivateProfile(change.user, await this.profileRepository.countFavorites(userId));
+  }
+
   private async updateAndRead(userId: string, changes: ProfileUpdate): Promise<PrivateProfileDto> {
     const user = await this.updateUser(userId, changes);
     return toPrivateProfile(user, await this.profileRepository.countFavorites(userId));
@@ -85,6 +123,20 @@ export class ProfileService {
     if (!user) throw new Error('Authenticated user no longer exists');
     return user;
   }
+
+  private async cleanupPreviousAsset(
+    asset: Awaited<ReturnType<ProfileRepository['findAssetByObjectKey']>>,
+  ): Promise<void> {
+    if (!asset) return;
+
+    try {
+      if (await this.profileRepository.deleteAssetIfUnreferenced(asset.id)) {
+        await this.profileAssetStore.delete(asset.objectKey);
+      }
+    } catch {
+      this.logger.logUnexpectedError('ProfileService.cleanupPreviousAsset');
+    }
+  }
 }
 
 function requireChanges(dto: object): void {
@@ -97,7 +149,9 @@ function toPrivateProfile(user: User, favoritesCount: number): PrivateProfileDto
   return {
     handle: user.handle,
     displayName: user.displayName,
-    avatarUrl: user.avatarAssetId ? `/api/v1/profile-assets/${user.avatarAssetId}` : null,
+    avatarUrl: user.avatarAssetId
+      ? `/api/v1/profile-assets/avatar_${user.avatarAssetId}.webp`
+      : null,
     bio: user.bio,
     joinedAt: user.createdAt.toISOString(),
     visibility: {

@@ -1,5 +1,6 @@
 // Предметные схемы будут экспортироваться отсюда по мере их появления.
 export { users } from '../users/entities/user.entity';
+export { profileAssets } from '../profile/profile-asset.entity';
 export { sessions } from '../auth/entities/session.entity';
 export { emailVerificationTokens } from '../auth/entities/email-verification-token.entity';
 export { passwordResetTokens } from '../auth/entities/password-reset-token.entity';

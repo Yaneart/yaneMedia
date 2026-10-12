@@ -4,9 +4,13 @@ import { AuthModule } from '../auth/auth.module';
 import { AppConfigModule } from '../config/config.module';
 import { DatabaseModule } from '../database/database.module';
 import { ProfileController } from './profile.controller';
+import { ProfileAssetsController } from './profile-assets.controller';
+import { ProfileAssetCleanupService } from './profile-asset-cleanup.service';
+import { ProfileAssetStore } from './profile-asset.store';
 import { ProfileRepository } from './profile.repository';
 import { ProfileService } from './profile.service';
 import { StrictBodyFieldsGuard, StrictQueryFieldsGuard } from './strict-body-fields.guard';
+import { AppLogger } from '../platform/logging/app-logger';
 
 @Module({
   imports: [
@@ -15,7 +19,15 @@ import { StrictBodyFieldsGuard, StrictQueryFieldsGuard } from './strict-body-fie
     DatabaseModule,
     ThrottlerModule.forRoot({ throttlers: [{ limit: 5, ttl: 60_000 }] }),
   ],
-  controllers: [ProfileController],
-  providers: [ProfileRepository, ProfileService, StrictBodyFieldsGuard, StrictQueryFieldsGuard],
+  controllers: [ProfileController, ProfileAssetsController],
+  providers: [
+    ProfileRepository,
+    ProfileService,
+    ProfileAssetStore,
+    ProfileAssetCleanupService,
+    StrictBodyFieldsGuard,
+    StrictQueryFieldsGuard,
+    AppLogger,
+  ],
 })
 export class ProfileModule {}

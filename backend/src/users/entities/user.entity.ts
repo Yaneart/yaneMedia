@@ -10,6 +10,7 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core';
 import { RESERVED_HANDLES } from '../handle';
+import { profileAssets } from '../../profile/profile-asset.entity';
 
 export const users = pgTable(
   'users',
@@ -18,7 +19,9 @@ export const users = pgTable(
     handle: varchar('handle', { length: 30 }).notNull(),
     displayName: varchar('display_name', { length: 50 }).notNull(),
     bio: varchar('bio', { length: 300 }).default('').notNull(),
-    avatarAssetId: uuid('avatar_asset_id'),
+    avatarAssetId: uuid('avatar_asset_id').references(() => profileAssets.id, {
+      onDelete: 'set null',
+    }),
     ratingsPublic: boolean('ratings_public').default(false).notNull(),
     favoritesPublic: boolean('favorites_public').default(false).notNull(),
     email: varchar('email', { length: 254 }).notNull(),

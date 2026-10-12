@@ -44,6 +44,8 @@ describe('profile HTTP contract', () => {
   const getSettings = jest.fn();
   const updateSettings = jest.fn();
   const getHandleAvailability = jest.fn();
+  const updateAvatar = jest.fn();
+  const deleteAvatar = jest.fn();
   const findUserBySessionHash = jest.fn();
   const deleteExpiredByTokenHash = jest.fn();
 
@@ -69,6 +71,8 @@ describe('profile HTTP contract', () => {
             getSettings,
             updateSettings,
             getHandleAvailability,
+            updateAvatar,
+            deleteAvatar,
           },
         },
         {
@@ -111,6 +115,8 @@ describe('profile HTTP contract', () => {
       .mockImplementation((_userId: string, handle: string) =>
         Promise.resolve({ handle, available: true }),
       );
+    updateAvatar.mockReset().mockResolvedValue({ ...profile, avatarUrl: '/avatar.webp' });
+    deleteAvatar.mockReset().mockResolvedValue(profile);
     findUserBySessionHash.mockReset().mockResolvedValue(user);
     deleteExpiredByTokenHash.mockReset().mockResolvedValue(undefined);
   });
@@ -222,5 +228,79 @@ describe('profile HTTP contract', () => {
     expect(payload.error.code).toBe('RATE_LIMITED');
     expect(getHandleAvailability).toHaveBeenNthCalledWith(1, user.id, 'candidate_0');
     expect(getHandleAvailability).toHaveBeenCalledTimes(5);
+  });
+
+  it('requires CSRF and exactly one multipart avatar file', async () => {
+    const form = new FormData();
+    form.append('avatar', new Blob([Buffer.from('avatar')], { type: 'image/png' }), 'avatar.png');
+
+    const missingCsrf = await fetch(`${url}/avatar`, {
+      method: 'PUT',
+      headers: authHeaders(),
+      body: form,
+    });
+    expect(missingCsrf.status).toBe(403);
+
+    const validForm = new FormData();
+    validForm.append(
+      'avatar',
+      new Blob([Buffer.from('avatar')], { type: 'image/png' }),
+      'avatar.png',
+    );
+    const response = await fetch(`${url}/avatar`, {
+      method: 'PUT',
+      headers: authHeaders(true),
+      body: validForm,
+    });
+    expect(response.status).toBe(200);
+    expect(updateAvatar).toHaveBeenCalledWith(
+      user.id,
+      expect.objectContaining({ buffer: Buffer.from('avatar'), mimetype: 'image/png' }),
+    );
+
+    const empty = await fetch(`${url}/avatar`, {
+      method: 'PUT',
+      headers: authHeaders(true),
+      body: new FormData(),
+    });
+    expect(empty.status).toBe(400);
+  });
+
+  it('rejects oversized uploads and deletes an avatar with CSRF protection', async () => {
+    const oversized = new FormData();
+    oversized.append(
+      'avatar',
+      new Blob([Buffer.alloc(5 * 1024 * 1024 + 1)], { type: 'image/png' }),
+      'large.png',
+    );
+    const rejected = await fetch(`${url}/avatar`, {
+      method: 'PUT',
+      headers: authHeaders(true),
+      body: oversized,
+    });
+    expect(rejected.status).toBe(413);
+    await expect(rejected.json()).resolves.toMatchObject({
+      error: { code: 'PAYLOAD_TOO_LARGE' },
+    });
+
+    const missingCsrf = await fetch(`${url}/avatar`, {
+      method: 'DELETE',
+      headers: authHeaders(),
+    });
+    expect(missingCsrf.status).toBe(403);
+
+    const response = await fetch(`${url}/avatar`, {
+      method: 'DELETE',
+      headers: authHeaders(true),
+    });
+    expect(response.status).toBe(200);
+    expect(deleteAvatar).toHaveBeenCalledWith(user.id);
+
+    const repeated: Awaited<ReturnType<typeof fetch>>[] = [];
+    for (let index = 0; index < 5; index += 1) {
+      repeated.push(await fetch(`${url}/avatar`, { method: 'DELETE', headers: authHeaders(true) }));
+    }
+    expect(repeated.map(({ status }) => status)).toEqual([200, 200, 200, 200, 429]);
+    expect(deleteAvatar).toHaveBeenCalledTimes(5);
   });
 });

@@ -1,4 +1,18 @@
-import { Body, Controller, Get, Patch, Query, UseGuards, ValidationPipe } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Patch,
+  Put,
+  Query,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors,
+  ValidationPipe,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthUserDto } from '../auth/dto/auth-user.dto';
@@ -13,6 +27,8 @@ import type {
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UpdateProfileSettingsDto } from './dto/update-profile-settings.dto';
 import { ProfileService } from './profile.service';
+import { PROFILE_AVATAR_MAX_BYTES } from './profile-asset.store';
+import type { UploadedAvatar } from './profile.service';
 import {
   StrictBodyFields,
   StrictBodyFieldsGuard,
@@ -70,5 +86,28 @@ export class ProfileController {
     @Query(strictValidation) query: HandleAvailabilityQueryDto,
   ): Promise<HandleAvailabilityDto> {
     return this.profileService.getHandleAvailability(user.id, query.handle);
+  }
+
+  @Put('avatar')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 5, ttl: 10 * 60_000 } })
+  @UseInterceptors(
+    FileInterceptor('avatar', {
+      limits: { fileSize: PROFILE_AVATAR_MAX_BYTES, files: 1, fields: 0 },
+    }),
+  )
+  updateAvatar(
+    @CurrentUser() user: AuthUserDto,
+    @UploadedFile() avatar: UploadedAvatar | undefined,
+  ): Promise<PrivateProfileDto> {
+    if (!avatar) throw new BadRequestException('Добавьте файл avatar');
+    return this.profileService.updateAvatar(user.id, avatar);
+  }
+
+  @Delete('avatar')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 5, ttl: 10 * 60_000 } })
+  deleteAvatar(@CurrentUser() user: AuthUserDto): Promise<PrivateProfileDto> {
+    return this.profileService.deleteAvatar(user.id);
   }
 }
