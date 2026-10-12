@@ -2,23 +2,33 @@ import {
   Body,
   Controller,
   Delete,
+  Get,
   HttpCode,
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
   ValidationPipe,
 } from '@nestjs/common';
-import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { CurrentUser, OptionalCurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthUserDto } from '../auth/dto/auth-user.dto';
 import { CsrfGuard } from '../auth/guards/csrf.guard';
+import { OptionalSessionGuard } from '../auth/guards/optional-session.guard';
 import { SessionGuard } from '../auth/guards/session.guard';
 import { NoStore } from '../platform/http/cache-policy';
-import { StrictBodyFields, StrictBodyFieldsGuard } from '../profile/strict-body-fields.guard';
+import {
+  StrictBodyFields,
+  StrictBodyFieldsGuard,
+  StrictQueryFields,
+  StrictQueryFieldsGuard,
+} from '../profile/strict-body-fields.guard';
 import {
   CreateReviewDto,
+  type ReviewCursorPageDto,
   type ReviewDetailDto,
   ReviewIdDto,
+  ReviewListQueryDto,
   ReviewMediaRefDto,
   UpdateReviewDto,
 } from './dto/review.dto';
@@ -33,6 +43,18 @@ const strictValidation = new ValidationPipe({
 @Controller('media')
 export class MediaReviewsController {
   constructor(private readonly reviewsService: ReviewsService) {}
+
+  @Get(':mediaRef/reviews')
+  @NoStore()
+  @UseGuards(OptionalSessionGuard, StrictQueryFieldsGuard)
+  @StrictQueryFields('sort', 'cursor', 'limit')
+  list(
+    @OptionalCurrentUser() user: AuthUserDto | undefined,
+    @Param(strictValidation) { mediaRef }: ReviewMediaRefDto,
+    @Query(strictValidation) query: ReviewListQueryDto,
+  ): Promise<ReviewCursorPageDto> {
+    return this.reviewsService.list(mediaRef, query, user?.id);
+  }
 
   @Post(':mediaRef/reviews')
   @NoStore()

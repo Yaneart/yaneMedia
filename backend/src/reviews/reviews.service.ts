@@ -9,16 +9,88 @@ import { DrizzleQueryError } from 'drizzle-orm';
 import { DatabaseError } from 'pg';
 import { MediaCatalogService } from '../media/catalog/media-catalog.service';
 import type { MediaSummaryDto } from '../media/dto/media-summary.dto';
-import type { CreateReviewDto, ReviewDetailDto, UpdateReviewDto } from './dto/review.dto';
+import type {
+  CreateReviewDto,
+  ReviewCursorPageDto,
+  ReviewDetailDto,
+  ReviewListQueryDto,
+  ReviewSummaryDto,
+  UpdateReviewDto,
+} from './dto/review.dto';
 import type { Review } from './entities/review.entity';
-import { ReviewsRepository, type ReviewAuthor, type ReviewChanges } from './reviews.repository';
+import type { ReviewListSnapshot } from './entities/review-list-snapshot.entity';
+import {
+  ReviewsRepository,
+  type PublicReviewPageRow,
+  type ReviewAuthor,
+  type ReviewChanges,
+} from './reviews.repository';
+import {
+  REVIEW_LIST_SNAPSHOT_TTL_MS,
+  ReviewListCursorService,
+  throwCursorInvalid,
+} from './review-list-cursor.service';
 
 @Injectable()
 export class ReviewsService {
   constructor(
     private readonly reviewsRepository: ReviewsRepository,
     private readonly mediaCatalogService: MediaCatalogService,
+    private readonly cursorService: ReviewListCursorService,
   ) {}
+
+  async list(
+    locator: string,
+    query: ReviewListQueryDto,
+    viewerId?: string,
+  ): Promise<ReviewCursorPageDto> {
+    const media = await this.requireMedia(locator);
+    const now = new Date();
+    let snapshot: ReviewListSnapshot;
+    let position = 0;
+
+    if (query.cursor) {
+      const decoded = this.cursorService.decode(query.cursor, media.mediaRef, query.sort);
+      position = decoded.position;
+      const existingSnapshot = await this.reviewsRepository.findListSnapshot(
+        decoded.snapshotId,
+        media.mediaRef,
+        query.sort,
+        now,
+      );
+      if (!existingSnapshot) throwCursorInvalid();
+      snapshot = existingSnapshot;
+    } else {
+      snapshot = await this.reviewsRepository.createListSnapshot(
+        media.mediaRef,
+        query.sort,
+        new Date(now.getTime() + REVIEW_LIST_SNAPSHOT_TTL_MS),
+      );
+    }
+
+    const [rows, viewer] = await Promise.all([
+      this.reviewsRepository.findPublicSnapshotPage(snapshot.id, position, query.limit + 1),
+      viewerId ? this.reviewsRepository.findAuthor(viewerId) : undefined,
+    ]);
+    const hasNextPage = rows.length > query.limit;
+    const pageRows = rows.slice(0, query.limit);
+    const nextPosition = rows[query.limit]?.position;
+
+    return {
+      items: pageRows.map((row) =>
+        toReviewSummary(row, media, viewerId, Boolean(viewer?.emailVerifiedAt)),
+      ),
+      nextCursor:
+        hasNextPage && nextPosition !== undefined
+          ? this.cursorService.encode(
+              media.mediaRef,
+              query.sort,
+              { snapshotId: snapshot.id, position: nextPosition },
+              snapshot.expiresAt,
+            )
+          : null,
+    };
+  }
 
   async create(userId: string, locator: string, dto: CreateReviewDto): Promise<ReviewDetailDto> {
     const [author, media] = await Promise.all([
@@ -174,6 +246,49 @@ function toReviewDetail(
       canDelete: true,
       canComment: review.publicationState === 'published',
       canReport: false,
+      canModerate: false,
+    },
+  };
+}
+
+function toReviewSummary(
+  review: PublicReviewPageRow,
+  media: MediaSummaryDto,
+  viewerId: string | undefined,
+  viewerCanPublish: boolean,
+): ReviewSummaryDto {
+  const isOwner = viewerId !== undefined && review.userId === viewerId;
+  const activeAuthor =
+    review.userId && review.authorHandle && review.authorDisplayName
+      ? {
+          state: 'active' as const,
+          user: {
+            handle: review.authorHandle,
+            displayName: review.authorDisplayName,
+            avatarUrl: review.authorAvatarAssetId
+              ? `/api/v1/profile-assets/avatar_${review.authorAvatarAssetId}.webp`
+              : null,
+          },
+        }
+      : { state: 'deleted' as const, label: 'Удалённый пользователь' as const };
+
+  return {
+    reviewId: review.reviewId,
+    media,
+    author: activeAuthor,
+    title: review.title,
+    excerpt: review.isSpoiler ? null : Array.from(review.body).slice(0, 280).join(''),
+    bodyState: review.isSpoiler ? 'spoiler-hidden' : 'excerpt',
+    isSpoiler: review.isSpoiler,
+    rating: review.rating,
+    commentCount: 0,
+    createdAt: review.createdAt.toISOString(),
+    updatedAt: review.updatedAt.toISOString(),
+    viewerActions: {
+      canEdit: isOwner,
+      canDelete: isOwner,
+      canComment: viewerCanPublish,
+      canReport: viewerCanPublish && !isOwner,
       canModerate: false,
     },
   };

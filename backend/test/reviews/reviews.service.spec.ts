@@ -3,6 +3,7 @@ import { DrizzleQueryError } from 'drizzle-orm';
 import { DatabaseError } from 'pg';
 import type { MediaCatalogService } from '../../src/media/catalog/media-catalog.service';
 import type { Review } from '../../src/reviews/entities/review.entity';
+import type { ReviewListCursorService } from '../../src/reviews/review-list-cursor.service';
 import type { ReviewsRepository } from '../../src/reviews/reviews.repository';
 import { ReviewsService } from '../../src/reviews/reviews.service';
 
@@ -40,7 +41,12 @@ describe('ReviewsService', () => {
   const findRating = jest.fn();
   const update = jest.fn();
   const softDelete = jest.fn();
+  const createListSnapshot = jest.fn();
+  const findListSnapshot = jest.fn();
+  const findPublicSnapshotPage = jest.fn();
   const resolveMediaRefs = jest.fn();
+  const encode = jest.fn();
+  const decode = jest.fn();
   const service = new ReviewsService(
     {
       findAuthor,
@@ -49,8 +55,12 @@ describe('ReviewsService', () => {
       findRating,
       update,
       softDelete,
+      createListSnapshot,
+      findListSnapshot,
+      findPublicSnapshotPage,
     } as unknown as ReviewsRepository,
     { resolveMediaRefs } as unknown as MediaCatalogService,
+    { encode, decode } as unknown as ReviewListCursorService,
   );
 
   beforeEach(() => {
@@ -60,6 +70,17 @@ describe('ReviewsService', () => {
     findRating.mockReset().mockResolvedValue(9);
     update.mockReset().mockResolvedValue({ ...review, isSpoiler: false });
     softDelete.mockReset().mockResolvedValue(undefined);
+    createListSnapshot.mockReset().mockResolvedValue({
+      id: '10000000-0000-4000-8000-000000000001',
+      mediaRef: media.mediaRef,
+      sort: 'new',
+      createdAt: new Date('2026-10-12T12:00:00.000Z'),
+      expiresAt: new Date('2026-10-12T13:00:00.000Z'),
+    });
+    findListSnapshot.mockReset();
+    findPublicSnapshotPage.mockReset().mockResolvedValue([]);
+    encode.mockReset().mockReturnValue('next-cursor');
+    decode.mockReset();
     resolveMediaRefs.mockReset().mockResolvedValue({
       items: [media],
       matches: [{ requestIndex: 0, item: media }],
@@ -67,6 +88,86 @@ describe('ReviewsService', () => {
       degraded: false,
       stale: false,
     });
+  });
+
+  it('lists spoiler-safe summaries from a stable snapshot with current ratings', async () => {
+    findPublicSnapshotPage.mockResolvedValue([
+      {
+        ...review,
+        position: 0,
+        authorHandle: author.handle,
+        authorDisplayName: author.displayName,
+        authorAvatarAssetId: author.avatarAssetId,
+        rating: 9,
+      },
+      {
+        ...review,
+        reviewId: 'review_00000000-0000-4000-8000-000000000002',
+        position: 1,
+        isSpoiler: false,
+        body: 'Обычный текст рецензии, который разрешено показать в списке.',
+        authorHandle: null,
+        authorDisplayName: null,
+        authorAvatarAssetId: null,
+        userId: null,
+        rating: null,
+      },
+      {
+        ...review,
+        reviewId: 'review_00000000-0000-4000-8000-000000000003',
+        position: 2,
+        authorHandle: author.handle,
+        authorDisplayName: author.displayName,
+        authorAvatarAssetId: null,
+        rating: 8,
+      },
+    ]);
+
+    const result = await service.list(media.mediaRef, { sort: 'new', limit: 2 }, userId);
+    expect(result).toMatchObject({
+      items: [
+        {
+          reviewId: review.reviewId,
+          media,
+          excerpt: null,
+          bodyState: 'spoiler-hidden',
+          rating: 9,
+        },
+        {
+          reviewId: 'review_00000000-0000-4000-8000-000000000002',
+          author: { state: 'deleted', label: 'Удалённый пользователь' },
+          excerpt: 'Обычный текст рецензии, который разрешено показать в списке.',
+          bodyState: 'excerpt',
+          rating: null,
+        },
+      ],
+      nextCursor: 'next-cursor',
+    });
+    expect(result.items[0]?.viewerActions).toMatchObject({ canEdit: true, canReport: false });
+    expect(findPublicSnapshotPage).toHaveBeenCalledWith(
+      '10000000-0000-4000-8000-000000000001',
+      0,
+      3,
+    );
+    expect(encode).toHaveBeenCalledWith(
+      media.mediaRef,
+      'new',
+      expect.objectContaining({ position: 2 }),
+      new Date('2026-10-12T13:00:00.000Z'),
+    );
+  });
+
+  it('rejects a cursor whose persisted snapshot is unavailable', async () => {
+    decode.mockReturnValue({
+      snapshotId: '10000000-0000-4000-8000-000000000001',
+      position: 2,
+    });
+    findListSnapshot.mockResolvedValue(undefined);
+
+    await expect(
+      service.list(media.mediaRef, { sort: 'updated', limit: 20, cursor: 'cursor' }),
+    ).rejects.toMatchObject({ response: { code: 'CURSOR_INVALID' } });
+    expect(createListSnapshot).not.toHaveBeenCalled();
   });
 
   it('creates against the canonical work and hides spoiler body in the public detail', async () => {

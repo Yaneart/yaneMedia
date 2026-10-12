@@ -1,5 +1,18 @@
-import { Transform } from 'class-transformer';
-import { IsBoolean, IsISO8601, IsOptional, IsString, Length, Matches } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
+import {
+  IsBoolean,
+  IsIn,
+  IsInt,
+  IsISO8601,
+  IsOptional,
+  IsString,
+  Length,
+  Matches,
+  Max,
+  MaxLength,
+  Min,
+  MinLength,
+} from 'class-validator';
 import type { MediaSummaryDto } from '../../media/dto/media-summary.dto';
 import { MEDIA_REF_PATTERN } from '../../media/media-ref';
 
@@ -17,6 +30,27 @@ export class ReviewIdDto {
   @IsString()
   @Matches(REVIEW_ID_PATTERN)
   reviewId!: string;
+}
+
+export const REVIEW_SORTS = ['new', 'updated', 'rating-high', 'rating-low'] as const;
+export type ReviewSort = (typeof REVIEW_SORTS)[number];
+
+export class ReviewListQueryDto {
+  @IsOptional()
+  @IsIn(REVIEW_SORTS)
+  sort: ReviewSort = 'new';
+
+  @IsOptional()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(2048)
+  cursor?: string;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  limit = 20;
 }
 
 export class CreateReviewDto {
@@ -65,6 +99,11 @@ export class ActiveAuthorDto {
   };
 }
 
+export class DeletedAuthorDto {
+  state!: 'deleted';
+  label!: 'Удалённый пользователь';
+}
+
 export class ViewerActionsDto {
   canEdit!: boolean;
   canDelete!: boolean;
@@ -86,6 +125,26 @@ export class ReviewDetailDto {
   createdAt!: string;
   updatedAt!: string;
   viewerActions!: ViewerActionsDto;
+}
+
+export class ReviewSummaryDto {
+  reviewId!: string;
+  media!: MediaSummaryDto;
+  author!: ActiveAuthorDto | DeletedAuthorDto;
+  title!: string;
+  excerpt!: string | null;
+  bodyState!: 'excerpt' | 'spoiler-hidden';
+  isSpoiler!: boolean;
+  rating!: number | null;
+  commentCount!: number;
+  createdAt!: string;
+  updatedAt!: string;
+  viewerActions!: ViewerActionsDto;
+}
+
+export class ReviewCursorPageDto {
+  items!: ReviewSummaryDto[];
+  nextCursor!: string | null;
 }
 
 function normalizeTitle(value: unknown): unknown {

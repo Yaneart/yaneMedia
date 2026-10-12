@@ -120,6 +120,13 @@
       "when": 1791786558043,
       "tag": "0016_dusty_chamber",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1791811923207,
+      "tag": "0017_last_hairball",
+      "breakpoints": true
     }
   ]
 }

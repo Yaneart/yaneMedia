@@ -1,8 +1,14 @@
 import { Injectable } from '@nestjs/common';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, isNull, lt, sql } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
 import { ratings } from '../ratings/entities/rating.entity';
 import { users, type User } from '../users/entities/user.entity';
+import type { ReviewSort } from './dto/review.dto';
+import {
+  reviewListSnapshotItems,
+  reviewListSnapshots,
+  type ReviewListSnapshot,
+} from './entities/review-list-snapshot.entity';
 import { reviews, type NewReview, type Review } from './entities/review.entity';
 
 export type ReviewAuthor = Pick<
@@ -11,6 +17,14 @@ export type ReviewAuthor = Pick<
 >;
 
 export type ReviewChanges = Partial<Pick<Review, 'body' | 'isSpoiler' | 'title'>>;
+
+export interface PublicReviewPageRow extends Review {
+  position: number;
+  authorHandle: string | null;
+  authorDisplayName: string | null;
+  authorAvatarAssetId: string | null;
+  rating: number | null;
+}
 
 @Injectable()
 export class ReviewsRepository {
@@ -59,6 +73,116 @@ export class ReviewsRepository {
     return rating?.value ?? null;
   }
 
+  async createListSnapshot(
+    mediaRef: string,
+    sort: ReviewSort,
+    expiresAt: Date,
+  ): Promise<ReviewListSnapshot> {
+    return this.databaseService.db.transaction(async (transaction) => {
+      await transaction
+        .delete(reviewListSnapshots)
+        .where(lt(reviewListSnapshots.expiresAt, new Date()));
+
+      const ordered = await transaction
+        .select({ reviewId: reviews.reviewId })
+        .from(reviews)
+        .leftJoin(
+          ratings,
+          and(eq(ratings.userId, reviews.userId), eq(ratings.mediaRef, reviews.mediaRef)),
+        )
+        .where(
+          and(
+            eq(reviews.mediaRef, mediaRef),
+            eq(reviews.publicationState, 'published'),
+            isNull(reviews.deletedAt),
+          ),
+        )
+        .orderBy(...reviewSortOrder(sort));
+      const [snapshot] = await transaction
+        .insert(reviewListSnapshots)
+        .values({ mediaRef, sort, expiresAt })
+        .returning();
+      if (!snapshot) throw new Error('Review list snapshot was not returned after creation');
+
+      if (ordered.length > 0) {
+        const items = ordered.map(({ reviewId }, position) => ({
+          snapshotId: snapshot.id,
+          position,
+          reviewId,
+        }));
+        for (let index = 0; index < items.length; index += 10_000) {
+          await transaction
+            .insert(reviewListSnapshotItems)
+            .values(items.slice(index, index + 10_000));
+        }
+      }
+      return snapshot;
+    });
+  }
+
+  async findListSnapshot(
+    snapshotId: string,
+    mediaRef: string,
+    sort: ReviewSort,
+    now: Date,
+  ): Promise<ReviewListSnapshot | undefined> {
+    const [snapshot] = await this.databaseService.db
+      .select()
+      .from(reviewListSnapshots)
+      .where(
+        and(
+          eq(reviewListSnapshots.id, snapshotId),
+          eq(reviewListSnapshots.mediaRef, mediaRef),
+          eq(reviewListSnapshots.sort, sort),
+          sql`${reviewListSnapshots.expiresAt} > ${now}`,
+        ),
+      )
+      .limit(1);
+    return snapshot;
+  }
+
+  async findPublicSnapshotPage(
+    snapshotId: string,
+    position: number,
+    limit: number,
+  ): Promise<PublicReviewPageRow[]> {
+    return this.databaseService.db
+      .select({
+        reviewId: reviews.reviewId,
+        userId: reviews.userId,
+        mediaRef: reviews.mediaRef,
+        title: reviews.title,
+        body: reviews.body,
+        isSpoiler: reviews.isSpoiler,
+        publicationState: reviews.publicationState,
+        deletedAt: reviews.deletedAt,
+        createdAt: reviews.createdAt,
+        updatedAt: reviews.updatedAt,
+        position: reviewListSnapshotItems.position,
+        authorHandle: users.handle,
+        authorDisplayName: users.displayName,
+        authorAvatarAssetId: users.avatarAssetId,
+        rating: ratings.value,
+      })
+      .from(reviewListSnapshotItems)
+      .innerJoin(reviews, eq(reviews.reviewId, reviewListSnapshotItems.reviewId))
+      .leftJoin(users, eq(users.id, reviews.userId))
+      .leftJoin(
+        ratings,
+        and(eq(ratings.userId, reviews.userId), eq(ratings.mediaRef, reviews.mediaRef)),
+      )
+      .where(
+        and(
+          eq(reviewListSnapshotItems.snapshotId, snapshotId),
+          gte(reviewListSnapshotItems.position, position),
+          eq(reviews.publicationState, 'published'),
+          isNull(reviews.deletedAt),
+        ),
+      )
+      .orderBy(asc(reviewListSnapshotItems.position))
+      .limit(limit);
+  }
+
   async update(
     reviewId: string,
     userId: string,
@@ -93,5 +217,18 @@ export class ReviewsRepository {
       .where(
         and(eq(reviews.reviewId, reviewId), eq(reviews.userId, userId), isNull(reviews.deletedAt)),
       );
+  }
+}
+
+function reviewSortOrder(sort: ReviewSort) {
+  switch (sort) {
+    case 'updated':
+      return [desc(reviews.updatedAt), desc(reviews.reviewId)];
+    case 'rating-high':
+      return [sql`${ratings.value} desc nulls last`, desc(reviews.reviewId)];
+    case 'rating-low':
+      return [sql`${ratings.value} asc nulls last`, desc(reviews.reviewId)];
+    case 'new':
+      return [desc(reviews.createdAt), desc(reviews.reviewId)];
   }
 }

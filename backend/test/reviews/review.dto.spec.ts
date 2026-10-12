@@ -1,3 +1,4 @@
+import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { CreateReviewDto, UpdateReviewDto } from '../../src/reviews/dto/review.dto';

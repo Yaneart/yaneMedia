@@ -4,15 +4,24 @@ import { AuthModule } from '../auth/auth.module';
 import { AppConfigModule } from '../config/config.module';
 import { DatabaseModule } from '../database/database.module';
 import { MediaModule } from '../media/media.module';
-import { StrictBodyFieldsGuard } from '../profile/strict-body-fields.guard';
+import { OptionalSessionGuard } from '../auth/guards/optional-session.guard';
+import { StrictBodyFieldsGuard, StrictQueryFieldsGuard } from '../profile/strict-body-fields.guard';
 import { MediaReviewsController, ReviewsController } from './reviews.controller';
+import { ReviewListCursorService } from './review-list-cursor.service';
 import { ReviewsRepository } from './reviews.repository';
 import { ReviewsService } from './reviews.service';
 
 @Module({
   imports: [AuthModule, AppConfigModule, DatabaseModule, MediaModule],
   controllers: [MediaReviewsController, ReviewsController],
-  providers: [ReviewsRepository, ReviewsService, StrictBodyFieldsGuard],
+  providers: [
+    ReviewsRepository,
+    ReviewsService,
+    ReviewListCursorService,
+    OptionalSessionGuard,
+    StrictBodyFieldsGuard,
+    StrictQueryFieldsGuard,
+  ],
 })
 export class ReviewsModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {

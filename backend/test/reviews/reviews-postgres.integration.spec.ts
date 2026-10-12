@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Client } from 'pg';
 import type { DatabaseService } from '../../src/database/database.service';
@@ -15,6 +15,7 @@ describePostgres('reviews with PostgreSQL', () => {
   let setupClient: Client;
   let workerClients: Client[];
   let userId: string | undefined;
+  const extraUserIds: string[] = [];
   const mediaRef = `work_${randomUUID()}`;
 
   beforeAll(async () => {
@@ -47,6 +48,7 @@ describePostgres('reviews with PostgreSQL', () => {
     try {
       const db = drizzle(setupClient);
       await db.delete(reviews).where(eq(reviews.mediaRef, mediaRef));
+      if (extraUserIds.length > 0) await db.delete(users).where(inArray(users.id, extraUserIds));
       if (userId) await db.delete(users).where(eq(users.id, userId));
       await db.delete(mediaWorks).where(eq(mediaWorks.mediaRef, mediaRef));
     } finally {
@@ -101,5 +103,60 @@ describePostgres('reviews with PostgreSQL', () => {
     });
     expect(replacement.reviewId).not.toBe(original.reviewId);
     await expect(repository.findRating(userId, mediaRef)).resolves.toBe(9);
+  });
+
+  it('keeps snapshot order stable and skips reviews deleted between pages', async () => {
+    if (!userId) throw new Error('Expected review author');
+    const db = drizzle(setupClient);
+    for (const value of [10, 8]) {
+      const [user] = await db
+        .insert(users)
+        .values({
+          handle: `review_${randomUUID().slice(0, 8)}`,
+          displayName: `Review probe ${value}`,
+          email: `review-${randomUUID()}@example.com`,
+          emailVerifiedAt: new Date(),
+          passwordHash: 'unused',
+        })
+        .returning({ id: users.id });
+      if (!user) throw new Error('Expected persisted review author');
+      extraUserIds.push(user.id);
+      await db.insert(ratings).values({ userId: user.id, mediaRef, value });
+      await db.insert(reviews).values({
+        userId: user.id,
+        mediaRef,
+        title: `Rated ${value}`,
+        body: 'This review body is long enough for the database constraint.',
+      });
+    }
+
+    const repository = new ReviewsRepository({ db } as unknown as DatabaseService);
+    const snapshot = await repository.createListSnapshot(
+      mediaRef,
+      'rating-high',
+      new Date(Date.now() + 60_000),
+    );
+    const firstPage = await repository.findPublicSnapshotPage(snapshot.id, 0, 1);
+    expect(firstPage).toHaveLength(1);
+    expect(firstPage[0]).toMatchObject({ userId: extraUserIds[0], rating: 10, position: 0 });
+
+    await db
+      .update(ratings)
+      .set({ value: 10 })
+      .where(and(eq(ratings.userId, extraUserIds[1]), eq(ratings.mediaRef, mediaRef)));
+    await repository.softDelete(
+      (
+        await db
+          .select({ reviewId: reviews.reviewId })
+          .from(reviews)
+          .where(and(eq(reviews.userId, userId), isNull(reviews.deletedAt)))
+          .limit(1)
+      )[0].reviewId,
+      userId,
+    );
+
+    const nextPage = await repository.findPublicSnapshotPage(snapshot.id, 1, 2);
+    expect(nextPage).toHaveLength(1);
+    expect(nextPage[0]).toMatchObject({ userId: extraUserIds[1], rating: 10, position: 2 });
   });
 });

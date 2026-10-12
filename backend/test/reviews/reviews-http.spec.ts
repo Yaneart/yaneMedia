@@ -4,12 +4,16 @@ import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import { AuthRepository } from '../../src/auth/auth.repository';
 import { CsrfGuard } from '../../src/auth/guards/csrf.guard';
+import { OptionalSessionGuard } from '../../src/auth/guards/optional-session.guard';
 import { SessionGuard } from '../../src/auth/guards/session.guard';
 import { SESSION_COOKIE_NAME } from '../../src/auth/session-cookie';
 import { ApiExceptionFilter } from '../../src/platform/http/api-error/api-exception/api-exception.filter';
 import { ApiResponseInterceptor } from '../../src/platform/http/api-response/api-response.interceptor';
 import type { AppLogger } from '../../src/platform/logging/app-logger';
-import { StrictBodyFieldsGuard } from '../../src/profile/strict-body-fields.guard';
+import {
+  StrictBodyFieldsGuard,
+  StrictQueryFieldsGuard,
+} from '../../src/profile/strict-body-fields.guard';
 import { MediaReviewsController, ReviewsController } from '../../src/reviews/reviews.controller';
 import { ReviewsService } from '../../src/reviews/reviews.service';
 
@@ -38,6 +42,7 @@ describe('reviews HTTP contract', () => {
     updatedAt: '2026-10-12T10:00:00.000Z',
   };
   const create = jest.fn();
+  const list = jest.fn();
   const update = jest.fn();
   const remove = jest.fn();
   const findUserBySessionHash = jest.fn();
@@ -48,13 +53,15 @@ describe('reviews HTTP contract', () => {
       controllers: [MediaReviewsController, ReviewsController],
       providers: [
         SessionGuard,
+        OptionalSessionGuard,
         CsrfGuard,
         StrictBodyFieldsGuard,
+        StrictQueryFieldsGuard,
         {
           provide: ConfigService,
           useValue: new ConfigService({ FRONTEND_ORIGIN: 'http://localhost:5173' }),
         },
-        { provide: ReviewsService, useValue: { create, update, delete: remove } },
+        { provide: ReviewsService, useValue: { list, create, update, delete: remove } },
         {
           provide: AuthRepository,
           useValue: { findUserBySessionHash, deleteExpiredByTokenHash },
@@ -76,6 +83,7 @@ describe('reviews HTTP contract', () => {
 
   beforeEach(() => {
     create.mockReset().mockResolvedValue(detail);
+    list.mockReset().mockResolvedValue({ items: [], nextCursor: null });
     update.mockReset().mockResolvedValue(detail);
     remove.mockReset().mockResolvedValue(undefined);
     findUserBySessionHash.mockReset().mockResolvedValue(user);
@@ -88,6 +96,27 @@ describe('reviews HTTP contract', () => {
     Cookie: `${SESSION_COOKIE_NAME}=${token}`,
     'Content-Type': 'application/json',
     'X-YaneMedia-CSRF': '1',
+  });
+
+  it('serves a guest list with strict sorting and pagination queries', async () => {
+    const response = await fetch(`${baseUrl}/media/${mediaRef}/reviews?sort=rating-high&limit=10`);
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(await response.json()).toEqual({ data: { items: [], nextCursor: null } });
+    expect(list).toHaveBeenCalledWith(mediaRef, { sort: 'rating-high', limit: 10 }, undefined);
+
+    expect(
+      await fetch(`${baseUrl}/media/${mediaRef}/reviews`, {
+        headers: { Cookie: `${SESSION_COOKIE_NAME}=${token}` },
+      }),
+    ).toMatchObject({ status: 200 });
+    expect(list).toHaveBeenLastCalledWith(mediaRef, { sort: 'new', limit: 20 }, user.id);
+
+    for (const query of ['sort=popular', 'limit=0', 'unknown=1']) {
+      expect(await fetch(`${baseUrl}/media/${mediaRef}/reviews?${query}`)).toMatchObject({
+        status: 400,
+      });
+    }
   });
 
   it('requires authentication and CSRF for publication', async () => {

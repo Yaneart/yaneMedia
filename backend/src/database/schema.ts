@@ -10,6 +10,10 @@ export { continueWatchingItems } from '../continue-watching/entities/continue-wa
 export { ratings } from '../ratings/entities/rating.entity';
 export { reviewPublicationState, reviews } from '../reviews/entities/review.entity';
 export {
+  reviewListSnapshotItems,
+  reviewListSnapshots,
+} from '../reviews/entities/review-list-snapshot.entity';
+export {
   catalogRevisionStatus,
   catalogRevisions,
   mediaAssetKind,
