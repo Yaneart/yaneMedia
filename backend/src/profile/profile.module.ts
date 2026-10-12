@@ -11,6 +11,7 @@ import { ProfileRepository } from './profile.repository';
 import { ProfileService } from './profile.service';
 import { StrictBodyFieldsGuard, StrictQueryFieldsGuard } from './strict-body-fields.guard';
 import { AppLogger } from '../platform/logging/app-logger';
+import { PublicProfilesController } from './public-profiles.controller';
 
 @Module({
   imports: [
@@ -19,7 +20,7 @@ import { AppLogger } from '../platform/logging/app-logger';
     DatabaseModule,
     ThrottlerModule.forRoot({ throttlers: [{ limit: 5, ttl: 60_000 }] }),
   ],
-  controllers: [ProfileController, ProfileAssetsController],
+  controllers: [ProfileController, ProfileAssetsController, PublicProfilesController],
   providers: [
     ProfileRepository,
     ProfileService,

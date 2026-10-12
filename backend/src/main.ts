@@ -39,7 +39,7 @@ async function bootstrap() {
   app.enableCors({
     origin: configService.getOrThrow<string>('FRONTEND_ORIGIN'),
     credentials: true,
-    exposedHeaders: ['Retry-After', 'ETag'],
+    exposedHeaders: ['Retry-After', 'ETag', 'Content-Location'],
   });
 
   app.useGlobalFilters(app.get(ApiExceptionFilter));

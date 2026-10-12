@@ -1,4 +1,9 @@
-import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { DrizzleQueryError } from 'drizzle-orm';
 import { DatabaseError } from 'pg';
 import type { User } from '../users/entities/user.entity';
@@ -7,11 +12,13 @@ import type {
   HandleAvailabilityDto,
   PrivateProfileDto,
   ProfileSettingsDto,
+  PublicProfileDto,
 } from './dto/profile.dto';
 import type { UpdateProfileDto } from './dto/update-profile.dto';
 import type { UpdateProfileSettingsDto } from './dto/update-profile-settings.dto';
 import { ProfileRepository, type ProfileUpdate } from './profile.repository';
 import { ProfileAssetStore } from './profile-asset.store';
+import { isHandleAllowed, normalizeHandle } from '../users/handle';
 
 export type UploadedAvatar = {
   buffer: Buffer;
@@ -33,6 +40,39 @@ export class ProfileService {
     ]);
 
     return toPrivateProfile(user, favoritesCount);
+  }
+
+  async getPublicProfile(rawHandle: string): Promise<PublicProfileDto> {
+    const handle = normalizeHandle(rawHandle);
+    const profile = isHandleAllowed(handle)
+      ? await this.profileRepository.findPublicByHandle(handle)
+      : undefined;
+    if (!profile) {
+      throw new NotFoundException({
+        code: 'PROFILE_NOT_FOUND',
+        message: 'Публичный профиль не найден',
+      });
+    }
+
+    return {
+      handle: profile.handle,
+      displayName: profile.displayName,
+      avatarUrl: profile.avatarAssetId
+        ? `/api/v1/profile-assets/avatar_${profile.avatarAssetId}.webp`
+        : null,
+      bio: profile.bio,
+      joinedAt: profile.createdAt.toISOString(),
+      visibility: {
+        ratings: profile.ratingsPublic,
+        favorites: profile.favoritesPublic,
+      },
+      counts: {
+        reviews: 0,
+        comments: 0,
+        ratings: profile.ratingsPublic ? 0 : null,
+        favorites: profile.favoritesCount,
+      },
+    };
   }
 
   async updateProfile(userId: string, dto: UpdateProfileDto): Promise<PrivateProfileDto> {

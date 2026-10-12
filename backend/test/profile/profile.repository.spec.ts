@@ -42,6 +42,40 @@ describe('ProfileRepository', () => {
     expect(query.params).toEqual(['candidate', user.id]);
   });
 
+  it('reads the public profile and its visible favorite count in one aggregate query', async () => {
+    let condition: SQL | undefined;
+    const profile = {
+      handle: user.handle,
+      displayName: user.displayName,
+      avatarAssetId: null,
+      bio: user.bio,
+      createdAt: user.createdAt,
+      ratingsPublic: false,
+      favoritesPublic: true,
+      favoritesCount: 7,
+    };
+    const limit = jest.fn().mockResolvedValue([profile]);
+    const groupBy = jest.fn().mockReturnValue({ limit });
+    const where = jest.fn((value: SQL) => {
+      condition = value;
+      return { groupBy };
+    });
+    const leftJoin = jest.fn().mockReturnValue({ where });
+    const from = jest.fn().mockReturnValue({ leftJoin });
+    const select = jest.fn().mockReturnValue({ from });
+    const repository = new ProfileRepository({ db: { select } } as unknown as DatabaseService);
+
+    await expect(repository.findPublicByHandle('yaneart')).resolves.toEqual(profile);
+    expect(from).toHaveBeenCalledWith(users);
+    expect(leftJoin).toHaveBeenCalledWith(favorites, expect.anything());
+    expect(groupBy).toHaveBeenCalledWith(users.id);
+    expect(limit).toHaveBeenCalledWith(1);
+    if (!condition) throw new Error('Expected a public handle condition');
+    const query = new PgDialect().sqlToQuery(condition);
+    expect(query.sql).toBe('lower("users"."handle") = $1');
+    expect(query.params).toEqual(['yaneart']);
+  });
+
   it('changes all submitted fields with one atomic update statement', async () => {
     const returning = jest.fn().mockResolvedValue([{ ...user, handle: 'new_handle' }]);
     const where = jest.fn().mockReturnValue({ returning });

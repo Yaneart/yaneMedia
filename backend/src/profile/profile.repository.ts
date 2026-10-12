@@ -14,6 +14,19 @@ export type AvatarChange = {
   previousAsset?: ProfileAsset;
 };
 
+export type PublicProfileRecord = Pick<
+  User,
+  | 'avatarAssetId'
+  | 'bio'
+  | 'createdAt'
+  | 'displayName'
+  | 'favoritesPublic'
+  | 'handle'
+  | 'ratingsPublic'
+> & {
+  favoritesCount: number | null;
+};
+
 @Injectable()
 export class ProfileRepository {
   constructor(private readonly databaseService: DatabaseService) {}
@@ -26,6 +39,30 @@ export class ProfileRepository {
       .limit(1);
 
     return user;
+  }
+
+  async findPublicByHandle(handle: string): Promise<PublicProfileRecord | undefined> {
+    const [profile] = await this.databaseService.db
+      .select({
+        handle: users.handle,
+        displayName: users.displayName,
+        avatarAssetId: users.avatarAssetId,
+        bio: users.bio,
+        createdAt: users.createdAt,
+        ratingsPublic: users.ratingsPublic,
+        favoritesPublic: users.favoritesPublic,
+        favoritesCount: sql<number | null>`case
+          when ${users.favoritesPublic} then count(${favorites.mediaRef})::int
+          else null
+        end`,
+      })
+      .from(users)
+      .leftJoin(favorites, eq(favorites.userId, users.id))
+      .where(sql`lower(${users.handle}) = ${handle}`)
+      .groupBy(users.id)
+      .limit(1);
+
+    return profile;
   }
 
   async countFavorites(userId: string): Promise<number> {

@@ -23,6 +23,9 @@ describe('ProfileService', () => {
     updatedAt: new Date('2026-09-04T08:00:00.000Z'),
   };
   const findById = jest.fn() as jest.MockedFunction<ProfileRepository['findById']>;
+  const findPublicByHandle = jest.fn() as jest.MockedFunction<
+    ProfileRepository['findPublicByHandle']
+  >;
   const countFavorites = jest.fn() as jest.MockedFunction<ProfileRepository['countFavorites']>;
   const isHandleAvailable = jest.fn() as jest.MockedFunction<
     ProfileRepository['isHandleAvailable']
@@ -38,6 +41,7 @@ describe('ProfileService', () => {
   const logUnexpectedError = jest.fn();
   const repository = {
     findById,
+    findPublicByHandle,
     countFavorites,
     isHandleAvailable,
     update,
@@ -52,6 +56,16 @@ describe('ProfileService', () => {
 
   beforeEach(() => {
     findById.mockReset().mockResolvedValue(user);
+    findPublicByHandle.mockReset().mockResolvedValue({
+      handle: user.handle,
+      displayName: user.displayName,
+      bio: user.bio,
+      avatarAssetId: user.avatarAssetId,
+      ratingsPublic: user.ratingsPublic,
+      favoritesPublic: user.favoritesPublic,
+      createdAt: user.createdAt,
+      favoritesCount: 12,
+    });
     countFavorites.mockReset().mockResolvedValue(12);
     isHandleAvailable.mockReset().mockResolvedValue(true);
     update.mockReset().mockResolvedValue(user);
@@ -76,6 +90,49 @@ describe('ProfileService', () => {
       emailVerified: true,
     });
   });
+
+  it('returns only the public projection and hides private collection counts', async () => {
+    findPublicByHandle.mockResolvedValue({
+      handle: user.handle,
+      displayName: user.displayName,
+      bio: user.bio,
+      avatarAssetId: '28b47aca-2c26-482e-bcb8-2f438bb53072',
+      ratingsPublic: false,
+      favoritesPublic: false,
+      createdAt: user.createdAt,
+      favoritesCount: null,
+    });
+
+    await expect(service.getPublicProfile('  YANEART  ')).resolves.toEqual({
+      handle: 'yaneart',
+      displayName: user.displayName,
+      avatarUrl: '/api/v1/profile-assets/avatar_28b47aca-2c26-482e-bcb8-2f438bb53072.webp',
+      bio: user.bio,
+      joinedAt: '2026-09-04T08:00:00.000Z',
+      visibility: { ratings: false, favorites: false },
+      counts: { reviews: 0, comments: 0, ratings: null, favorites: null },
+    });
+    expect(findPublicByHandle).toHaveBeenCalledWith('yaneart');
+  });
+
+  it('returns a visible collection count and supports profiles without avatars', async () => {
+    await expect(service.getPublicProfile('yaneart')).resolves.toMatchObject({
+      avatarUrl: null,
+      visibility: { ratings: false, favorites: true },
+      counts: { ratings: null, favorites: 12 },
+    });
+  });
+
+  it.each(['not-valid!', 'unknown_handle'])(
+    'uses the same PROFILE_NOT_FOUND error for an invalid or unknown handle: %s',
+    async (handle) => {
+      findPublicByHandle.mockResolvedValue(undefined);
+
+      await expect(service.getPublicProfile(handle)).rejects.toMatchObject({
+        response: { code: 'PROFILE_NOT_FOUND' },
+      });
+    },
+  );
 
   it('updates all submitted profile fields in one repository call', async () => {
     const changes = { displayName: 'Новое имя', handle: 'new_handle', bio: '' };

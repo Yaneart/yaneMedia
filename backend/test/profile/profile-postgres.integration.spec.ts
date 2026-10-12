@@ -67,6 +67,14 @@ describePostgres('profile with PostgreSQL', () => {
       ratingsPublic: true,
       favoritesPublic: true,
     });
+    await expect(
+      repository.findPublicByHandle(`PROBE_A_${suffix}`.toLowerCase()),
+    ).resolves.toMatchObject({
+      handle: `probe_a_${suffix}`,
+      ratingsPublic: true,
+      favoritesPublic: true,
+      favoritesCount: 0,
+    });
 
     const contestedHandle = `claimed_${suffix}`;
     const results = await Promise.allSettled([
