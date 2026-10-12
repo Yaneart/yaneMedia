@@ -1,8 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { and, count, desc, eq, lt, lte, or, sql } from 'drizzle-orm';
+import { and, count, desc, eq, isNull, lt, lte, or, sql } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
 import { favorites } from '../favorites/entities/favorite.entity';
 import { ratings } from '../ratings/entities/rating.entity';
+import { reviews } from '../reviews/entities/review.entity';
 import { users, type User } from '../users/entities/user.entity';
 import { profileAssets, type NewProfileAsset, type ProfileAsset } from './profile-asset.entity';
 
@@ -27,6 +28,7 @@ export type PublicProfileRecord = Pick<
 > & {
   favoritesCount: number | null;
   ratingsCount: number | null;
+  reviewsCount: number;
 };
 
 export type PublicCollectionOwner = Pick<
@@ -82,6 +84,12 @@ export class ProfileRepository {
           )
           else null
         end`,
+        reviewsCount: sql<number>`(
+          select count(*)::int from ${reviews}
+          where ${reviews.userId} = ${users.id}
+            and ${reviews.publicationState} = 'published'
+            and ${reviews.deletedAt} is null
+        )`,
       })
       .from(users)
       .where(sql`lower(${users.handle}) = ${handle}`)
@@ -176,6 +184,15 @@ export class ProfileRepository {
       .select({ value: count() })
       .from(ratings)
       .where(eq(ratings.userId, userId));
+
+    return result?.value ?? 0;
+  }
+
+  async countReviews(userId: string): Promise<number> {
+    const [result] = await this.databaseService.db
+      .select({ value: count() })
+      .from(reviews)
+      .where(and(eq(reviews.userId, userId), isNull(reviews.deletedAt)));
 
     return result?.value ?? 0;
   }

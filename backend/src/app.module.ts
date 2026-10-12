@@ -12,6 +12,7 @@ import { HistoryModule } from './history/history.module';
 import { ContinueWatchingModule } from './continue-watching/continue-watching.module';
 import { ProfileModule } from './profile/profile.module';
 import { RatingsModule } from './ratings/ratings.module';
+import { ReviewsModule } from './reviews/reviews.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { RatingsModule } from './ratings/ratings.module';
     HistoryModule,
     ContinueWatchingModule,
     RatingsModule,
+    ReviewsModule,
     ProfileModule,
   ],
   providers: [AppLogger, ApiExceptionFilter],

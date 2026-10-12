@@ -41,13 +41,14 @@ export class ProfileService {
   ) {}
 
   async getProfile(userId: string): Promise<PrivateProfileDto> {
-    const [user, favoritesCount, ratingsCount] = await Promise.all([
+    const [user, favoritesCount, ratingsCount, reviewsCount] = await Promise.all([
       this.requireUser(userId),
       this.profileRepository.countFavorites(userId),
       this.profileRepository.countRatings(userId),
+      this.profileRepository.countReviews(userId),
     ]);
 
-    return toPrivateProfile(user, favoritesCount, ratingsCount);
+    return toPrivateProfile(user, favoritesCount, ratingsCount, reviewsCount);
   }
 
   async getPublicProfile(rawHandle: string): Promise<PublicProfileDto> {
@@ -75,7 +76,7 @@ export class ProfileService {
         favorites: profile.favoritesPublic,
       },
       counts: {
-        reviews: 0,
+        reviews: profile.reviewsCount,
         comments: 0,
         ratings: profile.ratingsCount,
         favorites: profile.favoritesCount,
@@ -188,11 +189,12 @@ export class ProfileService {
   }
 
   private async toPrivateProfileWithCounts(user: User): Promise<PrivateProfileDto> {
-    const [favoritesCount, ratingsCount] = await Promise.all([
+    const [favoritesCount, ratingsCount, reviewsCount] = await Promise.all([
       this.profileRepository.countFavorites(user.id),
       this.profileRepository.countRatings(user.id),
+      this.profileRepository.countReviews(user.id),
     ]);
-    return toPrivateProfile(user, favoritesCount, ratingsCount);
+    return toPrivateProfile(user, favoritesCount, ratingsCount, reviewsCount);
   }
 
   private async getRatingsPage(
@@ -310,6 +312,7 @@ function toPrivateProfile(
   user: User,
   favoritesCount: number,
   ratingsCount: number,
+  reviewsCount: number,
 ): PrivateProfileDto {
   return {
     handle: user.handle,
@@ -323,7 +326,12 @@ function toPrivateProfile(
       ratings: user.ratingsPublic,
       favorites: user.favoritesPublic,
     },
-    counts: { reviews: 0, comments: 0, ratings: ratingsCount, favorites: favoritesCount },
+    counts: {
+      reviews: reviewsCount,
+      comments: 0,
+      ratings: ratingsCount,
+      favorites: favoritesCount,
+    },
     email: user.email,
     emailVerified: user.emailVerifiedAt !== null,
   };

@@ -3,6 +3,7 @@ import { PgDialect } from 'drizzle-orm/pg-core';
 import type { DatabaseService } from '../../src/database/database.service';
 import { favorites } from '../../src/favorites/entities/favorite.entity';
 import { ratings } from '../../src/ratings/entities/rating.entity';
+import { reviews } from '../../src/reviews/entities/review.entity';
 import { ProfileRepository } from '../../src/profile/profile.repository';
 import { users, type User } from '../../src/users/entities/user.entity';
 
@@ -55,6 +56,7 @@ describe('ProfileRepository', () => {
       favoritesPublic: true,
       favoritesCount: 7,
       ratingsCount: null,
+      reviewsCount: 2,
     };
     const limit = jest.fn().mockResolvedValue([profile]);
     const where = jest.fn((value: SQL) => {
@@ -222,6 +224,25 @@ describe('ProfileRepository', () => {
     if (!condition) throw new Error('Expected a ratings owner condition');
     const query = new PgDialect().sqlToQuery(condition);
     expect(query.sql).toContain('"ratings"."user_id" = $1');
+    expect(query.params).toEqual([user.id]);
+  });
+
+  it('counts only active reviews owned by the authenticated user', async () => {
+    let condition: SQL | undefined;
+    const where = jest.fn((value: SQL) => {
+      condition = value;
+      return Promise.resolve([{ value: 2 }]);
+    });
+    const from = jest.fn().mockReturnValue({ where });
+    const select = jest.fn().mockReturnValue({ from });
+    const repository = new ProfileRepository({ db: { select } } as unknown as DatabaseService);
+
+    await expect(repository.countReviews(user.id)).resolves.toBe(2);
+    expect(from).toHaveBeenCalledWith(reviews);
+    if (!condition) throw new Error('Expected a review owner condition');
+    const query = new PgDialect().sqlToQuery(condition);
+    expect(query.sql).toContain('"reviews"."user_id" = $1');
+    expect(query.sql).toContain('"reviews"."deleted_at" is null');
     expect(query.params).toEqual([user.id]);
   });
 });
