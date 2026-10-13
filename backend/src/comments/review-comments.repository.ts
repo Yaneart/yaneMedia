@@ -6,7 +6,12 @@ import { users, type User } from '../users/entities/user.entity';
 import type { ReviewCommentBoundary } from './review-comment-cursor.service';
 import { reviewComments, type ReviewComment } from './entities/review-comment.entity';
 
-export type CommentViewer = Pick<User, 'emailVerifiedAt' | 'id'>;
+export type CommentAuthor = Pick<
+  User,
+  'avatarAssetId' | 'displayName' | 'emailVerifiedAt' | 'handle' | 'id'
+>;
+
+export type CommentChanges = Pick<ReviewComment, 'body'>;
 
 export interface PublicReviewCommentRow extends ReviewComment {
   authorHandle: string | null;
@@ -33,13 +38,94 @@ export class ReviewCommentsRepository {
     return Boolean(review);
   }
 
-  async findViewer(userId: string): Promise<CommentViewer | undefined> {
+  async findViewer(userId: string): Promise<CommentAuthor | undefined> {
     const [viewer] = await this.databaseService.db
-      .select({ id: users.id, emailVerifiedAt: users.emailVerifiedAt })
+      .select({
+        id: users.id,
+        handle: users.handle,
+        displayName: users.displayName,
+        avatarAssetId: users.avatarAssetId,
+        emailVerifiedAt: users.emailVerifiedAt,
+      })
       .from(users)
       .where(eq(users.id, userId))
       .limit(1);
     return viewer;
+  }
+
+  async create(reviewId: string, userId: string, body: string): Promise<ReviewComment | undefined> {
+    return this.databaseService.db.transaction(async (transaction) => {
+      const [review] = await transaction
+        .select({ reviewId: reviews.reviewId })
+        .from(reviews)
+        .where(
+          and(
+            eq(reviews.reviewId, reviewId),
+            eq(reviews.publicationState, 'published'),
+            isNull(reviews.deletedAt),
+          ),
+        )
+        .limit(1)
+        .for('update');
+      if (!review) return undefined;
+
+      const now = new Date();
+      const [comment] = await transaction
+        .insert(reviewComments)
+        .values({ reviewId, userId, body, createdAt: now, updatedAt: now })
+        .returning();
+      if (!comment) throw new Error('Comment was not returned after creation');
+      return comment;
+    });
+  }
+
+  async findById(commentId: string): Promise<ReviewComment | undefined> {
+    const [comment] = await this.databaseService.db
+      .select()
+      .from(reviewComments)
+      .where(eq(reviewComments.commentId, commentId))
+      .limit(1);
+    return comment;
+  }
+
+  async update(
+    commentId: string,
+    userId: string,
+    expectedUpdatedAt: Date,
+    changes: CommentChanges,
+  ): Promise<ReviewComment | undefined> {
+    const [comment] = await this.databaseService.db
+      .update(reviewComments)
+      .set({
+        ...changes,
+        updatedAt: sql`greatest(
+          date_trunc('milliseconds', now()),
+          ${reviewComments.updatedAt} + interval '1 millisecond'
+        )`,
+      })
+      .where(
+        and(
+          eq(reviewComments.commentId, commentId),
+          eq(reviewComments.userId, userId),
+          isNull(reviewComments.deletedAt),
+          sql`date_trunc('milliseconds', ${reviewComments.updatedAt}) = ${expectedUpdatedAt}`,
+        ),
+      )
+      .returning();
+    return comment;
+  }
+
+  async softDelete(commentId: string, userId: string): Promise<void> {
+    await this.databaseService.db
+      .update(reviewComments)
+      .set({ deletedAt: new Date() })
+      .where(
+        and(
+          eq(reviewComments.commentId, commentId),
+          eq(reviewComments.userId, userId),
+          isNull(reviewComments.deletedAt),
+        ),
+      );
   }
 
   async findLatestPublicBoundary(reviewId: string): Promise<ReviewCommentBoundary | undefined> {

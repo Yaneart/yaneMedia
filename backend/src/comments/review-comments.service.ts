@@ -1,15 +1,25 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type {
+  CreateReviewCommentDto,
   ReviewCommentCursorPageDto,
   ReviewCommentDto,
   ReviewCommentListQueryDto,
+  UpdateReviewCommentDto,
 } from './dto/review-comment.dto';
+import type { ReviewComment } from './entities/review-comment.entity';
 import {
   ReviewCommentCursorService,
   type ReviewCommentBoundary,
 } from './review-comment-cursor.service';
 import {
   ReviewCommentsRepository,
+  type CommentAuthor,
   type PublicReviewCommentRow,
 } from './review-comments.repository';
 
@@ -66,6 +76,99 @@ export class ReviewCommentsService {
       newerCursor: this.cursorService.encodeNewer(reviewId, ceiling),
     };
   }
+
+  async create(
+    userId: string,
+    reviewId: string,
+    dto: CreateReviewCommentDto,
+  ): Promise<ReviewCommentDto> {
+    const author = await this.requireVerifiedAuthor(userId);
+    const comment = await this.repository.create(reviewId, userId, dto.body);
+    if (!comment) throwReviewNotFound();
+    return toOwnedReviewComment(comment, author);
+  }
+
+  async update(
+    userId: string,
+    commentId: string,
+    dto: UpdateReviewCommentDto,
+  ): Promise<ReviewCommentDto> {
+    const current = await this.requireOwned(commentId, userId, false);
+    const expectedUpdatedAt = new Date(dto.expectedUpdatedAt);
+    if (current.updatedAt.getTime() !== expectedUpdatedAt.getTime()) throwEditConflict();
+
+    const comment =
+      current.body === dto.body
+        ? current
+        : await this.repository.update(commentId, userId, expectedUpdatedAt, { body: dto.body });
+    if (!comment) throwEditConflict();
+    return toOwnedReviewComment(comment, await this.requireAuthor(userId));
+  }
+
+  async delete(userId: string, commentId: string): Promise<void> {
+    await this.requireOwned(commentId, userId, true);
+    await this.repository.softDelete(commentId, userId);
+  }
+
+  private async requireOwned(
+    commentId: string,
+    userId: string,
+    allowDeleted: boolean,
+  ): Promise<ReviewComment> {
+    const comment = await this.repository.findById(commentId);
+    if (!comment || (!allowDeleted && comment.deletedAt)) {
+      throwCommentNotFound();
+    }
+    if (comment.userId !== userId) {
+      throw new ForbiddenException({
+        code: 'ACTION_FORBIDDEN',
+        message: 'Изменять комментарий может только его автор',
+      });
+    }
+    return comment;
+  }
+
+  private async requireVerifiedAuthor(userId: string): Promise<CommentAuthor> {
+    const author = await this.requireAuthor(userId);
+    if (!author.emailVerifiedAt) {
+      throw new ForbiddenException({
+        code: 'EMAIL_VERIFICATION_REQUIRED',
+        message: 'Подтвердите email перед публикацией',
+      });
+    }
+    return author;
+  }
+
+  private async requireAuthor(userId: string): Promise<CommentAuthor> {
+    const author = await this.repository.findViewer(userId);
+    if (!author) throw new Error('Authenticated comment author was not found');
+    return author;
+  }
+}
+
+function toOwnedReviewComment(comment: ReviewComment, author: CommentAuthor): ReviewCommentDto {
+  return {
+    commentId: comment.commentId,
+    author: {
+      state: 'active',
+      user: {
+        handle: author.handle,
+        displayName: author.displayName,
+        avatarUrl: author.avatarAssetId
+          ? `/api/v1/profile-assets/avatar_${author.avatarAssetId}.webp`
+          : null,
+      },
+    },
+    body: comment.body,
+    createdAt: comment.createdAt.toISOString(),
+    updatedAt: comment.updatedAt.toISOString(),
+    viewerActions: {
+      canEdit: true,
+      canDelete: true,
+      canReport: false,
+      canModerate: false,
+    },
+  };
 }
 
 function toReviewComment(
@@ -114,4 +217,15 @@ function compareBoundaries(left: ReviewCommentBoundary, right: ReviewCommentBoun
 
 function throwReviewNotFound(): never {
   throw new NotFoundException({ code: 'REVIEW_NOT_FOUND', message: 'Рецензия не найдена' });
+}
+
+function throwCommentNotFound(): never {
+  throw new NotFoundException({ code: 'COMMENT_NOT_FOUND', message: 'Комментарий не найден' });
+}
+
+function throwEditConflict(): never {
+  throw new ConflictException({
+    code: 'EDIT_CONFLICT',
+    message: 'Комментарий был изменён. Обновите данные и повторите попытку',
+  });
 }

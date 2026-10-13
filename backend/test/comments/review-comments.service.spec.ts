@@ -5,6 +5,14 @@ import type { ReviewCommentCursorService } from '../../src/comments/review-comme
 describe('ReviewCommentsService', () => {
   const reviewId = 'review_00000000-0000-4000-8000-000000000001';
   const userId = '93ea2794-e805-4f60-b14f-2005d2c61804';
+  const otherUserId = '7d17a4eb-9b8b-4bbf-b6f7-f4e8b15eb50d';
+  const author = {
+    id: userId,
+    handle: 'yaneart',
+    displayName: 'Артём',
+    avatarAssetId: null,
+    emailVerifiedAt: new Date('2026-10-01T00:00:00.000Z'),
+  };
   const first = {
     commentId: 'comment_00000000-0000-4000-8000-000000000001',
     reviewId,
@@ -32,6 +40,10 @@ describe('ReviewCommentsService', () => {
   const findViewer = jest.fn();
   const findLatestPublicBoundary = jest.fn();
   const findPublicPage = jest.fn();
+  const create = jest.fn();
+  const findById = jest.fn();
+  const update = jest.fn();
+  const softDelete = jest.fn();
   const encodePage = jest.fn();
   const decodePage = jest.fn();
   const encodeNewer = jest.fn();
@@ -42,13 +54,17 @@ describe('ReviewCommentsService', () => {
       findViewer,
       findLatestPublicBoundary,
       findPublicPage,
+      create,
+      findById,
+      update,
+      softDelete,
     } as unknown as ReviewCommentsRepository,
     { encodePage, decodePage, encodeNewer, decodeNewer } as unknown as ReviewCommentCursorService,
   );
 
   beforeEach(() => {
     publicReviewExists.mockReset().mockResolvedValue(true);
-    findViewer.mockReset().mockResolvedValue({ id: userId, emailVerifiedAt: new Date() });
+    findViewer.mockReset().mockResolvedValue(author);
     findLatestPublicBoundary.mockReset().mockResolvedValue({
       createdAt: second.createdAt,
       commentId: second.commentId,
@@ -58,6 +74,14 @@ describe('ReviewCommentsService', () => {
     decodePage.mockReset();
     encodeNewer.mockReset().mockReturnValue('newer');
     decodeNewer.mockReset();
+    create.mockReset().mockResolvedValue(first);
+    findById.mockReset().mockResolvedValue(first);
+    update.mockReset().mockResolvedValue({
+      ...first,
+      body: 'Изменённый комментарий',
+      updatedAt: new Date('2026-10-13T10:05:00.000Z'),
+    });
+    softDelete.mockReset().mockResolvedValue(undefined);
   });
 
   it('lists oldest-first within a stable ceiling and projects safe actions/authors', async () => {
@@ -130,5 +154,94 @@ describe('ReviewCommentsService', () => {
       response: { code: 'REVIEW_NOT_FOUND' },
     });
     expect(findPublicPage).not.toHaveBeenCalled();
+  });
+
+  it('creates a comment only for a verified author and projects owner actions', async () => {
+    await expect(service.create(userId, reviewId, { body: first.body })).resolves.toEqual({
+      commentId: first.commentId,
+      author: {
+        state: 'active',
+        user: { handle: author.handle, displayName: author.displayName, avatarUrl: null },
+      },
+      body: first.body,
+      createdAt: first.createdAt.toISOString(),
+      updatedAt: first.updatedAt.toISOString(),
+      viewerActions: {
+        canEdit: true,
+        canDelete: true,
+        canReport: false,
+        canModerate: false,
+      },
+    });
+    expect(create).toHaveBeenCalledWith(reviewId, userId, first.body);
+
+    findViewer.mockResolvedValue({ ...author, emailVerifiedAt: null });
+    await expect(service.create(userId, reviewId, { body: first.body })).rejects.toMatchObject({
+      response: { code: 'EMAIL_VERIFICATION_REQUIRED' },
+    });
+    expect(create).toHaveBeenCalledTimes(1);
+
+    findViewer.mockResolvedValue(author);
+    create.mockResolvedValue(undefined);
+    await expect(service.create(userId, reviewId, { body: first.body })).rejects.toMatchObject({
+      response: { code: 'REVIEW_NOT_FOUND' },
+    });
+  });
+
+  it('updates with optimistic locking and preserves timestamps for equal text', async () => {
+    const expectedUpdatedAt = first.updatedAt.toISOString();
+    const changed = await service.update(userId, first.commentId, {
+      body: 'Изменённый комментарий',
+      expectedUpdatedAt,
+    });
+    expect(changed.body).toBe('Изменённый комментарий');
+    expect(update).toHaveBeenCalledWith(first.commentId, userId, first.updatedAt, {
+      body: 'Изменённый комментарий',
+    });
+
+    update.mockClear();
+    const equal = await service.update(userId, first.commentId, {
+      body: first.body,
+      expectedUpdatedAt,
+    });
+    expect(equal.updatedAt).toBe(expectedUpdatedAt);
+    expect(update).not.toHaveBeenCalled();
+
+    await expect(
+      service.update(userId, first.commentId, {
+        body: 'Новый текст',
+        expectedUpdatedAt: '2026-10-13T09:00:00.000Z',
+      }),
+    ).rejects.toMatchObject({ response: { code: 'EDIT_CONFLICT' } });
+  });
+
+  it('enforces ownership and makes owner deletion idempotent', async () => {
+    await expect(service.delete(otherUserId, first.commentId)).rejects.toMatchObject({
+      response: { code: 'ACTION_FORBIDDEN' },
+    });
+    expect(softDelete).not.toHaveBeenCalled();
+
+    findById.mockResolvedValue({ ...first, publicationState: 'moderation_hidden' });
+    await expect(
+      service.update(userId, first.commentId, {
+        body: 'Изменённый комментарий',
+        expectedUpdatedAt: first.updatedAt.toISOString(),
+      }),
+    ).resolves.toMatchObject({ body: 'Изменённый комментарий' });
+
+    findById.mockResolvedValue(first);
+    await service.delete(userId, first.commentId);
+    expect(softDelete).toHaveBeenCalledWith(first.commentId, userId);
+
+    findById.mockResolvedValue({ ...first, deletedAt: new Date() });
+    await expect(service.delete(userId, first.commentId)).resolves.toBeUndefined();
+    expect(softDelete).toHaveBeenCalledTimes(2);
+
+    await expect(
+      service.update(userId, first.commentId, {
+        body: 'Новый текст',
+        expectedUpdatedAt: first.updatedAt.toISOString(),
+      }),
+    ).rejects.toMatchObject({ response: { code: 'COMMENT_NOT_FOUND' } });
   });
 });

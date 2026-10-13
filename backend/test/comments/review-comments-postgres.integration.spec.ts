@@ -97,6 +97,7 @@ describePostgres('review comments with PostgreSQL', () => {
     const visible = inserted
       .filter(({ publicationState, deletedAt }) => publicationState === 'published' && !deletedAt)
       .sort((left, right) => left.commentId.localeCompare(right.commentId));
+    const deletedAuthorCommentId = inserted[1]?.commentId;
     const repository = new ReviewCommentsRepository({ db } as unknown as DatabaseService);
     const ceiling = await repository.findLatestPublicBoundary(reviewId);
     expect(ceiling).toEqual({
@@ -132,10 +133,93 @@ describePostgres('review comments with PostgreSQL', () => {
 
     await db.delete(users).where(eq(users.id, userIds[1]));
     const anonymized = await repository.findPublicPage(reviewId, null, ceiling, 2);
-    expect(anonymized.find(({ commentId }) => commentId === visible[1]?.commentId)).toMatchObject({
+    expect(anonymized.find(({ commentId }) => commentId === deletedAuthorCommentId)).toMatchObject({
       userId: null,
       authorHandle: null,
       authorDisplayName: null,
     });
+  });
+
+  it('creates, updates, and concurrently soft-deletes an owned comment', async () => {
+    const db = drizzle(client);
+    const repository = new ReviewCommentsRepository({ db } as unknown as DatabaseService);
+    const created = await repository.create(reviewId, userIds[0], 'Created through repository');
+    expect(created).toMatchObject({
+      reviewId,
+      userId: userIds[0],
+      body: 'Created through repository',
+      deletedAt: null,
+    });
+    if (!created) throw new Error('Expected created comment');
+
+    const updated = await repository.update(created.commentId, userIds[0], created.updatedAt, {
+      body: 'Updated through repository',
+    });
+    expect(updated?.body).toBe('Updated through repository');
+    expect(updated?.updatedAt.getTime()).toBeGreaterThan(created.updatedAt.getTime());
+    expect(
+      await repository.update(created.commentId, userIds[0], created.updatedAt, {
+        body: 'Stale update',
+      }),
+    ).toBeUndefined();
+    expect(
+      await repository.update(created.commentId, userIds[1], updated?.updatedAt ?? new Date(), {
+        body: 'Foreign update',
+      }),
+    ).toBeUndefined();
+
+    await Promise.all([
+      repository.softDelete(created.commentId, userIds[0]),
+      repository.softDelete(created.commentId, userIds[0]),
+    ]);
+    const deleted = await repository.findById(created.commentId);
+    expect(deleted?.body).toBe('Updated through repository');
+    expect(deleted?.deletedAt).toBeInstanceOf(Date);
+  });
+
+  it('does not create a comment when review deletion wins the transaction race', async () => {
+    const setupDb = drizzle(client);
+    const [raceReview] = await setupDb
+      .insert(reviews)
+      .values({
+        userId: null,
+        mediaRef,
+        title: 'Concurrent deletion review',
+        body: 'This review body is long enough for the database constraint.',
+        isSpoiler: false,
+      })
+      .returning({ reviewId: reviews.reviewId });
+    if (!raceReview) throw new Error('Expected race review');
+
+    const mutationClient = new Client({ connectionString: process.env.DATABASE_URL });
+    await mutationClient.connect();
+    try {
+      await client.query('begin');
+      await client.query('update reviews set deleted_at = now() where review_id = $1', [
+        raceReview.reviewId,
+      ]);
+
+      const mutationDb = drizzle(mutationClient);
+      const creation = new ReviewCommentsRepository({
+        db: mutationDb,
+      } as unknown as DatabaseService).create(
+        raceReview.reviewId,
+        userIds[0],
+        'Must not survive review deletion',
+      );
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      await client.query('commit');
+
+      await expect(creation).resolves.toBeUndefined();
+      const comments = await setupDb
+        .select({ commentId: reviewComments.commentId })
+        .from(reviewComments)
+        .where(eq(reviewComments.reviewId, raceReview.reviewId));
+      expect(comments).toEqual([]);
+    } finally {
+      await client.query('rollback').catch(() => undefined);
+      await mutationClient.end();
+      await setupDb.delete(reviews).where(eq(reviews.reviewId, raceReview.reviewId));
+    }
   });
 });
