@@ -127,6 +127,13 @@
       "when": 1791811923207,
       "tag": "0017_last_hairball",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1791870174488,
+      "tag": "0018_quiet_george_stacy",
+      "breakpoints": true
     }
   ]
 }

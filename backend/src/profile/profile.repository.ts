@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { and, count, desc, eq, isNull, lt, lte, or, sql } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
+import { reviewComments } from '../comments/entities/review-comment.entity';
 import { favorites } from '../favorites/entities/favorite.entity';
 import { ratings } from '../ratings/entities/rating.entity';
 import { reviews } from '../reviews/entities/review.entity';
@@ -29,6 +30,7 @@ export type PublicProfileRecord = Pick<
   favoritesCount: number | null;
   ratingsCount: number | null;
   reviewsCount: number;
+  commentsCount: number;
 };
 
 export type PublicCollectionOwner = Pick<
@@ -89,6 +91,16 @@ export class ProfileRepository {
           where ${reviews.userId} = ${users.id}
             and ${reviews.publicationState} = 'published'
             and ${reviews.deletedAt} is null
+        )`,
+        commentsCount: sql<number>`(
+          select count(*)::int from ${reviewComments} as profile_comments
+          inner join ${reviews} as comment_reviews
+            on comment_reviews.review_id = profile_comments.review_id
+          where profile_comments.user_id = ${users.id}
+            and profile_comments.publication_state = 'published'
+            and profile_comments.deleted_at is null
+            and comment_reviews.publication_state = 'published'
+            and comment_reviews.deleted_at is null
         )`,
       })
       .from(users)
@@ -193,6 +205,15 @@ export class ProfileRepository {
       .select({ value: count() })
       .from(reviews)
       .where(and(eq(reviews.userId, userId), isNull(reviews.deletedAt)));
+
+    return result?.value ?? 0;
+  }
+
+  async countComments(userId: string): Promise<number> {
+    const [result] = await this.databaseService.db
+      .select({ value: count() })
+      .from(reviewComments)
+      .where(and(eq(reviewComments.userId, userId), isNull(reviewComments.deletedAt)));
 
     return result?.value ?? 0;
   }

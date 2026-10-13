@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { and, asc, desc, eq, gte, isNull, lt, or, sql } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
+import { reviewComments } from '../comments/entities/review-comment.entity';
 import { ratings } from '../ratings/entities/rating.entity';
 import { users, type User } from '../users/entities/user.entity';
 import type { ReviewSort } from './dto/review.dto';
@@ -24,6 +25,7 @@ export interface PublicReviewRow extends Review {
   authorDisplayName: string | null;
   authorAvatarAssetId: string | null;
   rating: number | null;
+  commentCount: number;
 }
 
 export interface PublicReviewPageRow extends PublicReviewRow {
@@ -131,6 +133,22 @@ export class ReviewsRepository {
     return rating?.value ?? null;
   }
 
+  async countPublicComments(reviewId: string): Promise<number> {
+    const [result] = await this.databaseService.db
+      .select({
+        value: sql<number>`count(*)::int`,
+      })
+      .from(reviewComments)
+      .where(
+        and(
+          eq(reviewComments.reviewId, reviewId),
+          eq(reviewComments.publicationState, 'published'),
+          isNull(reviewComments.deletedAt),
+        ),
+      );
+    return result?.value ?? 0;
+  }
+
   async createListSnapshot(
     mediaRef: string,
     sort: ReviewSort,
@@ -221,6 +239,7 @@ export class ReviewsRepository {
         authorDisplayName: users.displayName,
         authorAvatarAssetId: users.avatarAssetId,
         rating: ratings.value,
+        commentCount: publicCommentCount(),
       })
       .from(reviewListSnapshotItems)
       .innerJoin(reviews, eq(reviews.reviewId, reviewListSnapshotItems.reviewId))
@@ -294,6 +313,7 @@ export class ReviewsRepository {
         authorDisplayName: users.displayName,
         authorAvatarAssetId: users.avatarAssetId,
         rating: ratings.value,
+        commentCount: publicCommentCount(),
       })
       .from(reviews)
       .leftJoin(users, eq(users.id, reviews.userId))
@@ -302,6 +322,15 @@ export class ReviewsRepository {
         and(eq(ratings.userId, reviews.userId), eq(ratings.mediaRef, reviews.mediaRef)),
       );
   }
+}
+
+function publicCommentCount() {
+  return sql<number>`(
+    select count(*)::int from ${reviewComments} as public_comments
+    where public_comments.review_id = reviews.review_id
+      and public_comments.publication_state = 'published'
+      and public_comments.deleted_at is null
+  )`;
 }
 
 function reviewSortOrder(sort: ReviewSort) {

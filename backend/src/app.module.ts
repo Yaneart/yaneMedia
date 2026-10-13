@@ -13,6 +13,7 @@ import { ContinueWatchingModule } from './continue-watching/continue-watching.mo
 import { ProfileModule } from './profile/profile.module';
 import { RatingsModule } from './ratings/ratings.module';
 import { ReviewsModule } from './reviews/reviews.module';
+import { ReviewCommentsModule } from './comments/review-comments.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { ReviewsModule } from './reviews/reviews.module';
     ContinueWatchingModule,
     RatingsModule,
     ReviewsModule,
+    ReviewCommentsModule,
     ProfileModule,
   ],
   providers: [AppLogger, ApiExceptionFilter],

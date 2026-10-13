@@ -31,6 +31,7 @@ describe('ProfileService', () => {
   const countFavorites = jest.fn() as jest.MockedFunction<ProfileRepository['countFavorites']>;
   const countRatings = jest.fn() as jest.MockedFunction<ProfileRepository['countRatings']>;
   const countReviews = jest.fn() as jest.MockedFunction<ProfileRepository['countReviews']>;
+  const countComments = jest.fn() as jest.MockedFunction<ProfileRepository['countComments']>;
   const findPublicCollectionOwner = jest.fn() as jest.MockedFunction<
     ProfileRepository['findPublicCollectionOwner']
   >;
@@ -56,6 +57,7 @@ describe('ProfileService', () => {
     countFavorites,
     countRatings,
     countReviews,
+    countComments,
     findPublicCollectionOwner,
     findPublicFavoritesPage,
     findRatingsPage,
@@ -97,10 +99,12 @@ describe('ProfileService', () => {
       favoritesCount: 12,
       ratingsCount: null,
       reviewsCount: 2,
+      commentsCount: 4,
     });
     countFavorites.mockReset().mockResolvedValue(12);
     countRatings.mockReset().mockResolvedValue(3);
     countReviews.mockReset().mockResolvedValue(2);
+    countComments.mockReset().mockResolvedValue(4);
     findPublicCollectionOwner.mockReset().mockResolvedValue({
       id: user.id,
       handle: user.handle,
@@ -139,7 +143,7 @@ describe('ProfileService', () => {
       bio: 'Смотрю кино.',
       joinedAt: '2026-09-04T08:00:00.000Z',
       visibility: { ratings: false, favorites: true },
-      counts: { reviews: 2, comments: 0, ratings: 3, favorites: 12 },
+      counts: { reviews: 2, comments: 4, ratings: 3, favorites: 12 },
       email: 'artem@example.com',
       emailVerified: true,
     });
@@ -157,6 +161,7 @@ describe('ProfileService', () => {
       favoritesCount: null,
       ratingsCount: null,
       reviewsCount: 2,
+      commentsCount: 4,
     });
 
     await expect(service.getPublicProfile('  YANEART  ')).resolves.toEqual({
@@ -166,7 +171,7 @@ describe('ProfileService', () => {
       bio: user.bio,
       joinedAt: '2026-09-04T08:00:00.000Z',
       visibility: { ratings: false, favorites: false },
-      counts: { reviews: 2, comments: 0, ratings: null, favorites: null },
+      counts: { reviews: 2, comments: 4, ratings: null, favorites: null },
     });
     expect(findPublicByHandle).toHaveBeenCalledWith('yaneart');
   });

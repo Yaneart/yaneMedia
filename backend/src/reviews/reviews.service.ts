@@ -199,12 +199,13 @@ export class ReviewsService {
         : await this.reviewsRepository.update(reviewId, userId, expectedUpdatedAt, changes);
     if (!review) throwEditConflict();
 
-    const [media, author, rating] = await Promise.all([
+    const [media, author, rating, commentCount] = await Promise.all([
       this.requireMedia(review.mediaRef),
       this.requireAuthor(userId),
       this.reviewsRepository.findRating(userId, review.mediaRef),
+      this.reviewsRepository.countPublicComments(review.reviewId),
     ]);
-    return toReviewDetail(review, media, author, rating);
+    return toReviewDetail(review, media, author, rating, commentCount);
   }
 
   async delete(userId: string, reviewId: string): Promise<void> {
@@ -279,6 +280,7 @@ function toReviewDetail(
   media: MediaSummaryDto,
   author: ReviewAuthor,
   rating: number | null,
+  commentCount = 0,
 ): ReviewDetailDto {
   const spoilerHidden = review.isSpoiler;
   return {
@@ -299,7 +301,7 @@ function toReviewDetail(
     bodyState: spoilerHidden ? 'spoiler-hidden' : 'visible',
     isSpoiler: review.isSpoiler,
     rating,
-    commentCount: 0,
+    commentCount,
     createdAt: review.createdAt.toISOString(),
     updatedAt: review.updatedAt.toISOString(),
     viewerActions: {
@@ -328,7 +330,7 @@ function toReviewSummary(
     bodyState: review.isSpoiler ? 'spoiler-hidden' : 'excerpt',
     isSpoiler: review.isSpoiler,
     rating: review.rating,
-    commentCount: 0,
+    commentCount: review.commentCount ?? 0,
     createdAt: review.createdAt.toISOString(),
     updatedAt: review.updatedAt.toISOString(),
     viewerActions: {
@@ -357,7 +359,7 @@ function toPublicReviewDetail(
     bodyState: review.isSpoiler ? 'spoiler-hidden' : 'visible',
     isSpoiler: review.isSpoiler,
     rating: review.rating,
-    commentCount: 0,
+    commentCount: review.commentCount ?? 0,
     createdAt: review.createdAt.toISOString(),
     updatedAt: review.updatedAt.toISOString(),
     viewerActions: {

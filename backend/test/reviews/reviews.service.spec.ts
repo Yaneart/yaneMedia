@@ -40,6 +40,7 @@ describe('ReviewsService', () => {
   const create = jest.fn();
   const findById = jest.fn();
   const findRating = jest.fn();
+  const countPublicComments = jest.fn();
   const findPublicById = jest.fn();
   const findPublicProfileOwner = jest.fn();
   const findPublicProfilePage = jest.fn();
@@ -59,6 +60,7 @@ describe('ReviewsService', () => {
       create,
       findById,
       findRating,
+      countPublicComments,
       findPublicById,
       findPublicProfileOwner,
       findPublicProfilePage,
@@ -78,6 +80,7 @@ describe('ReviewsService', () => {
     create.mockReset().mockResolvedValue(review);
     findById.mockReset().mockResolvedValue(review);
     findRating.mockReset().mockResolvedValue(9);
+    countPublicComments.mockReset().mockResolvedValue(0);
     findPublicById.mockReset().mockResolvedValue({
       ...review,
       authorHandle: author.handle,

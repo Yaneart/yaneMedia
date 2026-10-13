@@ -14,6 +14,10 @@ export {
   reviewListSnapshots,
 } from '../reviews/entities/review-list-snapshot.entity';
 export {
+  commentPublicationState,
+  reviewComments,
+} from '../comments/entities/review-comment.entity';
+export {
   catalogRevisionStatus,
   catalogRevisions,
   mediaAssetKind,

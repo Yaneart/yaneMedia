@@ -41,14 +41,15 @@ export class ProfileService {
   ) {}
 
   async getProfile(userId: string): Promise<PrivateProfileDto> {
-    const [user, favoritesCount, ratingsCount, reviewsCount] = await Promise.all([
+    const [user, favoritesCount, ratingsCount, reviewsCount, commentsCount] = await Promise.all([
       this.requireUser(userId),
       this.profileRepository.countFavorites(userId),
       this.profileRepository.countRatings(userId),
       this.profileRepository.countReviews(userId),
+      this.profileRepository.countComments(userId),
     ]);
 
-    return toPrivateProfile(user, favoritesCount, ratingsCount, reviewsCount);
+    return toPrivateProfile(user, favoritesCount, ratingsCount, reviewsCount, commentsCount);
   }
 
   async getPublicProfile(rawHandle: string): Promise<PublicProfileDto> {
@@ -77,7 +78,7 @@ export class ProfileService {
       },
       counts: {
         reviews: profile.reviewsCount,
-        comments: 0,
+        comments: profile.commentsCount,
         ratings: profile.ratingsCount,
         favorites: profile.favoritesCount,
       },
@@ -189,12 +190,13 @@ export class ProfileService {
   }
 
   private async toPrivateProfileWithCounts(user: User): Promise<PrivateProfileDto> {
-    const [favoritesCount, ratingsCount, reviewsCount] = await Promise.all([
+    const [favoritesCount, ratingsCount, reviewsCount, commentsCount] = await Promise.all([
       this.profileRepository.countFavorites(user.id),
       this.profileRepository.countRatings(user.id),
       this.profileRepository.countReviews(user.id),
+      this.profileRepository.countComments(user.id),
     ]);
-    return toPrivateProfile(user, favoritesCount, ratingsCount, reviewsCount);
+    return toPrivateProfile(user, favoritesCount, ratingsCount, reviewsCount, commentsCount);
   }
 
   private async getRatingsPage(
@@ -313,6 +315,7 @@ function toPrivateProfile(
   favoritesCount: number,
   ratingsCount: number,
   reviewsCount: number,
+  commentsCount: number,
 ): PrivateProfileDto {
   return {
     handle: user.handle,
@@ -328,7 +331,7 @@ function toPrivateProfile(
     },
     counts: {
       reviews: reviewsCount,
-      comments: 0,
+      comments: commentsCount,
       ratings: ratingsCount,
       favorites: favoritesCount,
     },
