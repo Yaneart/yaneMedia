@@ -13,6 +13,8 @@ import type { PublicProfileCollectionQueryDto } from '../profile/dto/public-prof
 import { isHandleAllowed, normalizeHandle } from '../users/handle';
 import type {
   CreateReviewDto,
+  OwnReviewCursorPageDto,
+  OwnReviewDetailDto,
   ReviewContentDto,
   ReviewCursorPageDto,
   ReviewDetailDto,
@@ -210,6 +212,66 @@ export class ReviewsService {
     };
   }
 
+  async listOwn(
+    userId: string,
+    query: PublicProfileCollectionQueryDto,
+    viewerCanModerate = false,
+  ): Promise<OwnReviewCursorPageDto> {
+    const boundary = query.cursor
+      ? this.profileCursorService.decode(query.cursor, userId)
+      : undefined;
+    const rows = await this.reviewsRepository.findOwnProfilePage(userId, boundary, query.limit + 1);
+    const hasNextPage = rows.length > query.limit;
+    const pageRows = rows.slice(0, query.limit);
+    const resolution = await this.mediaCatalogService.resolveMediaRefs(
+      pageRows.map(({ mediaRef }) => mediaRef),
+    );
+    const mediaByIndex = new Map(
+      resolution.matches.map(({ requestIndex, item }) => [requestIndex, item]),
+    );
+    const items = pageRows.map((row, index) => {
+      const media = mediaByIndex.get(index);
+      if (!media) throw new Error(`Canonical review media was not resolved: ${row.mediaRef}`);
+      const summary = toReviewSummary(row, media, userId, true, viewerCanModerate);
+      return {
+        ...summary,
+        publicationState: toPublicationState(row.publicationState),
+        viewerActions: {
+          ...summary.viewerActions,
+          canComment: row.publicationState === 'published',
+        },
+      };
+    });
+    const last = pageRows.at(-1);
+
+    return {
+      items,
+      nextCursor: hasNextPage && last ? this.profileCursorService.encode(userId, last) : null,
+    };
+  }
+
+  async getOwn(
+    userId: string,
+    reviewId: string,
+    viewerCanModerate = false,
+  ): Promise<OwnReviewDetailDto> {
+    const review = await this.reviewsRepository.findById(reviewId);
+    if (!review || review.deletedAt || review.userId !== userId) throwReviewNotFound();
+    const [media, author, rating, commentCount] = await Promise.all([
+      this.requireMedia(review.mediaRef),
+      this.requireAuthor(userId),
+      this.reviewsRepository.findRating(userId, review.mediaRef),
+      this.reviewsRepository.countPublicComments(review.reviewId),
+    ]);
+    const detail = toReviewDetail(review, media, author, rating, commentCount, viewerCanModerate);
+    return {
+      ...detail,
+      body: review.body,
+      bodyState: 'visible',
+      publicationState: toPublicationState(review.publicationState),
+    };
+  }
+
   async update(
     userId: string,
     reviewId: string,
@@ -301,6 +363,10 @@ function meaningfulChanges(review: Review, dto: UpdateReviewDto): ReviewChanges 
     throw new BadRequestException('Укажите хотя бы одно поле рецензии для изменения');
   }
   return changes;
+}
+
+function toPublicationState(state: Review['publicationState']): 'published' | 'moderation-hidden' {
+  return state === 'moderation_hidden' ? 'moderation-hidden' : 'published';
 }
 
 function toReviewDetail(

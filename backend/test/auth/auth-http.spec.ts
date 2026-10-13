@@ -134,7 +134,6 @@ describe('auth HTTP contract', () => {
     expect(await response.json()).toEqual({
       data: {
         user: {
-          id,
           displayName: 'Artem',
           email: 'artem@example.com',
           createdAt: createdAt.toISOString(),
@@ -209,7 +208,6 @@ describe('auth HTTP contract', () => {
     expect(await response.json()).toEqual({
       data: {
         user: {
-          id,
           displayName: 'Artem',
           email: 'artem@example.com',
           createdAt: createdAt.toISOString(),
@@ -237,12 +235,12 @@ describe('auth HTTP contract', () => {
     async (environment) => {
       config.set('NODE_ENV', environment);
       const publicUser = {
-        id,
         displayName: 'Artem',
         email: 'artem@example.com',
         createdAt: createdAt.toISOString(),
       };
       findByEmail.mockResolvedValue({
+        id,
         ...publicUser,
         handle: 'yaneart',
         bio: '',

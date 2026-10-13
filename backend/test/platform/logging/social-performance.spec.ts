@@ -64,6 +64,22 @@ describe('social HTTP performance instrumentation', () => {
     expect(JSON.stringify(events)).not.toContain('00000000');
   });
 
+  it('records private review detail with a fixed route template', () => {
+    const events = capture(
+      '/api/v1/profile/reviews/review_00000000-0000-4000-8000-000000000001',
+      'GET',
+      200,
+    );
+
+    expect(events[0]).toMatchObject({
+      area: 'review',
+      route: '/profile/reviews/:reviewId',
+      result: 'success',
+      status: 200,
+    });
+    expect(JSON.stringify(events)).not.toContain('00000000');
+  });
+
   it('ignores unrelated routes and unsupported methods', () => {
     expect(capture('/api/v1/health', 'GET', 200)).toEqual([]);
     expect(capture('/api/v1/reports', 'GET', 200)).toEqual([]);

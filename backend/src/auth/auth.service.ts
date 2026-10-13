@@ -49,7 +49,6 @@ export class AuthService {
 
       return {
         user: {
-          id: user.id,
           displayName: user.displayName,
           email: user.email,
           createdAt: user.createdAt.toISOString(),
@@ -100,7 +99,6 @@ export class AuthService {
 
     return {
       user: {
-        id: user.id,
         displayName: user.displayName,
         email: user.email,
         createdAt: user.createdAt.toISOString(),

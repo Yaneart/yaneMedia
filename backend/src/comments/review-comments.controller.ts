@@ -13,7 +13,6 @@ import {
 } from '@nestjs/common';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { CurrentUser, OptionalCurrentUser } from '../auth/decorators/current-user.decorator';
-import type { AuthUserDto } from '../auth/dto/auth-user.dto';
 import type { AuthenticatedUser } from '../auth/auth-request';
 import { CsrfGuard } from '../auth/guards/csrf.guard';
 import { OptionalSessionGuard } from '../auth/guards/optional-session.guard';
@@ -102,7 +101,7 @@ export class CommentsController {
   @Throttle({ default: SOCIAL_RATE_LIMITS.commentWrite })
   @UseGuards(SessionGuard, CsrfGuard, ThrottlerGuard)
   delete(
-    @CurrentUser() user: AuthUserDto,
+    @CurrentUser() user: AuthenticatedUser,
     @Param(strictValidation) { commentId }: CommentIdDto,
   ): Promise<void> {
     return this.commentsService.delete(user.id, commentId);

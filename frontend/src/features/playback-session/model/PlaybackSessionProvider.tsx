@@ -129,10 +129,10 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
   const [guestEntries, setGuestEntries] = useState<ContinueWatchingEntry[]>(
     loadContinueWatchingEntries,
   );
-  const accountUserId = authState.status === 'authenticated' ? authState.user.id : null;
+  const accountUserId = authState.status === 'authenticated' ? authState.user.email : null;
   const resolvedOwnerId =
     authState.status === 'authenticated'
-      ? authState.user.id
+      ? authState.user.email
       : authState.status === 'guest'
         ? null
         : undefined;

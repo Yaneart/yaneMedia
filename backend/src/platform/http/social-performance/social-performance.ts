@@ -27,6 +27,8 @@ const ROUTES: ReadonlyArray<{
   ),
   route(['PUT', 'DELETE'], /^\/api\/v1\/profile\/avatar$/, 'profile', '/profile/avatar'),
   route(['GET'], /^\/api\/v1\/profile\/ratings$/, 'rating', '/profile/ratings'),
+  route(['GET'], /^\/api\/v1\/profile\/reviews$/, 'review', '/profile/reviews'),
+  route(['GET'], /^\/api\/v1\/profile\/reviews\/[^/]+$/, 'review', '/profile/reviews/:reviewId'),
   route(['GET'], /^\/api\/v1\/profiles\/[^/]+$/, 'profile', '/profiles/:handle'),
   route(
     ['GET'],

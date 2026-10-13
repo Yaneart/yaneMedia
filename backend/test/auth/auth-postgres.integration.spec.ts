@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Client } from 'pg';
 import type { NextFunction, Request, Response } from 'express';
+import cookieParser from 'cookie-parser';
 import { AuthModule } from '../../src/auth/auth.module';
 import { AuthRepository } from '../../src/auth/auth.repository';
 import { verifyPassword } from '../../src/auth/password';
@@ -37,6 +38,7 @@ describePostgres('auth with PostgreSQL', () => {
       .useValue({ sendVerificationEmail: jest.fn().mockResolvedValue(undefined) })
       .compile();
     app = module.createNestApplication();
+    app.use(cookieParser());
     app.use((_request: Request, response: Response, next: NextFunction) => {
       response.setHeader('Cache-Control', 'no-store');
       next();
@@ -95,7 +97,6 @@ describePostgres('auth with PostgreSQL', () => {
     expect(await response.json()).toEqual({
       data: {
         user: {
-          id: stored.id,
           displayName: 'Probe',
           email,
           createdAt: stored.createdAt.toISOString(),
@@ -170,6 +171,7 @@ describePostgres('auth with PostgreSQL', () => {
     const registered = await register({ displayName: 'Login probe', email, password });
     expect(registered.status).toBe(201);
     const publicResponse: unknown = await registered.json();
+    expect(publicResponse).not.toHaveProperty('data.user.id');
     const user = await usersService.findByEmail(email);
     if (!user) throw new Error('Missing registered user');
     await client.query('UPDATE users SET email_verified_at = now() WHERE id = $1', [user.id]);
@@ -196,6 +198,11 @@ describePostgres('auth with PostgreSQL', () => {
       const token = /^yanemedia_session=([A-Za-z0-9_-]{43});/.exec(cookie)?.[1];
       if (!token) throw new Error('Missing session cookie');
       tokens.push(token);
+      const meResponse = await fetch(`${url}/me`, {
+        headers: { Cookie: `yanemedia_session=${token}` },
+      });
+      expect(meResponse.status).toBe(200);
+      expect(await meResponse.json()).toEqual(publicResponse);
       const stored = await client.query<{ token_hash: string; user_id: string; expires_at: Date }>(
         'SELECT token_hash, user_id, expires_at FROM sessions WHERE token_hash = $1',
         [hashToken(token)],

@@ -52,7 +52,6 @@ export class AuthController {
     return {
       user: user
         ? {
-            id: user.id,
             displayName: user.displayName,
             email: user.email,
             createdAt: user.createdAt,

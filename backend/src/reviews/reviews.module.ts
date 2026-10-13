@@ -9,6 +9,7 @@ import { OptionalSessionGuard } from '../auth/guards/optional-session.guard';
 import { StrictBodyFieldsGuard, StrictQueryFieldsGuard } from '../profile/strict-body-fields.guard';
 import {
   MediaReviewsController,
+  OwnProfileReviewsController,
   ProfileReviewsController,
   ReviewsController,
 } from './reviews.controller';
@@ -25,7 +26,12 @@ import { ReviewsService } from './reviews.service';
     MediaModule,
     ThrottlerModule.forRoot({ throttlers: [{ limit: 10, ttl: 60_000 }] }),
   ],
-  controllers: [MediaReviewsController, ReviewsController, ProfileReviewsController],
+  controllers: [
+    MediaReviewsController,
+    ReviewsController,
+    ProfileReviewsController,
+    OwnProfileReviewsController,
+  ],
   providers: [
     ReviewsRepository,
     ReviewsService,
@@ -44,6 +50,11 @@ export class ReviewsModule implements NestModule {
         response.setHeader('Cache-Control', 'no-store');
         next();
       })
-      .forRoutes(MediaReviewsController, ReviewsController, ProfileReviewsController);
+      .forRoutes(
+        MediaReviewsController,
+        ReviewsController,
+        ProfileReviewsController,
+        OwnProfileReviewsController,
+      );
   }
 }

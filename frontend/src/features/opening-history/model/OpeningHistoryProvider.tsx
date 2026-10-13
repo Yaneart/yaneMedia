@@ -102,7 +102,7 @@ export function OpeningHistoryProvider({ children }: OpeningHistoryProviderProps
   const [undoPendingOwnerId, setUndoPendingOwnerId] = useState<string | null | undefined>();
   const historyUndoRef = useRef(historyUndo);
   const undoPendingOwnerIdRef = useRef(undoPendingOwnerId);
-  const accountUserId = authState.status === 'authenticated' ? authState.user.id : null;
+  const accountUserId = authState.status === 'authenticated' ? authState.user.email : null;
   const currentUserIdRef = useRef(accountUserId);
   const renderedUserIdRef = useRef(accountUserId);
   const mutationStateUserIdRef = useRef(accountUserId);

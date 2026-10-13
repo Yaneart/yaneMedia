@@ -124,6 +124,31 @@ export class ReviewsRepository {
       .limit(limit);
   }
 
+  async findOwnProfilePage(
+    userId: string,
+    boundary: ProfileReviewBoundary | undefined,
+    limit: number,
+  ): Promise<PublicReviewRow[]> {
+    return this.publicReviewQuery()
+      .where(
+        and(
+          eq(reviews.userId, userId),
+          isNull(reviews.deletedAt),
+          boundary
+            ? or(
+                lt(reviews.createdAt, boundary.createdAt),
+                and(
+                  eq(reviews.createdAt, boundary.createdAt),
+                  lt(reviews.reviewId, boundary.reviewId),
+                ),
+              )
+            : undefined,
+        ),
+      )
+      .orderBy(desc(reviews.createdAt), desc(reviews.reviewId))
+      .limit(limit);
+  }
+
   async findRating(userId: string, mediaRef: string): Promise<number | null> {
     const [rating] = await this.databaseService.db
       .select({ value: ratings.value })
@@ -338,9 +363,17 @@ function reviewSortOrder(sort: ReviewSort) {
     case 'updated':
       return [desc(reviews.updatedAt), desc(reviews.reviewId)];
     case 'rating-high':
-      return [sql`${ratings.value} desc nulls last`, desc(reviews.reviewId)];
+      return [
+        sql`${ratings.value} desc nulls last`,
+        desc(reviews.createdAt),
+        desc(reviews.reviewId),
+      ];
     case 'rating-low':
-      return [sql`${ratings.value} asc nulls last`, desc(reviews.reviewId)];
+      return [
+        sql`${ratings.value} asc nulls last`,
+        desc(reviews.createdAt),
+        desc(reviews.reviewId),
+      ];
     case 'new':
       return [desc(reviews.createdAt), desc(reviews.reviewId)];
   }

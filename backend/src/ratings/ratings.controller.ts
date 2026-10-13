@@ -11,7 +11,7 @@ import {
 } from '@nestjs/common';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import type { AuthUserDto } from '../auth/dto/auth-user.dto';
+import type { AuthenticatedUser } from '../auth/auth-request';
 import { CsrfGuard } from '../auth/guards/csrf.guard';
 import { SessionGuard } from '../auth/guards/session.guard';
 import { NoStore } from '../platform/http/cache-policy';
@@ -40,7 +40,7 @@ export class RatingsController {
   @NoStore()
   @UseGuards(SessionGuard, CsrfGuard)
   getOwn(
-    @CurrentUser() user: AuthUserDto,
+    @CurrentUser() user: AuthenticatedUser,
     @Param(strictValidation) { mediaRef }: RatingMediaRefDto,
   ): Promise<OwnRatingResponseDto> {
     return this.ratingsService.getOwn(user.id, mediaRef);
@@ -52,7 +52,7 @@ export class RatingsController {
   @UseGuards(SessionGuard, CsrfGuard, ThrottlerGuard, StrictBodyFieldsGuard)
   @StrictBodyFields('value')
   upsert(
-    @CurrentUser() user: AuthUserDto,
+    @CurrentUser() user: AuthenticatedUser,
     @Param(strictValidation) { mediaRef }: RatingMediaRefDto,
     @Body(strictValidation) { value }: UpsertRatingDto,
   ): Promise<RatingDto> {
@@ -65,7 +65,7 @@ export class RatingsController {
   @Throttle({ default: SOCIAL_RATE_LIMITS.ratingWrite })
   @UseGuards(SessionGuard, CsrfGuard, ThrottlerGuard)
   delete(
-    @CurrentUser() user: AuthUserDto,
+    @CurrentUser() user: AuthenticatedUser,
     @Param(strictValidation) { mediaRef }: RatingMediaRefDto,
   ): Promise<void> {
     return this.ratingsService.delete(user.id, mediaRef);

@@ -44,6 +44,7 @@ describe('ReviewsService', () => {
   const findPublicById = jest.fn();
   const findPublicProfileOwner = jest.fn();
   const findPublicProfilePage = jest.fn();
+  const findOwnProfilePage = jest.fn();
   const update = jest.fn();
   const softDelete = jest.fn();
   const createListSnapshot = jest.fn();
@@ -64,6 +65,7 @@ describe('ReviewsService', () => {
       findPublicById,
       findPublicProfileOwner,
       findPublicProfilePage,
+      findOwnProfilePage,
       update,
       softDelete,
       createListSnapshot,
@@ -90,6 +92,7 @@ describe('ReviewsService', () => {
     });
     findPublicProfileOwner.mockReset().mockResolvedValue(author);
     findPublicProfilePage.mockReset().mockResolvedValue([]);
+    findOwnProfilePage.mockReset().mockResolvedValue([]);
     update.mockReset().mockResolvedValue({ ...review, isSpoiler: false });
     softDelete.mockReset().mockResolvedValue(undefined);
     createListSnapshot.mockReset().mockResolvedValue({
@@ -326,6 +329,58 @@ describe('ReviewsService', () => {
     profileDecode.mockReturnValue({ createdAt: review.createdAt, reviewId: review.reviewId });
     await service.listProfile('newhandle', { limit: 20, cursor: 'cursor' });
     expect(profileDecode).toHaveBeenCalledWith('cursor', userId);
+  });
+
+  it('lists moderation-hidden reviews for their author without exposing the body', async () => {
+    findOwnProfilePage.mockResolvedValue([
+      {
+        ...review,
+        publicationState: 'moderation_hidden',
+        authorHandle: author.handle,
+        authorDisplayName: author.displayName,
+        authorAvatarAssetId: author.avatarAssetId,
+        rating: 9,
+        commentCount: 0,
+      },
+    ]);
+
+    await expect(service.listOwn(userId, { limit: 20 })).resolves.toMatchObject({
+      items: [
+        {
+          reviewId: review.reviewId,
+          bodyState: 'spoiler-hidden',
+          publicationState: 'moderation-hidden',
+          viewerActions: { canEdit: true, canDelete: true, canComment: false },
+        },
+      ],
+      nextCursor: null,
+    });
+    expect(findOwnProfilePage).toHaveBeenCalledWith(userId, undefined, 21);
+  });
+
+  it('returns the full own body and moderation state through the private detail', async () => {
+    findById.mockResolvedValue({ ...review, publicationState: 'moderation_hidden' });
+
+    await expect(service.getOwn(userId, review.reviewId)).resolves.toMatchObject({
+      reviewId: review.reviewId,
+      body: review.body,
+      bodyState: 'visible',
+      publicationState: 'moderation-hidden',
+      viewerActions: { canEdit: true, canDelete: true, canComment: false },
+    });
+  });
+
+  it("does not reveal another author's hidden review through the private detail", async () => {
+    findById.mockResolvedValue({
+      ...review,
+      userId: '93ea2794-e805-4f60-b14f-2005d2c61805',
+      publicationState: 'moderation_hidden',
+    });
+
+    await expect(service.getOwn(userId, review.reviewId)).rejects.toMatchObject({
+      response: { code: 'REVIEW_NOT_FOUND' },
+    });
+    expect(resolveMediaRefs).not.toHaveBeenCalled();
   });
 
   it('requires a verified author before inserting', async () => {

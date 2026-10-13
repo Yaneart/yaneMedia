@@ -17,6 +17,7 @@ import {
 } from '../../src/profile/strict-body-fields.guard';
 import {
   MediaReviewsController,
+  OwnProfileReviewsController,
   ProfileReviewsController,
   ReviewsController,
 } from '../../src/reviews/reviews.controller';
@@ -53,13 +54,20 @@ describe('reviews HTTP contract', () => {
   const get = jest.fn();
   const getContent = jest.fn();
   const listProfile = jest.fn();
+  const listOwn = jest.fn();
+  const getOwn = jest.fn();
   const findUserBySessionHash = jest.fn();
   const deleteExpiredByTokenHash = jest.fn();
 
   beforeAll(async () => {
     const module = await Test.createTestingModule({
       imports: [ThrottlerModule.forRoot({ throttlers: [{ limit: 100, ttl: 60_000 }] })],
-      controllers: [MediaReviewsController, ReviewsController, ProfileReviewsController],
+      controllers: [
+        MediaReviewsController,
+        ReviewsController,
+        ProfileReviewsController,
+        OwnProfileReviewsController,
+      ],
       providers: [
         SessionGuard,
         OptionalSessionGuard,
@@ -73,7 +81,17 @@ describe('reviews HTTP contract', () => {
         },
         {
           provide: ReviewsService,
-          useValue: { list, create, get, getContent, listProfile, update, delete: remove },
+          useValue: {
+            list,
+            create,
+            get,
+            getContent,
+            listProfile,
+            listOwn,
+            getOwn,
+            update,
+            delete: remove,
+          },
         },
         {
           provide: AuthRepository,
@@ -102,6 +120,11 @@ describe('reviews HTTP contract', () => {
     get.mockReset().mockResolvedValue(detail);
     getContent.mockReset().mockResolvedValue({ body: detail.body });
     listProfile.mockReset().mockResolvedValue({ items: [], nextCursor: null });
+    listOwn.mockReset().mockResolvedValue({ items: [], nextCursor: null });
+    getOwn.mockReset().mockResolvedValue({
+      ...detail,
+      publicationState: 'moderation-hidden',
+    });
     findUserBySessionHash.mockReset().mockResolvedValue(user);
     deleteExpiredByTokenHash.mockReset().mockResolvedValue(undefined);
   });
@@ -181,6 +204,25 @@ describe('reviews HTTP contract', () => {
     });
     expect(get).not.toHaveBeenCalled();
     expect(listProfile).not.toHaveBeenCalled();
+  });
+
+  it('serves the private review list and own detail only to the session user', async () => {
+    expect(await fetch(`${baseUrl}/profile/reviews`)).toMatchObject({ status: 401 });
+
+    const listResponse = await fetch(`${baseUrl}/profile/reviews?limit=10`, {
+      headers: headers(),
+    });
+    expect(listResponse.status).toBe(200);
+    expect(listOwn).toHaveBeenCalledWith(user.id, { limit: 10 }, false);
+
+    const detailResponse = await fetch(`${baseUrl}/profile/reviews/${reviewId}`, {
+      headers: headers(),
+    });
+    expect(detailResponse.status).toBe(200);
+    expect(await detailResponse.json()).toEqual({
+      data: { ...detail, publicationState: 'moderation-hidden' },
+    });
+    expect(getOwn).toHaveBeenCalledWith(user.id, reviewId, false);
   });
 
   it('creates a normalized review with 201 and no-store', async () => {

@@ -14,7 +14,6 @@ import {
 } from '@nestjs/common';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { CurrentUser, OptionalCurrentUser } from '../auth/decorators/current-user.decorator';
-import type { AuthUserDto } from '../auth/dto/auth-user.dto';
 import type { AuthenticatedUser } from '../auth/auth-request';
 import { CsrfGuard } from '../auth/guards/csrf.guard';
 import { OptionalSessionGuard } from '../auth/guards/optional-session.guard';
@@ -28,6 +27,8 @@ import {
 } from '../profile/strict-body-fields.guard';
 import {
   CreateReviewDto,
+  type OwnReviewCursorPageDto,
+  type OwnReviewDetailDto,
   type ReviewCursorPageDto,
   type ReviewContentDto,
   type ReviewDetailDto,
@@ -123,7 +124,7 @@ export class ReviewsController {
   @Throttle({ default: SOCIAL_RATE_LIMITS.reviewWrite })
   @UseGuards(SessionGuard, CsrfGuard, ThrottlerGuard)
   delete(
-    @CurrentUser() user: AuthUserDto,
+    @CurrentUser() user: AuthenticatedUser,
     @Param(strictValidation) { reviewId }: ReviewIdDto,
   ): Promise<void> {
     return this.reviewsService.delete(user.id, reviewId);
@@ -147,5 +148,29 @@ export class ProfileReviewsController {
     return user?.role === 'admin'
       ? this.reviewsService.listProfile(handle, query, user.id, true)
       : this.reviewsService.listProfile(handle, query, user?.id);
+  }
+}
+
+@Controller('profile/reviews')
+@UseGuards(SessionGuard, CsrfGuard)
+export class OwnProfileReviewsController {
+  constructor(private readonly reviewsService: ReviewsService) {}
+
+  @Get()
+  @UseGuards(StrictQueryFieldsGuard)
+  @StrictQueryFields('cursor', 'limit')
+  list(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query(strictValidation) query: PublicProfileCollectionQueryDto,
+  ): Promise<OwnReviewCursorPageDto> {
+    return this.reviewsService.listOwn(user.id, query, user.role === 'admin');
+  }
+
+  @Get(':reviewId')
+  get(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param(strictValidation) { reviewId }: ReviewIdDto,
+  ): Promise<OwnReviewDetailDto> {
+    return this.reviewsService.getOwn(user.id, reviewId, user.role === 'admin');
   }
 }

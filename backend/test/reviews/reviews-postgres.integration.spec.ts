@@ -225,6 +225,11 @@ describePostgres('reviews with PostgreSQL', () => {
     );
     const secondPage = await repository.findPublicProfilePage(author.id, firstPage[1], 2);
     expect(secondPage.map(({ reviewId }) => reviewId)).toEqual([inserted[2]?.reviewId]);
+    const ownPage = await repository.findOwnProfilePage(author.id, undefined, 10);
+    expect(ownPage.map(({ reviewId }) => reviewId)).toEqual(
+      inserted.map(({ reviewId }) => reviewId),
+    );
+    expect(ownPage.at(-1)?.publicationState).toBe('moderation_hidden');
 
     const changedHandle = `changed_${randomUUID().slice(0, 8)}`;
     await db.update(users).set({ handle: changedHandle }).where(eq(users.id, author.id));

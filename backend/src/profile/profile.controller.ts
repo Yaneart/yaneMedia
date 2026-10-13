@@ -15,7 +15,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import type { AuthUserDto } from '../auth/dto/auth-user.dto';
+import type { AuthenticatedUser } from '../auth/auth-request';
 import { CsrfGuard } from '../auth/guards/csrf.guard';
 import { SessionGuard } from '../auth/guards/session.guard';
 import { HandleAvailabilityQueryDto } from './dto/handle-availability-query.dto';
@@ -51,7 +51,7 @@ export class ProfileController {
   constructor(private readonly profileService: ProfileService) {}
 
   @Get()
-  getProfile(@CurrentUser() user: AuthUserDto): Promise<PrivateProfileDto> {
+  getProfile(@CurrentUser() user: AuthenticatedUser): Promise<PrivateProfileDto> {
     return this.profileService.getProfile(user.id);
   }
 
@@ -60,14 +60,14 @@ export class ProfileController {
   @UseGuards(ThrottlerGuard, StrictBodyFieldsGuard)
   @StrictBodyFields('displayName', 'handle', 'bio')
   updateProfile(
-    @CurrentUser() user: AuthUserDto,
+    @CurrentUser() user: AuthenticatedUser,
     @Body(strictValidation) dto: UpdateProfileDto,
   ): Promise<PrivateProfileDto> {
     return this.profileService.updateProfile(user.id, dto);
   }
 
   @Get('settings')
-  getSettings(@CurrentUser() user: AuthUserDto): Promise<ProfileSettingsDto> {
+  getSettings(@CurrentUser() user: AuthenticatedUser): Promise<ProfileSettingsDto> {
     return this.profileService.getSettings(user.id);
   }
 
@@ -75,7 +75,7 @@ export class ProfileController {
   @UseGuards(StrictQueryFieldsGuard)
   @StrictQueryFields('cursor', 'limit')
   getRatings(
-    @CurrentUser() user: AuthUserDto,
+    @CurrentUser() user: AuthenticatedUser,
     @Query(strictValidation) query: PublicProfileCollectionQueryDto,
   ): Promise<CursorPageDto<PublicRatingDto>> {
     return this.profileService.getOwnRatings(user.id, query);
@@ -86,7 +86,7 @@ export class ProfileController {
   @UseGuards(ThrottlerGuard, StrictBodyFieldsGuard)
   @StrictBodyFields('ratingsVisibility', 'favoritesVisibility')
   updateSettings(
-    @CurrentUser() user: AuthUserDto,
+    @CurrentUser() user: AuthenticatedUser,
     @Body(strictValidation) dto: UpdateProfileSettingsDto,
   ): Promise<ProfileSettingsDto> {
     return this.profileService.updateSettings(user.id, dto);
@@ -97,7 +97,7 @@ export class ProfileController {
   @Throttle({ default: SOCIAL_RATE_LIMITS.handleAvailability })
   @StrictQueryFields('handle')
   getHandleAvailability(
-    @CurrentUser() user: AuthUserDto,
+    @CurrentUser() user: AuthenticatedUser,
     @Query(strictValidation) query: HandleAvailabilityQueryDto,
   ): Promise<HandleAvailabilityDto> {
     return this.profileService.getHandleAvailability(user.id, query.handle);
@@ -112,7 +112,7 @@ export class ProfileController {
     }),
   )
   updateAvatar(
-    @CurrentUser() user: AuthUserDto,
+    @CurrentUser() user: AuthenticatedUser,
     @UploadedFile() avatar: UploadedAvatar | undefined,
   ): Promise<PrivateProfileDto> {
     if (!avatar) throw new BadRequestException('Добавьте файл avatar');
@@ -122,7 +122,7 @@ export class ProfileController {
   @Delete('avatar')
   @UseGuards(ThrottlerGuard)
   @Throttle({ default: SOCIAL_RATE_LIMITS.avatarWrite })
-  deleteAvatar(@CurrentUser() user: AuthUserDto): Promise<PrivateProfileDto> {
+  deleteAvatar(@CurrentUser() user: AuthenticatedUser): Promise<PrivateProfileDto> {
     return this.profileService.deleteAvatar(user.id);
   }
 }

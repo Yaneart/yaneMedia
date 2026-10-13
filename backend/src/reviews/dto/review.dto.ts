@@ -152,6 +152,21 @@ export class ReviewCursorPageDto {
   nextCursor!: string | null;
 }
 
+export class OwnReviewSummaryDto extends ReviewSummaryDto {
+  publicationState!: 'published' | 'moderation-hidden';
+}
+
+export class OwnReviewDetailDto extends ReviewDetailDto {
+  declare body: string;
+  declare bodyState: 'visible';
+  publicationState!: 'published' | 'moderation-hidden';
+}
+
+export class OwnReviewCursorPageDto {
+  items!: OwnReviewSummaryDto[];
+  nextCursor!: string | null;
+}
+
 export class ReviewContentDto {
   body!: string;
 }
