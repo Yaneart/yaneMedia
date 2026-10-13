@@ -8,13 +8,13 @@ import type { AuthRequest } from '../auth-request';
 import { AuthRepository } from '../auth.repository';
 import { SESSION_COOKIE_NAME } from '../session-cookie';
 import { hashToken, isToken } from '../token';
-import type { AuthUserDto } from '../dto/auth-user.dto';
+import type { AuthenticatedUser } from '../auth-request';
 
 @Injectable()
 export class SessionGuard implements CanActivate {
   constructor(private readonly authRepository: AuthRepository) {}
 
-  async findUser(token: unknown): Promise<AuthUserDto | null> {
+  async findUser(token: unknown): Promise<AuthenticatedUser | null> {
     if (!isToken(token)) {
       return null;
     }
@@ -33,6 +33,7 @@ export class SessionGuard implements CanActivate {
       displayName: user.displayName,
       email: user.email,
       createdAt: user.createdAt.toISOString(),
+      role: user.role,
     };
   }
 

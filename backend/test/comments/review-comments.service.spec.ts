@@ -114,6 +114,16 @@ describe('ReviewCommentsService', () => {
     });
   });
 
+  it('exposes only the moderation capability to an administrator viewer', async () => {
+    const result = await service.list(reviewId, { limit: 1 }, otherUserId, true);
+    expect(result.items[0]?.viewerActions).toMatchObject({
+      canEdit: false,
+      canDelete: false,
+      canReport: true,
+      canModerate: true,
+    });
+  });
+
   it('uses an after marker for additions and anonymizes deleted authors', async () => {
     const boundary = { createdAt: first.createdAt, commentId: first.commentId };
     decodeNewer.mockReturnValue(boundary);

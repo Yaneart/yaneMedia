@@ -198,6 +198,7 @@ describe('auth HTTP contract', () => {
       displayName: 'Artem',
       email: 'artem@example.com',
       createdAt,
+      role: 'admin',
     });
 
     const response = await fetch(`${url}/me`, {

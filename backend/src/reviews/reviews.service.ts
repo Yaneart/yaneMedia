@@ -48,6 +48,7 @@ export class ReviewsService {
     locator: string,
     query: ReviewListQueryDto,
     viewerId?: string,
+    viewerCanModerate = false,
   ): Promise<ReviewCursorPageDto> {
     const media = await this.requireMedia(locator);
     const now = new Date();
@@ -83,7 +84,7 @@ export class ReviewsService {
 
     return {
       items: pageRows.map((row) =>
-        toReviewSummary(row, media, viewerId, Boolean(viewer?.emailVerifiedAt)),
+        toReviewSummary(row, media, viewerId, Boolean(viewer?.emailVerifiedAt), viewerCanModerate),
       ),
       nextCursor:
         hasNextPage && nextPosition !== undefined
@@ -97,7 +98,12 @@ export class ReviewsService {
     };
   }
 
-  async create(userId: string, locator: string, dto: CreateReviewDto): Promise<ReviewDetailDto> {
+  async create(
+    userId: string,
+    locator: string,
+    dto: CreateReviewDto,
+    viewerCanModerate = false,
+  ): Promise<ReviewDetailDto> {
     const [author, media] = await Promise.all([
       this.requireVerifiedAuthor(userId),
       this.requireMedia(locator),
@@ -128,10 +134,14 @@ export class ReviewsService {
     }
 
     const rating = await this.reviewsRepository.findRating(userId, media.mediaRef);
-    return toReviewDetail(review, media, author, rating);
+    return toReviewDetail(review, media, author, rating, 0, viewerCanModerate);
   }
 
-  async get(reviewId: string, viewerId?: string): Promise<ReviewDetailDto> {
+  async get(
+    reviewId: string,
+    viewerId?: string,
+    viewerCanModerate = false,
+  ): Promise<ReviewDetailDto> {
     const review = await this.reviewsRepository.findPublicById(reviewId);
     if (!review) throwReviewNotFound();
 
@@ -139,7 +149,13 @@ export class ReviewsService {
       this.requireMedia(review.mediaRef),
       viewerId ? this.reviewsRepository.findAuthor(viewerId) : undefined,
     ]);
-    return toPublicReviewDetail(review, media, viewerId, Boolean(viewer?.emailVerifiedAt));
+    return toPublicReviewDetail(
+      review,
+      media,
+      viewerId,
+      Boolean(viewer?.emailVerifiedAt),
+      viewerCanModerate,
+    );
   }
 
   async getContent(reviewId: string): Promise<ReviewContentDto> {
@@ -152,6 +168,7 @@ export class ReviewsService {
     rawHandle: string,
     query: PublicProfileCollectionQueryDto,
     viewerId?: string,
+    viewerCanModerate = false,
   ): Promise<ReviewCursorPageDto> {
     const handle = normalizeHandle(rawHandle);
     const owner = isHandleAllowed(handle)
@@ -177,7 +194,13 @@ export class ReviewsService {
     const items = pageRows.map((row, index) => {
       const media = mediaByIndex.get(index);
       if (!media) throw new Error(`Canonical review media was not resolved: ${row.mediaRef}`);
-      return toReviewSummary(row, media, viewerId, Boolean(viewer?.emailVerifiedAt));
+      return toReviewSummary(
+        row,
+        media,
+        viewerId,
+        Boolean(viewer?.emailVerifiedAt),
+        viewerCanModerate,
+      );
     });
     const last = pageRows.at(-1);
 
@@ -187,7 +210,12 @@ export class ReviewsService {
     };
   }
 
-  async update(userId: string, reviewId: string, dto: UpdateReviewDto): Promise<ReviewDetailDto> {
+  async update(
+    userId: string,
+    reviewId: string,
+    dto: UpdateReviewDto,
+    viewerCanModerate = false,
+  ): Promise<ReviewDetailDto> {
     const current = await this.requireOwned(reviewId, userId, false);
     const expectedUpdatedAt = new Date(dto.expectedUpdatedAt);
     if (current.updatedAt.getTime() !== expectedUpdatedAt.getTime()) throwEditConflict();
@@ -205,7 +233,7 @@ export class ReviewsService {
       this.reviewsRepository.findRating(userId, review.mediaRef),
       this.reviewsRepository.countPublicComments(review.reviewId),
     ]);
-    return toReviewDetail(review, media, author, rating, commentCount);
+    return toReviewDetail(review, media, author, rating, commentCount, viewerCanModerate);
   }
 
   async delete(userId: string, reviewId: string): Promise<void> {
@@ -281,6 +309,7 @@ function toReviewDetail(
   author: ReviewAuthor,
   rating: number | null,
   commentCount = 0,
+  viewerCanModerate = false,
 ): ReviewDetailDto {
   const spoilerHidden = review.isSpoiler;
   return {
@@ -309,7 +338,7 @@ function toReviewDetail(
       canDelete: true,
       canComment: review.publicationState === 'published',
       canReport: false,
-      canModerate: false,
+      canModerate: viewerCanModerate,
     },
   };
 }
@@ -319,6 +348,7 @@ function toReviewSummary(
   media: MediaSummaryDto,
   viewerId: string | undefined,
   viewerCanPublish: boolean,
+  viewerCanModerate: boolean,
 ): ReviewSummaryDto {
   const isOwner = viewerId !== undefined && review.userId === viewerId;
   return {
@@ -338,7 +368,7 @@ function toReviewSummary(
       canDelete: isOwner,
       canComment: viewerCanPublish,
       canReport: viewerCanPublish && !isOwner,
-      canModerate: false,
+      canModerate: viewerCanModerate,
     },
   };
 }
@@ -348,6 +378,7 @@ function toPublicReviewDetail(
   media: MediaSummaryDto,
   viewerId: string | undefined,
   viewerCanPublish: boolean,
+  viewerCanModerate: boolean,
 ): ReviewDetailDto {
   const isOwner = viewerId !== undefined && review.userId === viewerId;
   return {
@@ -367,7 +398,7 @@ function toPublicReviewDetail(
       canDelete: isOwner,
       canComment: viewerCanPublish,
       canReport: viewerCanPublish && !isOwner,
-      canModerate: false,
+      canModerate: viewerCanModerate,
     },
   };
 }

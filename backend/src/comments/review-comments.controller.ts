@@ -14,6 +14,7 @@ import {
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { CurrentUser, OptionalCurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthUserDto } from '../auth/dto/auth-user.dto';
+import type { AuthenticatedUser } from '../auth/auth-request';
 import { CsrfGuard } from '../auth/guards/csrf.guard';
 import { OptionalSessionGuard } from '../auth/guards/optional-session.guard';
 import { SessionGuard } from '../auth/guards/session.guard';
@@ -50,11 +51,13 @@ export class ReviewCommentsController {
   @UseGuards(OptionalSessionGuard, StrictQueryFieldsGuard)
   @StrictQueryFields('cursor', 'after', 'limit')
   list(
-    @OptionalCurrentUser() user: AuthUserDto | undefined,
+    @OptionalCurrentUser() user: AuthenticatedUser | undefined,
     @Param(strictValidation) { reviewId }: ReviewIdDto,
     @Query(strictValidation) query: ReviewCommentListQueryDto,
   ): Promise<ReviewCommentCursorPageDto> {
-    return this.commentsService.list(reviewId, query, user?.id);
+    return user?.role === 'admin'
+      ? this.commentsService.list(reviewId, query, user.id, true)
+      : this.commentsService.list(reviewId, query, user?.id);
   }
 
   @Post(':reviewId/comments')
@@ -63,11 +66,13 @@ export class ReviewCommentsController {
   @UseGuards(SessionGuard, CsrfGuard, ThrottlerGuard, StrictBodyFieldsGuard)
   @StrictBodyFields('body')
   create(
-    @CurrentUser() user: AuthUserDto,
+    @CurrentUser() user: AuthenticatedUser,
     @Param(strictValidation) { reviewId }: ReviewIdDto,
     @Body(strictValidation) dto: CreateReviewCommentDto,
   ): Promise<ReviewCommentDto> {
-    return this.commentsService.create(user.id, reviewId, dto);
+    return user.role === 'admin'
+      ? this.commentsService.create(user.id, reviewId, dto, true)
+      : this.commentsService.create(user.id, reviewId, dto);
   }
 }
 
@@ -81,11 +86,13 @@ export class CommentsController {
   @UseGuards(SessionGuard, CsrfGuard, ThrottlerGuard, StrictBodyFieldsGuard)
   @StrictBodyFields('body', 'expectedUpdatedAt')
   update(
-    @CurrentUser() user: AuthUserDto,
+    @CurrentUser() user: AuthenticatedUser,
     @Param(strictValidation) { commentId }: CommentIdDto,
     @Body(strictValidation) dto: UpdateReviewCommentDto,
   ): Promise<ReviewCommentDto> {
-    return this.commentsService.update(user.id, commentId, dto);
+    return user.role === 'admin'
+      ? this.commentsService.update(user.id, commentId, dto, true)
+      : this.commentsService.update(user.id, commentId, dto);
   }
 
   @Delete(':commentId')

@@ -3,11 +3,13 @@ import { Test } from '@nestjs/testing';
 import { randomUUID } from 'node:crypto';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Client } from 'pg';
+import type { NextFunction, Request, Response } from 'express';
 import { AuthModule } from '../../src/auth/auth.module';
 import { AuthRepository } from '../../src/auth/auth.repository';
 import { verifyPassword } from '../../src/auth/password';
 import { hashToken } from '../../src/auth/token';
 import { DatabaseService } from '../../src/database/database.service';
+import { MailService } from '../../src/mail/mail.service';
 import { ApiExceptionFilter } from '../../src/platform/http/api-error/api-exception/api-exception.filter';
 import { ApiResponseInterceptor } from '../../src/platform/http/api-response/api-response.interceptor';
 import type { AppLogger } from '../../src/platform/logging/app-logger';
@@ -31,8 +33,14 @@ describePostgres('auth with PostgreSQL', () => {
     const module = await Test.createTestingModule({ imports: [AuthModule] })
       .overrideProvider(DatabaseService)
       .useValue({ db: drizzle(client) })
+      .overrideProvider(MailService)
+      .useValue({ sendVerificationEmail: jest.fn().mockResolvedValue(undefined) })
       .compile();
     app = module.createNestApplication();
+    app.use((_request: Request, response: Response, next: NextFunction) => {
+      response.setHeader('Cache-Control', 'no-store');
+      next();
+    });
     app.setGlobalPrefix('api/v1');
     app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
     app.useGlobalInterceptors(new ApiResponseInterceptor());
@@ -61,7 +69,7 @@ describePostgres('auth with PostgreSQL', () => {
   function register(body: object) {
     return fetch(`${url}/register`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-YaneMedia-CSRF': '1' },
       body: JSON.stringify(body),
     });
   }
@@ -125,6 +133,7 @@ describePostgres('auth with PostgreSQL', () => {
       email: `session-probe-${randomUUID()}@example.com`,
       passwordHash: 'unused-in-session-lookup',
     });
+    await client.query('UPDATE users SET email_verified_at = now() WHERE id = $1', [user.id]);
     const now = new Date('2026-09-05T10:00:00.000Z');
     const expiresAt = new Date(now.getTime() + 1000);
     const tokenHash = hashToken(randomUUID());
@@ -138,6 +147,7 @@ describePostgres('auth with PostgreSQL', () => {
       displayName: user.displayName,
       email: user.email,
       createdAt: user.createdAt,
+      role: 'user',
     });
     await expect(
       authRepository.findUserBySessionHash(tokenHash, expiresAt),
@@ -162,11 +172,12 @@ describePostgres('auth with PostgreSQL', () => {
     const publicResponse: unknown = await registered.json();
     const user = await usersService.findByEmail(email);
     if (!user) throw new Error('Missing registered user');
+    await client.query('UPDATE users SET email_verified_at = now() WHERE id = $1', [user.id]);
 
     function login(body: object) {
       return fetch(`${url}/login`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-YaneMedia-CSRF': '1' },
         body: JSON.stringify(body),
       });
     }

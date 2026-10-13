@@ -1,5 +1,5 @@
 // Предметные схемы будут экспортироваться отсюда по мере их появления.
-export { users } from '../users/entities/user.entity';
+export { userRole, users } from '../users/entities/user.entity';
 export { profileAssets } from '../profile/profile-asset.entity';
 export { sessions } from '../auth/entities/session.entity';
 export { emailVerificationTokens } from '../auth/entities/email-verification-token.entity';
@@ -17,6 +17,14 @@ export {
   commentPublicationState,
   reviewComments,
 } from '../comments/entities/review-comment.entity';
+export {
+  contentReports,
+  moderationAction,
+  moderationEvents,
+  moderationTargetType,
+  reportReason,
+  reportStatus,
+} from '../moderation/entities/moderation.entity';
 export {
   catalogRevisionStatus,
   catalogRevisions,

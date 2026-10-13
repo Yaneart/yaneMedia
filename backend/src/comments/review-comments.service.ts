@@ -34,6 +34,7 @@ export class ReviewCommentsService {
     reviewId: string,
     query: ReviewCommentListQueryDto,
     viewerId?: string,
+    viewerCanModerate = false,
   ): Promise<ReviewCommentCursorPageDto> {
     if (query.cursor && query.after) {
       throw new BadRequestException({
@@ -68,7 +69,9 @@ export class ReviewCommentsService {
     const viewerCanPublish = Boolean(viewer?.emailVerifiedAt);
 
     return {
-      items: pageRows.map((row) => toReviewComment(row, viewerId, viewerCanPublish)),
+      items: pageRows.map((row) =>
+        toReviewComment(row, viewerId, viewerCanPublish, viewerCanModerate),
+      ),
       nextCursor:
         hasNextPage && last
           ? this.cursorService.encodePage(reviewId, boundaryOf(last), ceiling)
@@ -81,17 +84,19 @@ export class ReviewCommentsService {
     userId: string,
     reviewId: string,
     dto: CreateReviewCommentDto,
+    viewerCanModerate = false,
   ): Promise<ReviewCommentDto> {
     const author = await this.requireVerifiedAuthor(userId);
     const comment = await this.repository.create(reviewId, userId, dto.body);
     if (!comment) throwReviewNotFound();
-    return toOwnedReviewComment(comment, author);
+    return toOwnedReviewComment(comment, author, viewerCanModerate);
   }
 
   async update(
     userId: string,
     commentId: string,
     dto: UpdateReviewCommentDto,
+    viewerCanModerate = false,
   ): Promise<ReviewCommentDto> {
     const current = await this.requireOwned(commentId, userId, false);
     const expectedUpdatedAt = new Date(dto.expectedUpdatedAt);
@@ -102,7 +107,7 @@ export class ReviewCommentsService {
         ? current
         : await this.repository.update(commentId, userId, expectedUpdatedAt, { body: dto.body });
     if (!comment) throwEditConflict();
-    return toOwnedReviewComment(comment, await this.requireAuthor(userId));
+    return toOwnedReviewComment(comment, await this.requireAuthor(userId), viewerCanModerate);
   }
 
   async delete(userId: string, commentId: string): Promise<void> {
@@ -146,7 +151,11 @@ export class ReviewCommentsService {
   }
 }
 
-function toOwnedReviewComment(comment: ReviewComment, author: CommentAuthor): ReviewCommentDto {
+function toOwnedReviewComment(
+  comment: ReviewComment,
+  author: CommentAuthor,
+  viewerCanModerate: boolean,
+): ReviewCommentDto {
   return {
     commentId: comment.commentId,
     author: {
@@ -166,7 +175,7 @@ function toOwnedReviewComment(comment: ReviewComment, author: CommentAuthor): Re
       canEdit: true,
       canDelete: true,
       canReport: false,
-      canModerate: false,
+      canModerate: viewerCanModerate,
     },
   };
 }
@@ -175,6 +184,7 @@ function toReviewComment(
   comment: PublicReviewCommentRow,
   viewerId: string | undefined,
   viewerCanPublish: boolean,
+  viewerCanModerate: boolean,
 ): ReviewCommentDto {
   const isOwner = viewerId !== undefined && comment.userId === viewerId;
   return {
@@ -199,7 +209,7 @@ function toReviewComment(
       canEdit: isOwner,
       canDelete: isOwner,
       canReport: viewerCanPublish && !isOwner,
-      canModerate: false,
+      canModerate: viewerCanModerate,
     },
   };
 }

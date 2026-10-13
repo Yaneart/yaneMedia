@@ -14,6 +14,7 @@ import {
 } from '@nestjs/common';
 import { CurrentUser, OptionalCurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthUserDto } from '../auth/dto/auth-user.dto';
+import type { AuthenticatedUser } from '../auth/auth-request';
 import { CsrfGuard } from '../auth/guards/csrf.guard';
 import { OptionalSessionGuard } from '../auth/guards/optional-session.guard';
 import { SessionGuard } from '../auth/guards/session.guard';
@@ -52,11 +53,13 @@ export class MediaReviewsController {
   @UseGuards(OptionalSessionGuard, StrictQueryFieldsGuard)
   @StrictQueryFields('sort', 'cursor', 'limit')
   list(
-    @OptionalCurrentUser() user: AuthUserDto | undefined,
+    @OptionalCurrentUser() user: AuthenticatedUser | undefined,
     @Param(strictValidation) { mediaRef }: ReviewMediaRefDto,
     @Query(strictValidation) query: ReviewListQueryDto,
   ): Promise<ReviewCursorPageDto> {
-    return this.reviewsService.list(mediaRef, query, user?.id);
+    return user?.role === 'admin'
+      ? this.reviewsService.list(mediaRef, query, user.id, true)
+      : this.reviewsService.list(mediaRef, query, user?.id);
   }
 
   @Post(':mediaRef/reviews')
@@ -64,11 +67,13 @@ export class MediaReviewsController {
   @UseGuards(SessionGuard, CsrfGuard, StrictBodyFieldsGuard)
   @StrictBodyFields('title', 'body', 'isSpoiler')
   create(
-    @CurrentUser() user: AuthUserDto,
+    @CurrentUser() user: AuthenticatedUser,
     @Param(strictValidation) { mediaRef }: ReviewMediaRefDto,
     @Body(strictValidation) dto: CreateReviewDto,
   ): Promise<ReviewDetailDto> {
-    return this.reviewsService.create(user.id, mediaRef, dto);
+    return user.role === 'admin'
+      ? this.reviewsService.create(user.id, mediaRef, dto, true)
+      : this.reviewsService.create(user.id, mediaRef, dto);
   }
 }
 
@@ -80,10 +85,12 @@ export class ReviewsController {
   @NoStore()
   @UseGuards(OptionalSessionGuard)
   get(
-    @OptionalCurrentUser() user: AuthUserDto | undefined,
+    @OptionalCurrentUser() user: AuthenticatedUser | undefined,
     @Param(strictValidation) { reviewId }: ReviewIdDto,
   ): Promise<ReviewDetailDto> {
-    return this.reviewsService.get(reviewId, user?.id);
+    return user?.role === 'admin'
+      ? this.reviewsService.get(reviewId, user.id, true)
+      : this.reviewsService.get(reviewId, user?.id);
   }
 
   @Get(':reviewId/content')
@@ -97,11 +104,13 @@ export class ReviewsController {
   @UseGuards(SessionGuard, CsrfGuard, StrictBodyFieldsGuard)
   @StrictBodyFields('title', 'body', 'isSpoiler', 'expectedUpdatedAt')
   update(
-    @CurrentUser() user: AuthUserDto,
+    @CurrentUser() user: AuthenticatedUser,
     @Param(strictValidation) { reviewId }: ReviewIdDto,
     @Body(strictValidation) dto: UpdateReviewDto,
   ): Promise<ReviewDetailDto> {
-    return this.reviewsService.update(user.id, reviewId, dto);
+    return user.role === 'admin'
+      ? this.reviewsService.update(user.id, reviewId, dto, true)
+      : this.reviewsService.update(user.id, reviewId, dto);
   }
 
   @Delete(':reviewId')
@@ -125,10 +134,12 @@ export class ProfileReviewsController {
   @UseGuards(OptionalSessionGuard, StrictQueryFieldsGuard)
   @StrictQueryFields('cursor', 'limit')
   list(
-    @OptionalCurrentUser() user: AuthUserDto | undefined,
+    @OptionalCurrentUser() user: AuthenticatedUser | undefined,
     @Param('handle') handle: string,
     @Query(strictValidation) query: PublicProfileCollectionQueryDto,
   ): Promise<ReviewCursorPageDto> {
-    return this.reviewsService.listProfile(handle, query, user?.id);
+    return user?.role === 'admin'
+      ? this.reviewsService.listProfile(handle, query, user.id, true)
+      : this.reviewsService.listProfile(handle, query, user?.id);
   }
 }

@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import {
   boolean,
   check,
+  pgEnum,
   pgTable,
   text,
   timestamp,
@@ -11,6 +12,8 @@ import {
 } from 'drizzle-orm/pg-core';
 import { RESERVED_HANDLES } from '../handle';
 import { profileAssets } from '../../profile/profile-asset.entity';
+
+export const userRole = pgEnum('user_role', ['user', 'admin']);
 
 export const users = pgTable(
   'users',
@@ -24,6 +27,7 @@ export const users = pgTable(
     }),
     ratingsPublic: boolean('ratings_public').default(false).notNull(),
     favoritesPublic: boolean('favorites_public').default(false).notNull(),
+    role: userRole('role').default('user').notNull(),
     email: varchar('email', { length: 254 }).notNull(),
     emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
     passwordHash: text('password_hash').notNull(),

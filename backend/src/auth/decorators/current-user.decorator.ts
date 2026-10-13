@@ -1,9 +1,9 @@
 import { createParamDecorator, UnauthorizedException, type ExecutionContext } from '@nestjs/common';
 import type { AuthRequest } from '../auth-request';
-import type { AuthUserDto } from '../dto/auth-user.dto';
+import type { AuthenticatedUser } from '../auth-request';
 
 export const CurrentUser = createParamDecorator(
-  (_data: unknown, context: ExecutionContext): AuthUserDto => {
+  (_data: unknown, context: ExecutionContext): AuthenticatedUser => {
     const { user } = context.switchToHttp().getRequest<AuthRequest>();
 
     if (!user) {
@@ -15,6 +15,6 @@ export const CurrentUser = createParamDecorator(
 );
 
 export const OptionalCurrentUser = createParamDecorator(
-  (_data: unknown, context: ExecutionContext): AuthUserDto | undefined =>
+  (_data: unknown, context: ExecutionContext): AuthenticatedUser | undefined =>
     context.switchToHttp().getRequest<AuthRequest>().user,
 );

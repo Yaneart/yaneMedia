@@ -232,6 +232,20 @@ describe('ReviewsService', () => {
     await expect(service.getContent(review.reviewId)).resolves.toEqual({ body: review.body });
   });
 
+  it('exposes only the moderation capability to an administrator viewer', async () => {
+    await expect(
+      service.get(review.reviewId, '7d17a4eb-9b8b-4bbf-b6f7-f4e8b15eb50d', true),
+    ).resolves.toMatchObject({
+      viewerActions: {
+        canEdit: false,
+        canDelete: false,
+        canComment: true,
+        canReport: true,
+        canModerate: true,
+      },
+    });
+  });
+
   it('uses one indistinguishable not-found response for unavailable public reviews', async () => {
     findPublicById.mockResolvedValue(undefined);
     await expect(service.get(review.reviewId)).rejects.toMatchObject({

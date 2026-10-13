@@ -9,6 +9,7 @@ import { SessionGuard } from './guards/session.guard';
 import { CsrfGuard } from './guards/csrf.guard';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { MailModule } from '../mail/mail.module';
+import { AdminGuard } from './guards/admin.guard';
 
 @Module({
   imports: [
@@ -22,7 +23,7 @@ import { MailModule } from '../mail/mail.module';
     MailModule,
   ],
   controllers: [AuthController],
-  providers: [AuthService, AuthRepository, SessionGuard, CsrfGuard, ThrottlerGuard],
-  exports: [AuthRepository, SessionGuard, CsrfGuard],
+  providers: [AuthService, AuthRepository, SessionGuard, CsrfGuard, AdminGuard, ThrottlerGuard],
+  exports: [AuthRepository, SessionGuard, CsrfGuard, AdminGuard],
 })
 export class AuthModule {}
