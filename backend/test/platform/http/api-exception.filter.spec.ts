@@ -32,4 +32,26 @@ describe('ApiExceptionFilter', () => {
     });
     expect(logUnexpectedError).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ['entity.too.large', 413, 'PAYLOAD_TOO_LARGE', 'Payload too large'],
+    ['entity.parse.failed', 400, 'VALIDATION_FAILED', 'Invalid request body'],
+  ])(
+    'normalizes body parser errors without logging or exposing parser details',
+    (type, code, errorCode, message) => {
+      const logUnexpectedError = jest.fn();
+      const status = jest.fn().mockReturnThis();
+      const json = jest.fn();
+      const host = {
+        switchToHttp: () => ({ getResponse: () => ({ status, json }) }),
+      } as unknown as ArgumentsHost;
+      const filter = new ApiExceptionFilter({ logUnexpectedError } as unknown as AppLogger);
+
+      filter.catch({ type, message: 'private parser details', body: 'private content' }, host);
+
+      expect(status).toHaveBeenCalledWith(code);
+      expect(json).toHaveBeenCalledWith({ error: { code: errorCode, message } });
+      expect(logUnexpectedError).not.toHaveBeenCalled();
+    },
+  );
 });

@@ -34,6 +34,7 @@ import {
 } from './dto/moderation.dto';
 import { ModerationService } from './moderation.service';
 import { StrictReportTargetGuard } from './strict-report-target.guard';
+import { SOCIAL_RATE_LIMITS } from '../platform/http/social-rate-limits';
 
 const strictValidation = new ValidationPipe({
   transform: true,
@@ -47,7 +48,7 @@ export class ReportsController {
 
   @Post()
   @NoStore()
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Throttle({ default: SOCIAL_RATE_LIMITS.reportCreate })
   @UseGuards(
     SessionGuard,
     CsrfGuard,
@@ -81,7 +82,8 @@ export class AdminModerationController {
   @Post('reviews/:reviewId/hide')
   @HttpCode(204)
   @NoStore()
-  @UseGuards(SessionGuard, CsrfGuard, AdminGuard, StrictBodyFieldsGuard)
+  @Throttle({ default: SOCIAL_RATE_LIMITS.moderationWrite })
+  @UseGuards(SessionGuard, CsrfGuard, AdminGuard, ThrottlerGuard, StrictBodyFieldsGuard)
   @StrictBodyFields('decision')
   hideReview(
     @CurrentUser() user: AuthenticatedUser,
@@ -94,7 +96,8 @@ export class AdminModerationController {
   @Post('reviews/:reviewId/restore')
   @HttpCode(204)
   @NoStore()
-  @UseGuards(SessionGuard, CsrfGuard, AdminGuard, StrictBodyFieldsGuard)
+  @Throttle({ default: SOCIAL_RATE_LIMITS.moderationWrite })
+  @UseGuards(SessionGuard, CsrfGuard, AdminGuard, ThrottlerGuard, StrictBodyFieldsGuard)
   @StrictBodyFields('decision')
   restoreReview(
     @CurrentUser() user: AuthenticatedUser,
@@ -107,7 +110,8 @@ export class AdminModerationController {
   @Post('comments/:commentId/hide')
   @HttpCode(204)
   @NoStore()
-  @UseGuards(SessionGuard, CsrfGuard, AdminGuard, StrictBodyFieldsGuard)
+  @Throttle({ default: SOCIAL_RATE_LIMITS.moderationWrite })
+  @UseGuards(SessionGuard, CsrfGuard, AdminGuard, ThrottlerGuard, StrictBodyFieldsGuard)
   @StrictBodyFields('decision')
   hideComment(
     @CurrentUser() user: AuthenticatedUser,
@@ -120,7 +124,8 @@ export class AdminModerationController {
   @Post('comments/:commentId/restore')
   @HttpCode(204)
   @NoStore()
-  @UseGuards(SessionGuard, CsrfGuard, AdminGuard, StrictBodyFieldsGuard)
+  @Throttle({ default: SOCIAL_RATE_LIMITS.moderationWrite })
+  @UseGuards(SessionGuard, CsrfGuard, AdminGuard, ThrottlerGuard, StrictBodyFieldsGuard)
   @StrictBodyFields('decision')
   restoreComment(
     @CurrentUser() user: AuthenticatedUser,
@@ -133,7 +138,8 @@ export class AdminModerationController {
   @Post('reports/:reportId/resolve')
   @HttpCode(204)
   @NoStore()
-  @UseGuards(SessionGuard, CsrfGuard, AdminGuard, StrictBodyFieldsGuard)
+  @Throttle({ default: SOCIAL_RATE_LIMITS.moderationWrite })
+  @UseGuards(SessionGuard, CsrfGuard, AdminGuard, ThrottlerGuard, StrictBodyFieldsGuard)
   @StrictBodyFields('decision')
   resolveReport(
     @CurrentUser() user: AuthenticatedUser,
@@ -146,7 +152,8 @@ export class AdminModerationController {
   @Post('reports/:reportId/reject')
   @HttpCode(204)
   @NoStore()
-  @UseGuards(SessionGuard, CsrfGuard, AdminGuard, StrictBodyFieldsGuard)
+  @Throttle({ default: SOCIAL_RATE_LIMITS.moderationWrite })
+  @UseGuards(SessionGuard, CsrfGuard, AdminGuard, ThrottlerGuard, StrictBodyFieldsGuard)
   @StrictBodyFields('decision')
   rejectReport(
     @CurrentUser() user: AuthenticatedUser,

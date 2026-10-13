@@ -12,6 +12,7 @@ import {
   UseGuards,
   ValidationPipe,
 } from '@nestjs/common';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { CurrentUser, OptionalCurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthUserDto } from '../auth/dto/auth-user.dto';
 import type { AuthenticatedUser } from '../auth/auth-request';
@@ -37,6 +38,7 @@ import {
 } from './dto/review.dto';
 import { ReviewsService } from './reviews.service';
 import { PublicProfileCollectionQueryDto } from '../profile/dto/public-profile-collection-query.dto';
+import { SOCIAL_RATE_LIMITS } from '../platform/http/social-rate-limits';
 
 const strictValidation = new ValidationPipe({
   transform: true,
@@ -64,7 +66,8 @@ export class MediaReviewsController {
 
   @Post(':mediaRef/reviews')
   @NoStore()
-  @UseGuards(SessionGuard, CsrfGuard, StrictBodyFieldsGuard)
+  @Throttle({ default: SOCIAL_RATE_LIMITS.reviewCreate })
+  @UseGuards(SessionGuard, CsrfGuard, ThrottlerGuard, StrictBodyFieldsGuard)
   @StrictBodyFields('title', 'body', 'isSpoiler')
   create(
     @CurrentUser() user: AuthenticatedUser,
@@ -101,7 +104,8 @@ export class ReviewsController {
 
   @Patch(':reviewId')
   @NoStore()
-  @UseGuards(SessionGuard, CsrfGuard, StrictBodyFieldsGuard)
+  @Throttle({ default: SOCIAL_RATE_LIMITS.reviewWrite })
+  @UseGuards(SessionGuard, CsrfGuard, ThrottlerGuard, StrictBodyFieldsGuard)
   @StrictBodyFields('title', 'body', 'isSpoiler', 'expectedUpdatedAt')
   update(
     @CurrentUser() user: AuthenticatedUser,
@@ -116,7 +120,8 @@ export class ReviewsController {
   @Delete(':reviewId')
   @HttpCode(204)
   @NoStore()
-  @UseGuards(SessionGuard, CsrfGuard)
+  @Throttle({ default: SOCIAL_RATE_LIMITS.reviewWrite })
+  @UseGuards(SessionGuard, CsrfGuard, ThrottlerGuard)
   delete(
     @CurrentUser() user: AuthUserDto,
     @Param(strictValidation) { reviewId }: ReviewIdDto,
@@ -131,7 +136,8 @@ export class ProfileReviewsController {
 
   @Get(':handle/reviews')
   @NoStore()
-  @UseGuards(OptionalSessionGuard, StrictQueryFieldsGuard)
+  @Throttle({ default: SOCIAL_RATE_LIMITS.publicProfileLookup })
+  @UseGuards(OptionalSessionGuard, ThrottlerGuard, StrictQueryFieldsGuard)
   @StrictQueryFields('cursor', 'limit')
   list(
     @OptionalCurrentUser() user: AuthenticatedUser | undefined,

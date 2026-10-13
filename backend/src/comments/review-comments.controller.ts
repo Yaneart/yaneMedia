@@ -35,6 +35,7 @@ import {
   UpdateReviewCommentDto,
 } from './dto/review-comment.dto';
 import { ReviewCommentsService } from './review-comments.service';
+import { SOCIAL_RATE_LIMITS } from '../platform/http/social-rate-limits';
 
 const strictValidation = new ValidationPipe({
   transform: true,
@@ -62,7 +63,7 @@ export class ReviewCommentsController {
 
   @Post(':reviewId/comments')
   @NoStore()
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Throttle({ default: SOCIAL_RATE_LIMITS.commentWrite })
   @UseGuards(SessionGuard, CsrfGuard, ThrottlerGuard, StrictBodyFieldsGuard)
   @StrictBodyFields('body')
   create(
@@ -82,7 +83,7 @@ export class CommentsController {
 
   @Patch(':commentId')
   @NoStore()
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Throttle({ default: SOCIAL_RATE_LIMITS.commentWrite })
   @UseGuards(SessionGuard, CsrfGuard, ThrottlerGuard, StrictBodyFieldsGuard)
   @StrictBodyFields('body', 'expectedUpdatedAt')
   update(
@@ -98,7 +99,7 @@ export class CommentsController {
   @Delete(':commentId')
   @HttpCode(204)
   @NoStore()
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Throttle({ default: SOCIAL_RATE_LIMITS.commentWrite })
   @UseGuards(SessionGuard, CsrfGuard, ThrottlerGuard)
   delete(
     @CurrentUser() user: AuthUserDto,

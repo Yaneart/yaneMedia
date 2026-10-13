@@ -1,4 +1,5 @@
 import { Controller, Get, Param, Query, Res, UseGuards, ValidationPipe } from '@nestjs/common';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import type { Response } from 'express';
 import type { MediaSummaryDto } from '../media/dto/media-summary.dto';
 import { NoStore } from '../platform/http/cache-policy';
@@ -7,6 +8,7 @@ import { PublicProfileCollectionQueryDto } from './dto/public-profile-collection
 import type { PublicProfileDto } from './dto/profile.dto';
 import { ProfileService } from './profile.service';
 import { StrictQueryFields, StrictQueryFieldsGuard } from './strict-body-fields.guard';
+import { SOCIAL_RATE_LIMITS } from '../platform/http/social-rate-limits';
 
 const strictValidation = new ValidationPipe({
   transform: true,
@@ -20,6 +22,8 @@ export class PublicProfilesController {
 
   @Get(':handle')
   @NoStore()
+  @Throttle({ default: SOCIAL_RATE_LIMITS.publicProfileLookup })
+  @UseGuards(ThrottlerGuard)
   async getProfile(
     @Param('handle') handle: string,
     @Res({ passthrough: true }) response: Response,
@@ -31,7 +35,8 @@ export class PublicProfilesController {
 
   @Get(':handle/favorites')
   @NoStore()
-  @UseGuards(StrictQueryFieldsGuard)
+  @Throttle({ default: SOCIAL_RATE_LIMITS.publicProfileLookup })
+  @UseGuards(ThrottlerGuard, StrictQueryFieldsGuard)
   @StrictQueryFields('cursor', 'limit')
   getFavorites(
     @Param('handle') handle: string,
@@ -42,7 +47,8 @@ export class PublicProfilesController {
 
   @Get(':handle/ratings')
   @NoStore()
-  @UseGuards(StrictQueryFieldsGuard)
+  @Throttle({ default: SOCIAL_RATE_LIMITS.publicProfileLookup })
+  @UseGuards(ThrottlerGuard, StrictQueryFieldsGuard)
   @StrictQueryFields('cursor', 'limit')
   getRatings(
     @Param('handle') handle: string,

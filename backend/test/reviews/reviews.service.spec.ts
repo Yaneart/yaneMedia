@@ -312,6 +312,8 @@ describe('ReviewsService', () => {
     });
     expect(findPublicProfileOwner).toHaveBeenCalledWith('yaneart');
     expect(findPublicProfilePage).toHaveBeenCalledWith(userId, undefined, 2);
+    expect(resolveMediaRefs).toHaveBeenCalledWith([review.mediaRef]);
+    expect(resolveMediaRefs).toHaveBeenCalledTimes(1);
     expect(profileEncode).toHaveBeenCalledWith(
       userId,
       expect.objectContaining({

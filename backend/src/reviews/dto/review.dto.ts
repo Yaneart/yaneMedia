@@ -19,6 +19,7 @@ import { MEDIA_REF_PATTERN } from '../../media/media-ref';
 const REVIEW_ID_PATTERN =
   /^review_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const API_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+const PLAIN_TEXT_PATTERN = /^[^<>]*$/u;
 
 export class ReviewMediaRefDto {
   @IsString()
@@ -57,11 +58,13 @@ export class CreateReviewDto {
   @Transform(({ value }) => normalizeTitle(value))
   @IsString()
   @Length(1, 120)
+  @Matches(PLAIN_TEXT_PATTERN)
   title!: string;
 
   @Transform(({ value }) => normalizeBody(value))
   @IsString()
   @Length(20, 10_000)
+  @Matches(PLAIN_TEXT_PATTERN)
   body!: string;
 
   @IsBoolean()
@@ -73,12 +76,14 @@ export class UpdateReviewDto {
   @Transform(({ value }) => normalizeTitle(value))
   @IsString()
   @Length(1, 120)
+  @Matches(PLAIN_TEXT_PATTERN)
   title?: string;
 
   @IsOptional()
   @Transform(({ value }) => normalizeBody(value))
   @IsString()
   @Length(20, 10_000)
+  @Matches(PLAIN_TEXT_PATTERN)
   body?: string;
 
   @IsOptional()

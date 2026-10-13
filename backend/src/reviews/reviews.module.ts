@@ -1,5 +1,6 @@
 import { type MiddlewareConsumer, Module, type NestModule } from '@nestjs/common';
 import type { NextFunction, Request, Response } from 'express';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AuthModule } from '../auth/auth.module';
 import { AppConfigModule } from '../config/config.module';
 import { DatabaseModule } from '../database/database.module';
@@ -17,7 +18,13 @@ import { ReviewsRepository } from './reviews.repository';
 import { ReviewsService } from './reviews.service';
 
 @Module({
-  imports: [AuthModule, AppConfigModule, DatabaseModule, MediaModule],
+  imports: [
+    AuthModule,
+    AppConfigModule,
+    DatabaseModule,
+    MediaModule,
+    ThrottlerModule.forRoot({ throttlers: [{ limit: 10, ttl: 60_000 }] }),
+  ],
   controllers: [MediaReviewsController, ReviewsController, ProfileReviewsController],
   providers: [
     ReviewsRepository,
@@ -27,6 +34,7 @@ import { ReviewsService } from './reviews.service';
     OptionalSessionGuard,
     StrictBodyFieldsGuard,
     StrictQueryFieldsGuard,
+    ThrottlerGuard,
   ],
 })
 export class ReviewsModule implements NestModule {

@@ -23,10 +23,13 @@ export class ApiExceptionFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost): void {
     const response = host.switchToHttp().getResponse<Response>();
 
+    const parserStatus = getBodyParserStatus(exception);
     const status =
-      exception instanceof HttpException ? exception.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
+      exception instanceof HttpException
+        ? exception.getStatus()
+        : (parserStatus ?? HttpStatus.INTERNAL_SERVER_ERROR);
 
-    if (!(exception instanceof HttpException)) {
+    if (!(exception instanceof HttpException) && parserStatus === undefined) {
       this.logger.logUnexpectedError(ApiExceptionFilter.name);
     }
 
@@ -34,12 +37,26 @@ export class ApiExceptionFilter implements ExceptionFilter {
     const body: ApiErrorResponse = {
       error: domainError ?? {
         code: STATUS_CODES.get(status) ?? 'INTERNAL_ERROR',
-        message: exception instanceof HttpException ? exception.message : 'Internal server error',
+        message:
+          exception instanceof HttpException
+            ? exception.message
+            : parserStatus === HttpStatus.PAYLOAD_TOO_LARGE
+              ? 'Payload too large'
+              : parserStatus === HttpStatus.BAD_REQUEST
+                ? 'Invalid request body'
+                : 'Internal server error',
       },
     };
 
     response.status(status).json(body);
   }
+}
+
+function getBodyParserStatus(exception: unknown): number | undefined {
+  if (!isRecord(exception)) return undefined;
+  if (exception.type === 'entity.too.large') return HttpStatus.PAYLOAD_TOO_LARGE;
+  if (exception.type === 'entity.parse.failed') return HttpStatus.BAD_REQUEST;
+  return undefined;
 }
 
 function getDomainError(exception: HttpException): DomainErrorBody | undefined {

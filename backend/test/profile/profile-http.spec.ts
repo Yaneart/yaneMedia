@@ -186,6 +186,8 @@ describe('profile HTTP contract', () => {
     {},
     { handle: 'admin' },
     { displayName: 'x' },
+    { displayName: '<b>name</b>' },
+    { bio: '<script>unsafe</script>' },
     { bio: 'x'.repeat(301) },
     { email: 'new@example.com' },
   ])('rejects invalid profile changes before the service: %j', async (body) => {

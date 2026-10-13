@@ -1,5 +1,6 @@
 import { NotFoundException, type INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { ApiExceptionFilter } from '../../src/platform/http/api-error/api-exception/api-exception.filter';
 import { ApiResponseInterceptor } from '../../src/platform/http/api-response/api-response.interceptor';
 import type { Express } from 'express';
@@ -26,6 +27,7 @@ describe('public profile HTTP contract', () => {
 
   beforeAll(async () => {
     const module = await Test.createTestingModule({
+      imports: [ThrottlerModule.forRoot({ throttlers: [{ limit: 100, ttl: 60_000 }] })],
       controllers: [PublicProfilesController],
       providers: [
         {
@@ -33,6 +35,7 @@ describe('public profile HTTP contract', () => {
           useValue: { getPublicProfile, getPublicFavorites, getPublicRatings },
         },
         StrictQueryFieldsGuard,
+        ThrottlerGuard,
       ],
     }).compile();
 

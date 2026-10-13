@@ -31,6 +31,7 @@ import { UpdateProfileSettingsDto } from './dto/update-profile-settings.dto';
 import { ProfileService } from './profile.service';
 import { PROFILE_AVATAR_MAX_BYTES } from './profile-asset.store';
 import type { UploadedAvatar } from './profile.service';
+import { SOCIAL_RATE_LIMITS } from '../platform/http/social-rate-limits';
 import {
   StrictBodyFields,
   StrictBodyFieldsGuard,
@@ -55,7 +56,8 @@ export class ProfileController {
   }
 
   @Patch()
-  @UseGuards(StrictBodyFieldsGuard)
+  @Throttle({ default: SOCIAL_RATE_LIMITS.profileWrite })
+  @UseGuards(ThrottlerGuard, StrictBodyFieldsGuard)
   @StrictBodyFields('displayName', 'handle', 'bio')
   updateProfile(
     @CurrentUser() user: AuthUserDto,
@@ -80,7 +82,8 @@ export class ProfileController {
   }
 
   @Patch('settings')
-  @UseGuards(StrictBodyFieldsGuard)
+  @Throttle({ default: SOCIAL_RATE_LIMITS.profileWrite })
+  @UseGuards(ThrottlerGuard, StrictBodyFieldsGuard)
   @StrictBodyFields('ratingsVisibility', 'favoritesVisibility')
   updateSettings(
     @CurrentUser() user: AuthUserDto,
@@ -91,7 +94,7 @@ export class ProfileController {
 
   @Get('handle-availability')
   @UseGuards(StrictQueryFieldsGuard, ThrottlerGuard)
-  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Throttle({ default: SOCIAL_RATE_LIMITS.handleAvailability })
   @StrictQueryFields('handle')
   getHandleAvailability(
     @CurrentUser() user: AuthUserDto,
@@ -102,7 +105,7 @@ export class ProfileController {
 
   @Put('avatar')
   @UseGuards(ThrottlerGuard)
-  @Throttle({ default: { limit: 5, ttl: 10 * 60_000 } })
+  @Throttle({ default: SOCIAL_RATE_LIMITS.avatarWrite })
   @UseInterceptors(
     FileInterceptor('avatar', {
       limits: { fileSize: PROFILE_AVATAR_MAX_BYTES, files: 1, fields: 0 },
@@ -118,7 +121,7 @@ export class ProfileController {
 
   @Delete('avatar')
   @UseGuards(ThrottlerGuard)
-  @Throttle({ default: { limit: 5, ttl: 10 * 60_000 } })
+  @Throttle({ default: SOCIAL_RATE_LIMITS.avatarWrite })
   deleteAvatar(@CurrentUser() user: AuthUserDto): Promise<PrivateProfileDto> {
     return this.profileService.deleteAvatar(user.id);
   }

@@ -1,6 +1,7 @@
 import { type INestApplication, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import cookieParser from 'cookie-parser';
 import { AuthRepository } from '../../src/auth/auth.repository';
 import { CsrfGuard } from '../../src/auth/guards/csrf.guard';
@@ -57,6 +58,7 @@ describe('reviews HTTP contract', () => {
 
   beforeAll(async () => {
     const module = await Test.createTestingModule({
+      imports: [ThrottlerModule.forRoot({ throttlers: [{ limit: 100, ttl: 60_000 }] })],
       controllers: [MediaReviewsController, ReviewsController, ProfileReviewsController],
       providers: [
         SessionGuard,
@@ -64,6 +66,7 @@ describe('reviews HTTP contract', () => {
         CsrfGuard,
         StrictBodyFieldsGuard,
         StrictQueryFieldsGuard,
+        ThrottlerGuard,
         {
           provide: ConfigService,
           useValue: new ConfigService({ FRONTEND_ORIGIN: 'http://localhost:5173' }),
@@ -204,6 +207,8 @@ describe('reviews HTTP contract', () => {
     for (const body of [
       { title: '', body: detail.body, isSpoiler: false },
       { title: 'Заголовок', body: 'коротко', isSpoiler: false },
+      { title: '<b>Заголовок</b>', body: detail.body, isSpoiler: false },
+      { title: 'Заголовок', body: `<script>${detail.body}</script>`, isSpoiler: false },
       { title: 'Заголовок', body: detail.body, isSpoiler: false, userId: user.id },
     ]) {
       const response = await fetch(`${baseUrl}/media/${mediaRef}/reviews`, {
@@ -237,5 +242,29 @@ describe('reviews HTTP contract', () => {
     expect(deletion.status).toBe(204);
     expect(await deletion.text()).toBe('');
     expect(remove).toHaveBeenCalledWith(user.id, reviewId);
+  });
+
+  it('rejects oversized JSON and rate-limits repeated review publication', async () => {
+    const oversized = await fetch(`${baseUrl}/media/${mediaRef}/reviews`, {
+      method: 'POST',
+      headers: headers(),
+      body: JSON.stringify({ title: 'Title', body: 'x'.repeat(101 * 1024), isSpoiler: false }),
+    });
+    expect(oversized.status).toBe(413);
+
+    const statuses: number[] = [];
+    for (let index = 0; index < 11; index += 1) {
+      statuses.push(
+        (
+          await fetch(`${baseUrl}/media/${mediaRef}/reviews`, {
+            method: 'POST',
+            headers: headers(),
+            body: JSON.stringify({ title: 'Title', body: detail.body, isSpoiler: false }),
+          })
+        ).status,
+      );
+    }
+    expect(statuses).toContain(429);
+    expect(statuses.every((status) => status === 201 || status === 429)).toBe(true);
   });
 });

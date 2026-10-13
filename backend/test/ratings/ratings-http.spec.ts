@@ -1,6 +1,7 @@
 import { type INestApplication, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import cookieParser from 'cookie-parser';
 import { AuthRepository } from '../../src/auth/auth.repository';
 import { CsrfGuard } from '../../src/auth/guards/csrf.guard';
@@ -39,11 +40,13 @@ describe('ratings HTTP contract', () => {
 
   beforeAll(async () => {
     const module = await Test.createTestingModule({
+      imports: [ThrottlerModule.forRoot({ throttlers: [{ limit: 100, ttl: 60_000 }] })],
       controllers: [RatingsController],
       providers: [
         SessionGuard,
         CsrfGuard,
         StrictBodyFieldsGuard,
+        ThrottlerGuard,
         {
           provide: ConfigService,
           useValue: new ConfigService({ FRONTEND_ORIGIN: 'http://localhost:5173' }),
@@ -143,5 +146,28 @@ describe('ratings HTTP contract', () => {
     expect(deletion.status).toBe(204);
     expect(await deletion.text()).toBe('');
     expect(remove).toHaveBeenCalledWith(user.id, mediaRef);
+  });
+
+  it('applies a dedicated rating mutation limit', async () => {
+    const headers = {
+      Cookie: `${SESSION_COOKIE_NAME}=${token}`,
+      'Content-Type': 'application/json',
+      'X-YaneMedia-CSRF': '1',
+    };
+    const statuses: number[] = [];
+    for (let index = 0; index < 31; index += 1) {
+      statuses.push(
+        (
+          await fetch(`${url}/rating`, {
+            method: 'PUT',
+            headers,
+            body: JSON.stringify({ value: 9 }),
+          })
+        ).status,
+      );
+    }
+
+    expect(statuses).toContain(429);
+    expect(statuses.every((status) => status === 200 || status === 429)).toBe(true);
   });
 });

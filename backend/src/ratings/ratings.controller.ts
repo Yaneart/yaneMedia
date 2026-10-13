@@ -9,6 +9,7 @@ import {
   UseGuards,
   ValidationPipe,
 } from '@nestjs/common';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthUserDto } from '../auth/dto/auth-user.dto';
 import { CsrfGuard } from '../auth/guards/csrf.guard';
@@ -23,6 +24,7 @@ import {
   UpsertRatingDto,
 } from './dto/rating.dto';
 import { RatingsService } from './ratings.service';
+import { SOCIAL_RATE_LIMITS } from '../platform/http/social-rate-limits';
 
 const strictValidation = new ValidationPipe({
   transform: true,
@@ -46,7 +48,8 @@ export class RatingsController {
 
   @Put(':mediaRef/rating')
   @NoStore()
-  @UseGuards(SessionGuard, CsrfGuard, StrictBodyFieldsGuard)
+  @Throttle({ default: SOCIAL_RATE_LIMITS.ratingWrite })
+  @UseGuards(SessionGuard, CsrfGuard, ThrottlerGuard, StrictBodyFieldsGuard)
   @StrictBodyFields('value')
   upsert(
     @CurrentUser() user: AuthUserDto,
@@ -59,7 +62,8 @@ export class RatingsController {
   @Delete(':mediaRef/rating')
   @HttpCode(204)
   @NoStore()
-  @UseGuards(SessionGuard, CsrfGuard)
+  @Throttle({ default: SOCIAL_RATE_LIMITS.ratingWrite })
+  @UseGuards(SessionGuard, CsrfGuard, ThrottlerGuard)
   delete(
     @CurrentUser() user: AuthUserDto,
     @Param(strictValidation) { mediaRef }: RatingMediaRefDto,

@@ -227,6 +227,7 @@ describe('ProfileService', () => {
     expect(findPublicCollectionOwner).toHaveBeenCalledWith('yaneart');
     expect(findPublicFavoritesPage).toHaveBeenCalledWith(user.id, undefined, 3);
     expect(resolveMediaRefs).toHaveBeenCalledWith([first.mediaRef, second.mediaRef]);
+    expect(resolveMediaRefs).toHaveBeenCalledTimes(1);
     expect(encodeCursor).toHaveBeenCalledWith('favorites', user.handle, second);
   });
 
@@ -320,6 +321,8 @@ describe('ProfileService', () => {
       nextCursor: 'next-cursor',
     });
     expect(findRatingsPage).toHaveBeenCalledWith(user.id, undefined, 3);
+    expect(resolveMediaRefs).toHaveBeenCalledWith([first.mediaRef, second.mediaRef]);
+    expect(resolveMediaRefs).toHaveBeenCalledTimes(1);
     expect(encodeCursor).toHaveBeenCalledWith('ratings', user.handle, {
       addedAt: second.createdAt,
       mediaRef: second.mediaRef,

@@ -11,6 +11,7 @@ import {
   DiscoveryResponseMetricsInterceptor,
   discoveryPerformanceMiddleware,
 } from './platform/http/discovery-performance/discovery-performance';
+import { socialPerformanceMiddleware } from './platform/http/social-performance/social-performance';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -22,6 +23,7 @@ async function bootstrap() {
   app.setGlobalPrefix('api/v1');
 
   app.use(discoveryPerformanceMiddleware(app.get(AppLogger)));
+  app.use(socialPerformanceMiddleware(app.get(AppLogger)));
 
   app.use(
     [
