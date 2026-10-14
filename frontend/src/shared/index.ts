@@ -4,9 +4,11 @@ export { YaneMark } from './ui/YaneMark';
 export type { YaneMarkProps } from './ui/YaneMark';
 
 export {
+  ArrowRightIcon,
   AnimeIcon,
   AnimeFilledIcon,
   CloseIcon,
+  CommentIcon,
   DeleteIcon,
   DeviceIcon,
   DownIcon,
@@ -18,6 +20,7 @@ export {
   HistoryFilledIcon,
   HomeIcon,
   HomeFilledIcon,
+  MailIcon,
   MoonIcon,
   MoonFilledIcon,
   MoreIcon,
@@ -28,7 +31,9 @@ export {
   ProfileIcon,
   SearchIcon,
   SearchFilledIcon,
+  ShieldIcon,
   SkipForwardIcon,
+  StarIcon,
   SeriesIcon,
   SeriesFilledIcon,
   SunIcon,

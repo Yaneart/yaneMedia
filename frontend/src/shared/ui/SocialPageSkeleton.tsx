@@ -6,6 +6,7 @@ export type SocialPageSkeletonProps = {
 
 export function SocialPageSkeleton({ variant }: SocialPageSkeletonProps) {
   const isReview = variant === 'review';
+  const isPrivateProfile = variant === 'private-profile';
 
   return (
     <section aria-label="Загружаем страницу" aria-busy="true" className="mx-auto max-w-5xl py-8">
@@ -18,12 +19,20 @@ export function SocialPageSkeleton({ variant }: SocialPageSkeletonProps) {
             <Skeleton className="mt-3 h-4 w-2/5 max-w-xs rounded-pill" />
           </div>
         </div>
-        <Skeleton className="mt-8 h-24 w-full rounded-control" />
+        <Skeleton className="mt-8 h-20 w-full rounded-control" />
         <div className="mt-6 grid gap-3 sm:grid-cols-3">
           <Skeleton className="h-20 rounded-control" />
           <Skeleton className="h-20 rounded-control" />
           <Skeleton className="h-20 rounded-control" />
         </div>
+        {isPrivateProfile && (
+          <div className="mt-8 grid gap-3 sm:grid-cols-2">
+            <Skeleton className="h-24 rounded-control" />
+            <Skeleton className="h-24 rounded-control" />
+            <Skeleton className="h-24 rounded-control" />
+            <Skeleton className="h-24 rounded-control" />
+          </div>
+        )}
       </div>
     </section>
   );
