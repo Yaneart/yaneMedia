@@ -6,6 +6,7 @@ import {
   getPublicProfileDescription,
   getPublicProfileTabs,
 } from '../src/pages/public-profile/model/publicProfilePresentation';
+import { formatReviewDate } from '../src/pages/public-profile/model/profileActivityPresentation';
 
 const profile: PublicProfile = {
   handle: 'artem',
@@ -36,5 +37,10 @@ describe('public profile presentation', () => {
     expect(formatProfileJoinedAt('invalid')).toBe('Дата регистрации неизвестна');
     expect(getPublicProfileDescription(profile)).toBe('Публичный профиль Артём на yaneMedia.');
     expect(getPublicProfileDescription({ ...profile, bio: '  Люблю\nкино  ' })).toBe('Люблю кино');
+  });
+
+  test('formats review dates without leaking an invalid value into the interface', () => {
+    expect(formatReviewDate('2025-02-14T10:00:00.000Z')).toBe('14 февраля 2025 г.');
+    expect(formatReviewDate('invalid')).toBe('Дата не указана');
   });
 });

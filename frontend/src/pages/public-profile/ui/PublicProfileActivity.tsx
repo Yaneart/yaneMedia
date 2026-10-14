@@ -1,18 +1,28 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { useId, useState, type KeyboardEvent } from 'react';
-import { Link } from 'react-router';
+import { useId, useState, type KeyboardEvent, type ReactNode } from 'react';
 
-import { createReviewPath } from '@/app/router/routes';
-import { MediaLink } from '@/entities/media';
+import { MediaCard } from '@/entities/media';
 import type { PublicProfile } from '@/entities/profile';
+import { useFavorites } from '@/features/favorite';
 import {
   profileRatingsQueryOptions,
   profileReviewsQueryOptions,
   publicFavoritesQueryOptions,
   type SocialViewer,
 } from '@/features/social-data';
-import { EmptyState, ErrorState, FavoriteIcon, ProfileIcon, Skeleton, StarIcon } from '@/shared';
+import {
+  EmptyState,
+  ErrorState,
+  FavoriteIcon,
+  LoadMoreButton,
+  MediaGrid,
+  ProfileIcon,
+  Skeleton,
+  StarIcon,
+} from '@/shared';
+import { mergeCursorPages } from '@/shared/api';
 import { getPublicProfileTabs, type PublicProfileTabId } from '../model/publicProfilePresentation';
+import { PublicProfileReviewCard } from './PublicProfileReviewCard';
 
 type PublicProfileActivityProps = {
   profile: PublicProfile;
@@ -20,15 +30,59 @@ type PublicProfileActivityProps = {
   viewerReady: boolean;
 };
 
-const previewClassName =
-  'block rounded-control border border-border bg-surface-elevated p-4 transition-colors hover:border-context-border hover:bg-interactive-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/20 motion-reduce:transition-none';
+function PanelSkeleton({ kind }: { kind: PublicProfileTabId }) {
+  if (kind !== 'reviews') {
+    return (
+      <div
+        aria-label="Загружаем раздел профиля"
+        aria-busy="true"
+        className="grid grid-cols-2 gap-x-4 gap-y-6 p-4 sm:p-6 lg:grid-cols-3 xl:grid-cols-4"
+      >
+        {Array.from({ length: 4 }, (_, index) => (
+          <div key={index}>
+            <Skeleton className="aspect-2/3 rounded-card" />
+            <Skeleton className="mt-2 h-5 w-4/5 rounded-control" />
+            <Skeleton className="mt-2 h-4 w-2/5 rounded-control" />
+          </div>
+        ))}
+      </div>
+    );
+  }
 
-function PanelSkeleton() {
   return (
     <div aria-label="Загружаем раздел профиля" aria-busy="true" className="grid gap-3 p-4 sm:p-6">
-      <Skeleton className="h-20 rounded-control" />
-      <Skeleton className="h-20 rounded-control" />
-      <Skeleton className="h-20 rounded-control" />
+      <Skeleton className="h-40 rounded-control" />
+      <Skeleton className="h-40 rounded-control" />
+      <Skeleton className="h-40 rounded-control" />
+    </div>
+  );
+}
+
+function PanelContent({ children }: { children: ReactNode }) {
+  return <div className="p-4 sm:p-6">{children}</div>;
+}
+
+function PaginationFooter({
+  hasNextPage,
+  isFetchingNextPage,
+  hasError,
+  onLoadMore,
+}: {
+  hasNextPage: boolean;
+  isFetchingNextPage: boolean;
+  hasError: boolean;
+  onLoadMore: () => void;
+}) {
+  if (!hasNextPage && !hasError) return null;
+
+  return (
+    <div className="flex flex-col items-center gap-2 border-t border-border px-4 py-5 sm:px-6">
+      <LoadMoreButton isLoading={isFetchingNextPage} hasError={hasError} onClick={onLoadMore} />
+      {hasError && (
+        <p role="status" className="text-center text-caption text-danger">
+          Не удалось загрузить следующую страницу. Уже загруженные материалы сохранены.
+        </p>
+      )}
     </div>
   );
 }
@@ -42,6 +96,7 @@ export function PublicProfileActivity({
   const [activeTab, setActiveTab] = useState<PublicProfileTabId>('reviews');
   const tabIdPrefix = useId();
   const activeTabData = tabs.find((tab) => tab.id === activeTab) ?? tabs[0]!;
+  const { isFavorite, isFavoriteUpdating, toggleFavorite, canUpdateFavorites } = useFavorites();
 
   const reviewsQuery = useInfiniteQuery({
     ...profileReviewsQueryOptions(profile.handle, viewer),
@@ -70,7 +125,7 @@ export function PublicProfileActivity({
     document.getElementById(`${tabIdPrefix}-${nextTab.id}-tab`)?.focus();
   };
 
-  let panel;
+  let panel: ReactNode;
   if (activeTabData.isPrivate) {
     panel = (
       <EmptyState
@@ -86,10 +141,10 @@ export function PublicProfileActivity({
       />
     );
   } else if (activeTab === 'reviews') {
-    const items = reviewsQuery.data?.pages.flatMap((page) => page.items) ?? [];
+    const items = mergeCursorPages(reviewsQuery.data?.pages ?? [], (review) => review.reviewId);
     panel = reviewsQuery.isPending ? (
-      <PanelSkeleton />
-    ) : reviewsQuery.isError ? (
+      <PanelSkeleton kind="reviews" />
+    ) : reviewsQuery.isError && items.length === 0 ? (
       <ErrorState
         title="Не удалось загрузить рецензии"
         description="Профиль доступен, но этот раздел временно не загрузился."
@@ -102,27 +157,30 @@ export function PublicProfileActivity({
         icon={<ProfileIcon className="size-5" />}
       />
     ) : (
-      <div className="grid gap-3 p-4 sm:p-6">
-        {items.map((review) => (
-          <Link
-            key={review.reviewId}
-            to={createReviewPath(review.reviewId)}
-            className={previewClassName}
-          >
-            <p className="font-semibold text-text-primary">{review.title}</p>
-            <p className="mt-1 text-caption text-text-secondary">
-              {review.media.title}
-              {review.rating === null ? '' : ` · ${review.rating}/10`}
-            </p>
-          </Link>
-        ))}
-      </div>
+      <>
+        <PanelContent>
+          <div className="grid gap-3">
+            {items.map((review) => (
+              <PublicProfileReviewCard key={review.reviewId} review={review} />
+            ))}
+          </div>
+        </PanelContent>
+        <PaginationFooter
+          hasNextPage={reviewsQuery.hasNextPage}
+          isFetchingNextPage={reviewsQuery.isFetchingNextPage}
+          hasError={reviewsQuery.isFetchNextPageError}
+          onLoadMore={() => void reviewsQuery.fetchNextPage({ cancelRefetch: false })}
+        />
+      </>
     );
   } else if (activeTab === 'ratings') {
-    const items = ratingsQuery.data?.pages.flatMap((page) => page.items) ?? [];
+    const items = mergeCursorPages(
+      ratingsQuery.data?.pages ?? [],
+      (rating) => rating.media.mediaRef,
+    );
     panel = ratingsQuery.isPending ? (
-      <PanelSkeleton />
-    ) : ratingsQuery.isError ? (
+      <PanelSkeleton kind="ratings" />
+    ) : ratingsQuery.isError && items.length === 0 ? (
       <ErrorState
         title="Не удалось загрузить оценки"
         description="Профиль доступен, но этот раздел временно не загрузился."
@@ -135,31 +193,39 @@ export function PublicProfileActivity({
         icon={<StarIcon className="size-5" />}
       />
     ) : (
-      <div className="grid gap-3 p-4 sm:p-6">
-        {items.map((rating) => (
-          <MediaLink
-            key={rating.media.mediaRef}
-            mediaRef={rating.media.mediaRef}
-            summary={rating.media}
-            className={previewClassName}
-          >
-            <span className="flex items-center justify-between gap-4">
-              <span className="min-w-0 truncate font-semibold text-text-primary">
-                {rating.media.title}
-              </span>
-              <span className="shrink-0 rounded-pill bg-watermark/10 px-2.5 py-1 text-sm font-semibold text-accent-text">
-                {rating.value}/10
-              </span>
-            </span>
-          </MediaLink>
-        ))}
-      </div>
+      <>
+        <PanelContent>
+          <MediaGrid className="lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4">
+            {items.map((rating) => (
+              <div key={rating.media.mediaRef} className="relative min-w-0">
+                <MediaCard
+                  media={rating.media}
+                  isFavorite={isFavorite(rating.media.mediaRef)}
+                  favoriteDisabled={
+                    !canUpdateFavorites || isFavoriteUpdating(rating.media.mediaRef)
+                  }
+                  onFavoriteChange={() => toggleFavorite(rating.media.mediaRef)}
+                />
+                <span className="pointer-events-none absolute left-2 top-2 rounded-pill bg-black/70 px-2.5 py-1 text-sm font-semibold text-white shadow-sm backdrop-blur-sm">
+                  {rating.value}/10
+                </span>
+              </div>
+            ))}
+          </MediaGrid>
+        </PanelContent>
+        <PaginationFooter
+          hasNextPage={ratingsQuery.hasNextPage}
+          isFetchingNextPage={ratingsQuery.isFetchingNextPage}
+          hasError={ratingsQuery.isFetchNextPageError}
+          onLoadMore={() => void ratingsQuery.fetchNextPage({ cancelRefetch: false })}
+        />
+      </>
     );
   } else {
-    const items = favoritesQuery.data?.pages.flatMap((page) => page.items) ?? [];
+    const items = mergeCursorPages(favoritesQuery.data?.pages ?? [], (media) => media.mediaRef);
     panel = favoritesQuery.isPending ? (
-      <PanelSkeleton />
-    ) : favoritesQuery.isError ? (
+      <PanelSkeleton kind="favorites" />
+    ) : favoritesQuery.isError && items.length === 0 ? (
       <ErrorState
         title="Не удалось загрузить избранное"
         description="Профиль доступен, но этот раздел временно не загрузился."
@@ -172,21 +238,27 @@ export function PublicProfileActivity({
         icon={<FavoriteIcon className="size-5" />}
       />
     ) : (
-      <div className="grid gap-3 p-4 sm:p-6">
-        {items.map((media) => (
-          <MediaLink
-            key={media.mediaRef}
-            mediaRef={media.mediaRef}
-            summary={media}
-            className={previewClassName}
-          >
-            <p className="truncate font-semibold text-text-primary">{media.title}</p>
-            <p className="mt-1 text-caption text-text-secondary">
-              {[media.year, media.type].filter(Boolean).join(' · ')}
-            </p>
-          </MediaLink>
-        ))}
-      </div>
+      <>
+        <PanelContent>
+          <MediaGrid className="lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4">
+            {items.map((media) => (
+              <MediaCard
+                key={media.mediaRef}
+                media={media}
+                isFavorite={isFavorite(media.mediaRef)}
+                favoriteDisabled={!canUpdateFavorites || isFavoriteUpdating(media.mediaRef)}
+                onFavoriteChange={() => toggleFavorite(media.mediaRef)}
+              />
+            ))}
+          </MediaGrid>
+        </PanelContent>
+        <PaginationFooter
+          hasNextPage={favoritesQuery.hasNextPage}
+          isFetchingNextPage={favoritesQuery.isFetchingNextPage}
+          hasError={favoritesQuery.isFetchNextPageError}
+          onLoadMore={() => void favoritesQuery.fetchNextPage({ cancelRefetch: false })}
+        />
+      </>
     );
   }
 
