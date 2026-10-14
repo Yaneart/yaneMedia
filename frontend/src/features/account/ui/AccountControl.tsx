@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router';
 
 import { logout, useAuth } from '@/entities/auth';
+import { privateProfileQueryOptions } from '@/features/social-data';
 import { Button, createReturnToSearch, Popover, ProfileIcon } from '@/shared';
 import { ApiClientError } from '@/shared/api';
 
@@ -22,6 +24,15 @@ export function AccountControl({ loginPath, placement = 'bottom' }: AccountContr
   const { state, setGuest, refresh } = useAuth();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
+  const accountKey = state.status === 'authenticated' ? state.user.email : '';
+  const profileQuery = useQuery({
+    ...privateProfileQueryOptions(accountKey),
+    enabled: state.status === 'authenticated',
+  });
+  const [hasAvatarError, setHasAvatarError] = useState(false);
+  const avatarUrl = profileQuery.data?.avatarUrl ?? null;
+
+  useEffect(() => setHasAvatarError(false), [avatarUrl]);
 
   const handleLogout = async () => {
     if (isLoggingOut) return;
@@ -73,7 +84,18 @@ export function AccountControl({ loginPath, placement = 'bottom' }: AccountContr
 
   return (
     <Popover
-      trigger={<ProfileIcon className="size-5" />}
+      trigger={
+        avatarUrl && !hasAvatarError ? (
+          <img
+            src={avatarUrl}
+            alt=""
+            className="size-full rounded-control object-cover"
+            onError={() => setHasAvatarError(true)}
+          />
+        ) : (
+          <ProfileIcon className="size-5" />
+        )
+      }
       triggerLabel={
         state.status === 'authenticated'
           ? `Аккаунт: ${state.user.displayName}`

@@ -60,6 +60,30 @@ export async function updateProfile(payload: UpdateProfilePayload): Promise<Priv
   return { ...dto, avatarUrl: mapAvatarUrl(dto.avatarUrl) };
 }
 
+export async function updateProfileAvatar(avatar: File): Promise<PrivateProfile> {
+  const body = new FormData();
+  body.append('avatar', avatar);
+
+  const dto = await apiRequest<PrivateProfileDto>('/profile/avatar', {
+    method: 'PUT',
+    credentials: 'include',
+    headers: { 'X-YaneMedia-CSRF': '1' },
+    body,
+  });
+
+  return { ...dto, avatarUrl: mapAvatarUrl(dto.avatarUrl) };
+}
+
+export async function deleteProfileAvatar(): Promise<PrivateProfile> {
+  const dto = await apiRequest<PrivateProfileDto>('/profile/avatar', {
+    method: 'DELETE',
+    credentials: 'include',
+    headers: { 'X-YaneMedia-CSRF': '1' },
+  });
+
+  return { ...dto, avatarUrl: mapAvatarUrl(dto.avatarUrl) };
+}
+
 export function updateProfileSettings(
   payload: UpdateProfileSettingsPayload,
 ): Promise<ProfileSettings> {

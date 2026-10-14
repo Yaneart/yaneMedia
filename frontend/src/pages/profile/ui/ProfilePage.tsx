@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useState, type ComponentType } from 'react';
+import type { ComponentType } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
 
 import { createPublicProfilePath, routePaths } from '@/app/router/routes';
@@ -21,11 +21,8 @@ import {
   StarIcon,
   type IconProps,
 } from '@/shared';
-import {
-  getProfileCountHint,
-  getProfileInitial,
-  isGeneratedProfileHandle,
-} from '../model/profilePresentation';
+import { getProfileCountHint, isGeneratedProfileHandle } from '../model/profilePresentation';
+import { ProfileAvatarEditor } from './ProfileAvatarEditor';
 import { ProfileEditForm } from './ProfileEditForm';
 
 type ProfileLink = {
@@ -42,33 +39,6 @@ const linkClassName = [
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/20',
   'motion-reduce:transition-none',
 ].join(' ');
-
-function ProfileAvatar({ profile }: { profile: PrivateProfile }) {
-  const [hasImageError, setHasImageError] = useState(false);
-
-  useEffect(() => setHasImageError(false), [profile.avatarUrl]);
-
-  if (profile.avatarUrl && !hasImageError) {
-    return (
-      <img
-        src={profile.avatarUrl}
-        alt={`Аватар ${profile.displayName}`}
-        className="size-24 shrink-0 rounded-full bg-control object-cover sm:size-32"
-        onError={() => setHasImageError(true)}
-      />
-    );
-  }
-
-  return (
-    <div
-      role="img"
-      aria-label={`Аватар ${profile.displayName}`}
-      className="grid size-24 shrink-0 place-items-center rounded-full border border-context-border bg-watermark/10 text-3xl font-semibold text-accent-text sm:size-32 sm:text-4xl"
-    >
-      {getProfileInitial(profile.displayName, profile.handle)}
-    </div>
-  );
-}
 
 function CountCard({
   count,
@@ -167,7 +137,7 @@ function PrivateProfileView({
     <section className="mx-auto max-w-5xl py-8">
       <div className="rounded-card border border-border bg-surface p-5 sm:p-8">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
-          <ProfileAvatar profile={profile} />
+          <ProfileAvatarEditor accountKey={accountKey} profile={profile} />
           <div className="min-w-0 flex-1">
             <p className="text-caption font-semibold tracking-wider text-accent-text uppercase">
               Личный профиль

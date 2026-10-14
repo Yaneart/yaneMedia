@@ -1,10 +1,12 @@
 export {
+  deleteProfileAvatar,
   getPrivateProfile,
   getProfileRatings,
   getProfileSettings,
   getPublicFavorites,
   getPublicProfile,
   updateProfile,
+  updateProfileAvatar,
   updateProfileSettings,
 } from './api/profileApi';
 export type {
