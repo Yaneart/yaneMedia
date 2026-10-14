@@ -1,4 +1,5 @@
 import { lazy } from 'react';
+import { loadProfilePage, loadPublicProfilePage, loadReviewPage } from './socialRouteLoaders';
 
 const loadAnimePage = () =>
   import('@/pages/anime').then(({ AnimePage }) => ({ default: AnimePage }));
@@ -6,7 +7,6 @@ const loadMoviesPage = () =>
   import('@/pages/movies').then(({ MoviesPage }) => ({ default: MoviesPage }));
 const loadSeriesPage = () =>
   import('@/pages/series').then(({ SeriesPage }) => ({ default: SeriesPage }));
-
 export const AnimePage = lazy(loadAnimePage);
 export const EditorialCollectionPage = lazy(() =>
   import('@/pages/editorial-collection').then(({ EditorialCollectionPage }) => ({
@@ -25,6 +25,9 @@ export const LoginPage = lazy(() =>
 export const MediaPage = lazy(() =>
   import('@/pages/media').then(({ MediaPage }) => ({ default: MediaPage })),
 );
+export const ProfilePage = lazy(loadProfilePage);
+export const PublicProfilePage = lazy(loadPublicProfilePage);
+export const ReviewPage = lazy(loadReviewPage);
 export const RequestPasswordResetPage = lazy(() =>
   import('@/pages/password-reset').then(({ RequestPasswordResetPage }) => ({
     default: RequestPasswordResetPage,
@@ -53,3 +56,6 @@ export const VerifyEmailPage = lazy(() =>
 export const preloadAnimePage = loadAnimePage;
 export const preloadMoviesPage = loadMoviesPage;
 export const preloadSeriesPage = loadSeriesPage;
+export const preloadProfilePage = loadProfilePage;
+export const preloadPublicProfilePage = loadPublicProfilePage;
+export const preloadReviewPage = loadReviewPage;

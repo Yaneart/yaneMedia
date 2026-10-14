@@ -9,6 +9,7 @@ const documentTitles: Record<string, string> = {
   [routePaths.editorialPicks]: 'Выбор редакции',
   [routePaths.favorites]: 'Избранное',
   [routePaths.history]: 'История',
+  [routePaths.profile]: 'Профиль',
   [routePaths.login]: 'Вход',
   [routePaths.register]: 'Регистрация',
   [routePaths.verifyEmail]: 'Подтверждение почты',
@@ -20,7 +21,11 @@ export function getDocumentTitle(pathname: string) {
   const normalizedPathname = pathname.replace(/\/+$/, '') || routePaths.home;
   const pageTitle = normalizedPathname.startsWith('/media/')
     ? 'Произведение'
-    : (documentTitles[normalizedPathname] ?? 'Страница не найдена');
+    : normalizedPathname.startsWith('/u/')
+      ? 'Публичный профиль'
+      : normalizedPathname.startsWith('/reviews/')
+        ? 'Рецензия'
+        : (documentTitles[normalizedPathname] ?? 'Страница не найдена');
 
   return `${pageTitle} — yaneMedia`;
 }

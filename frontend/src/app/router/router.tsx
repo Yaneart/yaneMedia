@@ -10,7 +10,10 @@ import {
   MediaPage,
   MoviesPage,
   NotFoundPage,
+  ProfilePage,
+  PublicProfilePage,
   RegisterPage,
+  ReviewPage,
   RequestPasswordResetPage,
   ResetPasswordPage,
   SearchPage,
@@ -24,11 +27,13 @@ import {
   LoadingState,
   MediaPageSkeleton,
   SearchPageSkeleton,
+  SocialPageSkeleton,
 } from '@/shared';
 import { HomePage } from '@/pages/home';
 import { MediaCatalogSkeleton } from '@/widgets/media-catalog';
 import { LibraryPageSkeleton } from '@/widgets/library-page';
 import { AuthFormLayoutSkeleton } from '@/widgets/auth-form-layout';
+import { SocialRouteErrorBoundary } from './SocialRouteErrorBoundary';
 
 function lazyRoute(page: ReactNode, fallback?: ReactNode) {
   return (
@@ -120,6 +125,24 @@ export const router = createBrowserRouter([
           {
             path: routePaths.history,
             element: lazyRoute(<HistoryPage />, <LibraryPageSkeleton variant="history" />),
+          },
+          {
+            path: routePaths.profile,
+            element: lazyRoute(<ProfilePage />, <SocialPageSkeleton variant="private-profile" />),
+            errorElement: <SocialRouteErrorBoundary />,
+          },
+          {
+            path: routePaths.publicProfile,
+            element: lazyRoute(
+              <PublicProfilePage />,
+              <SocialPageSkeleton variant="public-profile" />,
+            ),
+            errorElement: <SocialRouteErrorBoundary />,
+          },
+          {
+            path: routePaths.review,
+            element: lazyRoute(<ReviewPage />, <SocialPageSkeleton variant="review" />),
+            errorElement: <SocialRouteErrorBoundary />,
           },
           {
             path: routePaths.notFound,
