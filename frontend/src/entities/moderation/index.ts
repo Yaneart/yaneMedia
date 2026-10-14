@@ -12,3 +12,4 @@ export type {
   ReportReceipt,
   ReportTarget,
 } from './model/moderation';
+export { createReport } from './api/moderationApi';
