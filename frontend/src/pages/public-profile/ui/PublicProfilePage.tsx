@@ -1,9 +1,59 @@
 import { useQuery } from '@tanstack/react-query';
-import { useParams } from 'react-router';
+import { useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router';
 
-import { publicProfileQueryOptions } from '@/features/social-data';
+import { createPublicProfilePath } from '@/app/router/routes';
+import { useAuth } from '@/entities/auth';
+import type { PublicProfile } from '@/entities/profile';
+import {
+  privateProfileQueryOptions,
+  publicProfileQueryOptions,
+  type SocialViewer,
+} from '@/features/social-data';
 import { ErrorState, SocialNotFoundState, SocialPageSkeleton } from '@/shared';
 import { ApiClientError } from '@/shared/api';
+import { getPublicProfileDescription } from '../model/publicProfilePresentation';
+import { PublicProfileActivity } from './PublicProfileActivity';
+import { PublicProfileHeader } from './PublicProfileHeader';
+
+function PublicProfileView({
+  profile,
+  requestedHandle,
+}: {
+  profile: PublicProfile;
+  requestedHandle: string;
+}) {
+  const navigate = useNavigate();
+  const { state } = useAuth();
+  const accountKey = state.status === 'authenticated' ? state.user.email : '';
+  const ownerQuery = useQuery({
+    ...privateProfileQueryOptions(accountKey),
+    enabled: state.status === 'authenticated',
+  });
+  const viewer: SocialViewer = state.status === 'authenticated' ? { accountKey } : 'guest';
+
+  useEffect(() => {
+    if (requestedHandle !== profile.handle) {
+      void navigate(createPublicProfilePath(profile.handle), { replace: true });
+    }
+  }, [navigate, profile.handle, requestedHandle]);
+
+  const isOwner = ownerQuery.data?.handle === profile.handle;
+  const description = getPublicProfileDescription(profile);
+
+  return (
+    <section className="mx-auto max-w-5xl py-8">
+      <title>{`${profile.displayName} (@${profile.handle}) — yaneMedia`}</title>
+      <meta name="description" content={description} />
+      <PublicProfileHeader profile={profile} isOwner={isOwner} />
+      <PublicProfileActivity
+        profile={profile}
+        viewer={viewer}
+        viewerReady={state.status !== 'loading'}
+      />
+    </section>
+  );
+}
 
 export function PublicProfilePage() {
   const handle = useParams().handle ?? '';
@@ -25,16 +75,5 @@ export function PublicProfilePage() {
   }
 
   const profile = query.data;
-  return (
-    <section className="mx-auto max-w-5xl py-8">
-      <p className="text-caption font-semibold tracking-wider text-accent-text uppercase">
-        Публичный профиль
-      </p>
-      <h1 data-page-heading tabIndex={-1} className="mt-2 text-3xl font-semibold text-text-primary">
-        {profile.displayName}
-      </h1>
-      <p className="mt-2 text-body text-text-secondary">@{profile.handle}</p>
-      {profile.bio && <p className="mt-6 max-w-2xl text-body text-text-secondary">{profile.bio}</p>}
-    </section>
-  );
+  return <PublicProfileView key={profile.handle} profile={profile} requestedHandle={handle} />;
 }

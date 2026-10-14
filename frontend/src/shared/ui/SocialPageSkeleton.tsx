@@ -11,7 +11,7 @@ export function SocialPageSkeleton({ variant }: SocialPageSkeletonProps) {
   return (
     <section aria-label="Загружаем страницу" aria-busy="true" className="mx-auto max-w-5xl py-8">
       <div className="rounded-card border border-border bg-surface p-5 sm:p-8">
-        <div className="flex items-start gap-4">
+        <div className="flex flex-col items-start gap-4 sm:flex-row">
           {!isReview && <Skeleton className="size-20 shrink-0 rounded-full sm:size-28" />}
           <div className="min-w-0 flex-1">
             <Skeleton className="h-4 w-24 rounded-pill" />
@@ -25,6 +25,19 @@ export function SocialPageSkeleton({ variant }: SocialPageSkeletonProps) {
           <Skeleton className="h-20 rounded-control" />
           <Skeleton className="h-20 rounded-control" />
         </div>
+        {variant === 'public-profile' && (
+          <div className="mt-6 overflow-hidden rounded-card border border-border">
+            <div className="flex gap-2 border-b border-border p-2">
+              <Skeleton className="h-10 w-28 rounded-control" />
+              <Skeleton className="h-10 w-24 rounded-control" />
+              <Skeleton className="h-10 w-28 rounded-control" />
+            </div>
+            <div className="grid gap-3 p-4 sm:p-6">
+              <Skeleton className="h-20 rounded-control" />
+              <Skeleton className="h-20 rounded-control" />
+            </div>
+          </div>
+        )}
         {isPrivateProfile && (
           <div className="mt-8 grid gap-3 sm:grid-cols-2">
             <Skeleton className="h-24 rounded-control" />
