@@ -29,3 +29,25 @@ export function getRatingSummary(
     signal,
   });
 }
+
+export async function upsertRating(mediaRef: MediaLocator, value: RatingValue): Promise<Rating> {
+  const dto = await apiRequest<RatingDto>(`/media/${encodeURIComponent(mediaRef)}/rating`, {
+    method: 'PUT',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-YaneMedia-CSRF': '1',
+    },
+    body: JSON.stringify({ value }),
+  });
+
+  return mapRating(dto);
+}
+
+export function deleteRating(mediaRef: MediaLocator): Promise<void> {
+  return apiRequest<void>(`/media/${encodeURIComponent(mediaRef)}/rating`, {
+    method: 'DELETE',
+    credentials: 'include',
+    headers: { 'X-YaneMedia-CSRF': '1' },
+  });
+}

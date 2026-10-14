@@ -3,7 +3,7 @@ import type { QueryClient, QueryKey } from '@tanstack/react-query';
 export type SocialMutation =
   | { type: 'profile'; handles: readonly string[] }
   | { type: 'favorite'; handle: string; mediaRef: string }
-  | { type: 'rating'; handle: string; mediaRef: string }
+  | { type: 'rating'; accountKey: string; handle?: string; mediaRef: string }
   | { type: 'review'; reviewId: string; handle?: string; mediaRef?: string }
   | { type: 'comment'; reviewId: string; handle?: string }
   | { type: 'moderation'; targetId: string };
@@ -24,6 +24,7 @@ export function invalidateAfterSocialMutation(
         : [];
   const identifiers = [
     ...handles,
+    'accountKey' in mutation ? mutation.accountKey : undefined,
     'mediaRef' in mutation ? mutation.mediaRef : undefined,
     'reviewId' in mutation ? mutation.reviewId : undefined,
     'targetId' in mutation ? mutation.targetId : undefined,

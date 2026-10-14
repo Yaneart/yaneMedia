@@ -70,12 +70,12 @@ export function MediaInfo({ media, actions, variant = 'default' }: MediaInfoProp
     typeLabels[media.type],
     media.year?.toString(),
     media.runtimeMinutes ? formatRuntime(media.runtimeMinutes) : undefined,
-    media.rating ? `${media.rating.value} / ${media.rating.scale}` : undefined,
+    media.rating ? `Рейтинг каталога: ${media.rating.value} / ${media.rating.scale}` : undefined,
   ].filter((item): item is string => item !== undefined);
   const mobileMetadata = [
     media.year?.toString(),
     media.runtimeMinutes ? formatRuntime(media.runtimeMinutes) : undefined,
-    media.rating?.value.toString(),
+    media.rating ? `Каталог: ${media.rating.value}` : undefined,
   ].filter((item): item is string => item !== undefined);
 
   const fullWidthOnMobile = media.poster

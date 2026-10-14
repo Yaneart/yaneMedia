@@ -9,6 +9,7 @@ import type { PlaybackEpisodeSelection } from '@/entities/playback';
 import { EpisodeSelector } from '@/features/episode-selection';
 import { FavoriteButton, useFavorites } from '@/features/favorite';
 import { usePlaybackSession } from '@/features/playback-session';
+import { UserRating } from '@/features/user-rating';
 import { SeasonSelector } from '@/features/season-selection';
 import {
   createPlaybackSourceCatalog,
@@ -875,26 +876,30 @@ export function MediaView({
         )}
       </div>
 
-      <MediaInfo
-        media={media}
-        variant="watch"
-        actions={
-          <FavoriteButton
-            isFavorite={mediaIsFavorite}
-            disabled={!canUpdateFavorites || isFavoriteUpdating(media.mediaRef)}
-            onFavoriteChange={(nextIsFavorite) => {
-              if (nextIsFavorite) {
-                addFavorite(media.mediaRef);
-              } else {
-                removeFavorite(media.mediaRef);
-              }
-            }}
-            mediaTitle={media.title}
-          />
-        }
-      />
+      <div className="contents xl:col-start-1 xl:row-start-1 xl:block">
+        <MediaInfo
+          media={media}
+          variant="watch"
+          actions={
+            <FavoriteButton
+              isFavorite={mediaIsFavorite}
+              disabled={!canUpdateFavorites || isFavoriteUpdating(media.mediaRef)}
+              onFavoriteChange={(nextIsFavorite) => {
+                if (nextIsFavorite) {
+                  addFavorite(media.mediaRef);
+                } else {
+                  removeFavorite(media.mediaRef);
+                }
+              }}
+              mediaTitle={media.title}
+            />
+          }
+        />
 
-      <section className="order-3 space-y-5 xl:hidden">
+        <UserRating media={media} className="order-3 min-w-0 xl:mt-6" />
+      </div>
+
+      <section className="order-4 space-y-5 xl:hidden">
         {media.description && (
           <div className="sm:hidden">
             <h2 className="text-heading text-text-primary">Описание</h2>
@@ -923,14 +928,14 @@ export function MediaView({
       {media.description && (
         <section
           aria-label="Полное описание"
-          className="order-3 hidden rounded-card border border-context-border bg-surface-elevated p-6 2xl:col-span-2 2xl:block"
+          className="order-4 hidden rounded-card border border-context-border bg-surface-elevated p-6 2xl:col-span-2 2xl:block"
         >
           <h2 className="text-heading text-text-primary">Описание</h2>
           <p className="mt-3 max-w-5xl text-body text-text-secondary">{media.description}</p>
         </section>
       )}
 
-      <MediaCast persons={media.persons} className="order-4 xl:col-span-2" />
+      <MediaCast persons={media.persons} className="order-5 xl:col-span-2" />
     </div>
   );
 }

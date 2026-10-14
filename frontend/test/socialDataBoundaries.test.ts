@@ -66,19 +66,23 @@ describe('social data boundaries', () => {
     const client = new QueryClient();
     const affectedProfile = socialQueryKeys.publicProfile('owner');
     const untouchedProfile = socialQueryKeys.publicProfile('other');
+    const privateProfile = socialQueryKeys.privateProfile('owner@example.com');
     const mediaDetails = ['media', 'details', 'work_1'] as const;
 
     client.setQueryData(affectedProfile, { handle: 'owner' });
     client.setQueryData(untouchedProfile, { handle: 'other' });
+    client.setQueryData(privateProfile, { handle: 'owner' });
     client.setQueryData(mediaDetails, { mediaRef: 'work_1' });
 
     await invalidateAfterSocialMutation(client, {
       type: 'rating',
+      accountKey: 'owner@example.com',
       handle: 'owner',
       mediaRef: 'work_1',
     });
 
     expect(client.getQueryState(affectedProfile)?.isInvalidated).toBe(true);
+    expect(client.getQueryState(privateProfile)?.isInvalidated).toBe(true);
     expect(client.getQueryState(mediaDetails)?.isInvalidated).toBe(true);
     expect(client.getQueryState(untouchedProfile)?.isInvalidated).toBe(false);
   });

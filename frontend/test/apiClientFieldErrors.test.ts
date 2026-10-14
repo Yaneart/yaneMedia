@@ -9,6 +9,14 @@ afterEach(() => {
 });
 
 describe('API client field errors', () => {
+  test('accepts successful responses without a body', async () => {
+    globalThis.fetch = mock(async () => new Response(null, { status: 204 })) as typeof fetch;
+
+    await expect(
+      apiRequest<void>('/media/work_1/rating', { method: 'DELETE' }),
+    ).resolves.toBeUndefined();
+  });
+
   test('retains only valid field details from an error envelope', async () => {
     globalThis.fetch = mock(async () =>
       Response.json(

@@ -66,6 +66,10 @@ export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T
   const response = await fetch(createApiUrl(path), init);
   const retryAfterMs = parseRetryAfter(response.headers.get('Retry-After'));
 
+  if (response.ok && response.status === 204) {
+    return undefined as T;
+  }
+
   let payload: unknown;
 
   try {
