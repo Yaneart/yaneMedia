@@ -9,8 +9,8 @@ import type { PlaybackEpisodeSelection } from '@/entities/playback';
 import { EpisodeSelector } from '@/features/episode-selection';
 import { FavoriteButton, useFavorites } from '@/features/favorite';
 import { usePlaybackSession } from '@/features/playback-session';
-import { UserRating } from '@/features/user-rating';
 import { ReviewEditor } from '@/features/review-editor';
+import { MediaReviews } from '@/features/media-reviews';
 import { SeasonSelector } from '@/features/season-selection';
 import {
   createPlaybackSourceCatalog,
@@ -896,8 +896,6 @@ export function MediaView({
             />
           }
         />
-
-        <UserRating media={media} className="order-3 min-w-0 xl:mt-6" />
       </div>
 
       <section className="order-4 space-y-5 xl:hidden">
@@ -938,7 +936,9 @@ export function MediaView({
 
       <ReviewEditor media={media} />
 
-      <MediaCast persons={media.persons} className="order-6 xl:col-span-2" />
+      <MediaReviews media={media} />
+
+      <MediaCast persons={media.persons} className="order-7 xl:col-span-2" />
     </div>
   );
 }

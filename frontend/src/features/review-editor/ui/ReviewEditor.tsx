@@ -18,6 +18,7 @@ import {
   privateProfileQueryOptions,
   socialQueryKeys,
 } from '@/features/social-data';
+import { UserRating } from '@/features/user-rating';
 import { Button, createReturnToSearch } from '@/shared';
 import { ApiClientError } from '@/shared/api';
 import {
@@ -403,6 +404,7 @@ export function ReviewEditor({ media }: { media: MediaSummary }) {
 
   return (
     <section
+      id="review-editor"
       aria-labelledby="review-editor-heading"
       className="order-5 rounded-card border border-context-border bg-surface-elevated p-5 sm:p-6 xl:col-span-2"
     >
@@ -413,6 +415,8 @@ export function ReviewEditor({ media }: { media: MediaSummary }) {
         Поделитесь развёрнутым мнением. У одного пользователя может быть одна рецензия на
         произведение.
       </p>
+
+      <UserRating media={media} embedded className="mt-5" />
 
       {authState.status === 'guest' || authState.status === 'error' ? (
         <p className="mt-5 text-sm text-text-secondary">

@@ -5,6 +5,7 @@ export {
   getOwnReviews,
   getProfileReviews,
   getReview,
+  getReviewContent,
   createReview,
   updateReview,
   deleteReview,

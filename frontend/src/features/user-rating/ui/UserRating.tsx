@@ -46,9 +46,10 @@ function getMutationError(error: Error): string {
 export type UserRatingProps = {
   media: MediaSummary;
   className?: string;
+  embedded?: boolean;
 };
 
-export function UserRating({ media, className = '' }: UserRatingProps) {
+export function UserRating({ media, className = '', embedded = false }: UserRatingProps) {
   const { state: authState, setGuest } = useAuth();
   const location = useLocation();
   const queryClient = useQueryClient();
@@ -171,7 +172,12 @@ export function UserRating({ media, className = '' }: UserRatingProps) {
   return (
     <section
       aria-label="Оценка yaneMedia"
-      className={`rounded-card border border-context-border bg-surface-elevated p-4 sm:p-5 ${className}`}
+      className={[
+        embedded
+          ? 'rounded-control border border-border bg-control/50 p-4 sm:p-5'
+          : 'rounded-card border border-context-border bg-surface-elevated p-4 sm:p-5',
+        className,
+      ].join(' ')}
     >
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -180,6 +186,7 @@ export function UserRating({ media, className = '' }: UserRatingProps) {
             Оценка yaneMedia
           </h2>
           <p className="mt-1 text-sm text-text-secondary">
+            {embedded && 'Оценка появится рядом с рецензией и сохранится отдельно от неё. '}
             {summaryQuery.data?.average === null
               ? 'Пока нет оценок'
               : summaryQuery.data
@@ -225,7 +232,12 @@ export function UserRating({ media, className = '' }: UserRatingProps) {
             <legend className="text-sm font-medium text-text-primary">
               {currentValue === null ? 'Вы ещё не оценили' : `Ваша оценка: ${currentValue} из 10`}
             </legend>
-            <div className="mt-2 grid grid-cols-5 gap-2 sm:grid-cols-10 xl:grid-cols-5 2xl:grid-cols-10">
+            <div
+              className={[
+                'mt-2 grid grid-cols-5 gap-2 sm:grid-cols-10',
+                embedded ? '' : 'xl:grid-cols-5 2xl:grid-cols-10',
+              ].join(' ')}
+            >
               {ratingValues.map((value) => (
                 <label key={value} className="relative cursor-pointer">
                   <input

@@ -53,6 +53,14 @@ export async function getReview(reviewId: string, signal?: AbortSignal): Promise
   );
 }
 
+export async function getReviewContent(reviewId: string, signal?: AbortSignal): Promise<string> {
+  const { body } = await apiRequest<{ body: string }>(
+    `/reviews/${encodeURIComponent(reviewId)}/content`,
+    { signal },
+  );
+  return body;
+}
+
 export async function getMediaReviews(
   mediaRef: MediaLocator,
   sort: ReviewSort,

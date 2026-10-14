@@ -12,7 +12,7 @@ mock.module('@/shared/api', () => ({
 mock.module('@/shared/api/apiConfig', () => ({ API_BASE_URL: 'http://localhost:3000/api/v1' }));
 mock.module('@/entities/media', () => ({ mapMediaSummary }));
 
-const { createReview, deleteReview, getOwnReviewForMedia, updateReview } =
+const { createReview, deleteReview, getOwnReviewForMedia, getReviewContent, updateReview } =
   await import('../src/entities/review/api/reviewApi');
 
 const mediaRef = 'work_00000000-0000-4000-8000-000000000001';
@@ -70,5 +70,14 @@ describe('review editor API', () => {
 
     responseData = undefined;
     await expect(deleteReview(reviewId)).resolves.toBeUndefined();
+  });
+
+  test('loads explicitly revealed spoiler content without attaching account credentials', async () => {
+    responseData = { body: detail.body };
+
+    await expect(getReviewContent(reviewId)).resolves.toBe(detail.body);
+    expect(apiRequest).toHaveBeenLastCalledWith(`/reviews/${reviewId}/content`, {
+      signal: undefined,
+    });
   });
 });

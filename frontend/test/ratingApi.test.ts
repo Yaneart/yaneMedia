@@ -4,7 +4,11 @@ let responseData: unknown;
 const apiRequest = mock(async () => responseData);
 const mapMediaSummary = (value: unknown) => value;
 
-mock.module('@/shared/api', () => ({ apiRequest }));
+mock.module('@/shared/api', () => ({
+  apiRequest,
+  createCursorSearch: mock(),
+  mapCursorPage: mock(),
+}));
 mock.module('@/entities/media', () => ({ mapMediaSummary }));
 
 const { deleteRating, upsertRating } = await import('../src/entities/rating/api/ratingApi');
