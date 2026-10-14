@@ -4,16 +4,30 @@ export class ApiClientError extends Error {
   readonly status: number;
   readonly code: string;
   readonly retryAfterMs: number | null;
+  readonly fields: readonly ApiFieldError[];
 
-  constructor(message: string, status: number, code: string, retryAfterMs: number | null = null) {
+  constructor(
+    message: string,
+    status: number,
+    code: string,
+    retryAfterMs: number | null = null,
+    fields: readonly ApiFieldError[] = [],
+  ) {
     super(message);
 
     this.name = 'ApiClientError';
     this.status = status;
     this.code = code;
     this.retryAfterMs = retryAfterMs;
+    this.fields = fields;
   }
 }
+
+export type ApiFieldError = {
+  path: string;
+  code: string;
+  message: string;
+};
 
 function parseRetryAfter(value: string | null): number | null {
   if (!value?.trim()) return null;
@@ -35,6 +49,19 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function parseFieldErrors(value: unknown): ApiFieldError[] {
+  if (!Array.isArray(value)) return [];
+
+  return value.flatMap((field) =>
+    isRecord(field) &&
+    typeof field.path === 'string' &&
+    typeof field.code === 'string' &&
+    typeof field.message === 'string'
+      ? [{ path: field.path, code: field.code, message: field.message }]
+      : [],
+  );
+}
+
 export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(createApiUrl(path), init);
   const retryAfterMs = parseRetryAfter(response.headers.get('Retry-After'));
@@ -52,12 +79,14 @@ export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T
 
   if (!response.ok) {
     const apiError = isRecord(payload) && isRecord(payload.error) ? payload.error : null;
+    const details = isRecord(apiError?.details) ? apiError.details : null;
 
     throw new ApiClientError(
       typeof apiError?.message === 'string' ? apiError.message : 'Request failed',
       response.status,
       typeof apiError?.code === 'string' ? apiError.code : 'HTTP_ERROR',
       retryAfterMs,
+      parseFieldErrors(details?.fields),
     );
   }
 

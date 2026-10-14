@@ -37,6 +37,14 @@ export type ProfileSettings = {
   favoritesVisibility: 'public' | 'private';
 };
 
+export type UpdateProfilePayload = {
+  displayName?: string;
+  handle?: string;
+  bio?: string;
+};
+
+export type UpdateProfileSettingsPayload = Partial<ProfileSettings>;
+
 export type ProfileRating = {
   media: MediaSummary;
   value: number;

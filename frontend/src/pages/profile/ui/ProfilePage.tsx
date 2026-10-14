@@ -6,7 +6,7 @@ import { createPublicProfilePath, routePaths } from '@/app/router/routes';
 import { loadPublicProfilePage } from '@/app/router/socialRouteLoaders';
 import { useAuth } from '@/entities/auth';
 import type { PrivateProfile } from '@/entities/profile';
-import { privateProfileQueryOptions } from '@/features/social-data';
+import { privateProfileQueryOptions, profileSettingsQueryOptions } from '@/features/social-data';
 import {
   ArrowRightIcon,
   CommentIcon,
@@ -26,6 +26,7 @@ import {
   getProfileInitial,
   isGeneratedProfileHandle,
 } from '../model/profilePresentation';
+import { ProfileEditForm } from './ProfileEditForm';
 
 type ProfileLink = {
   title: string;
@@ -151,7 +152,15 @@ function ProfileNavigation({ profile }: { profile: PrivateProfile }) {
   );
 }
 
-function PrivateProfileView({ profile }: { profile: PrivateProfile }) {
+function PrivateProfileView({
+  accountKey,
+  profile,
+  settings,
+}: {
+  accountKey: string;
+  profile: PrivateProfile;
+  settings: import('@/entities/profile').ProfileSettings;
+}) {
   const hasGeneratedHandle = isGeneratedProfileHandle(profile.handle);
 
   return (
@@ -190,6 +199,13 @@ function PrivateProfileView({ profile }: { profile: PrivateProfile }) {
             )}
           </div>
         </div>
+
+        <ProfileEditForm
+          key={accountKey}
+          accountKey={accountKey}
+          profile={profile}
+          settings={settings}
+        />
 
         <div className="mt-6 flex flex-col gap-3 rounded-control border border-border bg-surface-elevated p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-start gap-3">
@@ -235,6 +251,10 @@ export function ProfilePage() {
     ...privateProfileQueryOptions(accountKey),
     enabled: state.status === 'authenticated',
   });
+  const settingsQuery = useQuery({
+    ...profileSettingsQueryOptions(accountKey),
+    enabled: state.status === 'authenticated',
+  });
 
   if (state.status === 'loading') return <SocialPageSkeleton variant="private-profile" />;
 
@@ -265,17 +285,28 @@ export function ProfilePage() {
     );
   }
 
-  if (query.isPending) return <SocialPageSkeleton variant="private-profile" />;
-  if (query.isError || !query.data) {
+  if (query.isPending || settingsQuery.isPending) {
+    return <SocialPageSkeleton variant="private-profile" />;
+  }
+  if (query.isError || !query.data || settingsQuery.isError || !settingsQuery.data) {
     return (
       <ErrorState
         variant="page"
         title="Не удалось загрузить профиль"
         description="Данные аккаунта не были заменены локальной копией. Проверьте соединение и повторите запрос."
-        onRetry={() => void query.refetch({ cancelRefetch: false })}
+        onRetry={() => {
+          void query.refetch({ cancelRefetch: false });
+          void settingsQuery.refetch({ cancelRefetch: false });
+        }}
       />
     );
   }
 
-  return <PrivateProfileView profile={query.data} />;
+  return (
+    <PrivateProfileView
+      accountKey={accountKey}
+      profile={query.data}
+      settings={settingsQuery.data}
+    />
+  );
 }

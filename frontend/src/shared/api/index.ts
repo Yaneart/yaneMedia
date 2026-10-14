@@ -1,4 +1,5 @@
 export { ApiClientError, apiRequest } from './apiClient';
+export type { ApiFieldError } from './apiClient';
 export { createApiUrl } from './apiConfig';
 export {
   createCursorSearch,

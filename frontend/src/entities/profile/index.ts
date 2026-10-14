@@ -4,6 +4,8 @@ export {
   getProfileSettings,
   getPublicFavorites,
   getPublicProfile,
+  updateProfile,
+  updateProfileSettings,
 } from './api/profileApi';
 export type {
   PrivateProfileDto,
@@ -24,4 +26,6 @@ export type {
   ProfileSettings,
   ProfileVisibility,
   PublicProfile,
+  UpdateProfilePayload,
+  UpdateProfileSettingsPayload,
 } from './model/profile';

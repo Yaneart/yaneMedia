@@ -7,6 +7,8 @@ import type {
   ProfileRatingPage,
   ProfileSettings,
   PublicProfile,
+  UpdateProfilePayload,
+  UpdateProfileSettingsPayload,
 } from '../model/profile';
 import type {
   PrivateProfileDto,
@@ -41,6 +43,34 @@ export function getProfileSettings(signal?: AbortSignal): Promise<ProfileSetting
   return apiRequest<ProfileSettingsDto>('/profile/settings', {
     credentials: 'include',
     signal,
+  });
+}
+
+export async function updateProfile(payload: UpdateProfilePayload): Promise<PrivateProfile> {
+  const dto = await apiRequest<PrivateProfileDto>('/profile', {
+    method: 'PATCH',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-YaneMedia-CSRF': '1',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  return { ...dto, avatarUrl: mapAvatarUrl(dto.avatarUrl) };
+}
+
+export function updateProfileSettings(
+  payload: UpdateProfileSettingsPayload,
+): Promise<ProfileSettings> {
+  return apiRequest<ProfileSettingsDto>('/profile/settings', {
+    method: 'PATCH',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-YaneMedia-CSRF': '1',
+    },
+    body: JSON.stringify(payload),
   });
 }
 
