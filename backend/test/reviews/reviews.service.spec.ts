@@ -39,6 +39,7 @@ describe('ReviewsService', () => {
   const findAuthor = jest.fn();
   const create = jest.fn();
   const findById = jest.fn();
+  const findActiveByOwnerAndMedia = jest.fn();
   const findRating = jest.fn();
   const countPublicComments = jest.fn();
   const findPublicById = jest.fn();
@@ -60,6 +61,7 @@ describe('ReviewsService', () => {
       findAuthor,
       create,
       findById,
+      findActiveByOwnerAndMedia,
       findRating,
       countPublicComments,
       findPublicById,
@@ -81,6 +83,7 @@ describe('ReviewsService', () => {
     findAuthor.mockReset().mockResolvedValue(author);
     create.mockReset().mockResolvedValue(review);
     findById.mockReset().mockResolvedValue(review);
+    findActiveByOwnerAndMedia.mockReset().mockResolvedValue(review);
     findRating.mockReset().mockResolvedValue(9);
     countPublicComments.mockReset().mockResolvedValue(0);
     findPublicById.mockReset().mockResolvedValue({
@@ -368,6 +371,21 @@ describe('ReviewsService', () => {
       publicationState: 'moderation-hidden',
       viewerActions: { canEdit: true, canDelete: true, canComment: false },
     });
+  });
+
+  it('finds the active own review by canonical media identity without pagination', async () => {
+    await expect(service.getOwnForMedia(userId, media.slug)).resolves.toMatchObject({
+      review: {
+        reviewId: review.reviewId,
+        body: review.body,
+        bodyState: 'visible',
+        publicationState: 'published',
+      },
+    });
+    expect(findActiveByOwnerAndMedia).toHaveBeenCalledWith(userId, media.mediaRef);
+
+    findActiveByOwnerAndMedia.mockResolvedValueOnce(undefined);
+    await expect(service.getOwnForMedia(userId, media.mediaRef)).resolves.toEqual({ review: null });
   });
 
   it("does not reveal another author's hidden review through the private detail", async () => {

@@ -54,6 +54,8 @@ export type OwnReviewDetailDto = Omit<ReviewDetailDto, 'body' | 'bodyState'> & {
   publicationState: 'published' | 'moderation-hidden';
 };
 
+export type OwnReviewResponseDto = { review: OwnReviewDetailDto | null };
+
 export type ReviewPageDto = CursorPageDto<ReviewSummaryDto>;
 export type OwnReviewPageDto = CursorPageDto<OwnReviewSummaryDto>;
 export type ReviewContentDto = { body: string };

@@ -9,6 +9,7 @@ export type { SocialViewer } from './model/socialQueryKeys';
 export {
   mediaReviewsQueryOptions,
   ownRatingQueryOptions,
+  ownReviewForMediaQueryOptions,
   ownReviewQueryOptions,
   ownReviewsQueryOptions,
   privateProfileQueryOptions,

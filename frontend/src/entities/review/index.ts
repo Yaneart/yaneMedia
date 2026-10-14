@@ -1,15 +1,20 @@
 export {
   getMediaReviews,
   getOwnReview,
+  getOwnReviewForMedia,
   getOwnReviews,
   getProfileReviews,
   getReview,
+  createReview,
+  updateReview,
+  deleteReview,
 } from './api/reviewApi';
 export type {
   ActiveReviewAuthorDto,
   DeletedReviewAuthorDto,
   OwnReviewDetailDto,
   OwnReviewPageDto,
+  OwnReviewResponseDto,
   OwnReviewSummaryDto,
   ReviewAuthorDto,
   ReviewContentDto,
@@ -29,5 +34,7 @@ export type {
   ReviewSort,
   ReviewSummary,
   ReviewViewerActions,
+  ReviewDraft,
+  UpdateReviewDraft,
 } from './model/review';
 export { isReviewId } from './model/review';

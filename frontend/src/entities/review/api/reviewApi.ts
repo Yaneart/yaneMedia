@@ -9,10 +9,13 @@ import type {
   ReviewPage,
   ReviewSort,
   ReviewSummary,
+  ReviewDraft,
+  UpdateReviewDraft,
 } from '../model/review';
 import type {
   OwnReviewDetailDto,
   OwnReviewPageDto,
+  OwnReviewResponseDto,
   ReviewAuthorDto,
   ReviewDetailDto,
   ReviewPageDto,
@@ -99,4 +102,51 @@ export async function getOwnReview(
     { credentials: 'include', signal },
   );
   return { ...dto, media: mapMediaSummary(dto.media), author: mapAuthor(dto.author) };
+}
+
+export async function getOwnReviewForMedia(
+  mediaRef: MediaLocator,
+  signal?: AbortSignal,
+): Promise<OwnReviewDetail | null> {
+  const { review } = await apiRequest<OwnReviewResponseDto>(
+    `/profile/reviews/media/${encodeURIComponent(mediaRef)}`,
+    { credentials: 'include', headers: { 'X-YaneMedia-CSRF': '1' }, signal },
+  );
+  return review
+    ? { ...review, media: mapMediaSummary(review.media), author: mapAuthor(review.author) }
+    : null;
+}
+
+export async function createReview(
+  mediaRef: MediaLocator,
+  draft: ReviewDraft,
+): Promise<ReviewDetail> {
+  const dto = await apiRequest<ReviewDetailDto>(`/media/${encodeURIComponent(mediaRef)}/reviews`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', 'X-YaneMedia-CSRF': '1' },
+    body: JSON.stringify(draft),
+  });
+  return mapReviewDetail(dto);
+}
+
+export async function updateReview(
+  reviewId: string,
+  draft: UpdateReviewDraft,
+): Promise<ReviewDetail> {
+  const dto = await apiRequest<ReviewDetailDto>(`/reviews/${encodeURIComponent(reviewId)}`, {
+    method: 'PATCH',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', 'X-YaneMedia-CSRF': '1' },
+    body: JSON.stringify(draft),
+  });
+  return mapReviewDetail(dto);
+}
+
+export function deleteReview(reviewId: string): Promise<void> {
+  return apiRequest<void>(`/reviews/${encodeURIComponent(reviewId)}`, {
+    method: 'DELETE',
+    credentials: 'include',
+    headers: { 'X-YaneMedia-CSRF': '1' },
+  });
 }

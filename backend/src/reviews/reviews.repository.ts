@@ -70,6 +70,17 @@ export class ReviewsRepository {
     return review;
   }
 
+  async findActiveByOwnerAndMedia(userId: string, mediaRef: string): Promise<Review | undefined> {
+    const [review] = await this.databaseService.db
+      .select()
+      .from(reviews)
+      .where(
+        and(eq(reviews.userId, userId), eq(reviews.mediaRef, mediaRef), isNull(reviews.deletedAt)),
+      )
+      .limit(1);
+    return review;
+  }
+
   async findPublicById(reviewId: string): Promise<PublicReviewRow | undefined> {
     const [review] = await this.publicReviewQuery()
       .where(

@@ -23,6 +23,8 @@ export const socialQueryKeys = {
     [...socialQueryKeys.privateProfile(accountKey), 'reviews'] as const,
   ownReview: (accountKey: string, reviewId: string) =>
     [...socialQueryKeys.ownReviews(accountKey), 'detail', reviewId] as const,
+  ownReviewForMedia: (accountKey: string, mediaRef: string) =>
+    [...socialQueryKeys.ownReviews(accountKey), 'media', mediaRef] as const,
   publicProfile: (handle: string) =>
     [...socialQueryKeys.publicRoot, 'profiles', normalizeHandle(handle)] as const,
   publicFavorites: (handle: string) =>

@@ -29,6 +29,7 @@ import {
   CreateReviewDto,
   type OwnReviewCursorPageDto,
   type OwnReviewDetailDto,
+  type OwnReviewResponseDto,
   type ReviewCursorPageDto,
   type ReviewContentDto,
   type ReviewDetailDto,
@@ -164,6 +165,14 @@ export class OwnProfileReviewsController {
     @Query(strictValidation) query: PublicProfileCollectionQueryDto,
   ): Promise<OwnReviewCursorPageDto> {
     return this.reviewsService.listOwn(user.id, query, user.role === 'admin');
+  }
+
+  @Get('media/:mediaRef')
+  getForMedia(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param(strictValidation) { mediaRef }: ReviewMediaRefDto,
+  ): Promise<OwnReviewResponseDto> {
+    return this.reviewsService.getOwnForMedia(user.id, mediaRef, user.role === 'admin');
   }
 
   @Get(':reviewId')

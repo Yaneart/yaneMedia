@@ -10,6 +10,7 @@ import { EpisodeSelector } from '@/features/episode-selection';
 import { FavoriteButton, useFavorites } from '@/features/favorite';
 import { usePlaybackSession } from '@/features/playback-session';
 import { UserRating } from '@/features/user-rating';
+import { ReviewEditor } from '@/features/review-editor';
 import { SeasonSelector } from '@/features/season-selection';
 import {
   createPlaybackSourceCatalog,
@@ -935,7 +936,9 @@ export function MediaView({
         </section>
       )}
 
-      <MediaCast persons={media.persons} className="order-5 xl:col-span-2" />
+      <ReviewEditor media={media} />
+
+      <MediaCast persons={media.persons} className="order-6 xl:col-span-2" />
     </div>
   );
 }

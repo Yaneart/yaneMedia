@@ -11,6 +11,7 @@ import { getOwnRating, getRatingSummary } from '@/entities/rating';
 import {
   getMediaReviews,
   getOwnReview,
+  getOwnReviewForMedia,
   getOwnReviews,
   getProfileReviews,
   getReview,
@@ -98,6 +99,14 @@ export function ownReviewQueryOptions(accountKey: string, reviewId: string) {
   return queryOptions({
     queryKey: socialQueryKeys.ownReview(accountKey, reviewId),
     queryFn: ({ signal }) => getOwnReview(reviewId, signal),
+    staleTime: socialStaleTimeMs,
+  });
+}
+
+export function ownReviewForMediaQueryOptions(accountKey: string, mediaRef: string) {
+  return queryOptions({
+    queryKey: socialQueryKeys.ownReviewForMedia(accountKey, mediaRef),
+    queryFn: ({ signal }) => getOwnReviewForMedia(mediaRef, signal),
     staleTime: socialStaleTimeMs,
   });
 }

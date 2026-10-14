@@ -162,6 +162,10 @@ export class OwnReviewDetailDto extends ReviewDetailDto {
   publicationState!: 'published' | 'moderation-hidden';
 }
 
+export class OwnReviewResponseDto {
+  review!: OwnReviewDetailDto | null;
+}
+
 export class OwnReviewCursorPageDto {
   items!: OwnReviewSummaryDto[];
   nextCursor!: string | null;

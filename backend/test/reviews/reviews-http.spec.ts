@@ -56,6 +56,7 @@ describe('reviews HTTP contract', () => {
   const listProfile = jest.fn();
   const listOwn = jest.fn();
   const getOwn = jest.fn();
+  const getOwnForMedia = jest.fn();
   const findUserBySessionHash = jest.fn();
   const deleteExpiredByTokenHash = jest.fn();
 
@@ -89,6 +90,7 @@ describe('reviews HTTP contract', () => {
             listProfile,
             listOwn,
             getOwn,
+            getOwnForMedia,
             update,
             delete: remove,
           },
@@ -124,6 +126,9 @@ describe('reviews HTTP contract', () => {
     getOwn.mockReset().mockResolvedValue({
       ...detail,
       publicationState: 'moderation-hidden',
+    });
+    getOwnForMedia.mockReset().mockResolvedValue({
+      review: { ...detail, publicationState: 'published' },
     });
     findUserBySessionHash.mockReset().mockResolvedValue(user);
     deleteExpiredByTokenHash.mockReset().mockResolvedValue(undefined);
@@ -223,6 +228,12 @@ describe('reviews HTTP contract', () => {
       data: { ...detail, publicationState: 'moderation-hidden' },
     });
     expect(getOwn).toHaveBeenCalledWith(user.id, reviewId, false);
+
+    const mediaResponse = await fetch(`${baseUrl}/profile/reviews/media/${mediaRef}`, {
+      headers: headers(),
+    });
+    expect(mediaResponse.status).toBe(200);
+    expect(getOwnForMedia).toHaveBeenCalledWith(user.id, mediaRef, false);
   });
 
   it('creates a normalized review with 201 and no-store', async () => {

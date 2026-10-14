@@ -15,6 +15,7 @@ import type {
   CreateReviewDto,
   OwnReviewCursorPageDto,
   OwnReviewDetailDto,
+  OwnReviewResponseDto,
   ReviewContentDto,
   ReviewCursorPageDto,
   ReviewDetailDto,
@@ -269,6 +270,31 @@ export class ReviewsService {
       body: review.body,
       bodyState: 'visible',
       publicationState: toPublicationState(review.publicationState),
+    };
+  }
+
+  async getOwnForMedia(
+    userId: string,
+    locator: string,
+    viewerCanModerate = false,
+  ): Promise<OwnReviewResponseDto> {
+    const media = await this.requireMedia(locator);
+    const review = await this.reviewsRepository.findActiveByOwnerAndMedia(userId, media.mediaRef);
+    if (!review) return { review: null };
+
+    const [author, rating, commentCount] = await Promise.all([
+      this.requireAuthor(userId),
+      this.reviewsRepository.findRating(userId, media.mediaRef),
+      this.reviewsRepository.countPublicComments(review.reviewId),
+    ]);
+    const detail = toReviewDetail(review, media, author, rating, commentCount, viewerCanModerate);
+    return {
+      review: {
+        ...detail,
+        body: review.body,
+        bodyState: 'visible',
+        publicationState: toPublicationState(review.publicationState),
+      },
     };
   }
 

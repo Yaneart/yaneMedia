@@ -59,3 +59,11 @@ export type OwnReviewDetail = Omit<ReviewDetail, 'body' | 'bodyState'> & {
 export type ReviewPage = CursorPage<ReviewSummary>;
 export type OwnReviewPage = CursorPage<OwnReviewSummary>;
 export type ReviewSort = 'new' | 'updated' | 'rating-high' | 'rating-low';
+
+export type ReviewDraft = {
+  title: string;
+  body: string;
+  isSpoiler: boolean;
+};
+
+export type UpdateReviewDraft = ReviewDraft & { expectedUpdatedAt: string };
