@@ -7,6 +7,7 @@ import { useFavorites } from '@/features/favorite';
 import {
   profileRatingsQueryOptions,
   profileReviewsQueryOptions,
+  ownReviewsQueryOptions,
   publicFavoritesQueryOptions,
   type SocialViewer,
 } from '@/features/social-data';
@@ -28,6 +29,7 @@ type PublicProfileActivityProps = {
   profile: PublicProfile;
   viewer: SocialViewer;
   viewerReady: boolean;
+  ownerAccountKey?: string;
 };
 
 function PanelSkeleton({ kind }: { kind: PublicProfileTabId }) {
@@ -91,6 +93,7 @@ export function PublicProfileActivity({
   profile,
   viewer,
   viewerReady,
+  ownerAccountKey,
 }: PublicProfileActivityProps) {
   const tabs = getPublicProfileTabs(profile);
   const [activeTab, setActiveTab] = useState<PublicProfileTabId>('reviews');
@@ -98,10 +101,15 @@ export function PublicProfileActivity({
   const activeTabData = tabs.find((tab) => tab.id === activeTab) ?? tabs[0]!;
   const { isFavorite, isFavoriteUpdating, toggleFavorite, canUpdateFavorites } = useFavorites();
 
-  const reviewsQuery = useInfiniteQuery({
+  const publicReviewsQuery = useInfiniteQuery({
     ...profileReviewsQueryOptions(profile.handle, viewer),
-    enabled: viewerReady && activeTab === 'reviews',
+    enabled: viewerReady && activeTab === 'reviews' && !ownerAccountKey,
   });
+  const ownReviewsQuery = useInfiniteQuery({
+    ...ownReviewsQueryOptions(ownerAccountKey ?? 'inactive'),
+    enabled: viewerReady && activeTab === 'reviews' && Boolean(ownerAccountKey),
+  });
+  const reviewsQuery = ownerAccountKey ? ownReviewsQuery : publicReviewsQuery;
   const ratingsQuery = useInfiniteQuery({
     ...profileRatingsQueryOptions({ kind: 'public', handle: profile.handle }),
     enabled: activeTab === 'ratings' && profile.visibility.ratings,

@@ -12,8 +12,14 @@ mock.module('@/shared/api', () => ({
 mock.module('@/shared/api/apiConfig', () => ({ API_BASE_URL: 'http://localhost:3000/api/v1' }));
 mock.module('@/entities/media', () => ({ mapMediaSummary }));
 
-const { createReview, deleteReview, getOwnReviewForMedia, getReviewContent, updateReview } =
-  await import('../src/entities/review/api/reviewApi');
+const {
+  createReview,
+  deleteReview,
+  getOwnReview,
+  getOwnReviewForMedia,
+  getReviewContent,
+  updateReview,
+} = await import('../src/entities/review/api/reviewApi');
 
 const mediaRef = 'work_00000000-0000-4000-8000-000000000001';
 const reviewId = 'review_00000000-0000-4000-8000-000000000001';
@@ -43,6 +49,20 @@ describe('review editor API', () => {
     responseData = { review: { ...detail, publicationState: 'published' } };
     expect((await getOwnReviewForMedia(mediaRef))?.reviewId).toBe(reviewId);
     expect(apiRequest).toHaveBeenLastCalledWith(`/profile/reviews/media/${mediaRef}`, {
+      credentials: 'include',
+      headers: { 'X-YaneMedia-CSRF': '1' },
+      signal: undefined,
+    });
+  });
+
+  test('loads a moderation-hidden own review through the private contract', async () => {
+    responseData = { ...detail, publicationState: 'moderation-hidden' };
+
+    await expect(getOwnReview(reviewId)).resolves.toMatchObject({
+      reviewId,
+      publicationState: 'moderation-hidden',
+    });
+    expect(apiRequest).toHaveBeenLastCalledWith(`/profile/reviews/${reviewId}`, {
       credentials: 'include',
       headers: { 'X-YaneMedia-CSRF': '1' },
       signal: undefined,

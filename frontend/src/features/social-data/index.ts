@@ -1,4 +1,5 @@
 export { invalidateAfterSocialMutation } from './model/socialInvalidation';
+export { removeReviewFromSocialCache } from './model/socialContentCache';
 export type { SocialMutation } from './model/socialInvalidation';
 export {
   replaceCachedAuthorAvatar,

@@ -4,6 +4,7 @@ import { QueryClient } from '@tanstack/react-query';
 import { getDocumentTitle } from '../src/app/router/routeTitles';
 import { createPublicProfilePath, createReviewPath, routePaths } from '../src/app/router/routes';
 import { invalidateAfterSocialMutation } from '../src/features/social-data/model/socialInvalidation';
+import { removeReviewFromSocialCache } from '../src/features/social-data/model/socialContentCache';
 import { socialQueryKeys } from '../src/features/social-data/model/socialQueryKeys';
 import {
   createCursorSearch,
@@ -95,5 +96,33 @@ describe('social data boundaries', () => {
     expect(createReviewPath('review/id')).toBe('/reviews/review%2Fid');
     expect(getDocumentTitle('/u/owner')).toBe('Публичный профиль — yaneMedia');
     expect(getDocumentTitle('/reviews/review_1')).toBe('Рецензия — yaneMedia');
+  });
+
+  test('removes moderated review bodies and excerpts from every social cache shape', () => {
+    const client = new QueryClient();
+    const reviewId = 'review_1';
+    const detailKey = socialQueryKeys.review(reviewId, 'guest');
+    const feedKey = socialQueryKeys.profileReviews('owner', 'guest');
+    const untouchedKey = socialQueryKeys.profileReviews('other', 'guest');
+
+    client.setQueryData(detailKey, { reviewId, body: 'скрытый текст' });
+    client.setQueryData(feedKey, {
+      pages: [{ items: [{ reviewId, excerpt: 'скрытый отрывок' }], nextCursor: null }],
+      pageParams: [null],
+    });
+    client.setQueryData(untouchedKey, {
+      pages: [{ items: [{ reviewId: 'review_2', excerpt: 'остаётся' }], nextCursor: null }],
+      pageParams: [null],
+    });
+
+    removeReviewFromSocialCache(client, reviewId);
+
+    expect(client.getQueryData(detailKey)).toBeUndefined();
+    expect(
+      client.getQueryData<{ pages: Array<{ items: unknown[] }> }>(feedKey)?.pages[0]?.items,
+    ).toEqual([]);
+    expect(
+      client.getQueryData<{ pages: Array<{ items: unknown[] }> }>(untouchedKey)?.pages[0]?.items,
+    ).toEqual([{ reviewId: 'review_2', excerpt: 'остаётся' }]);
   });
 });

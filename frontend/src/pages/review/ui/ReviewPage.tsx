@@ -1,22 +1,27 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 
 import { createPublicProfilePath } from '@/app/router/routes';
 import { useAuth } from '@/entities/auth';
 import { MediaLink, MediaPosterFallback } from '@/entities/media';
-import { createReport, type ReportReason } from '@/entities/moderation';
 import {
   deleteReview,
-  getReviewContent,
   isReviewId,
   type ReviewAuthor,
   type ReviewDetail,
+  type OwnReviewDetail,
 } from '@/entities/review';
+import { ContentReportForm } from '@/features/content-report';
+import { ContentModerationForm } from '@/features/content-moderation';
+import { ReviewSpoiler } from '@/features/review-spoiler';
 import {
   invalidateAfterSocialMutation,
+  ownReviewQueryOptions,
   privateProfileQueryOptions,
+  removeReviewFromSocialCache,
   reviewQueryOptions,
+  socialQueryKeys,
   type SocialViewer,
 } from '@/features/social-data';
 import {
@@ -43,17 +48,9 @@ import {
   wasReviewEdited,
 } from '../model/reviewPagePresentation';
 
-const reportReasons: readonly { value: ReportReason; label: string }[] = [
-  { value: 'spam', label: 'Спам' },
-  { value: 'abuse', label: 'Оскорбления или травля' },
-  { value: 'hate', label: 'Язык ненависти' },
-  { value: 'sexual_content', label: 'Сексуальный контент' },
-  { value: 'violence', label: 'Жестокий контент' },
-  { value: 'spoiler', label: 'Неотмеченный спойлер' },
-  { value: 'other', label: 'Другое' },
-];
+type DisplayReview = ReviewDetail | OwnReviewDetail;
 
-function mediaPath(review: ReviewDetail): string {
+function mediaPath(review: DisplayReview): string {
   return `/media/${encodeURIComponent(review.media.slug)}`;
 }
 
@@ -109,107 +106,11 @@ function ReviewAuthorLink({ author }: { author: ReviewAuthor }) {
   );
 }
 
-function SpoilerBody({ review }: { review: ReviewDetail }) {
-  const [state, setState] = useState<
-    | { status: 'hidden' }
-    | { status: 'loading' }
-    | { status: 'visible'; body: string }
-    | { status: 'error' }
-  >(
-    review.bodyState === 'visible'
-      ? { status: 'visible', body: review.body ?? '' }
-      : { status: 'hidden' },
-  );
-  const requestRef = useRef<AbortController | null>(null);
-
-  useEffect(() => () => requestRef.current?.abort(), []);
-
-  if (state.status === 'visible') {
-    return (
-      <div className="whitespace-pre-wrap text-body leading-8 text-text-primary">{state.body}</div>
-    );
-  }
-
-  const reveal = async () => {
-    requestRef.current?.abort();
-    const controller = new AbortController();
-    requestRef.current = controller;
-    setState({ status: 'loading' });
-    try {
-      setState({
-        status: 'visible',
-        body: await getReviewContent(review.reviewId, controller.signal),
-      });
-    } catch {
-      if (!controller.signal.aborted) setState({ status: 'error' });
-    }
-  };
-
-  return (
-    <div className="rounded-card border border-context-border bg-control px-5 py-6 sm:px-8">
-      <p className="font-semibold text-text-primary">Рецензия содержит спойлеры</p>
-      <p className="mt-2 max-w-2xl text-sm leading-relaxed text-text-secondary">
-        Текст скрыт, пока вы явно не решите его открыть. Выбор действует только для текущего
-        просмотра.
-      </p>
-      <Button
-        className="mt-4"
-        variant="secondary"
-        disabled={state.status === 'loading'}
-        onClick={() => void reveal()}
-      >
-        {state.status === 'loading'
-          ? 'Открываем…'
-          : state.status === 'error'
-            ? 'Попробовать снова'
-            : 'Показать рецензию'}
-      </Button>
-      {state.status === 'error' && (
-        <p role="status" className="mt-3 text-sm text-error">
-          Не удалось открыть текст. Остальная страница продолжает работать.
-        </p>
-      )}
-    </div>
-  );
-}
-
 function ReportReview({ reviewId }: { reviewId: string }) {
   const { setGuest } = useAuth();
   const [open, setOpen] = useState(false);
-  const [reason, setReason] = useState<ReportReason>('spam');
-  const [note, setNote] = useState('');
-  const [validationError, setValidationError] = useState<string | null>(null);
-  const mutation = useMutation({
-    mutationFn: () => createReport({ type: 'review', reviewId }, reason, note.trim() || undefined),
-    onError: (error) => {
-      if (error instanceof ApiClientError && error.status === 401) setGuest();
-    },
-  });
 
   useRestoreSocialAction('report', () => setOpen(true));
-
-  const submit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const normalizedNote = note.trim();
-    if (reason === 'other' && !normalizedNote) {
-      setValidationError('Для причины «Другое» добавьте пояснение.');
-      return;
-    }
-    if (Array.from(normalizedNote).length > 1000 || /[<>]/u.test(normalizedNote)) {
-      setValidationError('Пояснение: до 1000 символов обычного текста без угловых скобок.');
-      return;
-    }
-    setValidationError(null);
-    mutation.mutate();
-  };
-
-  if (mutation.isSuccess) {
-    return (
-      <p role="status" className="text-sm font-medium text-success">
-        Жалоба отправлена на рассмотрение.
-      </p>
-    );
-  }
 
   if (!open) {
     return (
@@ -220,74 +121,23 @@ function ReportReview({ reviewId }: { reviewId: string }) {
     );
   }
 
-  const errorMessage = mutation.isError
-    ? mutation.error instanceof ApiClientError && mutation.error.code === 'REPORT_ALREADY_EXISTS'
-      ? 'Вы уже отправили активную жалобу на эту рецензию.'
-      : describeSocialAccessError(mutation.error, 'Не удалось отправить жалобу. Попробуйте снова.')
-          .message
-    : null;
-
   return (
-    <form
-      onSubmit={submit}
-      className="w-full rounded-control border border-border bg-control p-4 sm:max-w-xl"
-    >
-      <label htmlFor="review-report-reason" className="text-sm font-semibold text-text-primary">
-        Причина жалобы
-      </label>
-      <select
-        id="review-report-reason"
-        value={reason}
-        onChange={(event) => setReason(event.target.value as ReportReason)}
-        className="mt-2 min-h-11 w-full rounded-control border border-border bg-surface px-3 text-sm text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/20"
-      >
-        {reportReasons.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-      <label
-        htmlFor="review-report-note"
-        className="mt-4 block text-sm font-semibold text-text-primary"
-      >
-        Пояснение {reason === 'other' ? '(обязательно)' : '(необязательно)'}
-      </label>
-      <textarea
-        id="review-report-note"
-        value={note}
-        rows={4}
-        maxLength={1000}
-        onChange={(event) => setNote(event.target.value)}
-        className="mt-2 w-full resize-y rounded-control border border-border bg-surface px-3 py-2 text-sm text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/20"
+    <div className="w-full sm:max-w-xl">
+      <ContentReportForm
+        target={{ type: 'review', reviewId }}
+        onCancel={() => setOpen(false)}
+        onUnauthorized={setGuest}
       />
-      {(validationError || errorMessage) && (
-        <p role="alert" className="mt-2 text-sm text-error">
-          {validationError ?? errorMessage}
-        </p>
-      )}
-      <div className="mt-4 flex flex-wrap gap-2">
-        <Button type="submit" size="small" disabled={mutation.isPending}>
-          {mutation.isPending ? 'Отправляем…' : 'Отправить'}
-        </Button>
-        <Button
-          variant="ghost"
-          size="small"
-          disabled={mutation.isPending}
-          onClick={() => setOpen(false)}
-        >
-          Отмена
-        </Button>
-      </div>
-    </form>
+    </div>
   );
 }
 
-function ReviewActions({ review }: { review: ReviewDetail }) {
+function ReviewActions({ review }: { review: DisplayReview }) {
   const { state: authState, setGuest, refresh } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [moderating, setModerating] = useState(false);
   const profileQuery = useQuery({
     ...privateProfileQueryOptions(
       authState.status === 'authenticated' ? authState.user.email : 'inactive',
@@ -297,6 +147,12 @@ function ReviewActions({ review }: { review: ReviewDetail }) {
   const deleteMutation = useMutation({
     mutationFn: () => deleteReview(review.reviewId),
     onSuccess: async () => {
+      removeReviewFromSocialCache(queryClient, review.reviewId);
+      if (authState.status === 'authenticated') {
+        queryClient.removeQueries({
+          queryKey: socialQueryKeys.ownReviewForMedia(authState.user.email, review.media.mediaRef),
+        });
+      }
       void navigate(`${mediaPath(review)}#review-editor`, { replace: true });
       await invalidateAfterSocialMutation(queryClient, {
         type: 'review',
@@ -315,6 +171,7 @@ function ReviewActions({ review }: { review: ReviewDetail }) {
     !review.viewerActions.canEdit &&
     !review.viewerActions.canDelete &&
     !review.viewerActions.canReport &&
+    !review.viewerActions.canModerate &&
     profileQuery.data?.emailVerified !== false &&
     !profileQuery.isError
   ) {
@@ -344,6 +201,18 @@ function ReviewActions({ review }: { review: ReviewDetail }) {
           </Button>
         )}
         {review.viewerActions.canReport && <ReportReview reviewId={review.reviewId} />}
+        {review.viewerActions.canModerate &&
+          !('publicationState' in review && review.publicationState === 'moderation-hidden') && (
+            <Button
+              variant="ghost"
+              size="small"
+              className="text-error"
+              onClick={() => setModerating(true)}
+            >
+              <ShieldIcon className="size-4" aria-hidden="true" />
+              Скрыть как модератор
+            </Button>
+          )}
         {authState.status === 'guest' && (
           <SocialLoginLink
             intent="report"
@@ -373,6 +242,23 @@ function ReviewActions({ review }: { review: ReviewDetail }) {
           </Button>
         )}
       </div>
+
+      {moderating && (
+        <div className="mt-4 max-w-xl">
+          <ContentModerationForm
+            target={{ type: 'review', reviewId: review.reviewId }}
+            onCancel={() => setModerating(false)}
+            onSuccess={() => {
+              removeReviewFromSocialCache(queryClient, review.reviewId);
+              void invalidateAfterSocialMutation(queryClient, {
+                type: 'moderation',
+                targetId: review.reviewId,
+              });
+              void navigate(mediaPath(review), { replace: true });
+            }}
+          />
+        </div>
+      )}
 
       {confirmingDelete && (
         <div
@@ -420,9 +306,11 @@ function ReviewActions({ review }: { review: ReviewDetail }) {
   );
 }
 
-function ReviewContent({ review }: { review: ReviewDetail }) {
+function ReviewContent({ review }: { review: DisplayReview }) {
   const edited = wasReviewEdited(review.createdAt, review.updatedAt);
   const poster = review.media.poster;
+  const isModerationHidden =
+    'publicationState' in review && review.publicationState === 'moderation-hidden';
 
   return (
     <>
@@ -468,8 +356,25 @@ function ReviewContent({ review }: { review: ReviewDetail }) {
               )}
             </div>
 
+            {isModerationHidden && (
+              <div
+                role="status"
+                className="mt-6 rounded-control border border-watermark/30 bg-watermark/10 px-4 py-3"
+              >
+                <p className="font-semibold text-text-primary">Рецензия скрыта модерацией</p>
+                <p className="mt-1 text-sm text-text-secondary">
+                  Её видите только вы. Служебные данные модерации не раскрываются.
+                </p>
+              </div>
+            )}
+
             <div className="mt-8">
-              <SpoilerBody review={review} />
+              <ReviewSpoiler
+                reviewId={review.reviewId}
+                hidden={review.bodyState === 'spoiler-hidden'}
+                content={review.body}
+                variant="detail"
+              />
             </div>
             <ReviewActions review={review} />
           </div>
@@ -514,7 +419,7 @@ function ReviewContent({ review }: { review: ReviewDetail }) {
             </div>
           </aside>
         </div>
-        <ReviewDiscussion review={review} />
+        {!isModerationHidden && <ReviewDiscussion review={review} />}
       </article>
     </>
   );
@@ -530,22 +435,37 @@ export function ReviewPage() {
     ...reviewQueryOptions(reviewId, viewer),
     enabled: hasValidReviewId && state.status !== 'loading',
   });
+  const publicNotFound = query.error instanceof ApiClientError && query.error.status === 404;
+  const ownQuery = useQuery({
+    ...ownReviewQueryOptions(
+      state.status === 'authenticated' ? state.user.email : 'inactive',
+      reviewId,
+    ),
+    enabled: hasValidReviewId && state.status === 'authenticated' && publicNotFound,
+    retry: false,
+  });
 
   if (!hasValidReviewId) return <SocialNotFoundState kind="review" />;
-  if (state.status === 'loading' || query.isPending) return <SocialPageSkeleton variant="review" />;
-  if (query.error instanceof ApiClientError && query.error.status === 404) {
+  if (
+    state.status === 'loading' ||
+    query.isPending ||
+    (publicNotFound && state.status === 'authenticated' && ownQuery.isPending)
+  ) {
+    return <SocialPageSkeleton variant="review" />;
+  }
+  if (query.data) return <ReviewContent key={query.data.reviewId} review={query.data} />;
+  if (publicNotFound && ownQuery.data) {
+    return <ReviewContent key={ownQuery.data.reviewId} review={ownQuery.data} />;
+  }
+  if (publicNotFound) {
     return <SocialNotFoundState kind="review" />;
   }
-  if (query.isError || !query.data) {
-    return (
-      <ErrorState
-        variant="page"
-        title="Не удалось загрузить рецензию"
-        description="Проверьте соединение и попробуйте ещё раз."
-        onRetry={() => void query.refetch({ cancelRefetch: false })}
-      />
-    );
-  }
-
-  return <ReviewContent key={query.data.reviewId} review={query.data} />;
+  return (
+    <ErrorState
+      variant="page"
+      title="Не удалось загрузить рецензию"
+      description="Проверьте соединение и попробуйте ещё раз."
+      onRetry={() => void query.refetch({ cancelRefetch: false })}
+    />
+  );
 }

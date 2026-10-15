@@ -2,12 +2,15 @@ import { Link } from 'react-router';
 
 import { createReviewPath } from '@/app/router/routes';
 import { MediaLink, MediaPosterFallback } from '@/entities/media';
-import type { ReviewSummary } from '@/entities/review';
+import type { OwnReviewSummary, ReviewSummary } from '@/entities/review';
+import { ReviewSpoiler } from '@/features/review-spoiler';
 import { StarIcon } from '@/shared';
 import { formatReviewDate } from '../model/profileActivityPresentation';
 
-export function PublicProfileReviewCard({ review }: { review: ReviewSummary }) {
+export function PublicProfileReviewCard({ review }: { review: ReviewSummary | OwnReviewSummary }) {
   const poster = review.media.poster;
+  const isModerationHidden =
+    'publicationState' in review && review.publicationState === 'moderation-hidden';
 
   return (
     <article className="flex min-w-0 gap-4 rounded-control border border-border bg-surface-elevated p-4 sm:gap-5">
@@ -65,16 +68,26 @@ export function PublicProfileReviewCard({ review }: { review: ReviewSummary }) {
           </Link>
         </h3>
 
-        {review.bodyState === 'spoiler-hidden' ? (
-          <p className="mt-3 rounded-control bg-control px-3 py-2 text-sm text-text-secondary">
-            <span className="font-semibold text-text-primary">Есть спойлеры.</span> Текст скрыт до
-            открытия рецензии.
-          </p>
-        ) : review.excerpt ? (
-          <p className="mt-2 line-clamp-3 whitespace-pre-line text-sm leading-relaxed text-text-secondary">
-            {review.excerpt}
-          </p>
-        ) : null}
+        {isModerationHidden && (
+          <div
+            role="status"
+            className="mt-3 rounded-control border border-watermark/30 bg-watermark/10 px-3 py-2"
+          >
+            <p className="text-sm font-semibold text-text-primary">Скрыта модерацией</p>
+            <p className="mt-1 text-caption text-text-secondary">
+              Этот материал виден только вам. Служебные данные не раскрываются.
+            </p>
+          </div>
+        )}
+
+        {!isModerationHidden && (
+          <ReviewSpoiler
+            reviewId={review.reviewId}
+            hidden={review.bodyState === 'spoiler-hidden'}
+            content={review.excerpt}
+            variant="summary"
+          />
+        )}
 
         <Link
           to={createReviewPath(review.reviewId)}

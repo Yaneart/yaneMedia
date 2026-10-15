@@ -96,7 +96,7 @@ export async function getOwnReviews(
 ): Promise<OwnReviewPage> {
   const dto = await apiRequest<OwnReviewPageDto>(
     `/profile/reviews?${createCursorSearch(cursor, limit)}`,
-    { credentials: 'include', signal },
+    { credentials: 'include', headers: { 'X-YaneMedia-CSRF': '1' }, signal },
   );
   return mapCursorPage(dto, (item) => ({ ...item, ...mapReviewSummary(item) }));
 }
@@ -107,7 +107,7 @@ export async function getOwnReview(
 ): Promise<OwnReviewDetail> {
   const dto = await apiRequest<OwnReviewDetailDto>(
     `/profile/reviews/${encodeURIComponent(reviewId)}`,
-    { credentials: 'include', signal },
+    { credentials: 'include', headers: { 'X-YaneMedia-CSRF': '1' }, signal },
   );
   return { ...dto, media: mapMediaSummary(dto.media), author: mapAuthor(dto.author) };
 }

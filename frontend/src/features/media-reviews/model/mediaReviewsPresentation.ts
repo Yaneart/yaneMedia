@@ -1,4 +1,5 @@
 import type { ReviewSort } from '@/entities/review';
+export { createSpoilerExcerpt } from '../../review-spoiler/model/reviewSpoiler';
 
 export const mediaReviewSortOptions = [
   { value: 'new', label: 'Сначала новые' },
@@ -20,11 +21,4 @@ const reviewDateFormatter = new Intl.DateTimeFormat('ru-RU', {
 export function formatMediaReviewDate(value: string): string {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? 'Дата не указана' : reviewDateFormatter.format(date);
-}
-
-export function createSpoilerExcerpt(body: string, limit = 280): string {
-  const characters = Array.from(body.trim());
-  return characters.length > limit
-    ? `${characters.slice(0, limit).join('')}…`
-    : characters.join('');
 }

@@ -50,6 +50,7 @@ function PublicProfileView({
         profile={profile}
         viewer={viewer}
         viewerReady={state.status !== 'loading'}
+        ownerAccountKey={isOwner ? accountKey : undefined}
       />
     </section>
   );

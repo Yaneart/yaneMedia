@@ -1,16 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 
 import { createPublicProfilePath, createReviewPath } from '@/app/router/routes';
-import { getReviewContent, type ReviewSummary } from '@/entities/review';
-import { Button, CommentIcon, ProfileIcon, StarIcon } from '@/shared';
-import { createSpoilerExcerpt, formatMediaReviewDate } from '../model/mediaReviewsPresentation';
-
-type SpoilerState =
-  | { status: 'hidden' }
-  | { status: 'loading' }
-  | { status: 'visible'; excerpt: string }
-  | { status: 'error' };
+import type { ReviewSummary } from '@/entities/review';
+import { ReviewSpoiler } from '@/features/review-spoiler';
+import { CommentIcon, ProfileIcon, StarIcon } from '@/shared';
+import { formatMediaReviewDate } from '../model/mediaReviewsPresentation';
 
 function ReviewAuthor({ review }: { review: ReviewSummary }) {
   const [hasAvatarError, setHasAvatarError] = useState(false);
@@ -56,33 +51,6 @@ function ReviewAuthor({ review }: { review: ReviewSummary }) {
 }
 
 export function MediaReviewCard({ review }: { review: ReviewSummary }) {
-  const [spoiler, setSpoiler] = useState<SpoilerState>({ status: 'hidden' });
-  const requestRef = useRef<AbortController | null>(null);
-
-  useEffect(() => () => requestRef.current?.abort(), []);
-
-  const revealSpoiler = async () => {
-    requestRef.current?.abort();
-    const controller = new AbortController();
-    requestRef.current = controller;
-    setSpoiler({ status: 'loading' });
-
-    try {
-      const body = await getReviewContent(review.reviewId, controller.signal);
-      setSpoiler({ status: 'visible', excerpt: createSpoilerExcerpt(body) });
-    } catch {
-      if (controller.signal.aborted) return;
-      setSpoiler({ status: 'error' });
-    }
-  };
-
-  const visibleExcerpt =
-    review.bodyState === 'excerpt'
-      ? review.excerpt
-      : spoiler.status === 'visible'
-        ? spoiler.excerpt
-        : null;
-
   return (
     <article className="min-w-0 rounded-control border border-border bg-surface-elevated p-4 sm:p-5">
       <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-3 text-caption text-text-secondary">
@@ -105,36 +73,12 @@ export function MediaReviewCard({ review }: { review: ReviewSummary }) {
         </Link>
       </h3>
 
-      {visibleExcerpt ? (
-        <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-text-secondary">
-          {visibleExcerpt}
-        </p>
-      ) : review.bodyState === 'spoiler-hidden' ? (
-        <div className="mt-3 rounded-control border border-context-border bg-control px-4 py-3">
-          <p className="text-sm text-text-secondary">
-            <span className="font-semibold text-text-primary">Текст содержит спойлеры.</span>{' '}
-            Откройте его только если готовы узнать детали сюжета.
-          </p>
-          <Button
-            variant="ghost"
-            size="small"
-            className="mt-2 -ml-3 text-accent-text"
-            disabled={spoiler.status === 'loading'}
-            onClick={() => void revealSpoiler()}
-          >
-            {spoiler.status === 'loading'
-              ? 'Открываем…'
-              : spoiler.status === 'error'
-                ? 'Попробовать снова'
-                : 'Показать текст'}
-          </Button>
-          {spoiler.status === 'error' && (
-            <p role="status" className="text-caption text-danger">
-              Не удалось открыть текст. Остальная рецензия доступна.
-            </p>
-          )}
-        </div>
-      ) : null}
+      <ReviewSpoiler
+        reviewId={review.reviewId}
+        hidden={review.bodyState === 'spoiler-hidden'}
+        content={review.excerpt}
+        variant="summary"
+      />
 
       <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
         <Link

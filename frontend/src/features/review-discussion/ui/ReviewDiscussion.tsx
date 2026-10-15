@@ -24,6 +24,8 @@ import {
   type ReviewComment,
   type ReviewCommentPage,
 } from '@/entities/review-comment';
+import { ContentReportForm } from '@/features/content-report';
+import { ContentModerationForm } from '@/features/content-moderation';
 import {
   privateProfileQueryOptions,
   reviewCommentsQueryOptions,
@@ -35,7 +37,7 @@ import {
   SocialLoginLink,
   useRestoreSocialAction,
 } from '@/features/social-access';
-import { Button, DeleteIcon, LoadMoreButton, MoreIcon, ProfileIcon } from '@/shared';
+import { Button, DeleteIcon, LoadMoreButton, MoreIcon, ProfileIcon, ShieldIcon } from '@/shared';
 import { ApiClientError } from '@/shared/api';
 import {
   appendReviewComment,
@@ -209,6 +211,8 @@ function CommentItem({
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [reporting, setReporting] = useState(false);
+  const [moderating, setModerating] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -287,7 +291,10 @@ function CommentItem({
     >
       <div className="flex items-start justify-between gap-3">
         <Author author={comment.author} />
-        {(comment.viewerActions.canEdit || comment.viewerActions.canDelete) && (
+        {(comment.viewerActions.canEdit ||
+          comment.viewerActions.canDelete ||
+          comment.viewerActions.canReport ||
+          comment.viewerActions.canModerate) && (
           <div className="relative">
             <Button
               ref={menuButtonRef}
@@ -335,6 +342,32 @@ function CommentItem({
                     Удалить
                   </button>
                 )}
+                {comment.viewerActions.canReport && (
+                  <button
+                    role="menuitem"
+                    className="flex min-h-10 w-full items-center gap-2 rounded-control px-3 text-left text-sm font-medium text-text-primary hover:bg-control-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/20"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setReporting(true);
+                    }}
+                  >
+                    <ShieldIcon className="size-4" aria-hidden="true" />
+                    Пожаловаться
+                  </button>
+                )}
+                {comment.viewerActions.canModerate && (
+                  <button
+                    role="menuitem"
+                    className="flex min-h-10 w-full items-center gap-2 rounded-control px-3 text-left text-sm font-medium text-error hover:bg-error/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-error/20"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setModerating(true);
+                    }}
+                  >
+                    <ShieldIcon className="size-4" aria-hidden="true" />
+                    Скрыть как модератор
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -361,6 +394,32 @@ function CommentItem({
           <span title={`Изменено ${formatDate(comment.updatedAt)}`}> · изменено</span>
         )}
       </p>
+
+      {reporting && (
+        <div className="mt-4 max-w-xl">
+          <ContentReportForm
+            target={{ type: 'comment', commentId: comment.commentId }}
+            onCancel={() => {
+              setReporting(false);
+              requestAnimationFrame(() => menuButtonRef.current?.focus());
+            }}
+            onUnauthorized={onUnauthorized}
+          />
+        </div>
+      )}
+
+      {moderating && (
+        <div className="mt-4 max-w-xl">
+          <ContentModerationForm
+            target={{ type: 'comment', commentId: comment.commentId }}
+            onCancel={() => {
+              setModerating(false);
+              requestAnimationFrame(() => menuButtonRef.current?.focus());
+            }}
+            onSuccess={() => onDeleted(comment.commentId)}
+          />
+        </div>
+      )}
 
       {confirmingDelete && (
         <div
