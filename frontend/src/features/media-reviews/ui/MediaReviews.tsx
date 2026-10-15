@@ -6,7 +6,16 @@ import type { MediaSummary } from '@/entities/media';
 import type { ReviewSort } from '@/entities/review';
 import { SocialLoginLink } from '@/features/social-access';
 import { mediaReviewsQueryOptions, type SocialViewer } from '@/features/social-data';
-import { Button, ErrorState, LoadMoreButton, ProfileIcon, Select, Skeleton } from '@/shared';
+import {
+  Button,
+  ErrorState,
+  LoadMoreButton,
+  ProfileIcon,
+  Select,
+  Skeleton,
+  YaneMark,
+  YaneMarkField,
+} from '@/shared';
 import { mergeCursorPages } from '@/shared/api';
 import { isReviewSort, mediaReviewSortOptions } from '../model/mediaReviewsPresentation';
 import { MediaReviewCard } from './MediaReviewCard';
@@ -77,64 +86,74 @@ export function MediaReviews({ media }: { media: MediaSummary }) {
   return (
     <section
       aria-labelledby="media-reviews-heading"
-      className="min-w-0 rounded-card border border-context-border bg-surface p-5 sm:p-6"
+      className="relative isolate min-w-0 rounded-card border border-context-border bg-linear-to-br from-watermark/28 via-watermark/18 to-watermark/24 p-2 shadow-surface sm:p-3"
     >
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-caption font-semibold tracking-wider text-accent-text uppercase">
-            Мнения зрителей
-          </p>
-          <h2 id="media-reviews-heading" className="mt-1 text-heading text-text-primary">
-            Рецензии
-          </h2>
-        </div>
-        <Select
-          aria-label="Сортировка рецензий"
-          value={sort}
-          options={mediaReviewSortOptions}
-          placeholder="Сортировка"
-          allowEmpty={false}
-          onChange={(value) => {
-            if (isReviewSort(value)) setSort(value);
-          }}
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-0 overflow-hidden rounded-card">
+        <YaneMarkField />
+        <YaneMark
+          className="absolute -top-10 -right-12 size-56 rotate-[138deg] text-watermark opacity-[0.26]"
         />
+        <div className="absolute inset-0 bg-linear-to-br from-transparent via-transparent to-watermark/8" />
       </div>
-
-      <div className="mt-5">
-        {!viewerReady || query.isPending ? (
-          <ReviewsSkeleton />
-        ) : query.isError && reviews.length === 0 ? (
-          <ErrorState
-            title="Не удалось загрузить рецензии"
-            description="Просмотр и сведения о произведении продолжают работать. Этот раздел можно загрузить отдельно."
-            onRetry={() => void query.refetch()}
+      <div className="relative z-10 rounded-card border border-context-border/80 bg-surface/70 p-4 sm:p-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="inline-flex rounded-pill border border-context-border bg-watermark/10 px-2.5 py-1 text-[0.65rem] font-semibold tracking-wide text-accent-text uppercase">
+              Мнения зрителей
+            </p>
+            <h2 id="media-reviews-heading" className="mt-1 text-heading text-text-primary">
+              Рецензии
+            </h2>
+          </div>
+          <Select
+            aria-label="Сортировка рецензий"
+            value={sort}
+            options={mediaReviewSortOptions}
+            placeholder="Сортировка"
+            allowEmpty={false}
+            menuAlign="end"
+            onChange={(value) => {
+              if (isReviewSort(value)) setSort(value);
+            }}
           />
-        ) : reviews.length === 0 ? (
-          <EmptyReviews authStatus={authState.status} onRetryAuth={() => void refresh()} />
-        ) : (
-          <>
-            <div className="grid items-start gap-3 lg:grid-cols-2">
-              {reviews.map((review) => (
-                <MediaReviewCard key={review.reviewId} review={review} />
-              ))}
-            </div>
+        </div>
 
-            {(query.hasNextPage || query.isFetchNextPageError) && (
-              <div className="mt-6 flex flex-col items-center gap-2 border-t border-border pt-5">
-                <LoadMoreButton
-                  isLoading={query.isFetchingNextPage}
-                  hasError={query.isFetchNextPageError}
-                  onClick={() => void query.fetchNextPage({ cancelRefetch: false })}
-                />
-                {query.isFetchNextPageError && (
-                  <p role="status" className="text-center text-caption text-danger">
-                    Следующая страница не загрузилась. Уже показанные рецензии сохранены.
-                  </p>
-                )}
+        <div className="mt-5">
+          {!viewerReady || query.isPending ? (
+            <ReviewsSkeleton />
+          ) : query.isError && reviews.length === 0 ? (
+            <ErrorState
+              title="Не удалось загрузить рецензии"
+              description="Просмотр и сведения о произведении продолжают работать. Этот раздел можно загрузить отдельно."
+              onRetry={() => void query.refetch()}
+            />
+          ) : reviews.length === 0 ? (
+            <EmptyReviews authStatus={authState.status} onRetryAuth={() => void refresh()} />
+          ) : (
+            <>
+              <div className="grid items-stretch gap-3 lg:grid-cols-2">
+                {reviews.map((review) => (
+                  <MediaReviewCard key={review.reviewId} review={review} />
+                ))}
               </div>
-            )}
-          </>
-        )}
+
+              {(query.hasNextPage || query.isFetchNextPageError) && (
+                <div className="mt-6 flex flex-col items-center gap-2 border-t border-border pt-5">
+                  <LoadMoreButton
+                    isLoading={query.isFetchingNextPage}
+                    hasError={query.isFetchNextPageError}
+                    onClick={() => void query.fetchNextPage({ cancelRefetch: false })}
+                  />
+                  {query.isFetchNextPageError && (
+                    <p role="status" className="text-center text-caption text-danger">
+                      Следующая страница не загрузилась. Уже показанные рецензии сохранены.
+                    </p>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
       </div>
     </section>
   );

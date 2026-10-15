@@ -32,7 +32,7 @@ import {
   SocialLoginLink,
   useRestoreSocialAction,
 } from '@/features/social-access';
-import { Button, LoadMoreButton, ProfileIcon, Skeleton } from '@/shared';
+import { Button, LoadMoreButton, ProfileIcon, Skeleton, YaneMark, YaneMarkField } from '@/shared';
 import { ApiClientError } from '@/shared/api';
 import {
   appendMediaComment,
@@ -167,7 +167,7 @@ function CommentForm({
           setBody(event.target.value);
           setValidationError(null);
         }}
-        className="mt-2 w-full resize-y rounded-control border border-border bg-elevated px-3 py-2 text-sm leading-relaxed text-text-primary placeholder:text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/20"
+        className="mt-2 w-full resize-y rounded-control border border-border bg-surface/70 px-3 py-2 text-sm leading-relaxed text-text-primary placeholder:text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/20"
       />
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
         <span className="text-caption text-text-secondary">
@@ -249,8 +249,8 @@ function CommentCard({
       tabIndex={-1}
       className={
         isReply
-          ? 'rounded-control border border-border/80 bg-elevated p-4 outline-none focus-visible:ring-2 focus-visible:ring-action/20'
-          : 'rounded-card border border-border bg-surface p-4 outline-none focus-visible:ring-2 focus-visible:ring-action/20 sm:p-5'
+          ? 'rounded-control border border-context-border/80 bg-surface/40 p-4 outline-none focus-visible:ring-2 focus-visible:ring-action/20'
+          : 'rounded-card border border-context-border/80 bg-surface/40 p-4 outline-none focus-visible:ring-2 focus-visible:ring-action/20 sm:p-5'
       }
     >
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -492,150 +492,157 @@ export function MediaComments({ media }: { media: MediaSummary }) {
   };
 
   return (
-    <div className="rounded-card border border-context-border bg-surface p-5 sm:p-6">
-      <div>
-        <p className="text-caption font-semibold tracking-wider text-accent-text uppercase">
-          Обсуждение произведения
-        </p>
-        <h2 className="mt-1 text-heading text-text-primary">Комментарии</h2>
+    <section className="relative isolate overflow-hidden rounded-card border border-context-border bg-linear-to-br from-watermark/28 via-watermark/18 to-watermark/24 p-2 shadow-surface sm:p-3">
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-0 overflow-hidden rounded-card">
+        <YaneMarkField />
+        <YaneMark className="absolute -top-10 -right-12 size-56 rotate-[138deg] text-watermark opacity-[0.26]" />
+        <div className="absolute inset-0 bg-linear-to-br from-transparent via-transparent to-watermark/8" />
       </div>
+      <div className="relative z-10 rounded-card border border-context-border/80 bg-surface/70 p-4 sm:p-5">
+        <div>
+          <p className="inline-flex rounded-pill border border-context-border bg-watermark/10 px-2.5 py-1 text-[0.65rem] font-semibold tracking-wide text-accent-text uppercase">
+            Обсуждение произведения
+          </p>
+          <h2 className="mt-1 text-heading text-text-primary">Комментарии</h2>
+        </div>
 
-      <div ref={composerRef} className="mt-5">
-        {authState.status === 'authenticated' && profileQuery.data?.emailVerified ? (
-          <form
-            onSubmit={submit}
-            className="rounded-control border border-border bg-control/40 p-4"
-          >
-            <label htmlFor={composerId} className="font-semibold text-text-primary">
-              Добавить комментарий
-            </label>
-            <textarea
-              id={composerId}
-              rows={4}
-              value={body}
-              placeholder="Что вы думаете об этом произведении?"
-              onChange={(event) => {
-                setBody(event.target.value);
-                setValidationError(null);
-                createMutation.reset();
-              }}
-              className="mt-3 w-full resize-y rounded-control border border-border bg-elevated px-3 py-2 text-sm leading-relaxed text-text-primary placeholder:text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/20"
-            />
-            <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
-              <span className="text-caption text-text-secondary">
-                {Array.from(body).length}/{mediaCommentBodyLimit}
-              </span>
-              <Button type="submit" size="small" disabled={createMutation.isPending}>
-                {createMutation.isPending ? 'Отправляем…' : 'Опубликовать'}
+        <div ref={composerRef} className="mt-5">
+          {authState.status === 'authenticated' && profileQuery.data?.emailVerified ? (
+            <form
+              onSubmit={submit}
+              className="rounded-control border border-context-border bg-surface-elevated/55 p-4"
+            >
+              <label htmlFor={composerId} className="font-semibold text-text-primary">
+                Добавить комментарий
+              </label>
+              <textarea
+                id={composerId}
+                rows={4}
+                value={body}
+                placeholder="Что вы думаете об этом произведении?"
+                onChange={(event) => {
+                  setBody(event.target.value);
+                  setValidationError(null);
+                  createMutation.reset();
+                }}
+                className="mt-3 w-full resize-y rounded-control border border-border bg-surface/70 px-3 py-2 text-sm leading-relaxed text-text-primary placeholder:text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/20"
+              />
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+                <span className="text-caption text-text-secondary">
+                  {Array.from(body).length}/{mediaCommentBodyLimit}
+                </span>
+                <Button type="submit" size="small" disabled={createMutation.isPending}>
+                  {createMutation.isPending ? 'Отправляем…' : 'Опубликовать'}
+                </Button>
+              </div>
+              {(validationError || createMutation.isError) && (
+                <p role="alert" className="mt-2 text-sm text-error">
+                  {validationError ?? mutationMessage(createMutation.error, 'create')}
+                </p>
+              )}
+            </form>
+          ) : authState.status === 'guest' ? (
+            <p className="rounded-control border border-border bg-control/40 px-4 py-3 text-sm text-text-secondary">
+              <SocialLoginLink intent="comment" className="font-semibold text-action hover:underline">
+                Войдите
+              </SocialLoginLink>{' '}
+              с возвратом к произведению, чтобы писать комментарии.
+            </p>
+          ) : authState.status === 'error' ? (
+            <div className="flex flex-wrap items-center gap-3 rounded-control border border-border p-4">
+              <p role="alert" className="text-sm text-error">
+                Не удалось проверить сессию.
+              </p>
+              <Button variant="secondary" size="small" onClick={() => void refresh()}>
+                Повторить
               </Button>
             </div>
-            {(validationError || createMutation.isError) && (
-              <p role="alert" className="mt-2 text-sm text-error">
-                {validationError ?? mutationMessage(createMutation.error, 'create')}
+          ) : profileQuery.isError ? (
+            <div className="flex flex-wrap items-center gap-3 rounded-control border border-border p-4">
+              <p role="alert" className="text-sm text-error">
+                Не удалось проверить доступ.
               </p>
-            )}
-          </form>
-        ) : authState.status === 'guest' ? (
-          <p className="rounded-control border border-border bg-control/40 px-4 py-3 text-sm text-text-secondary">
-            <SocialLoginLink intent="comment" className="font-semibold text-action hover:underline">
-              Войдите
-            </SocialLoginLink>{' '}
-            с возвратом к произведению, чтобы писать комментарии.
-          </p>
-        ) : authState.status === 'error' ? (
-          <div className="flex flex-wrap items-center gap-3 rounded-control border border-border p-4">
-            <p role="alert" className="text-sm text-error">
-              Не удалось проверить сессию.
+              <Button variant="secondary" size="small" onClick={() => void profileQuery.refetch()}>
+                Повторить
+              </Button>
+            </div>
+          ) : authState.status === 'authenticated' && profileQuery.data?.emailVerified === false ? (
+            <p className="rounded-control border border-border bg-control/40 px-4 py-3 text-sm text-text-secondary">
+              Подтвердите email, чтобы участвовать в обсуждении.
             </p>
-            <Button variant="secondary" size="small" onClick={() => void refresh()}>
-              Повторить
-            </Button>
-          </div>
-        ) : profileQuery.isError ? (
-          <div className="flex flex-wrap items-center gap-3 rounded-control border border-border p-4">
-            <p role="alert" className="text-sm text-error">
-              Не удалось проверить доступ.
-            </p>
-            <Button variant="secondary" size="small" onClick={() => void profileQuery.refetch()}>
-              Повторить
-            </Button>
-          </div>
-        ) : authState.status === 'authenticated' && profileQuery.data?.emailVerified === false ? (
-          <p className="rounded-control border border-border bg-control/40 px-4 py-3 text-sm text-text-secondary">
-            Подтвердите email, чтобы участвовать в обсуждении.
-          </p>
-        ) : null}
-      </div>
+          ) : null}
+        </div>
 
-      <div className="mt-6" aria-live="polite">
-        {!viewerReady || query.isPending ? (
-          <div aria-label="Загружаем комментарии" className="space-y-3">
-            <Skeleton className="h-36 rounded-card" />
-            <Skeleton className="h-28 rounded-card" />
-          </div>
-        ) : query.isError && comments.length === 0 ? (
-          <div className="rounded-control border border-error/30 bg-error/5 p-4">
-            <p className="font-semibold text-text-primary">Не удалось загрузить комментарии</p>
-            <p className="mt-1 text-sm text-text-secondary">
-              Сведения о произведении и плеер продолжают работать.
+        <div className="mt-6" aria-live="polite">
+          {!viewerReady || query.isPending ? (
+            <div aria-label="Загружаем комментарии" className="space-y-3">
+              <Skeleton className="h-36 rounded-card" />
+              <Skeleton className="h-28 rounded-card" />
+            </div>
+          ) : query.isError && comments.length === 0 ? (
+            <div className="rounded-control border border-error/30 bg-error/5 p-4">
+              <p className="font-semibold text-text-primary">Не удалось загрузить комментарии</p>
+              <p className="mt-1 text-sm text-text-secondary">
+                Сведения о произведении и плеер продолжают работать.
+              </p>
+              <Button
+                className="mt-3"
+                variant="secondary"
+                size="small"
+                onClick={() => void query.refetch()}
+              >
+                Попробовать снова
+              </Button>
+            </div>
+          ) : roots.length === 0 ? (
+            <p className="rounded-control border border-dashed border-border px-4 py-8 text-center text-sm text-text-secondary">
+              Здесь пока тихо. Начните обсуждение произведения.
             </p>
-            <Button
-              className="mt-3"
-              variant="secondary"
-              size="small"
-              onClick={() => void query.refetch()}
-            >
-              Попробовать снова
-            </Button>
-          </div>
-        ) : roots.length === 0 ? (
-          <p className="rounded-control border border-dashed border-border px-4 py-8 text-center text-sm text-text-secondary">
-            Здесь пока тихо. Начните обсуждение произведения.
-          </p>
-        ) : (
-          <div className="space-y-4">
-            {roots.map((root) => (
-              <div key={root.commentId}>
-                <CommentCard
-                  comment={root}
-                  mediaRef={media.mediaRef}
-                  isReply={false}
-                  onChanged={changed}
-                  onRemoved={removed}
-                  onCreated={append}
-                  onUnauthorized={setGuest}
-                />
-                {(repliesByRoot.get(root.commentId)?.length ?? 0) > 0 && (
-                  <div className="mt-2 ml-4 space-y-2 border-l-2 border-action/20 pl-3 sm:ml-8 sm:pl-5">
-                    {repliesByRoot.get(root.commentId)?.map((reply) => (
-                      <CommentCard
-                        key={reply.commentId}
-                        comment={reply}
-                        mediaRef={media.mediaRef}
-                        isReply
-                        onChanged={changed}
-                        onRemoved={removed}
-                        onCreated={append}
-                        onUnauthorized={setGuest}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
+          ) : (
+            <div className="space-y-4">
+              {roots.map((root) => (
+                <div key={root.commentId}>
+                  <CommentCard
+                    comment={root}
+                    mediaRef={media.mediaRef}
+                    isReply={false}
+                    onChanged={changed}
+                    onRemoved={removed}
+                    onCreated={append}
+                    onUnauthorized={setGuest}
+                  />
+                  {(repliesByRoot.get(root.commentId)?.length ?? 0) > 0 && (
+                    <div className="mt-2 ml-4 space-y-2 border-l-2 border-action/20 pl-3 sm:ml-8 sm:pl-5">
+                      {repliesByRoot.get(root.commentId)?.map((reply) => (
+                        <CommentCard
+                          key={reply.commentId}
+                          comment={reply}
+                          mediaRef={media.mediaRef}
+                          isReply
+                          onChanged={changed}
+                          onRemoved={removed}
+                          onCreated={append}
+                          onUnauthorized={setGuest}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
 
-        {query.hasNextPage && (
-          <div className="mt-5 flex justify-center">
-            <LoadMoreButton
-              isLoading={query.isFetchingNextPage}
-              hasError={query.isFetchNextPageError}
-              onClick={() => void query.fetchNextPage({ cancelRefetch: false })}
-            />
-          </div>
-        )}
+          {query.hasNextPage && (
+            <div className="mt-5 flex justify-center">
+              <LoadMoreButton
+                isLoading={query.isFetchingNextPage}
+                hasError={query.isFetchNextPageError}
+                onClick={() => void query.fetchNextPage({ cancelRefetch: false })}
+              />
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+    </section>
   );
 }

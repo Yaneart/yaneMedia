@@ -52,7 +52,7 @@ function ReviewAuthor({ review }: { review: ReviewSummary }) {
 
 export function MediaReviewCard({ review }: { review: ReviewSummary }) {
   return (
-    <article className="min-w-0 rounded-control border border-border bg-surface-elevated p-4 sm:p-5">
+    <article className="flex min-h-60 min-w-0 flex-col rounded-control border border-context-border/80 bg-surface/40 p-4 sm:p-5">
       <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-3 text-caption text-text-secondary">
         <ReviewAuthor review={review} />
         {review.rating !== null && (
@@ -80,7 +80,7 @@ export function MediaReviewCard({ review }: { review: ReviewSummary }) {
         variant="summary"
       />
 
-      <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
+      <div className="mt-auto flex flex-wrap items-center gap-x-4 gap-y-2 pt-4">
         <Link
           to={createReviewPath(review.reviewId)}
           className="inline-flex min-h-8 items-center text-sm font-semibold text-accent-text outline-none hover:underline focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-action/20"

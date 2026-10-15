@@ -75,6 +75,7 @@ export const router = createBrowserRouter([
         path: routePaths.forgotPassword,
         element: lazyRoute(
           <RequestPasswordResetPage homePath={routePaths.home} loginPath={routePaths.login} />,
+          <AuthFormLayoutSkeleton variant="forgot-password" />,
         ),
       },
       {

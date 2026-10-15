@@ -24,8 +24,9 @@ import {
   useRestoreSocialAction,
 } from '@/features/social-access';
 import { UserRating } from '@/features/user-rating';
-import { Button } from '@/shared';
+import { Button, YaneMark, YaneMarkField } from '@/shared';
 import { ApiClientError } from '@/shared/api';
+import { CheckIcon } from '@/shared/ui/Icons';
 import {
   countCharacters,
   normalizeReviewDraft,
@@ -38,6 +39,10 @@ import {
 } from '../model/reviewForm';
 
 const emptyDraft: ReviewDraft = { title: '', body: '', isSpoiler: false };
+const editorButtonClass =
+  'shadow-sm transition-[background-color,border-color,box-shadow,transform] hover:-translate-y-0.5 hover:shadow-md hover:shadow-action/15 hover:ring-2 hover:ring-watermark/35 motion-reduce:transform-none';
+const editorDestructiveButtonClass =
+  'shadow-sm transition-[background-color,border-color,box-shadow,transform] hover:-translate-y-0.5 hover:shadow-md hover:shadow-error/15 hover:ring-2 hover:ring-error/25 motion-reduce:transform-none';
 
 function toDraft(review: OwnReviewDetail | null): ReviewDraft {
   return review
@@ -207,9 +212,9 @@ function ReviewForm({
   const bodyCount = countCharacters(draft.body);
 
   return (
-    <form onSubmit={submit} noValidate className="mt-5 space-y-5">
+    <form onSubmit={submit} noValidate className="mt-4 space-y-4">
       {review && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-control border border-border bg-control px-4 py-3 text-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-control border border-border bg-control/70 px-3 py-2 text-sm">
           <span className="text-text-secondary">
             {review.publicationState === 'moderation-hidden'
               ? 'Рецензия скрыта модерацией, но её текст доступен вам.'
@@ -225,7 +230,7 @@ function ReviewForm({
       )}
 
       <div>
-        <div className="mb-2 flex items-end justify-between gap-3">
+        <div className="mb-1.5 flex items-end justify-between gap-3">
           <label htmlFor="review-title" className="text-sm font-medium text-text-primary">
             Заголовок
           </label>
@@ -252,7 +257,7 @@ function ReviewForm({
             setErrors((current) => ({ ...current, title: undefined }));
             setMessage(null);
           }}
-          className="min-h-11 w-full rounded-control border border-border bg-control px-3 text-sm text-text-primary outline-none transition-colors focus:border-text-secondary focus:ring-2 focus:ring-action/20 disabled:opacity-50"
+          className="min-h-10 w-full rounded-control border border-border bg-control px-3 text-sm text-text-primary outline-none transition-[background-color,border-color,box-shadow] focus:border-text-secondary focus:ring-2 focus:ring-action/20 disabled:opacity-50"
           placeholder="Коротко сформулируйте главную мысль"
         />
         {errors.title && (
@@ -263,7 +268,7 @@ function ReviewForm({
       </div>
 
       <div>
-        <div className="mb-2 flex items-end justify-between gap-3">
+        <div className="mb-1.5 flex items-end justify-between gap-3">
           <label htmlFor="review-body" className="text-sm font-medium text-text-primary">
             Текст рецензии
           </label>
@@ -281,7 +286,7 @@ function ReviewForm({
           ref={bodyRef}
           id="review-body"
           value={draft.body}
-          rows={9}
+          rows={7}
           maxLength={REVIEW_BODY_MAX_LENGTH + 500}
           disabled={busy}
           aria-invalid={Boolean(errors.body)}
@@ -291,7 +296,7 @@ function ReviewForm({
             setErrors((current) => ({ ...current, body: undefined }));
             setMessage(null);
           }}
-          className="w-full resize-y rounded-control border border-border bg-control px-3 py-3 text-sm leading-6 text-text-primary outline-none transition-colors focus:border-text-secondary focus:ring-2 focus:ring-action/20 disabled:opacity-50"
+          className="w-full resize-y rounded-control border border-border bg-control px-3 py-2.5 text-sm leading-6 text-text-primary outline-none transition-[background-color,border-color,box-shadow] focus:border-text-secondary focus:ring-2 focus:ring-action/20 disabled:opacity-50"
           placeholder="Расскажите, что получилось у авторов и что оставило впечатление"
         />
         <p
@@ -305,23 +310,30 @@ function ReviewForm({
         </p>
       </div>
 
-      <label className="flex cursor-pointer items-start gap-3 rounded-control border border-border bg-control p-4 has-focus-visible:ring-2 has-focus-visible:ring-action/20">
-        <input
-          type="checkbox"
-          checked={draft.isSpoiler}
-          disabled={busy}
-          onChange={(event) => {
-            setDraft((current) => ({ ...current, isSpoiler: event.target.checked }));
-            setMessage(null);
-          }}
-          className="mt-0.5 size-5 accent-[var(--color-action)]"
-        />
+      <label className="flex cursor-pointer items-start justify-between gap-3 rounded-control border border-border bg-surface-elevated/55 p-3 transition-[background-color,border-color] hover:border-watermark/50 hover:bg-watermark/10 has-focus-visible:ring-2 has-focus-visible:ring-action/20 has-disabled:cursor-not-allowed has-disabled:opacity-60 motion-reduce:transition-none">
         <span>
           <span className="block text-sm font-semibold text-text-primary">
             В тексте есть спойлеры
           </span>
           <span className="mt-1 block text-caption text-text-secondary">
             Читатели увидят предупреждение и раскроют текст только по явному действию.
+          </span>
+        </span>
+        <span className="relative inline-grid size-6 shrink-0 place-items-center self-center">
+          <input
+            className="peer size-6 appearance-none rounded-full border border-border bg-control outline-none checked:border-action checked:bg-action"
+            type="checkbox"
+            role="switch"
+            name="review-spoiler"
+            checked={draft.isSpoiler}
+            disabled={busy}
+            onChange={(event) => {
+              setDraft((current) => ({ ...current, isSpoiler: event.target.checked }));
+              setMessage(null);
+            }}
+          />
+          <span className="pointer-events-none absolute inset-0 grid place-items-center text-action-text opacity-0 peer-checked:opacity-100">
+            <CheckIcon aria-hidden="true" className="size-3.5" />
           </span>
         </span>
       </label>
@@ -339,7 +351,7 @@ function ReviewForm({
         <div
           role="alertdialog"
           aria-labelledby="delete-review-title"
-          className="rounded-control border border-error/50 bg-error/5 p-4"
+          className="rounded-control border border-error/40 bg-error/5 p-3 sm:p-4"
         >
           <h3 id="delete-review-title" className="font-semibold text-text-primary">
             Удалить рецензию?
@@ -348,13 +360,13 @@ function ReviewForm({
             Текст и обсуждение перестанут быть доступны. Это действие нельзя отменить, но ваша
             оценка произведения сохранится.
           </p>
-          <div className="mt-4 flex flex-wrap gap-3">
+          <div className="mt-3 flex flex-wrap gap-2">
             <Button
               type="button"
               variant="secondary"
               disabled={busy}
               onClick={() => deleteMutation.mutate()}
-              className="border-error/60 text-error"
+              className={`border-error/50 bg-error/5 text-error hover:border-error/70 hover:bg-error/10 ${editorDestructiveButtonClass}`}
             >
               Удалить навсегда
             </Button>
@@ -363,14 +375,15 @@ function ReviewForm({
               variant="ghost"
               disabled={busy}
               onClick={() => setConfirmingDelete(false)}
+              className={editorButtonClass}
             >
               Отмена
             </Button>
           </div>
         </div>
       ) : (
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <Button type="submit" disabled={busy || !isDirty}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <Button type="submit" disabled={busy || !isDirty} className={editorButtonClass}>
             {saveMutation.isPending
               ? 'Сохраняем…'
               : review
@@ -380,10 +393,10 @@ function ReviewForm({
           {review && (
             <Button
               type="button"
-              variant="ghost"
+              variant="secondary"
               disabled={busy}
               onClick={() => setConfirmingDelete(true)}
-              className="text-error"
+              className={`border-error/50 bg-error/5 text-error hover:border-error/70 hover:bg-error/10 ${editorDestructiveButtonClass}`}
             >
               Удалить рецензию
             </Button>
@@ -410,64 +423,96 @@ export function ReviewEditor({ media }: { media: MediaSummary }) {
     <section
       id="review-editor"
       aria-labelledby="review-editor-heading"
-      className="order-5 rounded-card border border-context-border bg-surface-elevated p-5 sm:p-6 xl:col-span-2"
+      className="relative isolate order-5 overflow-hidden rounded-card border border-context-border bg-linear-to-br from-watermark/28 via-watermark/18 to-watermark/24 p-2 shadow-surface sm:p-3 xl:col-span-2"
     >
-      <h2 id="review-editor-heading" className="text-heading text-text-primary">
-        Ваша рецензия
-      </h2>
-      <p className="mt-2 max-w-3xl text-sm text-text-secondary">
-        Поделитесь развёрнутым мнением. У одного пользователя может быть одна рецензия на
-        произведение.
-      </p>
-
-      <UserRating media={media} embedded className="mt-5" />
-
-      {authState.status === 'guest' ? (
-        <p className="mt-5 text-sm text-text-secondary">
-          <SocialLoginLink intent="review" className="font-semibold text-action hover:underline">
-            Войдите
-          </SocialLoginLink>{' '}
-          или зарегистрируйтесь, чтобы написать рецензию.
-        </p>
-      ) : authState.status === 'error' ? (
-        <div className="mt-5 flex flex-wrap items-center gap-3">
-          <p role="alert" className="text-sm text-error">
-            Не удалось проверить сессию.
-          </p>
-          <Button variant="secondary" size="small" onClick={() => void refresh()}>
-            Повторить
-          </Button>
-        </div>
-      ) : authState.status === 'loading' || profileQuery.isPending || reviewQuery.isPending ? (
-        <p className="mt-5 text-sm text-text-secondary" aria-live="polite">
-          Загружаем редактор…
-        </p>
-      ) : profileQuery.isError || reviewQuery.isError || !profileQuery.data ? (
-        <div className="mt-5 flex flex-wrap items-center gap-3">
-          <p role="alert" className="text-sm text-error">
-            Не удалось загрузить вашу рецензию.
-          </p>
-          <Button
-            variant="secondary"
-            size="small"
-            onClick={() => void Promise.all([profileQuery.refetch(), reviewQuery.refetch()])}
-          >
-            Повторить
-          </Button>
-        </div>
-      ) : !profileQuery.data.emailVerified ? (
-        <p className="mt-5 text-sm text-text-secondary">
-          Подтвердите email в профиле, чтобы публиковать рецензии.
-        </p>
-      ) : (
-        <ReviewForm
-          accountKey={accountKey!}
-          profile={profileQuery.data}
-          media={media}
-          initialReview={reviewQuery.data ?? null}
-          onUnauthorized={setGuest}
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+        <YaneMarkField />
+        <YaneMark
+          className="absolute -top-10 -right-12 size-56 rotate-[138deg] text-watermark opacity-[0.26]"
         />
-      )}
+        <div className="absolute inset-0 bg-linear-to-br from-transparent via-transparent to-watermark/8" />
+      </div>
+
+      <div className="relative z-10 rounded-card border border-context-border/80 bg-surface/70 p-3 sm:p-4">
+        <header className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <span className="inline-flex rounded-pill border border-context-border bg-watermark/10 px-2.5 py-1 text-[0.65rem] font-semibold tracking-wide text-accent-text uppercase">
+              yaneMedia · Ваш вклад
+            </span>
+            <h2 id="review-editor-heading" className="mt-1.5 text-heading text-text-primary">
+              Ваша рецензия
+            </h2>
+            <p className="mt-1 max-w-3xl text-sm text-text-secondary">
+              Поделитесь мнением о произведении. У вас может быть одна рецензия на него.
+            </p>
+          </div>
+        </header>
+
+        <UserRating media={media} embedded className="mt-3" />
+
+        <div className="mt-3 min-w-0">
+          {authState.status === 'guest' ? (
+            <p className="rounded-control border border-border bg-surface/45 p-3 text-sm text-text-secondary">
+              <SocialLoginLink
+                intent="review"
+                className="font-semibold text-action hover:underline"
+              >
+                Войдите
+              </SocialLoginLink>{' '}
+              или зарегистрируйтесь, чтобы написать рецензию.
+            </p>
+          ) : authState.status === 'error' ? (
+            <div className="flex flex-wrap items-center gap-2 rounded-control border border-error/30 bg-error/5 p-3">
+              <p role="alert" className="text-sm text-error">
+                Не удалось проверить сессию.
+              </p>
+              <Button
+                variant="secondary"
+                size="small"
+                onClick={() => void refresh()}
+                className={editorButtonClass}
+              >
+                Повторить
+              </Button>
+            </div>
+          ) : authState.status === 'loading' || profileQuery.isPending || reviewQuery.isPending ? (
+            <p
+              className="rounded-control border border-border bg-surface/45 p-3 text-sm text-text-secondary"
+              aria-live="polite"
+            >
+              Загружаем редактор…
+            </p>
+          ) : profileQuery.isError || reviewQuery.isError || !profileQuery.data ? (
+            <div className="flex flex-wrap items-center gap-2 rounded-control border border-error/30 bg-error/5 p-3">
+              <p role="alert" className="text-sm text-error">
+                Не удалось загрузить вашу рецензию.
+              </p>
+              <Button
+                variant="secondary"
+                size="small"
+                onClick={() =>
+                  void Promise.all([profileQuery.refetch(), reviewQuery.refetch()])
+                }
+                className={editorButtonClass}
+              >
+                Повторить
+              </Button>
+            </div>
+          ) : !profileQuery.data.emailVerified ? (
+            <p className="rounded-control border border-border bg-surface/45 p-3 text-sm text-text-secondary">
+              Подтвердите email в профиле, чтобы публиковать рецензии.
+            </p>
+          ) : (
+            <ReviewForm
+              accountKey={accountKey!}
+              profile={profileQuery.data}
+              media={media}
+              initialReview={reviewQuery.data ?? null}
+              onUnauthorized={setGuest}
+            />
+          )}
+        </div>
+      </div>
     </section>
   );
 }

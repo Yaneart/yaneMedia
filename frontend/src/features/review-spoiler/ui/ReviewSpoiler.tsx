@@ -49,7 +49,7 @@ export function ReviewSpoiler({ reviewId, content, hidden, variant }: ReviewSpoi
   if (state.status === 'visible') {
     if (!state.content) return null;
     return variant === 'summary' ? (
-      <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-text-secondary">
+      <p className="mt-2 line-clamp-3 whitespace-pre-line text-sm leading-relaxed text-text-secondary">
         {state.content}
       </p>
     ) : (
@@ -63,22 +63,20 @@ export function ReviewSpoiler({ reviewId, content, hidden, variant }: ReviewSpoi
     <div
       className={
         variant === 'summary'
-          ? 'mt-3 rounded-control border border-context-border bg-control px-4 py-3'
-          : 'rounded-card border border-context-border bg-surface-elevated/65 px-5 py-6 sm:px-8'
+          ? 'mt-3 rounded-control border border-context-border bg-watermark/10 px-4 py-4 sm:px-5'
+          : 'rounded-card border border-context-border bg-watermark/10 px-5 py-6 sm:px-8'
       }
     >
       <p className="font-semibold text-text-primary">
-        {variant === 'summary' ? 'Текст содержит спойлеры' : 'Рецензия содержит спойлеры'}
+        Рецензия содержит спойлеры
       </p>
       <p className="mt-1 text-sm leading-relaxed text-text-secondary">
-        {variant === 'summary'
-          ? 'Откройте его только если готовы узнать детали сюжета.'
-          : 'Текст появится только после подтверждения. Выбор действует в текущем просмотре.'}
+        Текст появится только после подтверждения. Выбор действует в текущем просмотре.
       </p>
       <Button
-        variant={variant === 'summary' ? 'ghost' : 'secondary'}
-        size={variant === 'summary' ? 'small' : 'medium'}
-        className={variant === 'summary' ? 'mt-2 -ml-3 text-accent-text' : 'mt-4'}
+        variant="secondary"
+        size="medium"
+        className="mt-4"
         disabled={state.status === 'loading'}
         onClick={() => void reveal()}
       >
@@ -86,9 +84,7 @@ export function ReviewSpoiler({ reviewId, content, hidden, variant }: ReviewSpoi
           ? 'Открываем…'
           : state.status === 'error'
             ? 'Попробовать снова'
-            : variant === 'summary'
-              ? 'Показать текст'
-              : 'Показать рецензию'}
+            : 'Показать рецензию'}
       </Button>
       {state.status === 'error' && (
         <p role="status" className="mt-2 text-caption text-danger">

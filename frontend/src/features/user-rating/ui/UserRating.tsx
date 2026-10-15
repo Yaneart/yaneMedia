@@ -183,19 +183,32 @@ export function UserRating({ media, className = '', embedded = false }: UserRati
       aria-label="Оценка yaneMedia"
       className={[
         embedded
-          ? 'rounded-control border border-border bg-control/50 p-4 sm:p-5'
+          ? 'relative grid grid-cols-1 gap-3 overflow-hidden rounded-control border border-context-border bg-linear-to-r from-watermark/10 via-surface/65 to-action/5 p-3 shadow-sm sm:p-4'
           : 'rounded-card border border-context-border bg-surface-elevated p-4 sm:p-5',
         className,
       ].join(' ')}
     >
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="flex items-center gap-2 text-base font-semibold text-text-primary">
-            <StarIcon className="size-5 text-action" aria-hidden="true" />
+      <div
+        className={
+          embedded
+            ? 'flex min-w-0 items-start justify-between gap-3'
+            : 'flex items-start justify-between gap-4'
+        }
+      >
+        <div className={embedded ? 'min-w-0' : ''}>
+          <h2
+            className={`flex items-center gap-2 font-semibold text-text-primary ${embedded ? 'text-sm' : 'text-base'}`}
+          >
+            <StarIcon
+              className={embedded ? 'size-4 text-action' : 'size-5 text-action'}
+              aria-hidden="true"
+            />
             Оценка yaneMedia
           </h2>
-          <p className="mt-1 text-sm text-text-secondary">
-            {embedded && 'Оценка появится рядом с рецензией и сохранится отдельно от неё. '}
+          <p
+            className={`${embedded ? 'mt-1.5 max-w-xl leading-5' : 'mt-1'} text-text-secondary ${embedded ? 'text-caption' : 'text-sm'}`}
+          >
+            {embedded && 'Отдельная от рецензии оценка. '}
             {summaryQuery.data?.average === null
               ? 'Пока нет оценок'
               : summaryQuery.data
@@ -206,14 +219,16 @@ export function UserRating({ media, className = '', embedded = false }: UserRati
           </p>
         </div>
         {currentValue !== null && (
-          <span className="rounded-pill bg-action/12 px-3 py-1 text-sm font-semibold text-action">
+          <span
+            className={`shrink-0 rounded-pill border border-action/20 bg-action/10 font-semibold text-action ${embedded ? 'px-3 py-1.5 text-sm' : 'px-3 py-1 text-sm'}`}
+          >
             {currentValue}/10
           </span>
         )}
       </div>
 
       {authState.status === 'guest' ? (
-        <p className="mt-4 text-sm text-text-secondary">
+        <p className={`${embedded ? '' : 'mt-4'} text-sm text-text-secondary`}>
           <SocialLoginLink
             intent="rating"
             className="font-semibold text-action underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/20"
@@ -223,38 +238,59 @@ export function UserRating({ media, className = '', embedded = false }: UserRati
           и поставьте свою оценку.
         </p>
       ) : authState.status === 'error' ? (
-        <div className="mt-4 flex flex-wrap items-center gap-3">
+        <div className={`${embedded ? '' : 'mt-4'} flex flex-wrap items-center gap-2`}>
           <p role="alert" className="text-sm text-error">
             Не удалось проверить сессию.
           </p>
-          <Button variant="secondary" size="small" onClick={() => void refresh()}>
+          <Button
+            variant="secondary"
+            size="small"
+            onClick={() => void refresh()}
+            className={embedded ? 'hover:ring-2 hover:ring-watermark/35' : ''}
+          >
             Повторить
           </Button>
         </div>
       ) : authState.status === 'loading' || ownRatingQuery.isPending ? (
-        <p className="mt-4 text-sm text-text-secondary" aria-live="polite">
+        <p className={`${embedded ? '' : 'mt-4'} text-sm text-text-secondary`} aria-live="polite">
           Загружаем вашу оценку…
         </p>
       ) : ownRatingQuery.isError ? (
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+        <div className={`${embedded ? '' : 'mt-4'} flex flex-wrap items-center justify-between gap-2`}>
           <p className="text-sm text-danger" role="alert">
             Не удалось загрузить вашу оценку.
           </p>
-          <Button variant="secondary" size="small" onClick={() => void ownRatingQuery.refetch()}>
+          <Button
+            variant="secondary"
+            size="small"
+            onClick={() => void ownRatingQuery.refetch()}
+            className={embedded ? 'hover:ring-2 hover:ring-watermark/35' : ''}
+          >
             Повторить
           </Button>
         </div>
       ) : (
-        <>
-          <fieldset ref={fieldsetRef} className="mt-4" disabled={mutation.isPending}>
-            <legend className="text-sm font-medium text-text-primary">
+        <div className={embedded ? 'min-w-0' : ''}>
+          <fieldset
+            ref={fieldsetRef}
+            className={
+              embedded
+                ? 'min-w-0'
+                : 'mt-4'
+            }
+            disabled={mutation.isPending}
+          >
+            <legend
+              className="text-sm font-medium text-text-primary"
+            >
               {currentValue === null ? 'Вы ещё не оценили' : `Ваша оценка: ${currentValue} из 10`}
             </legend>
             <div
-              className={[
-                'mt-2 grid grid-cols-5 gap-2 sm:grid-cols-10',
-                embedded ? '' : 'xl:grid-cols-5 2xl:grid-cols-10',
-              ].join(' ')}
+              className={
+                embedded
+                  ? 'mt-2 grid w-full grid-cols-5 gap-2 sm:grid-cols-10'
+                  : 'mt-2 grid grid-cols-5 gap-2 sm:grid-cols-10 xl:grid-cols-5 2xl:grid-cols-10'
+              }
             >
               {ratingValues.map((value) => (
                 <label key={value} className="relative cursor-pointer">
@@ -267,7 +303,9 @@ export function UserRating({ media, className = '', embedded = false }: UserRati
                     aria-label={`Поставить оценку ${value} из 10 на yaneMedia`}
                     onChange={() => mutation.mutate({ value })}
                   />
-                  <span className="flex min-h-10 items-center justify-center rounded-control border border-border bg-control text-sm font-semibold text-text-primary transition-colors hover:border-action/60 hover:bg-control-hover peer-checked:border-action peer-checked:bg-action peer-checked:text-action-text peer-focus-visible:ring-2 peer-focus-visible:ring-action/25 motion-reduce:transition-none">
+                  <span
+                    className={`flex items-center justify-center rounded-control border font-semibold text-text-primary transition-[background-color,border-color,box-shadow,transform] hover:border-action/60 hover:bg-control-hover hover:shadow-sm peer-checked:border-action peer-checked:bg-action peer-checked:text-action-text peer-focus-visible:ring-2 peer-focus-visible:ring-action/25 motion-reduce:transition-none ${embedded ? 'min-h-10 w-full border-context-border bg-surface/70 text-sm shadow-sm' : 'min-h-10 border-border bg-control text-sm'}`}
+                  >
                     {value}
                   </span>
                 </label>
@@ -275,8 +313,13 @@ export function UserRating({ media, className = '', embedded = false }: UserRati
             </div>
           </fieldset>
 
-          <div className="mt-3 flex min-h-9 items-center justify-between gap-3">
-            <p className="text-sm text-text-secondary" aria-live="polite">
+          <div
+            className={`${embedded ? 'mt-1 border-t border-context-border/60 pt-2' : 'mt-3'} flex min-h-8 items-center justify-between gap-2`}
+          >
+            <p
+              className={embedded ? 'text-caption text-text-secondary' : 'text-sm text-text-secondary'}
+              aria-live="polite"
+            >
               {mutation.isPending
                 ? 'Сохраняем оценку…'
                 : currentValue
@@ -289,6 +332,7 @@ export function UserRating({ media, className = '', embedded = false }: UserRati
                 size="small"
                 disabled={mutation.isPending}
                 onClick={() => mutation.mutate({ value: null })}
+                className={embedded ? 'hover:bg-watermark/10 hover:text-accent-text' : ''}
               >
                 Удалить
               </Button>
@@ -299,7 +343,7 @@ export function UserRating({ media, className = '', embedded = false }: UserRati
               {getMutationError(mutation.error)}
             </p>
           )}
-        </>
+        </div>
       )}
     </section>
   );

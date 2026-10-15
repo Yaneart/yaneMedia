@@ -4,6 +4,7 @@ import type { MediaSummary } from '@/entities/media';
 import { MediaComments } from '@/features/media-comments';
 import { MediaReviews } from '@/features/media-reviews';
 import { ReviewEditor } from '@/features/review-editor';
+import { CommentIcon, StarIcon } from '@/shared';
 
 type CommunityTab = 'comments' | 'reviews';
 
@@ -20,7 +21,7 @@ export function MediaCommunity({ media }: { media: MediaSummary }) {
       <div
         role="tablist"
         aria-label="Обсуждение и рецензии"
-        className="mb-3 inline-flex rounded-control border border-border bg-surface p-1"
+        className="mb-3 inline-flex gap-1 rounded-control border border-context-border bg-surface/70 p-1.5 shadow-surface backdrop-blur-sm"
       >
         {(
           [
@@ -46,12 +47,17 @@ export function MediaCommunity({ media }: { media: MediaSummary }) {
                 document.getElementById(`media-community-${next}-tab`)?.focus(),
               );
             }}
-            className={`min-h-10 rounded-control px-4 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/20 ${
+            className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-control border px-4 text-sm font-semibold transition-[background-color,border-color,box-shadow,color,transform] duration-200 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/30 motion-reduce:transition-none ${
               tab === value
-                ? 'bg-action text-action-text shadow-sm'
-                : 'text-text-secondary hover:bg-control-hover hover:text-text-primary'
+                ? 'border-context-border bg-action text-action-text shadow-sm'
+                : 'border-transparent text-text-secondary hover:bg-watermark/10 hover:text-text-primary'
             }`}
           >
+            {value === 'comments' ? (
+              <CommentIcon className="size-4" aria-hidden="true" />
+            ) : (
+              <StarIcon className="size-4" aria-hidden="true" />
+            )}
             {label}
           </button>
         ))}
