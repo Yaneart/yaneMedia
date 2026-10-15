@@ -12,6 +12,7 @@ import { invalidateAfterSocialMutation, socialQueryKeys } from '@/features/socia
 import { focusFirstInvalidField } from '@/features/auth-form';
 import { Button, Input } from '@/shared';
 import { ApiClientError } from '@/shared/api';
+import { CheckIcon } from '@/shared/ui/Icons';
 import {
   createProfileChanges,
   createProfileFormFields,
@@ -48,7 +49,7 @@ function PrivacySwitch({
   onChange: (event: ChangeEvent<HTMLInputElement>) => void;
 }) {
   return (
-    <label className="flex cursor-pointer items-start justify-between gap-4 rounded-control border border-border bg-surface-elevated p-4 has-focus-visible:ring-2 has-focus-visible:ring-action/20 has-disabled:cursor-not-allowed has-disabled:opacity-60">
+    <label className="flex cursor-pointer items-start justify-between gap-3 rounded-control border border-border bg-surface-elevated/55 p-3 has-focus-visible:ring-2 has-focus-visible:ring-action/20 has-disabled:cursor-not-allowed has-disabled:opacity-60">
       <span>
         <span className="block text-sm font-semibold text-text-primary">{title}</span>
         <span className="mt-1 block text-caption text-text-secondary">{description}</span>
@@ -209,19 +210,19 @@ export function ProfileEditForm({ accountKey, profile, settings }: ProfileEditFo
   return (
     <section
       aria-labelledby="profile-settings-heading"
-      className="mt-8 border-t border-border pt-8"
+      className="min-w-0 rounded-card border border-border bg-surface/40 p-3 sm:p-4 xl:p-5"
     >
-      <div className="max-w-2xl">
+      <div>
         <h2 id="profile-settings-heading" className="text-heading text-text-primary">
           Публичная информация
         </h2>
-        <p className="mt-2 text-body text-text-secondary">
+        <p className="mt-2 max-w-3xl text-body text-text-secondary">
           Эти данные видны на вашей публичной странице. Email и история просмотра всегда остаются
           приватными.
         </p>
       </div>
 
-      <form className="mt-6 grid gap-5" noValidate onSubmit={handleSubmit}>
+      <form className="mt-4 grid gap-3" noValidate onSubmit={handleSubmit}>
         <div className="grid gap-4 sm:grid-cols-2">
           <Input
             label="Отображаемое имя"
@@ -271,7 +272,7 @@ export function ProfileEditForm({ accountKey, profile, settings }: ProfileEditFo
           <textarea
             id="profile-bio"
             name="bio"
-            rows={4}
+            rows={3}
             value={fields.bio}
             maxLength={PROFILE_BIO_MAX_LENGTH}
             placeholder="Расскажите немного о себе"
@@ -298,9 +299,9 @@ export function ProfileEditForm({ accountKey, profile, settings }: ProfileEditFo
           </p>
         </div>
 
-        <fieldset className="grid gap-3">
+        <fieldset className="grid gap-2">
           <legend className="text-sm font-medium text-text-primary">Публичность коллекций</legend>
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-2 sm:grid-cols-2">
             <PrivacySwitch
               name="ratingsPublic"
               checked={fields.ratingsPublic}
@@ -328,17 +329,25 @@ export function ProfileEditForm({ accountKey, profile, settings }: ProfileEditFo
           </div>
         </fieldset>
 
-        <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
-          <Button type="submit" disabled={isSubmitting}>
-            {isSubmitting ? 'Сохраняем…' : 'Сохранить изменения'}
-          </Button>
+        <div className="flex flex-col-reverse gap-3 border-t border-border/70 pt-3 sm:flex-row sm:items-center sm:justify-between">
           <p
             role={submitError ? 'alert' : 'status'}
             aria-live="polite"
-            className={['text-caption', submitError ? 'text-error' : 'text-success'].join(' ')}
+            className={['min-h-5 text-caption', submitError ? 'text-error' : 'text-success'].join(
+              ' ',
+            )}
           >
             {submitError ?? submitSuccess}
           </p>
+          <Button
+            type="submit"
+            size="small"
+            disabled={isSubmitting}
+            className="min-w-36 shadow-sm shadow-action/15"
+          >
+            {!isSubmitting && <CheckIcon aria-hidden="true" className="size-4" />}
+            {isSubmitting ? 'Сохраняем…' : 'Сохранить'}
+          </Button>
         </div>
       </form>
     </section>

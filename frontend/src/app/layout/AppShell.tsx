@@ -40,7 +40,6 @@ export function AppShell() {
     useAppScrollRestoration();
 
   const isHomePage = pathname === routePaths.home;
-
   const normalizedPathname = pathname.replace(/\/+$/, '') || routePaths.home;
   const mediaRouteMatch = matchPath(routePaths.media, normalizedPathname);
   const isActivePlaybackMediaPage = isActivePlaybackMediaRoute(
@@ -99,7 +98,6 @@ export function AppShell() {
             favoritesPath={routePaths.favorites}
             historyPath={routePaths.history}
             profilePath={routePaths.profile}
-            overlay={isHomePage}
           />
         </div>
         <main

@@ -474,15 +474,6 @@
     );
 }
 
-.home-mobile-header-overlay {
-  background-image: linear-gradient(
-    to bottom,
-    var(--theme-hero-overlay-start),
-    var(--theme-hero-overlay-middle),
-    transparent
-  );
-}
-
 .yane-content-scrollbar {
   scrollbar-width: none;
 }

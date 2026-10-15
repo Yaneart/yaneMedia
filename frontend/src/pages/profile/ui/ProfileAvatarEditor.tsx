@@ -120,13 +120,13 @@ export function ProfileAvatarEditor({ accountKey, profile }: ProfileAvatarEditor
   };
 
   return (
-    <div className="w-full sm:w-52 sm:shrink-0">
-      <div className="relative mx-auto size-32 sm:mx-0">
+    <div className="w-full sm:w-40 sm:shrink-0">
+      <div className="relative mx-auto size-28">
         {visibleUrl && !hasImageError ? (
           <img
             src={visibleUrl}
             alt={`Аватар ${profile.displayName}`}
-            className="size-32 rounded-full bg-control object-cover"
+            className="mx-auto size-28 rounded-full bg-control object-cover"
             onError={() => {
               setHasImageError(true);
               if (previewUrl) {
@@ -141,7 +141,7 @@ export function ProfileAvatarEditor({ accountKey, profile }: ProfileAvatarEditor
           <div
             role="img"
             aria-label={`Аватар ${profile.displayName}`}
-            className="grid size-32 place-items-center rounded-full border border-context-border bg-watermark/10 text-4xl font-semibold text-accent-text"
+            className="mx-auto grid size-28 place-items-center rounded-full border border-context-border bg-watermark/10 text-3xl font-semibold text-accent-text"
           >
             {getProfileInitial(profile.displayName, profile.handle)}
           </div>
@@ -163,14 +163,14 @@ export function ProfileAvatarEditor({ accountKey, profile }: ProfileAvatarEditor
         onChange={handleFileChange}
       />
 
-      <div className="mt-4 grid gap-2">
+      <div className="mt-3 grid gap-1">
         <Button
           variant="secondary"
           size="small"
           disabled={action !== null}
           onClick={() => inputRef.current?.click()}
         >
-          {selectedFile ? 'Выбрать другое' : profile.avatarUrl ? 'Заменить' : 'Выбрать изображение'}
+          {selectedFile ? 'Выбрать другое' : profile.avatarUrl ? 'Заменить' : 'Добавить аватар'}
         </Button>
 
         {selectedFile ? (
@@ -197,14 +197,11 @@ export function ProfileAvatarEditor({ accountKey, profile }: ProfileAvatarEditor
         )}
       </div>
 
-      <p className="mt-3 text-caption text-text-secondary">
-        JPEG, PNG или WebP, не более 5 МБ. Изображение будет обрезано до квадрата.
-      </p>
       <p
         role={message?.tone === 'error' ? 'alert' : 'status'}
         aria-live="polite"
         className={[
-          'mt-2 min-h-5 text-caption',
+          'mt-1 min-h-0 text-caption',
           message?.tone === 'error' ? 'text-error' : 'text-success',
         ].join(' ')}
       >

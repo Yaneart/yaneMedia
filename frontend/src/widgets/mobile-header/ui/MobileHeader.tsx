@@ -16,7 +16,6 @@ type MobileHeaderProps = {
   favoritesPath: string;
   historyPath: string;
   profilePath: string;
-  overlay?: boolean;
 };
 
 export function MobileHeader({
@@ -24,18 +23,12 @@ export function MobileHeader({
   favoritesPath,
   historyPath,
   profilePath,
-  overlay = false,
 }: MobileHeaderProps) {
   const { pathname } = useLocation();
   const isLibraryRoute = pathname === favoritesPath || pathname === historyPath;
 
   return (
-    <header
-      className={[
-        'pt-[env(safe-area-inset-top)]',
-        overlay ? 'home-mobile-header-overlay' : 'bg-[var(--theme-home-background)]',
-      ].join(' ')}
-    >
+    <header className="bg-[var(--theme-home-background)] pt-[env(safe-area-inset-top)]">
       <div className="flex min-h-16 items-center justify-between gap-4 px-page">
         <NavLink
           to={homePath}
@@ -46,7 +39,7 @@ export function MobileHeader({
             'motion-reduce:transform-none motion-reduce:transition-none',
           ].join(' ')}
         >
-          <Logo compact className={overlay ? '[&>span:first-child]:text-hero-text' : ''} />
+          <Logo compact />
         </NavLink>
 
         <div className="flex items-center gap-2">
@@ -60,7 +53,7 @@ export function MobileHeader({
             triggerVariant="bare"
             panelClassName="min-w-0 rounded-control bg-background p-1"
             triggerClassName={[
-              'size-10 shrink-0 rounded-control border bg-background',
+              'size-12 shrink-0 rounded-control border bg-background',
               'transition-[background-color,border-color,color,transform] duration-200 ease-out',
               'hover:bg-interactive-hover active:scale-[0.97] active:duration-75',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/20',
@@ -71,14 +64,14 @@ export function MobileHeader({
             ].join(' ')}
           >
             {(closePopover) => (
-              <nav aria-label="Разделы пользователя" className="flex items-center gap-1">
+              <nav aria-label="Разделы пользователя" className="flex items-center gap-2">
                 <NavLink
                   to={favoritesPath}
                   aria-label="Открыть избранное"
                   title="Избранное"
                   className={({ isActive }) =>
                     [
-                      'flex size-8 shrink-0 items-center justify-center rounded-lg border',
+                      'flex size-10 shrink-0 items-center justify-center rounded-lg border',
                       'transition-[background-color,border-color,color] duration-200 ease-out',
                       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-watermark/60',
                       isActive
@@ -101,7 +94,7 @@ export function MobileHeader({
                   title="История"
                   className={({ isActive }) =>
                     [
-                      'flex size-8 shrink-0 items-center justify-center rounded-lg border',
+                      'flex size-10 shrink-0 items-center justify-center rounded-lg border',
                       'transition-[background-color,border-color,color] duration-200 ease-out',
                       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-watermark/60',
                       isActive
