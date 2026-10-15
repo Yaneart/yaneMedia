@@ -18,6 +18,7 @@ import {
   reviewQueryOptions,
   type SocialViewer,
 } from '@/features/social-data';
+import { ReviewDiscussion } from '@/features/review-discussion';
 import {
   Button,
   CommentIcon,
@@ -458,6 +459,7 @@ function ReviewContent({ review }: { review: ReviewDetail }) {
             </div>
           </aside>
         </div>
+        <ReviewDiscussion review={review} />
       </article>
     </>
   );

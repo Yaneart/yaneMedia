@@ -1,4 +1,9 @@
-export { getReviewComments } from './api/reviewCommentApi';
+export {
+  createReviewComment,
+  deleteReviewComment,
+  getReviewComments,
+  updateReviewComment,
+} from './api/reviewCommentApi';
 export type {
   ReviewCommentDto,
   ReviewCommentPageDto,

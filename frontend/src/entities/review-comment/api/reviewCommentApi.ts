@@ -36,3 +36,38 @@ export async function getReviewComments(
   );
   return { ...dto, items: dto.items.map(mapComment) };
 }
+
+export async function createReviewComment(reviewId: string, body: string) {
+  const dto = await apiRequest<ReviewCommentDto>(
+    `/reviews/${encodeURIComponent(reviewId)}/comments`,
+    {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', 'X-YaneMedia-CSRF': '1' },
+      body: JSON.stringify({ body }),
+    },
+  );
+  return mapComment(dto);
+}
+
+export async function updateReviewComment(
+  commentId: string,
+  body: string,
+  expectedUpdatedAt: string,
+) {
+  const dto = await apiRequest<ReviewCommentDto>(`/comments/${encodeURIComponent(commentId)}`, {
+    method: 'PATCH',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', 'X-YaneMedia-CSRF': '1' },
+    body: JSON.stringify({ body, expectedUpdatedAt }),
+  });
+  return mapComment(dto);
+}
+
+export function deleteReviewComment(commentId: string): Promise<void> {
+  return apiRequest<void>(`/comments/${encodeURIComponent(commentId)}`, {
+    method: 'DELETE',
+    credentials: 'include',
+    headers: { 'X-YaneMedia-CSRF': '1' },
+  });
+}
