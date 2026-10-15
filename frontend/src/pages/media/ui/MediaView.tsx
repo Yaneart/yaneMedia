@@ -10,6 +10,7 @@ import { EpisodeSelector } from '@/features/episode-selection';
 import { FavoriteButton, useFavorites } from '@/features/favorite';
 import { usePlaybackSession } from '@/features/playback-session';
 import { MediaCommunity } from '@/features/media-community';
+import { UserRating } from '@/features/user-rating';
 import { SeasonSelector } from '@/features/season-selection';
 import {
   createPlaybackSourceCatalog,
@@ -880,6 +881,7 @@ export function MediaView({
             <p className="mt-3 text-body text-text-secondary">{media.description}</p>
           </MediaDescriptionPanel>
         )}
+        <UserRating media={media} embedded className="hidden xl:block 2xl:hidden" />
       </div>
 
       <div className="contents xl:col-start-1 xl:row-start-1 xl:block">
@@ -926,6 +928,7 @@ export function MediaView({
             </MediaDescriptionPanel>
           </div>
         )}
+        <UserRating media={media} embedded className="sm:hidden" />
 
         <MediaFacts media={media} className="grid gap-2 text-caption" />
       </section>
@@ -935,6 +938,7 @@ export function MediaView({
           <p className="mt-3 max-w-5xl text-body text-text-secondary">{media.description}</p>
         </MediaDescriptionPanel>
       )}
+      <UserRating media={media} embedded className="order-5 hidden 2xl:col-span-2 2xl:block" />
 
       <MediaCommunity media={media} />
 

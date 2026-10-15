@@ -1,6 +1,11 @@
 import type { PublicProfile } from '@/entities/profile';
 
 export type PublicProfileTabId = 'reviews' | 'ratings' | 'favorites';
+const publicProfileTabOrder: Record<PublicProfileTabId, number> = {
+  ratings: 0,
+  favorites: 1,
+  reviews: 2,
+};
 
 export type PublicProfileTab = {
   id: PublicProfileTabId;
@@ -40,7 +45,7 @@ export function getPublicProfileTabs(profile: PublicProfile): PublicProfileTab[]
       count: profile.visibility.favorites ? profile.counts.favorites : null,
       isPrivate: !profile.visibility.favorites,
     },
-  ];
+  ].sort((left, right) => publicProfileTabOrder[left.id] - publicProfileTabOrder[right.id]);
 }
 
 export function getPublicProfileDescription(profile: PublicProfile): string {

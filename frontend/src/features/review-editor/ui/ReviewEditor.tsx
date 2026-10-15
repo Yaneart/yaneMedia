@@ -409,6 +409,7 @@ function ReviewForm({
 
 export function ReviewEditor({ media }: { media: MediaSummary }) {
   const { state: authState, setGuest, refresh } = useAuth();
+  const [isFormOpen, setIsFormOpen] = useState(false);
   const accountKey = authState.status === 'authenticated' ? authState.user.email : null;
   const profileQuery = useQuery({
     ...privateProfileQueryOptions(accountKey ?? 'inactive'),
@@ -418,6 +419,15 @@ export function ReviewEditor({ media }: { media: MediaSummary }) {
     ...ownReviewForMediaQueryOptions(accountKey ?? 'inactive', media.mediaRef),
     enabled: accountKey !== null,
   });
+
+  useEffect(() => {
+    if (window.location.hash === '#review-editor') setIsFormOpen(true);
+    const openFromHash = () => {
+      if (window.location.hash === '#review-editor') setIsFormOpen(true);
+    };
+    window.addEventListener('hashchange', openFromHash);
+    return () => window.removeEventListener('hashchange', openFromHash);
+  }, []);
 
   return (
     <section
@@ -447,8 +457,6 @@ export function ReviewEditor({ media }: { media: MediaSummary }) {
             </p>
           </div>
         </header>
-
-        <UserRating media={media} embedded className="mt-3" />
 
         <div className="mt-3 min-w-0">
           {authState.status === 'guest' ? (
@@ -503,13 +511,31 @@ export function ReviewEditor({ media }: { media: MediaSummary }) {
               Подтвердите email в профиле, чтобы публиковать рецензии.
             </p>
           ) : (
-            <ReviewForm
-              accountKey={accountKey!}
-              profile={profileQuery.data}
-              media={media}
-              initialReview={reviewQuery.data ?? null}
-              onUnauthorized={setGuest}
-            />
+            <>
+              <Button
+                type="button"
+                variant="secondary"
+                aria-expanded={isFormOpen}
+                aria-controls="review-form"
+                onClick={() => setIsFormOpen((open) => !open)}
+              >
+                {isFormOpen
+                  ? 'Свернуть редактор'
+                  : reviewQuery.data
+                    ? 'Редактировать рецензию'
+                    : 'Написать рецензию'}
+              </Button>
+              <div id="review-form" hidden={!isFormOpen}>
+                <UserRating media={media} embedded className="mt-3" />
+                <ReviewForm
+                  accountKey={accountKey!}
+                  profile={profileQuery.data}
+                  media={media}
+                  initialReview={reviewQuery.data ?? null}
+                  onUnauthorized={setGuest}
+                />
+              </div>
+            </>
           )}
         </div>
       </div>

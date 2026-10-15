@@ -16,6 +16,7 @@ import {
   SearchInput,
   LoadingState,
   YaneMark,
+  YaneMarkField,
 } from '@/shared';
 
 const searchSuggestions = ['Дюна', 'Игра престолов', 'Фрирен'] as const;
@@ -102,71 +103,78 @@ export function SearchPage() {
 
       <header
         className={[
-          'relative overflow-hidden rounded-card border border-border',
-          'bg-linear-to-br from-watermark/50 via-surface-elevated to-surface-elevated',
-          'px-5 py-6 shadow-sm sm:px-7 sm:py-7',
-          'lg:grid lg:grid-cols-[minmax(18rem,0.75fr)_minmax(28rem,1.25fr)]',
-          'lg:items-center lg:gap-10 lg:px-10 lg:py-8',
+          'relative isolate overflow-hidden rounded-card border border-context-border',
+          'bg-linear-to-br from-watermark/38 via-watermark/26 to-watermark/32 p-2 shadow-surface sm:p-3',
         ].join(' ')}
       >
-        <YaneMark
-          className={[
-            'pointer-events-none absolute -top-20 -right-12 hidden size-80 rotate-12',
-            'text-watermark opacity-watermark sm:block',
-          ].join(' ')}
-        />
-
-        <div className="relative">
-          <p className="text-caption font-semibold tracking-[0.14em] text-accent-text uppercase">
-            Поиск по каталогу
-          </p>
-
-          <h1
-            data-page-heading
-            tabIndex={-1}
-            className="mt-2 text-2xl font-semibold tracking-tight text-text-primary sm:text-3xl"
-          >
-            Что будем смотреть?
-          </h1>
-
-          <p className="mt-2 max-w-md text-body text-text-secondary">
-            Фильмы, сериалы и аниме — в одном поиске.
-          </p>
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-0 overflow-hidden"
+        >
+          <YaneMarkField />
+          <YaneMark className="absolute -top-20 -right-12 hidden size-80 rotate-12 text-watermark opacity-watermark sm:block" />
         </div>
 
-        <div className="relative mt-5 lg:mt-0">
-          <form className="flex flex-col gap-2 sm:flex-row" onSubmit={handleSubmit}>
-            <SearchInput
-              aria-label="Название произведения"
-              value={query}
-              maxLength={maximumMediaSearchQueryLength}
-              placeholder="Введите название"
-              onChange={(event) => setQuery(event.currentTarget.value)}
-            />
+        <div
+          className={[
+            'relative z-10 grid rounded-card border border-context-border/80 bg-surface/35',
+            'px-5 py-6 sm:px-7 sm:py-7',
+            'lg:grid lg:grid-cols-[minmax(18rem,0.75fr)_minmax(28rem,1.25fr)]',
+            'lg:items-center lg:gap-10 lg:px-10 lg:py-8',
+          ].join(' ')}
+        >
+          <div className="relative">
+            <p className="text-caption font-semibold tracking-[0.14em] text-accent-text uppercase">
+              Поиск по каталогу
+            </p>
 
-            <Button
-              type="submit"
-              disabled={!query.trim()}
-              className="w-full shrink-0 sm:w-auto sm:min-w-28"
+            <h1
+              data-page-heading
+              tabIndex={-1}
+              className="mt-2 text-2xl font-semibold tracking-tight text-text-primary sm:text-3xl"
             >
-              Найти
-            </Button>
-          </form>
+              Что будем смотреть?
+            </h1>
 
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <span className="text-caption text-text-secondary">Попробуйте:</span>
+            <p className="mt-2 max-w-md text-body text-text-secondary">
+              Фильмы, сериалы и аниме — в одном поиске.
+            </p>
+          </div>
 
-            {searchSuggestions.map((suggestion) => (
+          <div className="relative mt-5 lg:mt-0">
+            <form className="flex flex-col gap-2 sm:flex-row" onSubmit={handleSubmit}>
+              <SearchInput
+                aria-label="Название произведения"
+                value={query}
+                maxLength={maximumMediaSearchQueryLength}
+                placeholder="Введите название"
+                onChange={(event) => setQuery(event.currentTarget.value)}
+              />
+
               <Button
-                key={suggestion}
-                variant="ghost"
-                size="small"
-                className="rounded-full bg-watermark/10 text-text-primary hover:bg-watermark/20"
-                onClick={() => startSearch(suggestion)}
+                type="submit"
+                disabled={!query.trim()}
+                className="w-full shrink-0 sm:w-auto sm:min-w-28"
               >
-                {suggestion}
+                Найти
               </Button>
-            ))}
+            </form>
+
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="text-caption text-text-secondary">Попробуйте:</span>
+
+              {searchSuggestions.map((suggestion) => (
+                <Button
+                  key={suggestion}
+                  variant="ghost"
+                  size="small"
+                  className="rounded-full bg-watermark/10 text-text-primary hover:bg-watermark/20"
+                  onClick={() => startSearch(suggestion)}
+                >
+                  {suggestion}
+                </Button>
+              ))}
+            </div>
           </div>
         </div>
       </header>

@@ -96,7 +96,7 @@ export function PublicProfileActivity({
   ownerAccountKey,
 }: PublicProfileActivityProps) {
   const tabs = getPublicProfileTabs(profile);
-  const [activeTab, setActiveTab] = useState<PublicProfileTabId>('reviews');
+  const [activeTab, setActiveTab] = useState<PublicProfileTabId>('ratings');
   const tabIdPrefix = useId();
   const activeTabData = tabs.find((tab) => tab.id === activeTab) ?? tabs[0]!;
   const { isFavorite, isFavoriteUpdating, toggleFavorite, canUpdateFavorites } = useFavorites();
@@ -281,7 +281,7 @@ export function PublicProfileActivity({
       <div
         role="tablist"
         aria-label="Разделы профиля"
-        className="flex gap-2 overflow-x-auto border-b border-border/80 p-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="flex flex-wrap gap-1 border-b border-border/80 p-1.5 sm:gap-2 sm:p-2"
       >
         {tabs.map((tab, index) => (
           <button
@@ -293,7 +293,7 @@ export function PublicProfileActivity({
             aria-controls={`${tabIdPrefix}-${tab.id}-panel`}
             tabIndex={activeTab === tab.id ? 0 : -1}
             className={[
-              'min-h-10 shrink-0 rounded-control px-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/20 motion-reduce:transition-none',
+              'min-h-10 shrink-0 rounded-control px-2.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/20 motion-reduce:transition-none sm:px-3',
               activeTab === tab.id
                 ? 'bg-watermark/15 text-accent-text shadow-sm'
                 : 'text-text-secondary hover:bg-watermark/10 hover:text-accent-text',
@@ -303,7 +303,7 @@ export function PublicProfileActivity({
           >
             {tab.label}
             {tab.count !== null && (
-              <span className="ml-2 tabular-nums opacity-70">{tab.count}</span>
+              <span className="ml-1 tabular-nums opacity-70 sm:ml-2">{tab.count}</span>
             )}
           </button>
         ))}

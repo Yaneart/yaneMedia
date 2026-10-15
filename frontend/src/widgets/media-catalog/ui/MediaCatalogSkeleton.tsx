@@ -1,4 +1,4 @@
-import { ContentRow, Skeleton } from '@/shared';
+import { ContentRow, Skeleton, YaneMark, YaneMarkField } from '@/shared';
 
 export function MediaCatalogSkeleton({ title }: { title: string }) {
   return (
@@ -7,16 +7,31 @@ export function MediaCatalogSkeleton({ title }: { title: string }) {
         Загружаем каталог «{title}»
       </p>
 
-      <div
-        aria-hidden="true"
-        className={[
-          'rounded-card border border-border bg-linear-to-br',
-          'from-watermark/50 via-surface-elevated to-surface-elevated p-6 shadow-sm',
-        ].join(' ')}
-      >
-        <Skeleton className="h-8 w-40" />
-        <Skeleton className="mt-4 h-5 w-2/3" />
-        <Skeleton className="mt-5 h-11 w-full" />
+      <div className="relative isolate overflow-hidden rounded-card border border-context-border bg-linear-to-br from-watermark/38 via-watermark/26 to-watermark/32 p-2 shadow-surface sm:p-3">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 overflow-hidden rounded-card"
+        >
+          <YaneMarkField />
+          <YaneMark className="absolute -top-20 -right-12 hidden size-80 rotate-12 text-watermark opacity-watermark sm:block" />
+        </div>
+        <div
+          aria-hidden="true"
+          className="relative z-10 grid rounded-card border border-context-border/80 bg-surface/35 px-5 py-6 sm:px-7 sm:py-7 xl:grid-cols-[minmax(16rem,0.65fr)_minmax(34rem,1.35fr)] xl:items-center xl:gap-10 xl:px-10 xl:py-8"
+        >
+          <div>
+            <Skeleton className="h-8 w-40" />
+            <Skeleton className="mt-4 h-5 w-2/3" />
+          </div>
+          <div className="mt-5 xl:mt-0">
+            <Skeleton className="h-11 w-full" />
+            <div className="mt-3 flex gap-2">
+              <Skeleton className="h-7 w-20 rounded-full" />
+              <Skeleton className="h-7 w-16 rounded-full" />
+              <Skeleton className="h-7 w-28 rounded-full" />
+            </div>
+          </div>
+        </div>
       </div>
 
       {[0, 1, 2].map((row) => (

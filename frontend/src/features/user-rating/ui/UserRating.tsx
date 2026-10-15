@@ -183,7 +183,7 @@ export function UserRating({ media, className = '', embedded = false }: UserRati
       aria-label="Оценка yaneMedia"
       className={[
         embedded
-          ? 'relative grid grid-cols-1 gap-3 overflow-hidden rounded-control border border-context-border bg-linear-to-r from-watermark/10 via-surface/65 to-action/5 p-3 shadow-sm sm:p-4'
+          ? 'relative grid grid-cols-1 gap-3 overflow-hidden rounded-control border border-context-border bg-surface/70 p-3 shadow-sm sm:p-4'
           : 'rounded-card border border-context-border bg-surface-elevated p-4 sm:p-5',
         className,
       ].join(' ')}
@@ -205,18 +205,17 @@ export function UserRating({ media, className = '', embedded = false }: UserRati
             />
             Оценка yaneMedia
           </h2>
-          <p
-            className={`${embedded ? 'mt-1.5 max-w-xl leading-5' : 'mt-1'} text-text-secondary ${embedded ? 'text-caption' : 'text-sm'}`}
-          >
-            {embedded && 'Отдельная от рецензии оценка. '}
-            {summaryQuery.data?.average === null
-              ? 'Пока нет оценок'
-              : summaryQuery.data
-                ? `${summaryQuery.data.average.toFixed(1)} из 10 · ${summaryQuery.data.count}`
-                : summaryQuery.isError
-                  ? 'Общий рейтинг временно недоступен'
-                  : 'Загружаем общий рейтинг…'}
-          </p>
+          {!embedded && (
+            <p className="mt-1 text-sm text-text-secondary">
+              {summaryQuery.data?.average === null
+                ? 'Пока нет оценок'
+                : summaryQuery.data
+                  ? `${summaryQuery.data.average.toFixed(1)} из 10 · ${summaryQuery.data.count}`
+                  : summaryQuery.isError
+                    ? 'Общий рейтинг временно недоступен'
+                    : 'Загружаем общий рейтинг…'}
+            </p>
+          )}
         </div>
         {currentValue !== null && (
           <span

@@ -12,6 +12,7 @@ import {
   SearchInput,
   Select,
   YaneMark,
+  YaneMarkField,
 } from '@/shared';
 import {
   maximumMediaSearchQueryLength,
@@ -205,107 +206,112 @@ export function MediaCatalog({ type, title, filters }: MediaCatalogProps) {
 
       <header
         className={[
-          'relative rounded-card border border-border',
-          'bg-linear-to-br from-watermark/50 via-surface-elevated to-surface-elevated',
-          'px-5 py-6 shadow-sm sm:px-7 sm:py-7',
-          'xl:grid xl:grid-cols-[minmax(16rem,0.65fr)_minmax(34rem,1.35fr)]',
-          'xl:items-center xl:gap-10 xl:px-10 xl:py-8',
+          'relative isolate overflow-hidden rounded-card border border-context-border',
+          'bg-linear-to-br from-watermark/38 via-watermark/26 to-watermark/32 p-2 shadow-surface sm:p-3',
         ].join(' ')}
       >
-        <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-card">
-          <YaneMark
-            className={[
-              'absolute -top-20 -right-12 hidden size-80 rotate-12',
-              'text-watermark opacity-watermark sm:block',
-            ].join(' ')}
-          />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-0 overflow-hidden"
+        >
+          <YaneMarkField />
+          <YaneMark className="absolute -top-20 -right-12 hidden size-80 rotate-12 text-watermark opacity-watermark sm:block" />
         </div>
 
-        <div className="relative">
-          <p className="text-caption font-semibold tracking-[0.14em] text-accent-text uppercase">
-            Каталог yaneMedia
-          </p>
+        <div
+          className={[
+            'relative z-10 grid rounded-card border border-context-border/80 bg-surface/35',
+            'px-5 py-6 sm:px-7 sm:py-7',
+            'xl:grid xl:grid-cols-[minmax(16rem,0.65fr)_minmax(34rem,1.35fr)]',
+            'xl:items-center xl:gap-10 xl:px-10 xl:py-8',
+          ].join(' ')}
+        >
+          <div className="relative">
+            <p className="text-caption font-semibold tracking-[0.14em] text-accent-text uppercase">
+              Каталог yaneMedia
+            </p>
 
-          <h1
-            data-page-heading
-            tabIndex={-1}
-            className="mt-2 text-2xl font-semibold tracking-tight text-text-primary sm:text-3xl"
-          >
-            {title}
-          </h1>
+            <h1
+              data-page-heading
+              tabIndex={-1}
+              className="mt-2 text-2xl font-semibold tracking-tight text-text-primary sm:text-3xl"
+            >
+              {title}
+            </h1>
 
-          <p className="mt-2 max-w-md text-body text-text-secondary">
-            Подборки, поиск и фильтры относятся только к разделу «{title}».
-          </p>
-        </div>
+            <p className="mt-2 max-w-md text-body text-text-secondary">
+              Подборки, поиск и фильтры относятся только к разделу «{title}».
+            </p>
+          </div>
 
-        <div className="relative mt-5 xl:mt-0">
-          <SearchInput
-            aria-label={`Поиск: ${title}`}
-            value={searchValue}
-            maxLength={maximumMediaSearchQueryLength}
-            placeholder="Поиск по каталогу"
-            onChange={(event) => setSearchValue(event.currentTarget.value)}
-          />
-          <Button
-            variant="secondary"
-            className="mt-3 w-full justify-between sm:hidden"
-            aria-expanded={areMobileFiltersOpen}
-            aria-controls={filtersPanelId}
-            onClick={() => setAreMobileFiltersOpen((current) => !current)}
-          >
-            <span className="flex items-center gap-2">
-              Фильтры
-              {activeSelectFiltersCount > 0 && (
-                <span className="flex size-5 items-center justify-center rounded-full bg-action text-xs text-action-text">
-                  {activeSelectFiltersCount}
-                </span>
-              )}
-            </span>
-            <DownIcon
-              aria-hidden="true"
+          <div className="relative mt-5 xl:mt-0">
+            <SearchInput
+              aria-label={`Поиск: ${title}`}
+              value={searchValue}
+              maxLength={maximumMediaSearchQueryLength}
+              placeholder="Поиск по каталогу"
+              onChange={(event) => setSearchValue(event.currentTarget.value)}
+            />
+            <Button
+              variant="secondary"
+              className="mt-3 w-full justify-between sm:hidden"
+              aria-expanded={areMobileFiltersOpen}
+              aria-controls={filtersPanelId}
+              onClick={() => setAreMobileFiltersOpen((current) => !current)}
+            >
+              <span className="flex items-center gap-2">
+                Фильтры
+                {activeSelectFiltersCount > 0 && (
+                  <span className="flex size-5 items-center justify-center rounded-full bg-action text-xs text-action-text">
+                    {activeSelectFiltersCount}
+                  </span>
+                )}
+              </span>
+              <DownIcon
+                aria-hidden="true"
+                className={[
+                  'size-4 transition-transform duration-200',
+                  areMobileFiltersOpen ? 'rotate-180' : '',
+                ].join(' ')}
+              />
+            </Button>
+
+            <div
+              id={filtersPanelId}
               className={[
-                'size-4 transition-transform duration-200',
-                areMobileFiltersOpen ? 'rotate-180' : '',
+                'mt-3 grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-center',
+                'xl:flex-nowrap',
+                areMobileFiltersOpen ? 'grid' : 'hidden sm:flex',
               ].join(' ')}
-            />
-          </Button>
-
-          <div
-            id={filtersPanelId}
-            className={[
-              'mt-3 grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-center',
-              'xl:flex-nowrap',
-              areMobileFiltersOpen ? 'grid' : 'hidden sm:flex',
-            ].join(' ')}
-          >
-            <Select
-              aria-label="Жанр"
-              value={selectedGenre}
-              options={genreOptions}
-              placeholder="Все жанры"
-              onChange={(genre) => updateUrlFilters({ genre })}
-            />
-            <Select
-              aria-label="Год"
-              value={selectedYear === null ? null : String(selectedYear)}
-              options={yearOptions}
-              placeholder="Все годы"
-              onChange={(value) =>
-                updateUrlFilters({ year: value === null ? null : Number(value) })
-              }
-            />
-            <Select
-              aria-label="Минимальный рейтинг"
-              value={minimumRating === null ? null : String(minimumRating)}
-              options={ratingOptions}
-              placeholder="Любой рейтинг"
-              onChange={(value) =>
-                updateUrlFilters({ minimumRating: value === null ? null : Number(value) })
-              }
-              className="col-span-2 sm:col-span-1"
-            />
-            {filters}
+            >
+              <Select
+                aria-label="Жанр"
+                value={selectedGenre}
+                options={genreOptions}
+                placeholder="Все жанры"
+                onChange={(genre) => updateUrlFilters({ genre })}
+              />
+              <Select
+                aria-label="Год"
+                value={selectedYear === null ? null : String(selectedYear)}
+                options={yearOptions}
+                placeholder="Все годы"
+                onChange={(value) =>
+                  updateUrlFilters({ year: value === null ? null : Number(value) })
+                }
+              />
+              <Select
+                aria-label="Минимальный рейтинг"
+                value={minimumRating === null ? null : String(minimumRating)}
+                options={ratingOptions}
+                placeholder="Любой рейтинг"
+                onChange={(value) =>
+                  updateUrlFilters({ minimumRating: value === null ? null : Number(value) })
+                }
+                className="col-span-2 sm:col-span-1"
+              />
+              {filters}
+            </div>
           </div>
         </div>
       </header>

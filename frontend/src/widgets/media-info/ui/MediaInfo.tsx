@@ -1,4 +1,5 @@
 import { MediaPosterFallback, type MediaDetails, type MediaPersonRole } from '@/entities/media';
+import { UserRating } from '@/features/user-rating';
 import { YaneMark, YaneMarkField } from '@/shared';
 import type { ReactNode } from 'react';
 
@@ -236,6 +237,10 @@ export function MediaInfo({ media, actions, variant = 'default' }: MediaInfoProp
           <MediaDescriptionPanel className="order-5 mt-5 hidden sm:block xl:hidden" compact>
             <p className="mt-2 line-clamp-6 text-body text-text-secondary">{media.description}</p>
           </MediaDescriptionPanel>
+        )}
+
+        {isWatchLayout && (
+          <UserRating media={media} embedded className="order-6 mt-4 hidden sm:block xl:hidden" />
         )}
       </div>
 
