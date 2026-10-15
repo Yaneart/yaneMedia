@@ -314,7 +314,7 @@ function ReviewContent({ review }: { review: DisplayReview }) {
 
   return (
     <>
-      <title>{review.title} — yaneMedia</title>
+      <title>{`${review.title} — yaneMedia`}</title>
       <article className="mx-auto max-w-5xl py-8">
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_15rem] lg:gap-8">
           <div className="min-w-0 rounded-card border border-border bg-surface p-5 sm:p-8">
