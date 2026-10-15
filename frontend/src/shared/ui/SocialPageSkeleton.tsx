@@ -64,11 +64,61 @@ export function SocialPageSkeleton({ variant }: SocialPageSkeletonProps) {
     );
   }
 
+  if (isReview) {
+    return (
+      <section
+        aria-label="Загружаем страницу"
+        aria-busy="true"
+        className="relative isolate mx-auto max-w-[1600px] overflow-hidden rounded-card border border-context-border bg-linear-to-br from-watermark/38 via-watermark/26 to-watermark/32 p-2 shadow-surface sm:p-3"
+      >
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-0 overflow-hidden"
+        >
+          <YaneMark className="absolute -left-10 top-12 size-48 rotate-[18deg] text-watermark opacity-[0.24]" />
+          <YaneMark className="absolute left-[34%] -top-12 size-56 -rotate-[18deg] text-watermark opacity-[0.2]" />
+          <YaneMark className="absolute -right-12 top-[32rem] size-56 -rotate-[20deg] text-watermark opacity-[0.24]" />
+        </div>
+        <div className="relative z-10 space-y-3">
+          <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_18rem]">
+            <div className="rounded-card border border-context-border/80 bg-surface/40 p-4 sm:p-6 lg:p-8">
+              <Skeleton className="h-4 w-56 rounded-pill" />
+              <Skeleton className="mt-3 h-10 w-3/4 max-w-3xl rounded-control" />
+              <div className="mt-6 flex items-center gap-3">
+                <Skeleton className="size-11 rounded-full" />
+                <Skeleton className="h-10 w-48 rounded-control" />
+                <Skeleton className="h-9 w-20 rounded-pill" />
+              </div>
+              <Skeleton className="mt-5 h-4 w-64 rounded-pill" />
+              <Skeleton className="mt-8 h-72 rounded-control" />
+              <Skeleton className="mt-6 h-10 w-52 rounded-control" />
+            </div>
+            <div className="rounded-card border border-context-border/80 bg-surface/40 p-3 sm:p-4">
+              <Skeleton className="mx-auto aspect-2/3 max-w-48 rounded-control xl:max-w-none" />
+              <Skeleton className="mt-3 h-6 w-4/5 rounded-control" />
+              <Skeleton className="mt-2 h-4 w-3/5 rounded-pill" />
+            </div>
+          </div>
+          <div className="rounded-card border border-context-border/80 bg-surface/40 p-4 sm:p-6 lg:p-8">
+            <Skeleton className="h-8 w-52 rounded-control" />
+            <Skeleton className="mt-2 h-4 w-40 rounded-pill" />
+            <Skeleton className="mt-6 h-32 rounded-control" />
+            <Skeleton className="mt-3 h-28 rounded-control" />
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   return (
-    <section aria-label="Загружаем страницу" aria-busy="true" className={isReview ? 'mx-auto max-w-5xl py-8' : 'mx-auto max-w-[1600px] rounded-card border border-context-border bg-linear-to-br from-watermark/38 via-watermark/26 to-watermark/32 p-2 shadow-surface sm:p-3'}>
-      <div className={isReview ? 'rounded-card border border-border bg-surface p-5 sm:p-8' : 'rounded-card border border-context-border/80 bg-surface/35 p-3 sm:p-4'}>
+    <section
+      aria-label="Загружаем страницу"
+      aria-busy="true"
+      className="mx-auto max-w-[1600px] rounded-card border border-context-border bg-linear-to-br from-watermark/38 via-watermark/26 to-watermark/32 p-2 shadow-surface sm:p-3"
+    >
+      <div className="rounded-card border border-context-border/80 bg-surface/35 p-3 sm:p-4">
         <div className="flex flex-col items-start gap-4 sm:flex-row">
-          {!isReview && <Skeleton className="size-20 shrink-0 rounded-full sm:size-28" />}
+          <Skeleton className="size-20 shrink-0 rounded-full sm:size-28" />
           <div className="min-w-0 flex-1">
             <Skeleton className="h-4 w-24 rounded-pill" />
             <Skeleton className="mt-3 h-8 w-3/5 max-w-md rounded-control" />

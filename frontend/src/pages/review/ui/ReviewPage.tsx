@@ -40,6 +40,7 @@ import {
   SocialNotFoundState,
   SocialPageSkeleton,
   StarIcon,
+  YaneMark,
 } from '@/shared';
 import { ApiClientError } from '@/shared/api';
 import {
@@ -49,6 +50,18 @@ import {
 } from '../model/reviewPagePresentation';
 
 type DisplayReview = ReviewDetail | OwnReviewDetail;
+
+const reviewActionClassName =
+  'inline-flex min-h-9 items-center gap-2 rounded-control border border-border bg-surface-elevated/70 px-3 text-sm font-semibold shadow-sm transition-[background-color,border-color,box-shadow] hover:border-watermark/50 hover:bg-watermark/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/20 motion-reduce:transition-none';
+
+const reviewWatermarks = [
+  '-left-10 top-12 size-48 rotate-[18deg] opacity-[0.24]',
+  'left-[34%] -top-12 size-56 -rotate-[18deg] opacity-[0.2]',
+  'right-[8%] top-24 size-32 rotate-[35deg] opacity-[0.2]',
+  '-right-12 top-[32rem] size-56 -rotate-[20deg] opacity-[0.24]',
+  'left-[18%] top-[44rem] size-32 rotate-[142deg] opacity-[0.17]',
+  'left-[61%] top-[60rem] size-48 rotate-[24deg] opacity-[0.2]',
+];
 
 function mediaPath(review: DisplayReview): string {
   return `/media/${encodeURIComponent(review.media.slug)}`;
@@ -191,9 +204,9 @@ function ReviewActions({ review }: { review: DisplayReview }) {
         )}
         {review.viewerActions.canDelete && (
           <Button
-            variant="ghost"
+            variant="bare"
             size="small"
-            className="text-error"
+            className={`${reviewActionClassName} text-error hover:text-error`}
             onClick={() => setConfirmingDelete(true)}
           >
             <DeleteIcon className="size-4" aria-hidden="true" />
@@ -204,9 +217,9 @@ function ReviewActions({ review }: { review: DisplayReview }) {
         {review.viewerActions.canModerate &&
           !('publicationState' in review && review.publicationState === 'moderation-hidden') && (
             <Button
-              variant="ghost"
+              variant="bare"
               size="small"
-              className="text-error"
+              className={`${reviewActionClassName} text-error hover:text-error`}
               onClick={() => setModerating(true)}
             >
               <ShieldIcon className="size-4" aria-hidden="true" />
@@ -315,112 +328,125 @@ function ReviewContent({ review }: { review: DisplayReview }) {
   return (
     <>
       <title>{`${review.title} — yaneMedia`}</title>
-      <article className="mx-auto max-w-5xl py-8">
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_15rem] lg:gap-8">
-          <div className="min-w-0 rounded-card border border-border bg-surface p-5 sm:p-8">
-            <MediaLink
-              mediaRef={review.media.mediaRef}
-              summary={review.media}
-              className="text-caption font-semibold tracking-wider text-accent-text uppercase hover:underline"
-            >
-              Рецензия на «{review.media.title}»
-            </MediaLink>
-            <h1
-              data-page-heading
-              tabIndex={-1}
-              className="mt-3 text-3xl leading-tight font-semibold text-text-primary sm:text-4xl"
-            >
-              {review.title}
-            </h1>
-
-            <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-4">
-              <ReviewAuthorLink author={review.author} />
-              {review.rating !== null && (
-                <span className="inline-flex items-center gap-1.5 rounded-pill bg-watermark/10 px-3 py-1.5 text-sm font-semibold text-text-primary">
-                  <StarIcon className="size-4 text-watermark" aria-hidden="true" />
-                  {review.rating}/10
-                </span>
-              )}
-            </div>
-
-            <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-caption text-text-secondary">
-              <span>
-                Опубликовано{' '}
-                <time dateTime={review.createdAt}>{formatReviewPageDate(review.createdAt)}</time>
-              </span>
-              {edited && (
-                <span>
-                  Изменено{' '}
-                  <time dateTime={review.updatedAt}>{formatReviewPageDate(review.updatedAt)}</time>
-                </span>
-              )}
-            </div>
-
-            {isModerationHidden && (
-              <div
-                role="status"
-                className="mt-6 rounded-control border border-watermark/30 bg-watermark/10 px-4 py-3"
+      <section className="relative isolate mx-auto max-w-[1600px] overflow-hidden rounded-card border border-context-border bg-linear-to-br from-watermark/38 via-watermark/26 to-watermark/32 p-2 shadow-surface sm:p-3">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-0 overflow-hidden"
+        >
+          {reviewWatermarks.map((className) => (
+            <YaneMark key={className} className={`absolute ${className} text-watermark`} />
+          ))}
+          <div className="absolute inset-0 bg-linear-to-br from-transparent via-transparent to-watermark/8" />
+        </div>
+        <article className="relative z-10 space-y-3">
+          <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_18rem]">
+            <div className="min-w-0 rounded-card border border-context-border/80 bg-surface/40 p-4 sm:p-6 lg:p-8">
+              <MediaLink
+                mediaRef={review.media.mediaRef}
+                summary={review.media}
+                className="text-caption font-semibold tracking-wider text-accent-text uppercase hover:underline"
               >
-                <p className="font-semibold text-text-primary">Рецензия скрыта модерацией</p>
-                <p className="mt-1 text-sm text-text-secondary">
-                  Её видите только вы. Служебные данные модерации не раскрываются.
-                </p>
-              </div>
-            )}
+                Рецензия на «{review.media.title}»
+              </MediaLink>
+              <h1
+                data-page-heading
+                tabIndex={-1}
+                className="mt-3 text-3xl leading-tight font-semibold text-text-primary sm:text-4xl"
+              >
+                {review.title}
+              </h1>
 
-            <div className="mt-8">
-              <ReviewSpoiler
-                reviewId={review.reviewId}
-                hidden={review.bodyState === 'spoiler-hidden'}
-                content={review.body}
-                variant="detail"
-              />
-            </div>
-            <ReviewActions review={review} />
-          </div>
-
-          <aside className="self-start rounded-card border border-border bg-surface-elevated p-4 lg:sticky lg:top-6">
-            <MediaLink
-              mediaRef={review.media.mediaRef}
-              summary={review.media}
-              className="group block"
-            >
-              <div className="mx-auto aspect-2/3 max-w-48 overflow-hidden rounded-control border border-context-border bg-elevated lg:max-w-none">
-                {poster ? (
-                  <img
-                    src={poster.url}
-                    alt=""
-                    width={poster.width}
-                    height={poster.height}
-                    className="size-full object-cover"
-                  />
-                ) : (
-                  <MediaPosterFallback
-                    mediaRef={review.media.mediaRef}
-                    title={review.media.title}
-                    type={review.media.type}
-                  />
+              <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-4">
+                <ReviewAuthorLink author={review.author} />
+                {review.rating !== null && (
+                  <span className="inline-flex items-center gap-1.5 rounded-pill bg-watermark/10 px-3 py-1.5 text-sm font-semibold text-text-primary">
+                    <StarIcon className="size-4 text-watermark" aria-hidden="true" />
+                    {review.rating}/10
+                  </span>
                 )}
               </div>
-              <span className="mt-3 block font-semibold text-text-primary group-hover:text-accent-text group-hover:underline">
-                {review.media.title}
-              </span>
-              {(review.media.year || review.media.genres.length > 0) && (
-                <span className="mt-1 block text-caption text-text-secondary">
-                  {[review.media.year, review.media.genres.slice(0, 2).join(', ')]
-                    .filter(Boolean)
-                    .join(' · ')}
+
+              <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-caption text-text-secondary">
+                <span>
+                  Опубликовано{' '}
+                  <time dateTime={review.createdAt}>{formatReviewPageDate(review.createdAt)}</time>
                 </span>
+                {edited && (
+                  <span>
+                    Изменено{' '}
+                    <time dateTime={review.updatedAt}>
+                      {formatReviewPageDate(review.updatedAt)}
+                    </time>
+                  </span>
+                )}
+              </div>
+
+              {isModerationHidden && (
+                <div
+                  role="status"
+                  className="mt-6 rounded-control border border-watermark/30 bg-watermark/10 px-4 py-3"
+                >
+                  <p className="font-semibold text-text-primary">Рецензия скрыта модерацией</p>
+                  <p className="mt-1 text-sm text-text-secondary">
+                    Её видите только вы. Служебные данные модерации не раскрываются.
+                  </p>
+                </div>
               )}
-            </MediaLink>
-            <div className="mt-4 flex items-center gap-2 border-t border-border pt-4 text-sm text-text-secondary">
-              <CommentIcon className="size-4" aria-hidden="true" />
-              {formatReviewCommentCount(review.commentCount)}
+
+              <div className="mt-8">
+                <ReviewSpoiler
+                  reviewId={review.reviewId}
+                  hidden={review.bodyState === 'spoiler-hidden'}
+                  content={review.body}
+                  variant="detail"
+                />
+              </div>
+              <ReviewActions review={review} />
             </div>
-          </aside>
-        </div>
-        {!isModerationHidden && <ReviewDiscussion review={review} />}
-      </article>
+
+            <aside className="self-start rounded-card border border-context-border/80 bg-surface/40 p-3 sm:p-4 xl:sticky xl:top-6">
+              <MediaLink
+                mediaRef={review.media.mediaRef}
+                summary={review.media}
+                className="group block"
+              >
+                <div className="mx-auto aspect-2/3 max-w-48 overflow-hidden rounded-control border border-context-border bg-elevated lg:max-w-none">
+                  {poster ? (
+                    <img
+                      src={poster.url}
+                      alt=""
+                      width={poster.width}
+                      height={poster.height}
+                      className="size-full object-cover"
+                    />
+                  ) : (
+                    <MediaPosterFallback
+                      mediaRef={review.media.mediaRef}
+                      title={review.media.title}
+                      type={review.media.type}
+                    />
+                  )}
+                </div>
+                <span className="mt-3 block font-semibold text-text-primary group-hover:text-accent-text group-hover:underline">
+                  {review.media.title}
+                </span>
+                {(review.media.year || review.media.genres.length > 0) && (
+                  <span className="mt-1 block text-caption text-text-secondary">
+                    {[review.media.year, review.media.genres.slice(0, 2).join(', ')]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
+                )}
+              </MediaLink>
+              <div className="mt-4 flex items-center gap-2 border-t border-border pt-4 text-sm text-text-secondary">
+                <CommentIcon className="size-4" aria-hidden="true" />
+                {formatReviewCommentCount(review.commentCount)}
+              </div>
+            </aside>
+          </div>
+          {!isModerationHidden && <ReviewDiscussion review={review} />}
+        </article>
+      </section>
     </>
   );
 }

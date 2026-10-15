@@ -64,7 +64,7 @@ export function ReviewSpoiler({ reviewId, content, hidden, variant }: ReviewSpoi
       className={
         variant === 'summary'
           ? 'mt-3 rounded-control border border-context-border bg-control px-4 py-3'
-          : 'rounded-card border border-context-border bg-control px-5 py-6 sm:px-8'
+          : 'rounded-card border border-context-border bg-surface-elevated/65 px-5 py-6 sm:px-8'
       }
     >
       <p className="font-semibold text-text-primary">

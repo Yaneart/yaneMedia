@@ -584,8 +584,8 @@ export function ReviewDiscussion({ review }: DiscussionProps) {
   };
 
   return (
-    <section aria-labelledby="discussion-title" className="mx-auto mt-8 max-w-5xl">
-      <div className="rounded-card border border-border bg-surface-elevated p-5 sm:p-8">
+    <section aria-labelledby="discussion-title" className="w-full">
+      <div className="rounded-card border border-context-border/80 bg-surface/40 p-4 sm:p-6 lg:p-8">
         <h2 id="discussion-title" className="text-2xl font-semibold text-text-primary">
           Обсуждение
         </h2>
@@ -598,7 +598,7 @@ export function ReviewDiscussion({ review }: DiscussionProps) {
         {authState.status === 'authenticated' && review.viewerActions.canComment ? (
           <form
             onSubmit={submit}
-            className="mt-6 rounded-control border border-border bg-surface p-4"
+            className="mt-6 rounded-control border border-context-border bg-surface-elevated/55 p-4"
           >
             <label htmlFor="new-comment-body" className="font-semibold text-text-primary">
               Добавить комментарий
@@ -614,13 +614,17 @@ export function ReviewDiscussion({ review }: DiscussionProps) {
                 setValidationError(null);
                 if (createMutation.isError) createMutation.reset();
               }}
-              className="mt-3 w-full resize-y rounded-control border border-border bg-elevated px-3 py-2 text-sm leading-relaxed text-text-primary placeholder:text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/20"
+              className="mt-3 w-full resize-y rounded-control border border-border bg-surface/70 px-3 py-2 text-sm leading-relaxed text-text-primary placeholder:text-text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/20"
             />
             <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
               <span className="text-caption text-text-secondary">
                 {Array.from(body).length}/{commentBodyLimit}
               </span>
-              <Button type="submit" disabled={createMutation.isPending}>
+              <Button
+                type="submit"
+                disabled={createMutation.isPending}
+                className="min-w-36 shadow-sm shadow-action/15 hover:shadow-md hover:shadow-watermark/25 hover:ring-2 hover:ring-watermark/40"
+              >
                 {createMutation.isPending ? 'Отправляем…' : 'Отправить'}
               </Button>
             </div>
