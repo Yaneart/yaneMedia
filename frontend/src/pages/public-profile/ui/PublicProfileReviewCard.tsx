@@ -13,7 +13,7 @@ export function PublicProfileReviewCard({ review }: { review: ReviewSummary | Ow
     'publicationState' in review && review.publicationState === 'moderation-hidden';
 
   return (
-    <article className="flex min-w-0 gap-4 rounded-control border border-border bg-surface-elevated p-4 sm:gap-5">
+    <article className="flex min-w-0 gap-4 rounded-control border border-context-border/80 bg-surface/45 p-4 shadow-sm sm:gap-5">
       <MediaLink
         mediaRef={review.media.mediaRef}
         summary={review.media}

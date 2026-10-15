@@ -38,25 +38,25 @@ type ProfileLink = {
 
 const linkClassName = [
   'group flex min-h-12 items-center gap-2 rounded-control border border-border bg-surface-elevated/70 p-2',
-  'transition-[background-color,border-color,box-shadow] hover:border-context-border hover:bg-interactive-hover',
+  'transition-[background-color,border-color,box-shadow] hover:border-watermark/50 hover:bg-watermark/10',
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/20',
   'motion-reduce:transition-none',
 ].join(' ');
 
 const profileWatermarks = [
-  '-left-8 top-[5%] size-44 rotate-[22deg] opacity-[0.28]',
-  'left-[18%] top-[13%] size-24 -rotate-[28deg] opacity-[0.24]',
+  '-left-8 top-20 size-44 rotate-[22deg] opacity-[0.28]',
+  'left-[18%] top-[13rem] size-24 -rotate-[28deg] opacity-[0.24]',
   'left-[42%] -top-10 size-56 rotate-[138deg] opacity-[0.26]',
-  'left-[68%] top-[7%] size-32 rotate-[35deg] opacity-[0.27]',
-  '-right-12 top-[18%] size-56 -rotate-[20deg] opacity-[0.3]',
-  'left-[7%] top-[36%] size-28 rotate-[142deg] opacity-[0.22]',
-  'left-[35%] top-[43%] size-40 rotate-[28deg] opacity-[0.25]',
-  'left-[59%] top-[34%] size-24 -rotate-[18deg] opacity-[0.22]',
-  'left-[84%] top-[49%] size-40 rotate-[145deg] opacity-[0.28]',
-  '-left-10 bottom-[12%] size-48 -rotate-[26deg] opacity-[0.25]',
-  'left-[25%] -bottom-12 size-40 rotate-[24deg] opacity-[0.28]',
-  'left-[52%] bottom-[8%] size-28 rotate-[138deg] opacity-[0.24]',
-  'left-[73%] -bottom-14 size-52 -rotate-[24deg] opacity-[0.28]',
+  'left-[68%] top-28 size-32 rotate-[35deg] opacity-[0.27]',
+  '-right-12 top-[18rem] size-56 -rotate-[20deg] opacity-[0.3]',
+  'left-[7%] top-[36rem] size-28 rotate-[142deg] opacity-[0.22]',
+  'left-[35%] top-[43rem] size-40 rotate-[28deg] opacity-[0.25]',
+  'left-[59%] top-[34rem] size-24 -rotate-[18deg] opacity-[0.22]',
+  'left-[84%] top-[49rem] size-40 rotate-[145deg] opacity-[0.28]',
+  '-left-10 top-[60rem] size-48 -rotate-[26deg] opacity-[0.25]',
+  'left-[25%] top-[70rem] size-40 rotate-[24deg] opacity-[0.28]',
+  'left-[52%] top-[80rem] size-28 rotate-[138deg] opacity-[0.24]',
+  'left-[73%] top-[90rem] size-52 -rotate-[24deg] opacity-[0.28]',
 ];
 
 function CountCard({
@@ -100,15 +100,17 @@ function ProfileNavigation() {
     <nav aria-label="Разделы аккаунта" className="grid gap-2 sm:grid-cols-2">
       {links.map(({ title, to, icon: Icon }) => (
         <Link key={title} to={to} className={linkClassName}>
-          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-watermark/10 text-accent-text">
+          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-watermark/10 text-accent-text transition-colors group-hover:bg-watermark/20">
             <Icon aria-hidden="true" className="size-4" />
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block font-semibold text-text-primary">{title}</span>
+            <span className="block font-semibold text-text-primary transition-colors group-hover:text-accent-text">
+              {title}
+            </span>
           </span>
           <ArrowRightIcon
             aria-hidden="true"
-            className="size-4 shrink-0 text-text-secondary transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none"
+            className="size-4 shrink-0 text-text-secondary transition-[transform,color] group-hover:translate-x-0.5 group-hover:text-accent-text motion-reduce:transition-none"
           />
         </Link>
       ))}

@@ -273,7 +273,7 @@ export function PublicProfileActivity({
   return (
     <section
       aria-labelledby="profile-activity-heading"
-      className="mt-6 overflow-hidden rounded-card border border-border bg-surface"
+      className="overflow-hidden rounded-card border border-border bg-surface/40"
     >
       <h2 id="profile-activity-heading" className="sr-only">
         Публичная активность
@@ -281,7 +281,7 @@ export function PublicProfileActivity({
       <div
         role="tablist"
         aria-label="Разделы профиля"
-        className="flex overflow-x-auto border-b border-border p-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="flex gap-2 overflow-x-auto border-b border-border/80 p-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         {tabs.map((tab, index) => (
           <button
@@ -295,8 +295,8 @@ export function PublicProfileActivity({
             className={[
               'min-h-10 shrink-0 rounded-control px-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/20 motion-reduce:transition-none',
               activeTab === tab.id
-                ? 'bg-navigation-active text-navigation-active-text'
-                : 'text-text-secondary hover:bg-interactive-hover hover:text-text-primary',
+                ? 'bg-watermark/15 text-accent-text shadow-sm'
+                : 'text-text-secondary hover:bg-watermark/10 hover:text-accent-text',
             ].join(' ')}
             onClick={() => setActiveTab(tab.id)}
             onKeyDown={(event) => selectAdjacentTab(event, index)}

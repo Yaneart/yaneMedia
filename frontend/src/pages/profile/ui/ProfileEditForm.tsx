@@ -49,12 +49,12 @@ function PrivacySwitch({
   onChange: (event: ChangeEvent<HTMLInputElement>) => void;
 }) {
   return (
-    <label className="flex cursor-pointer items-start justify-between gap-3 rounded-control border border-border bg-surface-elevated/55 p-3 has-focus-visible:ring-2 has-focus-visible:ring-action/20 has-disabled:cursor-not-allowed has-disabled:opacity-60">
+    <label className="flex cursor-pointer items-start justify-between gap-3 rounded-control border border-border bg-surface-elevated/55 p-3 transition-[background-color,border-color] hover:border-watermark/50 hover:bg-watermark/10 has-focus-visible:ring-2 has-focus-visible:ring-action/20 has-disabled:cursor-not-allowed has-disabled:opacity-60 motion-reduce:transition-none">
       <span>
         <span className="block text-sm font-semibold text-text-primary">{title}</span>
         <span className="mt-1 block text-caption text-text-secondary">{description}</span>
       </span>
-      <span className="relative mt-0.5 inline-flex shrink-0">
+      <span className="relative inline-grid size-6 shrink-0 place-items-center self-center">
         <input
           className="peer size-6 appearance-none rounded-full border border-border bg-control outline-none checked:border-action checked:bg-action"
           type="checkbox"
@@ -64,8 +64,8 @@ function PrivacySwitch({
           disabled={disabled}
           onChange={onChange}
         />
-        <span className="pointer-events-none absolute inset-0 grid place-items-center text-xs font-bold text-transparent peer-checked:text-action-text">
-          ✓
+        <span className="pointer-events-none absolute inset-0 grid place-items-center text-action-text opacity-0 peer-checked:opacity-100">
+          <CheckIcon aria-hidden="true" className="size-3.5" />
         </span>
       </span>
     </label>
@@ -343,7 +343,7 @@ export function ProfileEditForm({ accountKey, profile, settings }: ProfileEditFo
             type="submit"
             size="small"
             disabled={isSubmitting}
-            className="min-w-36 shadow-sm shadow-action/15"
+            className="min-w-36 shadow-sm shadow-action/15 hover:shadow-md hover:shadow-watermark/25 hover:ring-2 hover:ring-watermark/40"
           >
             {!isSubmitting && <CheckIcon aria-hidden="true" className="size-4" />}
             {isSubmitting ? 'Сохраняем…' : 'Сохранить'}

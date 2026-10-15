@@ -65,8 +65,8 @@ export function SocialPageSkeleton({ variant }: SocialPageSkeletonProps) {
   }
 
   return (
-    <section aria-label="Загружаем страницу" aria-busy="true" className="mx-auto max-w-5xl py-8">
-      <div className="rounded-card border border-border bg-surface p-5 sm:p-8">
+    <section aria-label="Загружаем страницу" aria-busy="true" className={isReview ? 'mx-auto max-w-5xl py-8' : 'mx-auto max-w-[1600px] rounded-card border border-context-border bg-linear-to-br from-watermark/38 via-watermark/26 to-watermark/32 p-2 shadow-surface sm:p-3'}>
+      <div className={isReview ? 'rounded-card border border-border bg-surface p-5 sm:p-8' : 'rounded-card border border-context-border/80 bg-surface/35 p-3 sm:p-4'}>
         <div className="flex flex-col items-start gap-4 sm:flex-row">
           {!isReview && <Skeleton className="size-20 shrink-0 rounded-full sm:size-28" />}
           <div className="min-w-0 flex-1">
