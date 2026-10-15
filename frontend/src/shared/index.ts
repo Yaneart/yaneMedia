@@ -12,6 +12,7 @@ export {
   DeleteIcon,
   DeviceIcon,
   DownIcon,
+  ExitIcon,
   FullscreenIcon,
   FullscreenExitIcon,
   FavoriteIcon,
@@ -83,7 +84,7 @@ export { ErrorState } from './ui/ErrorState';
 export type { ErrorStateProps, ErrorStateTone, ErrorStateVariant } from './ui/ErrorState';
 
 export { Popover } from './ui/Popover';
-export type { PopoverAlign, PopoverProps } from './ui/Popover';
+export type { PopoverAlign, PopoverProps, PopoverSide } from './ui/Popover';
 
 export { ContentRow } from './ui/ContentRow';
 export type { ContentRowProps, ContentRowVariant } from './ui/ContentRow';

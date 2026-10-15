@@ -12,6 +12,7 @@ import {
 import { createPortal } from 'react-dom';
 
 export type PopoverAlign = 'start' | 'center' | 'end';
+export type PopoverSide = 'auto' | 'top' | 'bottom';
 
 type PopoverChildren = ReactNode | ((closePopover: () => void) => ReactNode);
 
@@ -20,6 +21,7 @@ export type PopoverProps = Omit<ComponentPropsWithoutRef<'div'>, 'children'> & {
   triggerLabel: string;
   children: PopoverChildren;
   align?: PopoverAlign;
+  side?: PopoverSide;
   triggerSize?: IconButtonProps['size'];
   triggerVariant?: IconButtonProps['variant'];
   triggerClassName?: string;
@@ -31,6 +33,7 @@ export function Popover({
   triggerLabel,
   children,
   align = 'end',
+  side = 'auto',
   triggerSize = 'medium',
   triggerVariant = 'ghost',
   triggerClassName = '',
@@ -118,7 +121,9 @@ export function Popover({
 
       const spaceBelow = viewportHeight - triggerRect.bottom - gap - viewportPadding;
       const spaceAbove = triggerRect.top - gap - viewportPadding;
-      const openAbove = panelRect.height > spaceBelow && spaceAbove > spaceBelow;
+      const openAbove =
+        side === 'top' ||
+        (side === 'auto' && panelRect.height > spaceBelow && spaceAbove > spaceBelow);
       const preferredTop = openAbove
         ? triggerRect.top - panelRect.height - gap
         : triggerRect.bottom + gap;
@@ -146,12 +151,12 @@ export function Popover({
       window.removeEventListener('resize', updatePosition);
       window.removeEventListener('scroll', updatePosition, true);
     };
-  }, [align, isOpen]);
+  }, [align, isOpen, side]);
 
   const closePopover = () => setIsOpen(false);
 
   return (
-    <div {...props} ref={containerRef} className={['relative inline-block', className].join(' ')}>
+    <div {...props} ref={containerRef} className={['relative inline-flex', className].join(' ')}>
       <IconButton
         ref={triggerRef}
         aria-label={triggerLabel}

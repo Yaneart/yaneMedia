@@ -5,7 +5,7 @@ import { Link } from 'react-router';
 import { logout, useAuth } from '@/entities/auth';
 import { SocialLoginLink } from '@/features/social-access';
 import { privateProfileQueryOptions } from '@/features/social-data';
-import { Button, Popover, ProfileIcon } from '@/shared';
+import { Button, ExitIcon, Popover, ProfileIcon } from '@/shared';
 import { ApiClientError } from '@/shared/api';
 
 type AccountControlProps = {
@@ -14,10 +14,13 @@ type AccountControlProps = {
 };
 
 const triggerClassName = [
-  'flex size-10 shrink-0 items-center justify-center rounded-control',
+  'relative flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-control',
   'border border-navigation-border bg-background text-text-primary',
-  'hover:bg-interactive-hover',
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/20',
+  'transition-[background-color,border-color,color,transform,box-shadow] duration-200 ease-out',
+  'hover:border-action/40 hover:bg-interactive-hover',
+  'aria-expanded:border-action/40 aria-expanded:bg-navigation-active aria-expanded:text-navigation-active-text',
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/30',
+  'motion-reduce:transform-none motion-reduce:transition-none',
 ].join(' ');
 
 export function AccountControl({ profilePath, placement = 'bottom' }: AccountControlProps) {
@@ -88,7 +91,7 @@ export function AccountControl({ profilePath, placement = 'bottom' }: AccountCon
           <img
             src={avatarUrl}
             alt=""
-            className="size-full rounded-control object-cover"
+            className="size-full object-cover"
             onError={() => setHasAvatarError(true)}
           />
         ) : (
@@ -104,50 +107,77 @@ export function AccountControl({ profilePath, placement = 'bottom' }: AccountCon
       triggerVariant="bare"
       triggerClassName={triggerClassName}
       align="end"
-      className={
-        placement === 'top' ? '[&>div]:top-auto [&>div]:bottom-full [&>div]:mt-0 [&>div]:mb-2' : ''
-      }
+      side={placement}
       panelClassName={[
-        placement === 'top' ? 'w-52 translate-x-11' : 'w-60',
-        'max-w-[calc(100vw-2rem)] rounded-overlay bg-popover p-3',
+        placement === 'top' ? 'w-52' : 'w-60',
+        'max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-2rem)] overflow-y-auto',
+        'rounded-overlay bg-popover p-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
       ].join(' ')}
     >
-      <div className="flex flex-col gap-3">
-        {state.status === 'error' ? (
-          <>
-            <p role="alert" className="text-caption text-error">
-              Не удалось проверить сессию.
-            </p>
-            <Button variant="secondary" onClick={() => void refresh()}>
-              Повторить
-            </Button>
-          </>
-        ) : (
-          <>
-            <div className="min-w-0">
-              <p className="truncate font-semibold">{state.user.displayName}</p>
-              <p className="break-all text-caption text-text-secondary">{state.user.email}</p>
-            </div>
-
-            <Link
-              to={profilePath}
-              className="inline-flex min-h-10 items-center justify-center rounded-control border border-border bg-control px-3 text-sm font-semibold text-text-primary hover:border-text-secondary hover:bg-control-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/20"
-            >
-              Личный профиль
-            </Link>
-
-            <Button variant="secondary" disabled={isLoggingOut} onClick={handleLogout}>
-              {isLoggingOut ? 'Выходим…' : 'Выйти'}
-            </Button>
-
-            {logoutError && (
-              <p role="alert" className="text-caption text-error">
-                {logoutError}
+      {(closePopover) => (
+        <div className={state.status === 'error' ? 'flex flex-col gap-3 p-2' : 'flex flex-col'}>
+          {state.status === 'error' ? (
+            <>
+              <p role="alert" className="text-sm text-error">
+                Не удалось проверить сессию.
               </p>
-            )}
-          </>
-        )}
-      </div>
+              <Button size="small" variant="secondary" onClick={() => void refresh()}>
+                Повторить
+              </Button>
+            </>
+          ) : (
+            <>
+              <div className="flex min-w-0 items-center gap-3 rounded-control border border-border bg-background/50 p-2">
+                <span className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-full bg-watermark/10 text-accent-text">
+                  {avatarUrl && !hasAvatarError ? (
+                    <img
+                      src={avatarUrl}
+                      alt=""
+                      className="size-full object-cover"
+                      onError={() => setHasAvatarError(true)}
+                    />
+                  ) : (
+                    <ProfileIcon aria-hidden="true" className="size-5" />
+                  )}
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-text-primary">
+                    {state.user.displayName}
+                  </p>
+                </div>
+              </div>
+
+              <div className="my-2 h-px bg-border" />
+
+              <Link
+                to={profilePath}
+                className="flex min-h-10 items-center gap-3 rounded-control px-3 text-sm font-semibold text-text-primary transition-colors hover:bg-interactive-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/30"
+                onClick={closePopover}
+              >
+                <ProfileIcon aria-hidden="true" className="size-5 shrink-0 text-text-secondary" />
+                Личный профиль
+              </Link>
+
+              <Button
+                variant="bare"
+                size="custom"
+                className="min-h-10 w-full justify-start gap-3 px-3 text-sm text-text-secondary hover:bg-interactive-hover hover:text-text-primary focus-visible:ring-action/30"
+                disabled={isLoggingOut}
+                onClick={handleLogout}
+              >
+                <ExitIcon aria-hidden="true" className="size-5 shrink-0" />
+                {isLoggingOut ? 'Выходим…' : 'Выйти'}
+              </Button>
+
+              {logoutError && (
+                <p role="alert" className="px-3 pt-2 text-xs text-error">
+                  {logoutError}
+                </p>
+              )}
+            </>
+          )}
+        </div>
+      )}
     </Popover>
   );
 }

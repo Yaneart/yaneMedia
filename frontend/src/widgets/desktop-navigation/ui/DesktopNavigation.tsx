@@ -116,7 +116,7 @@ export function DesktopNavigation({
 
       <div className="mt-5 flex min-h-0 flex-1 items-center justify-center">{playbackDock}</div>
 
-      <div className="flex items-center gap-2 px-2 pt-5">
+      <div className="flex items-center justify-between px-2 pt-5">
         <ThemeToggle />
 
         <AccountControl profilePath={profilePath} placement="top" />
