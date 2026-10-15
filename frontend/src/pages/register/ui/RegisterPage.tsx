@@ -10,7 +10,8 @@ import {
   type RegisterFormErrors,
   type RegisterFormFields,
 } from '@/features/auth-form';
-import { Button, createReturnToSearch, Input, parseInternalReturnTo } from '@/shared';
+import { createSocialLoginSearch, parseSocialActionIntent } from '@/features/social-access';
+import { Button, Input, parseInternalReturnTo } from '@/shared';
 import { ApiClientError } from '@/shared/api';
 import { AuthFormLayout } from '@/widgets/auth-form-layout';
 import { useState, type ChangeEvent, type SubmitEvent } from 'react';
@@ -39,8 +40,12 @@ function readRegisterFormFields(form: HTMLFormElement): RegisterFormFields {
 export function RegisterPage({ homePath, loginPath }: RegisterPageProps) {
   const [searchParams] = useSearchParams();
   const returnTo = parseInternalReturnTo(searchParams.get('returnTo'));
+  const socialIntent = returnTo ? parseSocialActionIntent(searchParams.get('intent')) : null;
   const loginDestination = returnTo
-    ? { pathname: loginPath, search: createReturnToSearch(returnTo) }
+    ? {
+        pathname: loginPath,
+        search: createSocialLoginSearch(returnTo, socialIntent),
+      }
     : loginPath;
   const [formErrors, setFormErrors] = useState<RegisterFormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);

@@ -1,14 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { Link, useLocation } from 'react-router';
+import { Link } from 'react-router';
 
 import { logout, useAuth } from '@/entities/auth';
+import { SocialLoginLink } from '@/features/social-access';
 import { privateProfileQueryOptions } from '@/features/social-data';
-import { Button, createReturnToSearch, Popover, ProfileIcon } from '@/shared';
+import { Button, Popover, ProfileIcon } from '@/shared';
 import { ApiClientError } from '@/shared/api';
 
 type AccountControlProps = {
-  loginPath: string;
+  profilePath: string;
   placement?: 'top' | 'bottom';
 };
 
@@ -19,8 +20,7 @@ const triggerClassName = [
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/20',
 ].join(' ');
 
-export function AccountControl({ loginPath, placement = 'bottom' }: AccountControlProps) {
-  const location = useLocation();
+export function AccountControl({ profilePath, placement = 'bottom' }: AccountControlProps) {
   const { state, setGuest, refresh } = useAuth();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
@@ -69,16 +69,15 @@ export function AccountControl({ loginPath, placement = 'bottom' }: AccountContr
   }
 
   if (state.status === 'guest') {
-    const returnTo = `${location.pathname}${location.search}${location.hash}`;
-
     return (
-      <Link
-        to={{ pathname: loginPath, search: createReturnToSearch(returnTo) }}
-        aria-label="Войти"
+      <SocialLoginLink
+        intent="profile"
+        returnTo={profilePath}
+        ariaLabel="Войти и открыть личный профиль"
         className={triggerClassName}
       >
         <ProfileIcon className="size-5" />
-      </Link>
+      </SocialLoginLink>
     );
   }
 
@@ -129,6 +128,13 @@ export function AccountControl({ loginPath, placement = 'bottom' }: AccountContr
               <p className="truncate font-semibold">{state.user.displayName}</p>
               <p className="break-all text-caption text-text-secondary">{state.user.email}</p>
             </div>
+
+            <Link
+              to={profilePath}
+              className="inline-flex min-h-10 items-center justify-center rounded-control border border-border bg-control px-3 text-sm font-semibold text-text-primary hover:border-text-secondary hover:bg-control-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/20"
+            >
+              Личный профиль
+            </Link>
 
             <Button variant="secondary" disabled={isLoggingOut} onClick={handleLogout}>
               {isLoggingOut ? 'Выходим…' : 'Выйти'}

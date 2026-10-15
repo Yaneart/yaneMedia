@@ -1,6 +1,7 @@
 import {
   useInfiniteQuery,
   useMutation,
+  useQuery,
   useQueryClient,
   type InfiniteData,
 } from '@tanstack/react-query';
@@ -11,7 +12,7 @@ import {
   type FormEvent,
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
-import { Link, useLocation } from 'react-router';
+import { Link } from 'react-router';
 
 import { createPublicProfilePath } from '@/app/router/routes';
 import { useAuth } from '@/entities/auth';
@@ -24,18 +25,17 @@ import {
   type ReviewCommentPage,
 } from '@/entities/review-comment';
 import {
+  privateProfileQueryOptions,
   reviewCommentsQueryOptions,
   socialQueryKeys,
   type SocialViewer,
 } from '@/features/social-data';
 import {
-  Button,
-  createReturnToSearch,
-  DeleteIcon,
-  LoadMoreButton,
-  MoreIcon,
-  ProfileIcon,
-} from '@/shared';
+  describeSocialAccessError,
+  SocialLoginLink,
+  useRestoreSocialAction,
+} from '@/features/social-access';
+import { Button, DeleteIcon, LoadMoreButton, MoreIcon, ProfileIcon } from '@/shared';
 import { ApiClientError } from '@/shared/api';
 import {
   appendReviewComment,
@@ -64,23 +64,22 @@ function formatDate(value: string): string {
 }
 
 function mutationMessage(error: unknown, action: 'create' | 'update' | 'delete'): string {
-  if (!(error instanceof ApiClientError)) return 'Не удалось выполнить действие. Попробуйте снова.';
-  if (error.code === 'EMAIL_VERIFICATION_REQUIRED') {
-    return 'Подтвердите email, чтобы участвовать в обсуждении.';
-  }
-  if (error.code === 'EDIT_CONFLICT') {
+  if (error instanceof ApiClientError && error.code === 'EDIT_CONFLICT') {
     return 'Комментарий уже изменился. Скопируйте текст, обновите страницу и повторите попытку.';
   }
-  if (error.code === 'REVIEW_NOT_FOUND') {
+  if (error instanceof ApiClientError && error.code === 'REVIEW_NOT_FOUND') {
     return 'Рецензия больше недоступна. Текст комментария сохранён в форме.';
   }
-  if (error.code === 'COMMENT_NOT_FOUND') return 'Комментарий больше недоступен.';
-  if (error.status === 429) return 'Слишком много действий. Подождите немного и попробуйте снова.';
-  return action === 'create'
-    ? 'Не удалось отправить комментарий. Текст сохранён — попробуйте снова.'
-    : action === 'update'
-      ? 'Не удалось сохранить изменения. Текст сохранён — попробуйте снова.'
-      : 'Не удалось удалить комментарий. Попробуйте снова.';
+  if (error instanceof ApiClientError && error.code === 'COMMENT_NOT_FOUND') {
+    return 'Комментарий больше недоступен.';
+  }
+  const fallback =
+    action === 'create'
+      ? 'Не удалось отправить комментарий. Текст сохранён — попробуйте снова.'
+      : action === 'update'
+        ? 'Не удалось сохранить изменения. Текст сохранён — попробуйте снова.'
+        : 'Не удалось удалить комментарий. Попробуйте снова.';
+  return describeSocialAccessError(error, fallback).message;
 }
 
 function Author({ author }: { author: ReviewAuthor }) {
@@ -405,9 +404,9 @@ function CommentItem({
 }
 
 export function ReviewDiscussion({ review }: DiscussionProps) {
-  const { state: authState, setGuest } = useAuth();
-  const location = useLocation();
+  const { state: authState, setGuest, refresh } = useAuth();
   const queryClient = useQueryClient();
+  const commentBodyRef = useRef<HTMLTextAreaElement>(null);
   const [body, setBody] = useState('');
   const [newCommentId, setNewCommentId] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -416,8 +415,19 @@ export function ReviewDiscussion({ review }: DiscussionProps) {
   const viewerReady = authState.status !== 'loading';
   const queryOptions = reviewCommentsQueryOptions(review.reviewId, viewer);
   const query = useInfiniteQuery({ ...queryOptions, enabled: viewerReady });
+  const profileQuery = useQuery({
+    ...privateProfileQueryOptions(
+      authState.status === 'authenticated' ? authState.user.email : 'inactive',
+    ),
+    enabled: authState.status === 'authenticated',
+  });
   const comments = mergeReviewComments(query.data?.pages ?? []);
-  const returnTo = `${location.pathname}${location.search}${location.hash}`;
+
+  useRestoreSocialAction(
+    'comment',
+    () => commentBodyRef.current?.focus(),
+    authState.status === 'authenticated' && review.viewerActions.canComment,
+  );
 
   useEffect(() => {
     if (!newCommentId) return;
@@ -535,6 +545,7 @@ export function ReviewDiscussion({ review }: DiscussionProps) {
               Добавить комментарий
             </label>
             <textarea
+              ref={commentBodyRef}
               id="new-comment-body"
               rows={5}
               value={body}
@@ -560,20 +571,41 @@ export function ReviewDiscussion({ review }: DiscussionProps) {
               </p>
             )}
           </form>
-        ) : authState.status === 'guest' || authState.status === 'error' ? (
+        ) : authState.status === 'guest' ? (
           <p className="mt-5 rounded-control border border-border bg-surface px-4 py-3 text-sm text-text-secondary">
-            <Link
-              to={{ pathname: '/login', search: createReturnToSearch(returnTo) }}
+            <SocialLoginLink
+              intent="comment"
               className="font-semibold text-action hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/20"
             >
               Войдите
-            </Link>{' '}
+            </SocialLoginLink>{' '}
             с возвратом к рецензии, чтобы оставить комментарий.
           </p>
-        ) : authState.status === 'authenticated' ? (
+        ) : authState.status === 'error' ? (
+          <div className="mt-5 flex flex-wrap items-center gap-3 rounded-control border border-border bg-surface px-4 py-3">
+            <p role="alert" className="text-sm text-error">
+              Не удалось проверить сессию.
+            </p>
+            <Button variant="secondary" size="small" onClick={() => void refresh()}>
+              Повторить
+            </Button>
+          </div>
+        ) : authState.status === 'authenticated' && profileQuery.isError ? (
+          <div className="mt-5 flex flex-wrap items-center gap-3 rounded-control border border-border bg-surface px-4 py-3">
+            <p role="alert" className="text-sm text-error">
+              Не удалось проверить доступ к комментариям.
+            </p>
+            <Button variant="secondary" size="small" onClick={() => void profileQuery.refetch()}>
+              Повторить
+            </Button>
+          </div>
+        ) : authState.status === 'authenticated' && profileQuery.data?.emailVerified === false ? (
           <p className="mt-5 rounded-control border border-border bg-surface px-4 py-3 text-sm text-text-secondary">
-            Сейчас добавить комментарий нельзя. Если email ещё не подтверждён, завершите проверку
-            адреса в письме.
+            Подтвердите email, чтобы участвовать в обсуждении.
+          </p>
+        ) : authState.status === 'authenticated' && !profileQuery.isPending ? (
+          <p className="mt-5 rounded-control border border-border bg-surface px-4 py-3 text-sm text-text-secondary">
+            У вас нет права добавить комментарий к этой рецензии.
           </p>
         ) : null}
 

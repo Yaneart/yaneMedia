@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type SubmitEvent } from 'react';
-import { Link, useBeforeUnload, useBlocker, useLocation } from 'react-router';
+import { Link, useBeforeUnload, useBlocker } from 'react-router';
 
 import { useAuth } from '@/entities/auth';
 import type { MediaSummary } from '@/entities/media';
@@ -18,8 +18,13 @@ import {
   privateProfileQueryOptions,
   socialQueryKeys,
 } from '@/features/social-data';
+import {
+  describeSocialAccessError,
+  SocialLoginLink,
+  useRestoreSocialAction,
+} from '@/features/social-access';
 import { UserRating } from '@/features/user-rating';
-import { Button, createReturnToSearch } from '@/shared';
+import { Button } from '@/shared';
 import { ApiClientError } from '@/shared/api';
 import {
   countCharacters,
@@ -41,18 +46,17 @@ function toDraft(review: OwnReviewDetail | null): ReviewDraft {
 }
 
 function mutationErrorMessage(error: Error): string {
-  if (!(error instanceof ApiClientError))
-    return 'Не удалось сохранить рецензию. Текст остался в редакторе.';
-  if (error.status === 401)
-    return 'Сессия завершилась. Войдите снова — текст останется в редакторе.';
-  if (error.code === 'EMAIL_NOT_VERIFIED') return 'Подтвердите email, чтобы публиковать рецензии.';
-  if (error.code === 'EDIT_CONFLICT')
+  if (error instanceof ApiClientError && error.code === 'EDIT_CONFLICT')
     return 'Рецензия уже изменилась в другой вкладке. Ваш текст сохранён здесь; обновите данные перед повторной отправкой.';
-  if (error.code === 'REVIEW_ALREADY_EXISTS')
+  if (error instanceof ApiClientError && error.code === 'REVIEW_ALREADY_EXISTS')
     return 'Для этого произведения уже существует ваша рецензия. Обновите редактор, чтобы открыть её.';
-  if (error.status === 429) return 'Слишком много изменений. Подождите немного и попробуйте снова.';
-  if (error.status >= 500) return 'Сервис временно недоступен. Текст остался в редакторе.';
-  return error.message || 'Не удалось сохранить рецензию. Текст остался в редакторе.';
+  const accessError = describeSocialAccessError(
+    error,
+    'Не удалось сохранить рецензию. Текст остался в редакторе.',
+  );
+  return accessError.kind === 'other'
+    ? accessError.message
+    : `${accessError.message} Текст остался в редакторе.`;
 }
 
 function ReviewForm({
@@ -79,6 +83,8 @@ function ReviewForm({
   const bodyRef = useRef<HTMLTextAreaElement>(null);
   const isDirty = !reviewDraftsEqual(draft, initialDraftRef.current);
   const blocker = useBlocker(isDirty);
+
+  useRestoreSocialAction('review', () => titleRef.current?.focus());
 
   useEffect(() => {
     if (!initialReview || initialReview.reviewId === review?.reviewId) return;
@@ -389,8 +395,7 @@ function ReviewForm({
 }
 
 export function ReviewEditor({ media }: { media: MediaSummary }) {
-  const { state: authState, setGuest } = useAuth();
-  const location = useLocation();
+  const { state: authState, setGuest, refresh } = useAuth();
   const accountKey = authState.status === 'authenticated' ? authState.user.email : null;
   const profileQuery = useQuery({
     ...privateProfileQueryOptions(accountKey ?? 'inactive'),
@@ -400,7 +405,6 @@ export function ReviewEditor({ media }: { media: MediaSummary }) {
     ...ownReviewForMediaQueryOptions(accountKey ?? 'inactive', media.mediaRef),
     enabled: accountKey !== null,
   });
-  const returnTo = `${location.pathname}${location.search}${location.hash}`;
 
   return (
     <section
@@ -418,16 +422,22 @@ export function ReviewEditor({ media }: { media: MediaSummary }) {
 
       <UserRating media={media} embedded className="mt-5" />
 
-      {authState.status === 'guest' || authState.status === 'error' ? (
+      {authState.status === 'guest' ? (
         <p className="mt-5 text-sm text-text-secondary">
-          <Link
-            to={{ pathname: '/login', search: createReturnToSearch(returnTo) }}
-            className="font-semibold text-action hover:underline"
-          >
+          <SocialLoginLink intent="review" className="font-semibold text-action hover:underline">
             Войдите
-          </Link>{' '}
+          </SocialLoginLink>{' '}
           или зарегистрируйтесь, чтобы написать рецензию.
         </p>
+      ) : authState.status === 'error' ? (
+        <div className="mt-5 flex flex-wrap items-center gap-3">
+          <p role="alert" className="text-sm text-error">
+            Не удалось проверить сессию.
+          </p>
+          <Button variant="secondary" size="small" onClick={() => void refresh()}>
+            Повторить
+          </Button>
+        </div>
       ) : authState.status === 'loading' || profileQuery.isPending || reviewQuery.isPending ? (
         <p className="mt-5 text-sm text-text-secondary" aria-live="polite">
           Загружаем редактор…

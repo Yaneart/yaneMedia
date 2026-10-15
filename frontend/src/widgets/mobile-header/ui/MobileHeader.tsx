@@ -121,7 +121,7 @@ export function MobileHeader({
             )}
           </Popover>
 
-          <AccountControl loginPath={profilePath} />
+          <AccountControl profilePath={profilePath} />
         </div>
       </div>
     </header>

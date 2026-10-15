@@ -1,19 +1,12 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Link, useLocation } from 'react-router';
 
 import { useAuth } from '@/entities/auth';
 import type { MediaSummary } from '@/entities/media';
 import type { ReviewSort } from '@/entities/review';
+import { SocialLoginLink } from '@/features/social-access';
 import { mediaReviewsQueryOptions, type SocialViewer } from '@/features/social-data';
-import {
-  ErrorState,
-  LoadMoreButton,
-  ProfileIcon,
-  Select,
-  Skeleton,
-  createReturnToSearch,
-} from '@/shared';
+import { Button, ErrorState, LoadMoreButton, ProfileIcon, Select, Skeleton } from '@/shared';
 import { mergeCursorPages } from '@/shared/api';
 import { isReviewSort, mediaReviewSortOptions } from '../model/mediaReviewsPresentation';
 import { MediaReviewCard } from './MediaReviewCard';
@@ -27,7 +20,14 @@ function ReviewsSkeleton() {
   );
 }
 
-function EmptyReviews({ isGuest, returnTo }: { isGuest: boolean; returnTo: string }) {
+function EmptyReviews({
+  authStatus,
+  onRetryAuth,
+}: {
+  authStatus: 'guest' | 'authenticated' | 'error';
+  onRetryAuth: () => void;
+}) {
+  const isGuest = authStatus === 'guest';
   return (
     <div className="rounded-control border border-dashed border-border px-5 py-8 text-center sm:px-8">
       <span className="mx-auto grid size-10 place-items-center rounded-full bg-watermark/10 text-accent-text">
@@ -39,13 +39,17 @@ function EmptyReviews({ isGuest, returnTo }: { isGuest: boolean; returnTo: strin
           ? 'Войдите, чтобы первым поделиться развёрнутым мнением об этом произведении.'
           : 'Станьте первым зрителем, который поделится развёрнутым мнением.'}
       </p>
-      {isGuest ? (
-        <Link
-          to={{ pathname: '/login', search: createReturnToSearch(returnTo) }}
+      {authStatus === 'error' ? (
+        <Button className="mt-5" variant="secondary" onClick={onRetryAuth}>
+          Повторить проверку сессии
+        </Button>
+      ) : isGuest ? (
+        <SocialLoginLink
+          intent="review"
           className="mt-5 inline-flex min-h-10 items-center justify-center rounded-control bg-action px-4 text-sm font-semibold text-action-text transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-action/20 focus-visible:outline-none motion-reduce:transition-none"
         >
           Войти и написать
-        </Link>
+        </SocialLoginLink>
       ) : (
         <a
           href="#review-editor"
@@ -59,8 +63,7 @@ function EmptyReviews({ isGuest, returnTo }: { isGuest: boolean; returnTo: strin
 }
 
 export function MediaReviews({ media }: { media: MediaSummary }) {
-  const { state: authState } = useAuth();
-  const location = useLocation();
+  const { state: authState, refresh } = useAuth();
   const [sort, setSort] = useState<ReviewSort>('new');
   const viewer: SocialViewer =
     authState.status === 'authenticated' ? { accountKey: authState.user.email } : 'guest';
@@ -70,8 +73,6 @@ export function MediaReviews({ media }: { media: MediaSummary }) {
     enabled: viewerReady,
   });
   const reviews = mergeCursorPages(query.data?.pages ?? [], (review) => review.reviewId);
-  const returnTo = `${location.pathname}${location.search}${location.hash}`;
-  const isGuest = authState.status === 'guest' || authState.status === 'error';
 
   return (
     <section
@@ -109,7 +110,7 @@ export function MediaReviews({ media }: { media: MediaSummary }) {
             onRetry={() => void query.refetch()}
           />
         ) : reviews.length === 0 ? (
-          <EmptyReviews isGuest={isGuest} returnTo={returnTo} />
+          <EmptyReviews authStatus={authState.status} onRetryAuth={() => void refresh()} />
         ) : (
           <>
             <div className="grid items-start gap-3 lg:grid-cols-2">

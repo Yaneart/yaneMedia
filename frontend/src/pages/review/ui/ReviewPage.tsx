@@ -15,9 +15,15 @@ import {
 } from '@/entities/review';
 import {
   invalidateAfterSocialMutation,
+  privateProfileQueryOptions,
   reviewQueryOptions,
   type SocialViewer,
 } from '@/features/social-data';
+import {
+  describeSocialAccessError,
+  SocialLoginLink,
+  useRestoreSocialAction,
+} from '@/features/social-access';
 import { ReviewDiscussion } from '@/features/review-discussion';
 import {
   Button,
@@ -168,13 +174,19 @@ function SpoilerBody({ review }: { review: ReviewDetail }) {
 }
 
 function ReportReview({ reviewId }: { reviewId: string }) {
+  const { setGuest } = useAuth();
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState<ReportReason>('spam');
   const [note, setNote] = useState('');
   const [validationError, setValidationError] = useState<string | null>(null);
   const mutation = useMutation({
     mutationFn: () => createReport({ type: 'review', reviewId }, reason, note.trim() || undefined),
+    onError: (error) => {
+      if (error instanceof ApiClientError && error.status === 401) setGuest();
+    },
   });
+
+  useRestoreSocialAction('report', () => setOpen(true));
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -208,15 +220,12 @@ function ReportReview({ reviewId }: { reviewId: string }) {
     );
   }
 
-  const errorMessage =
-    mutation.error instanceof ApiClientError && mutation.error.code === 'REPORT_ALREADY_EXISTS'
+  const errorMessage = mutation.isError
+    ? mutation.error instanceof ApiClientError && mutation.error.code === 'REPORT_ALREADY_EXISTS'
       ? 'Вы уже отправили активную жалобу на эту рецензию.'
-      : mutation.error instanceof ApiClientError &&
-          mutation.error.code === 'EMAIL_VERIFICATION_REQUIRED'
-        ? 'Подтвердите email перед отправкой жалобы.'
-        : mutation.isError
-          ? 'Не удалось отправить жалобу. Попробуйте снова.'
-          : null;
+      : describeSocialAccessError(mutation.error, 'Не удалось отправить жалобу. Попробуйте снова.')
+          .message
+    : null;
 
   return (
     <form
@@ -275,9 +284,16 @@ function ReportReview({ reviewId }: { reviewId: string }) {
 }
 
 function ReviewActions({ review }: { review: ReviewDetail }) {
+  const { state: authState, setGuest, refresh } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const profileQuery = useQuery({
+    ...privateProfileQueryOptions(
+      authState.status === 'authenticated' ? authState.user.email : 'inactive',
+    ),
+    enabled: authState.status === 'authenticated',
+  });
   const deleteMutation = useMutation({
     mutationFn: () => deleteReview(review.reviewId),
     onSuccess: async () => {
@@ -289,12 +305,18 @@ function ReviewActions({ review }: { review: ReviewDetail }) {
         ...(review.author.state === 'active' ? { handle: review.author.user.handle } : {}),
       });
     },
+    onError: (error) => {
+      if (error instanceof ApiClientError && error.status === 401) setGuest();
+    },
   });
 
   if (
+    authState.status === 'authenticated' &&
     !review.viewerActions.canEdit &&
     !review.viewerActions.canDelete &&
-    !review.viewerActions.canReport
+    !review.viewerActions.canReport &&
+    profileQuery.data?.emailVerified !== false &&
+    !profileQuery.isError
   ) {
     return null;
   }
@@ -322,6 +344,34 @@ function ReviewActions({ review }: { review: ReviewDetail }) {
           </Button>
         )}
         {review.viewerActions.canReport && <ReportReview reviewId={review.reviewId} />}
+        {authState.status === 'guest' && (
+          <SocialLoginLink
+            intent="report"
+            className="inline-flex min-h-9 items-center gap-2 rounded-control px-3 text-sm font-semibold text-text-secondary hover:bg-interactive-hover hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/20"
+          >
+            <ShieldIcon className="size-4" aria-hidden="true" />
+            Войти, чтобы пожаловаться
+          </SocialLoginLink>
+        )}
+        {authState.status === 'error' && (
+          <Button variant="secondary" size="small" onClick={() => void refresh()}>
+            Повторить проверку сессии
+          </Button>
+        )}
+        {authState.status === 'authenticated' &&
+          !review.viewerActions.canEdit &&
+          !review.viewerActions.canDelete &&
+          !review.viewerActions.canReport &&
+          profileQuery.data?.emailVerified === false && (
+            <p className="text-sm text-text-secondary">
+              Подтвердите email, чтобы отправлять жалобы.
+            </p>
+          )}
+        {authState.status === 'authenticated' && profileQuery.isError && (
+          <Button variant="secondary" size="small" onClick={() => void profileQuery.refetch()}>
+            Повторить проверку доступа
+          </Button>
+        )}
       </div>
 
       {confirmingDelete && (
@@ -338,7 +388,12 @@ function ReviewActions({ review }: { review: ReviewDetail }) {
           </p>
           {deleteMutation.isError && (
             <p role="alert" className="mt-2 text-sm text-error">
-              Не удалось удалить рецензию. Попробуйте снова.
+              {
+                describeSocialAccessError(
+                  deleteMutation.error,
+                  'Не удалось удалить рецензию. Попробуйте снова.',
+                ).message
+              }
             </p>
           )}
           <div className="mt-4 flex flex-wrap gap-2">

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
-import { Link, useLocation } from 'react-router';
+import { useRef } from 'react';
 
 import { useAuth } from '@/entities/auth';
 import type { MediaSummary } from '@/entities/media';
@@ -18,8 +18,13 @@ import {
   ratingSummaryQueryOptions,
   socialQueryKeys,
 } from '@/features/social-data';
+import {
+  describeSocialAccessError,
+  SocialLoginLink,
+  useRestoreSocialAction,
+} from '@/features/social-access';
 import { ApiClientError } from '@/shared/api';
-import { Button, createReturnToSearch, StarIcon } from '@/shared';
+import { Button, StarIcon } from '@/shared';
 import type { InfiniteData } from '@tanstack/react-query';
 import type { ProfileRatingPage } from '@/entities/profile';
 import {
@@ -34,13 +39,13 @@ type RatingMutation = { value: RatingValue | null };
 type CacheSnapshot = Array<[QueryKey, unknown]>;
 
 function getMutationError(error: Error): string {
-  if (error instanceof ApiClientError) {
-    if (error.status === 401) return 'Сессия завершилась. Войдите снова, чтобы поставить оценку.';
-    if (error.status === 429)
-      return 'Слишком много изменений. Подождите немного и попробуйте снова.';
-  }
-
-  return 'Не удалось сохранить оценку. Предыдущее значение восстановлено.';
+  const accessError = describeSocialAccessError(
+    error,
+    'Не удалось сохранить оценку. Предыдущее значение восстановлено.',
+  );
+  return accessError.kind === 'other'
+    ? accessError.message
+    : `${accessError.message} Предыдущее значение восстановлено.`;
 }
 
 export type UserRatingProps = {
@@ -50,9 +55,9 @@ export type UserRatingProps = {
 };
 
 export function UserRating({ media, className = '', embedded = false }: UserRatingProps) {
-  const { state: authState, setGuest } = useAuth();
-  const location = useLocation();
+  const { state: authState, setGuest, refresh } = useAuth();
   const queryClient = useQueryClient();
+  const fieldsetRef = useRef<HTMLFieldSetElement>(null);
   const accountKey = authState.status === 'authenticated' ? authState.user.email : null;
 
   const summaryQuery = useQuery(ratingSummaryQueryOptions(media.mediaRef));
@@ -167,7 +172,11 @@ export function UserRating({ media, className = '', embedded = false }: UserRati
   });
 
   const currentValue = ownRatingQuery.data?.value ?? null;
-  const returnTo = `${location.pathname}${location.search}${location.hash}`;
+  useRestoreSocialAction(
+    'rating',
+    () => fieldsetRef.current?.querySelector('input')?.focus(),
+    authState.status === 'authenticated' && !ownRatingQuery.isPending,
+  );
 
   return (
     <section
@@ -203,16 +212,25 @@ export function UserRating({ media, className = '', embedded = false }: UserRati
         )}
       </div>
 
-      {authState.status === 'guest' || authState.status === 'error' ? (
+      {authState.status === 'guest' ? (
         <p className="mt-4 text-sm text-text-secondary">
-          <Link
-            to={{ pathname: '/login', search: createReturnToSearch(returnTo) }}
+          <SocialLoginLink
+            intent="rating"
             className="font-semibold text-action underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/20"
           >
             Войдите
-          </Link>{' '}
+          </SocialLoginLink>{' '}
           и поставьте свою оценку.
         </p>
+      ) : authState.status === 'error' ? (
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <p role="alert" className="text-sm text-error">
+            Не удалось проверить сессию.
+          </p>
+          <Button variant="secondary" size="small" onClick={() => void refresh()}>
+            Повторить
+          </Button>
+        </div>
       ) : authState.status === 'loading' || ownRatingQuery.isPending ? (
         <p className="mt-4 text-sm text-text-secondary" aria-live="polite">
           Загружаем вашу оценку…
@@ -228,7 +246,7 @@ export function UserRating({ media, className = '', embedded = false }: UserRati
         </div>
       ) : (
         <>
-          <fieldset className="mt-4" disabled={mutation.isPending}>
+          <fieldset ref={fieldsetRef} className="mt-4" disabled={mutation.isPending}>
             <legend className="text-sm font-medium text-text-primary">
               {currentValue === null ? 'Вы ещё не оценили' : `Ваша оценка: ${currentValue} из 10`}
             </legend>

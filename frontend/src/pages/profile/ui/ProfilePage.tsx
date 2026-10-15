@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import type { ComponentType } from 'react';
+import { useRef, type ComponentType } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
 
 import { createPublicProfilePath, routePaths } from '@/app/router/routes';
@@ -8,9 +8,13 @@ import { useAuth } from '@/entities/auth';
 import type { PrivateProfile } from '@/entities/profile';
 import { privateProfileQueryOptions, profileSettingsQueryOptions } from '@/features/social-data';
 import {
+  createSocialLoginSearch,
+  describeSocialAccessError,
+  useRestoreSocialAction,
+} from '@/features/social-access';
+import {
   ArrowRightIcon,
   CommentIcon,
-  createReturnToSearch,
   ErrorState,
   FavoriteIcon,
   HistoryIcon,
@@ -132,6 +136,8 @@ function PrivateProfileView({
   settings: import('@/entities/profile').ProfileSettings;
 }) {
   const hasGeneratedHandle = isGeneratedProfileHandle(profile.handle);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  useRestoreSocialAction('profile', () => headingRef.current?.focus());
 
   return (
     <section className="mx-auto max-w-5xl py-8">
@@ -143,6 +149,7 @@ function PrivateProfileView({
               Личный профиль
             </p>
             <h1
+              ref={headingRef}
               data-page-heading
               tabIndex={-1}
               className="mt-2 break-words text-3xl font-semibold text-text-primary"
@@ -249,7 +256,9 @@ export function ProfilePage() {
         visualLabel="Нужен вход"
         title="Войдите, чтобы открыть профиль"
         description="Настройки профиля и приватные данные доступны только владельцу аккаунта."
-        onRetry={() => void navigate(`${routePaths.login}${createReturnToSearch(returnTo)}`)}
+        onRetry={() =>
+          void navigate(`${routePaths.login}${createSocialLoginSearch(returnTo, 'profile')}`)
+        }
         retryLabel="Войти"
       />
     );
@@ -263,7 +272,12 @@ export function ProfilePage() {
       <ErrorState
         variant="page"
         title="Не удалось загрузить профиль"
-        description="Данные аккаунта не были заменены локальной копией. Проверьте соединение и повторите запрос."
+        description={
+          describeSocialAccessError(
+            query.error ?? settingsQuery.error,
+            'Данные аккаунта не были заменены локальной копией. Проверьте соединение и повторите запрос.',
+          ).message
+        }
         onRetry={() => {
           void query.refetch({ cancelRefetch: false });
           void settingsQuery.refetch({ cancelRefetch: false });

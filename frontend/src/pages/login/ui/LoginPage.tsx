@@ -6,7 +6,13 @@ import {
   type LoginFormErrors,
   type LoginFormFields,
 } from '@/features/auth-form';
-import { Button, createReturnToSearch, Input, parseInternalReturnTo } from '@/shared';
+import {
+  createSocialIntentState,
+  createSocialLoginSearch,
+  getSocialLoginDescription,
+  parseSocialActionIntent,
+} from '@/features/social-access';
+import { Button, Input, parseInternalReturnTo } from '@/shared';
 import { ApiClientError } from '@/shared/api';
 import { AuthFormLayout } from '@/widgets/auth-form-layout';
 import { useState, type ChangeEvent, type SubmitEvent } from 'react';
@@ -35,12 +41,19 @@ export function LoginPage({ homePath, registerPath, forgotPasswordPath }: LoginP
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const returnTo = parseInternalReturnTo(searchParams.get('returnTo'));
+  const socialIntent = returnTo ? parseSocialActionIntent(searchParams.get('intent')) : null;
   const destination = returnTo ?? homePath;
   const registerDestination = returnTo
-    ? { pathname: registerPath, search: createReturnToSearch(returnTo) }
+    ? {
+        pathname: registerPath,
+        search: createSocialLoginSearch(returnTo, socialIntent),
+      }
     : registerPath;
   const forgotPasswordDestination = returnTo
-    ? { pathname: forgotPasswordPath, search: createReturnToSearch(returnTo) }
+    ? {
+        pathname: forgotPasswordPath,
+        search: createSocialLoginSearch(returnTo, socialIntent),
+      }
     : forgotPasswordPath;
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -78,7 +91,10 @@ export function LoginPage({ homePath, registerPath, forgotPasswordPath }: LoginP
       });
 
       setAuthenticated(user);
-      navigate(destination, { replace: true });
+      navigate(destination, {
+        replace: true,
+        state: socialIntent ? createSocialIntentState(socialIntent) : null,
+      });
     } catch (error: unknown) {
       if (!(error instanceof ApiClientError)) {
         setSubmitError('Не удалось получить ответ сервера. Проверьте соединение.');
@@ -138,7 +154,7 @@ export function LoginPage({ homePath, registerPath, forgotPasswordPath }: LoginP
     <AuthFormLayout
       homePath={homePath}
       title="Вход"
-      description="Войдите в свой аккаунт yaneMedia."
+      description={getSocialLoginDescription(socialIntent)}
       footer={
         <p>
           Нет аккаунта?{' '}

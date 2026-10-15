@@ -119,7 +119,7 @@ export function DesktopNavigation({
       <div className="flex items-center gap-2 px-2 pt-5">
         <ThemeToggle />
 
-        <AccountControl loginPath={profilePath} placement="top" />
+        <AccountControl profilePath={profilePath} placement="top" />
       </div>
     </aside>
   );
