@@ -9,8 +9,7 @@ import type { PlaybackEpisodeSelection } from '@/entities/playback';
 import { EpisodeSelector } from '@/features/episode-selection';
 import { FavoriteButton, useFavorites } from '@/features/favorite';
 import { usePlaybackSession } from '@/features/playback-session';
-import { ReviewEditor } from '@/features/review-editor';
-import { MediaReviews } from '@/features/media-reviews';
+import { MediaCommunity } from '@/features/media-community';
 import { SeasonSelector } from '@/features/season-selection';
 import {
   createPlaybackSourceCatalog,
@@ -934,9 +933,7 @@ export function MediaView({
         </section>
       )}
 
-      <ReviewEditor media={media} />
-
-      <MediaReviews media={media} />
+      <MediaCommunity media={media} />
 
       <MediaCast persons={media.persons} className="order-7 xl:col-span-2" />
     </div>

@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { and, count, desc, eq, isNull, lt, lte, or, sql } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
 import { reviewComments } from '../comments/entities/review-comment.entity';
+import { mediaComments } from '../media-comments/entities/media-comment.entity';
 import { favorites } from '../favorites/entities/favorite.entity';
 import { ratings } from '../ratings/entities/rating.entity';
 import { reviews } from '../reviews/entities/review.entity';
@@ -101,6 +102,19 @@ export class ProfileRepository {
             and profile_comments.deleted_at is null
             and comment_reviews.publication_state = 'published'
             and comment_reviews.deleted_at is null
+        ) + (
+          select count(*)::int from ${mediaComments} as profile_media_comments
+          where profile_media_comments.user_id = ${users.id}
+            and profile_media_comments.publication_state = 'published'
+            and profile_media_comments.deleted_at is null
+            and (
+              profile_media_comments.parent_comment_id is null
+              or exists (
+                select 1 from ${mediaComments} as profile_media_comment_roots
+                where profile_media_comment_roots.comment_id = profile_media_comments.parent_comment_id
+                  and profile_media_comment_roots.publication_state = 'published'
+              )
+            )
         )`,
       })
       .from(users)
@@ -210,12 +224,18 @@ export class ProfileRepository {
   }
 
   async countComments(userId: string): Promise<number> {
-    const [result] = await this.databaseService.db
-      .select({ value: count() })
-      .from(reviewComments)
-      .where(and(eq(reviewComments.userId, userId), isNull(reviewComments.deletedAt)));
+    const [reviewResult, mediaResult] = await Promise.all([
+      this.databaseService.db
+        .select({ value: count() })
+        .from(reviewComments)
+        .where(and(eq(reviewComments.userId, userId), isNull(reviewComments.deletedAt))),
+      this.databaseService.db
+        .select({ value: count() })
+        .from(mediaComments)
+        .where(and(eq(mediaComments.userId, userId), isNull(mediaComments.deletedAt))),
+    ]);
 
-    return result?.value ?? 0;
+    return (reviewResult[0]?.value ?? 0) + (mediaResult[0]?.value ?? 0);
   }
 
   async isHandleAvailable(handle: string, userId: string): Promise<boolean> {

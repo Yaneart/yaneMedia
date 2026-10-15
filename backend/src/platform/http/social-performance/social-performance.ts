@@ -56,6 +56,12 @@ const ROUTES: ReadonlyArray<{
     'review',
     '/media/:mediaRef/reviews',
   ),
+  route(
+    ['GET', 'POST'],
+    /^\/api\/v1\/media\/[^/]+\/comments$/,
+    'comment',
+    '/media/:mediaRef/comments',
+  ),
   route(['GET', 'PATCH', 'DELETE'], /^\/api\/v1\/reviews\/[^/]+$/, 'review', '/reviews/:reviewId'),
   route(['GET'], /^\/api\/v1\/reviews\/[^/]+\/content$/, 'review', '/reviews/:reviewId/content'),
   route(
@@ -65,6 +71,12 @@ const ROUTES: ReadonlyArray<{
     '/reviews/:reviewId/comments',
   ),
   route(['PATCH', 'DELETE'], /^\/api\/v1\/comments\/[^/]+$/, 'comment', '/comments/:commentId'),
+  route(
+    ['PATCH', 'DELETE'],
+    /^\/api\/v1\/media-comments\/[^/]+$/,
+    'comment',
+    '/media-comments/:commentId',
+  ),
   route(['POST'], /^\/api\/v1\/reports$/, 'report', '/reports'),
   route(['GET'], /^\/api\/v1\/admin\/reports$/, 'moderation', '/admin/reports'),
   route(

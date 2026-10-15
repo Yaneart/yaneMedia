@@ -1,0 +1,4 @@
+ALTER TABLE "content_reports" DROP CONSTRAINT "content_reports_target_id_format_check";--> statement-breakpoint
+ALTER TABLE "content_reports" ALTER COLUMN "target_id" SET DATA TYPE varchar(50);--> statement-breakpoint
+ALTER TABLE "moderation_events" ALTER COLUMN "entity_id" SET DATA TYPE varchar(50);--> statement-breakpoint
+ALTER TABLE "content_reports" ADD CONSTRAINT "content_reports_target_id_format_check" CHECK (("content_reports"."target_type" = 'review' and "content_reports"."target_id" ~ '^review_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$') or ("content_reports"."target_type" = 'comment' and "content_reports"."target_id" ~ '^(comment|media_comment)_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'));

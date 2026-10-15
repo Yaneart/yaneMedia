@@ -77,7 +77,7 @@ export function MediaReviews({ media }: { media: MediaSummary }) {
   return (
     <section
       aria-labelledby="media-reviews-heading"
-      className="order-6 min-w-0 rounded-card border border-context-border bg-surface p-5 sm:p-6 xl:col-span-2"
+      className="min-w-0 rounded-card border border-context-border bg-surface p-5 sm:p-6"
     >
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>

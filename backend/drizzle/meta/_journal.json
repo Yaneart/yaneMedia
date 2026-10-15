@@ -141,6 +141,20 @@
       "when": 1791872347586,
       "tag": "0019_free_clint_barton",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1792071656099,
+      "tag": "0020_cold_pixie",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1792072410651,
+      "tag": "0021_fixed_black_panther",
+      "breakpoints": true
     }
   ]
 }

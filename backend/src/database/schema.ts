@@ -17,6 +17,7 @@ export {
   commentPublicationState,
   reviewComments,
 } from '../comments/entities/review-comment.entity';
+export { mediaComments } from '../media-comments/entities/media-comment.entity';
 export {
   contentReports,
   moderationAction,

@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { and, desc, eq, isNull, lt, or } from 'drizzle-orm';
+import { and, desc, eq, isNull, lt, or, sql } from 'drizzle-orm';
 import { DatabaseService } from '../database/database.service';
 import { reviewComments } from '../comments/entities/review-comment.entity';
+import { mediaComments } from '../media-comments/entities/media-comment.entity';
 import { reviews } from '../reviews/entities/review.entity';
 import { users } from '../users/entities/user.entity';
 import type { AdminReportStatus, ReportReason } from './dto/moderation.dto';
@@ -49,6 +50,29 @@ export class ModerationRepository {
           .for('update');
         if (!review) return { state: 'missing' };
         authorUserId = review.userId;
+      } else if (input.targetId.startsWith('media_comment_')) {
+        const [comment] = await transaction
+          .select({ userId: mediaComments.userId })
+          .from(mediaComments)
+          .where(
+            and(
+              eq(mediaComments.commentId, input.targetId),
+              eq(mediaComments.publicationState, 'published'),
+              isNull(mediaComments.deletedAt),
+              or(
+                isNull(mediaComments.parentCommentId),
+                sql`exists (
+                  select 1 from media_comments as report_roots
+                  where report_roots.comment_id = ${mediaComments.parentCommentId}
+                    and report_roots.publication_state = 'published'
+                )`,
+              ),
+            ),
+          )
+          .limit(1)
+          .for('update');
+        if (!comment) return { state: 'missing' };
+        authorUserId = comment.userId;
       } else {
         const [candidate] = await transaction
           .select({ reviewId: reviewComments.reviewId })
@@ -162,6 +186,9 @@ export class ModerationRepository {
     state: 'published' | 'moderation_hidden',
     decision: string,
   ): Promise<boolean> {
+    if (commentId.startsWith('media_comment_')) {
+      return this.setMediaCommentVisibility(commentId, administratorUserId, state, decision);
+    }
     return this.databaseService.db.transaction(async (transaction) => {
       const [comment] = await transaction
         .select({ publicationState: reviewComments.publicationState })
@@ -176,6 +203,36 @@ export class ModerationRepository {
         .update(reviewComments)
         .set({ publicationState: state })
         .where(eq(reviewComments.commentId, commentId));
+      await transaction.insert(moderationEvents).values({
+        administratorUserId,
+        action: state === 'published' ? 'comment_restore' : 'comment_hide',
+        entityId: commentId,
+        decision,
+      });
+      return true;
+    });
+  }
+
+  private async setMediaCommentVisibility(
+    commentId: string,
+    administratorUserId: string,
+    state: 'published' | 'moderation_hidden',
+    decision: string,
+  ): Promise<boolean> {
+    return this.databaseService.db.transaction(async (transaction) => {
+      const [comment] = await transaction
+        .select({ publicationState: mediaComments.publicationState })
+        .from(mediaComments)
+        .where(and(eq(mediaComments.commentId, commentId), isNull(mediaComments.deletedAt)))
+        .limit(1)
+        .for('update');
+      if (!comment) return false;
+      if (comment.publicationState === state) return true;
+
+      await transaction
+        .update(mediaComments)
+        .set({ publicationState: state })
+        .where(eq(mediaComments.commentId, commentId));
       await transaction.insert(moderationEvents).values({
         administratorUserId,
         action: state === 'published' ? 'comment_restore' : 'comment_hide',

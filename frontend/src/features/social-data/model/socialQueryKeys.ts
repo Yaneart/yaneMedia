@@ -38,6 +38,8 @@ export const socialQueryKeys = {
     [...socialQueryKeys.publicRoot, 'media', mediaRef, 'rating-summary'] as const,
   mediaReviews: (mediaRef: string, sort: string, viewer: SocialViewer) =>
     [...viewerRoot(viewer), 'media', mediaRef, 'reviews', { sort }] as const,
+  mediaComments: (mediaRef: string, viewer: SocialViewer) =>
+    [...viewerRoot(viewer), 'media', mediaRef, 'comments'] as const,
   review: (reviewId: string, viewer: SocialViewer) =>
     [...viewerRoot(viewer), 'reviews', reviewId] as const,
   reviewComments: (reviewId: string, viewer: SocialViewer) =>

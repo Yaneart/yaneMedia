@@ -18,6 +18,7 @@ import {
   type ReviewSort,
 } from '@/entities/review';
 import { getReviewComments } from '@/entities/review-comment';
+import { getMediaComments } from '@/entities/media-comment';
 import { getNextCursorPageParam, initialCursorPageParam } from '@/shared/api';
 import { socialQueryKeys, type SocialViewer } from './socialQueryKeys';
 
@@ -132,6 +133,17 @@ export function mediaReviewsQueryOptions(mediaRef: string, sort: ReviewSort, vie
     queryKey: socialQueryKeys.mediaReviews(mediaRef, sort, viewer),
     queryFn: ({ pageParam, signal }) =>
       getMediaReviews(mediaRef, sort, pageParam, socialPageSize, signal),
+    initialPageParam: initialCursorPageParam,
+    getNextPageParam: getNextCursorPageParam,
+    staleTime: socialStaleTimeMs,
+  });
+}
+
+export function mediaCommentsQueryOptions(mediaRef: string, viewer: SocialViewer) {
+  return infiniteQueryOptions({
+    queryKey: socialQueryKeys.mediaComments(mediaRef, viewer),
+    queryFn: ({ pageParam, signal }) =>
+      getMediaComments(mediaRef, pageParam, socialPageSize, signal),
     initialPageParam: initialCursorPageParam,
     getNextPageParam: getNextCursorPageParam,
     staleTime: socialStaleTimeMs,

@@ -30,7 +30,7 @@ export type AdminReportStatus = (typeof ADMIN_REPORT_STATUSES)[number];
 const REVIEW_ID_PATTERN =
   /^review_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const COMMENT_ID_PATTERN =
-  /^comment_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+  /^(?:comment|media_comment)_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const REPORT_ID_PATTERN =
   /^report_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const PLAIN_TEXT_PATTERN = /^[^<>]*$/u;

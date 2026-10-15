@@ -39,7 +39,7 @@ export const contentReports = pgTable(
       .primaryKey(),
     reporterUserId: uuid('reporter_user_id').references(() => users.id, { onDelete: 'set null' }),
     targetType: moderationTargetType('target_type').notNull(),
-    targetId: varchar('target_id', { length: 44 }).notNull(),
+    targetId: varchar('target_id', { length: 50 }).notNull(),
     reason: reportReason('reason').notNull(),
     note: varchar('note', { length: 1000 }),
     status: reportStatus('status').default('open').notNull(),
@@ -66,7 +66,7 @@ export const contentReports = pgTable(
     ),
     check(
       'content_reports_target_id_format_check',
-      sql`(${table.targetType} = 'review' and ${table.targetId} ~ '^review_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$') or (${table.targetType} = 'comment' and ${table.targetId} ~ '^comment_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')`,
+      sql`(${table.targetType} = 'review' and ${table.targetId} ~ '^review_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$') or (${table.targetType} = 'comment' and ${table.targetId} ~ '^(comment|media_comment)_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')`,
     ),
     check(
       'content_reports_note_format_check',
@@ -91,7 +91,7 @@ export const moderationEvents = pgTable(
       onDelete: 'set null',
     }),
     action: moderationAction('action').notNull(),
-    entityId: varchar('entity_id', { length: 44 }).notNull(),
+    entityId: varchar('entity_id', { length: 50 }).notNull(),
     decision: varchar('decision', { length: 1000 }).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },

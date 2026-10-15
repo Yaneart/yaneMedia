@@ -15,6 +15,7 @@ import { RatingsModule } from './ratings/ratings.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { ReviewCommentsModule } from './comments/review-comments.module';
 import { ModerationModule } from './moderation/moderation.module';
+import { MediaCommentsModule } from './media-comments/media-comments.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { ModerationModule } from './moderation/moderation.module';
     RatingsModule,
     ReviewsModule,
     ReviewCommentsModule,
+    MediaCommentsModule,
     ModerationModule,
     ProfileModule,
   ],
