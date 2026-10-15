@@ -19,16 +19,18 @@ services:
   backend:
     build: ./backend
     env_file:
-        - ./backend/.env
+      - ./backend/.env
     environment:
       DATABASE_URL: postgresql://yanemedia:yanemedia@postgres:5432/yanemedia
       FRONTEND_ORIGIN: http://localhost:5173
       MEDIA_ASSETS_ROOT: /app/storage/media-assets
+      PROFILE_ASSETS_ROOT: /app/storage/profile-assets
       SESSION_TTL_DAYS: "30"
     ports:
       - "3000:3000"
     volumes:
       - ./storage/media-assets:/app/storage/media-assets
+      - ./storage/profile-assets:/app/storage/profile-assets
     depends_on:
       postgres:
         condition: service_healthy

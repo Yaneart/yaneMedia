@@ -9,6 +9,8 @@ import type { PlaybackEpisodeSelection } from '@/entities/playback';
 import { EpisodeSelector } from '@/features/episode-selection';
 import { FavoriteButton, useFavorites } from '@/features/favorite';
 import { usePlaybackSession } from '@/features/playback-session';
+import { MediaCommunity } from '@/features/media-community';
+import { UserRating } from '@/features/user-rating';
 import { SeasonSelector } from '@/features/season-selection';
 import {
   createPlaybackSourceCatalog,
@@ -32,13 +34,13 @@ import {
   type PlaybackMode,
 } from '@/features/source-selection';
 import { MediaCast } from '@/widgets/mdeia-cast';
-import { MediaFacts, MediaInfo } from '@/widgets/media-info';
+import { MediaDescriptionPanel, MediaFacts, MediaInfo } from '@/widgets/media-info';
 import {
   MediaPlayer,
   type MediaPlayerEmptyState,
   type MediaPlayerStatus,
 } from '@/widgets/media-player';
-import { Spinner } from '@/shared';
+import { Spinner, YaneMark, YaneMarkField } from '@/shared';
 import { useCallback, useEffect, useState } from 'react';
 
 import type { MediaAvailabilityStatus } from '../model/useMediaAvailability';
@@ -750,74 +752,84 @@ export function MediaView({
     <div className="grid min-w-0 items-start gap-8 xl:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)] xl:gap-10">
       <div className="order-2 min-w-0 space-y-8 xl:order-none xl:col-start-2 xl:row-start-1">
         <div className="min-w-0">
-          <div className="min-w-0 overflow-hidden rounded-card border border-context-border bg-surface shadow-surface">
-            <div className="grid min-w-0 grid-cols-2 gap-3 bg-surface-elevated px-4 py-3 sm:px-5 2xl:flex 2xl:flex-nowrap 2xl:items-center 2xl:gap-x-3">
-              {isToolbarLoading ? (
-                <AvailabilityToolbarStatus />
-              ) : (
-                <>
-                  {showLocalEpisodeControls && animeSeasonSelector && (
-                    <SeasonSelector
-                      seasons={animeSeasonSelector.options}
-                      selectedSeasonNumber={animeSeasonSelector.selectedSeasonNumber}
-                      onSeasonChange={onAnimeSeasonChange}
-                      variant="inline"
-                      compactDesktop
-                    />
-                  )}
-
-                  {showLocalEpisodeControls &&
-                    !animeSeasonSelector &&
-                    directSeasonNumbers.length > 0 && (
+          <div className="min-w-0 overflow-visible rounded-card border border-context-border bg-surface shadow-surface">
+            <div className="relative z-20 isolate">
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-0 z-0 overflow-hidden rounded-t-card bg-linear-to-br from-watermark/28 via-watermark/18 to-watermark/24"
+              >
+                <YaneMarkField />
+                <YaneMark className="absolute -top-10 -right-12 size-56 rotate-[138deg] text-watermark opacity-[0.26]" />
+                <div className="absolute inset-0 bg-linear-to-br from-transparent via-transparent to-watermark/8" />
+              </div>
+              <div className="relative z-10 grid min-w-0 grid-cols-2 gap-3 rounded-t-card bg-surface/70 px-4 py-3 sm:px-5 2xl:flex 2xl:flex-nowrap 2xl:items-center 2xl:gap-x-3">
+                {isToolbarLoading ? (
+                  <AvailabilityToolbarStatus />
+                ) : (
+                  <>
+                    {showLocalEpisodeControls && animeSeasonSelector && (
                       <SeasonSelector
-                        seasons={directSeasons}
-                        selectedSeasonNumber={selectedDirectEpisode?.seasonNumber ?? null}
-                        onSeasonChange={selectSeason}
+                        seasons={animeSeasonSelector.options}
+                        selectedSeasonNumber={animeSeasonSelector.selectedSeasonNumber}
+                        onSeasonChange={onAnimeSeasonChange}
                         variant="inline"
                         compactDesktop
                       />
                     )}
 
-                  {showLocalEpisodeControls && (
-                    <EpisodeSelector
-                      episodes={directEpisodeOptions}
-                      selectedEpisodeNumber={
-                        selectedDirectEpisode
-                          ? (getDirectEpisodeDisplayNumber(selectedDirectEpisode) ?? null)
-                          : null
-                      }
-                      onEpisodeChange={selectEpisode}
-                      variant="inline"
-                      compactDesktop
-                    />
-                  )}
+                    {showLocalEpisodeControls &&
+                      !animeSeasonSelector &&
+                      directSeasonNumbers.length > 0 && (
+                        <SeasonSelector
+                          seasons={directSeasons}
+                          selectedSeasonNumber={selectedDirectEpisode?.seasonNumber ?? null}
+                          onSeasonChange={selectSeason}
+                          variant="inline"
+                          compactDesktop
+                        />
+                      )}
 
-                  <div className="col-span-2 w-full 2xl:ml-auto 2xl:w-auto">
-                    <PlaybackSourcePicker
-                      embedSources={currentEmbedSources}
-                      directSources={currentDirectSources}
-                      selectedSource={selectedSource}
-                      selectedDirectSource={selectedDirectSource}
-                      selectedTrackKey={selectedDirectTrackKey}
-                      onEmbedSelect={(sourceRef) => {
-                        if (playbackMode !== 'embed') selectPlaybackMode('embed');
-                        selectEmbedSource(sourceRef);
-                      }}
-                      onDirectSelect={(trackKey) => {
-                        if (playbackMode !== 'direct') selectPlaybackMode('direct');
-                        selectTrack(trackKey);
-                      }}
-                      onQualitySelect={(sourceRef) =>
-                        selectDirectSource(
-                          currentDirectSources.find((source) => source.sourceRef === sourceRef),
-                        )
-                      }
-                      isLoading={sourcesPending && sourceSearchSettledMediaRef !== media.mediaRef}
-                      align="end"
-                    />
-                  </div>
-                </>
-              )}
+                    {showLocalEpisodeControls && (
+                      <EpisodeSelector
+                        episodes={directEpisodeOptions}
+                        selectedEpisodeNumber={
+                          selectedDirectEpisode
+                            ? (getDirectEpisodeDisplayNumber(selectedDirectEpisode) ?? null)
+                            : null
+                        }
+                        onEpisodeChange={selectEpisode}
+                        variant="inline"
+                        compactDesktop
+                      />
+                    )}
+
+                    <div className="col-span-2 w-full 2xl:ml-auto 2xl:w-auto">
+                      <PlaybackSourcePicker
+                        embedSources={currentEmbedSources}
+                        directSources={currentDirectSources}
+                        selectedSource={selectedSource}
+                        selectedDirectSource={selectedDirectSource}
+                        selectedTrackKey={selectedDirectTrackKey}
+                        onEmbedSelect={(sourceRef) => {
+                          if (playbackMode !== 'embed') selectPlaybackMode('embed');
+                          selectEmbedSource(sourceRef);
+                        }}
+                        onDirectSelect={(trackKey) => {
+                          if (playbackMode !== 'direct') selectPlaybackMode('direct');
+                          selectTrack(trackKey);
+                        }}
+                        onQualitySelect={(sourceRef) =>
+                          selectDirectSource(
+                            currentDirectSources.find((source) => source.sourceRef === sourceRef),
+                          )
+                        }
+                        isLoading={sourcesPending && sourceSearchSettledMediaRef !== media.mediaRef}
+                        align="end"
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
 
             <MediaPlayer
@@ -865,72 +877,72 @@ export function MediaView({
         </div>
 
         {media.description && (
-          <section
-            aria-label="Полное описание"
-            className="hidden rounded-card border border-context-border bg-surface-elevated p-6 xl:block 2xl:hidden"
-          >
-            <h2 className="text-heading text-text-primary">Описание</h2>
+          <MediaDescriptionPanel className="hidden xl:block 2xl:hidden">
             <p className="mt-3 text-body text-text-secondary">{media.description}</p>
-          </section>
+          </MediaDescriptionPanel>
         )}
+        <UserRating media={media} embedded className="hidden xl:block 2xl:hidden" />
       </div>
 
-      <MediaInfo
-        media={media}
-        variant="watch"
-        actions={
-          <FavoriteButton
-            isFavorite={mediaIsFavorite}
-            disabled={!canUpdateFavorites || isFavoriteUpdating(media.mediaRef)}
-            onFavoriteChange={(nextIsFavorite) => {
-              if (nextIsFavorite) {
-                addFavorite(media.mediaRef);
-              } else {
-                removeFavorite(media.mediaRef);
-              }
-            }}
-            mediaTitle={media.title}
-          />
-        }
-      />
+      <div className="contents xl:col-start-1 xl:row-start-1 xl:block">
+        <MediaInfo
+          media={media}
+          variant="watch"
+          actions={
+            <FavoriteButton
+              isFavorite={mediaIsFavorite}
+              disabled={!canUpdateFavorites || isFavoriteUpdating(media.mediaRef)}
+              onFavoriteChange={(nextIsFavorite) => {
+                if (nextIsFavorite) {
+                  addFavorite(media.mediaRef);
+                } else {
+                  removeFavorite(media.mediaRef);
+                }
+              }}
+              mediaTitle={media.title}
+            />
+          }
+        />
+      </div>
 
-      <section className="order-3 space-y-5 xl:hidden">
+      <section className="order-4 space-y-5 xl:hidden">
         {media.description && (
           <div className="sm:hidden">
-            <h2 className="text-heading text-text-primary">Описание</h2>
-            <p
-              className={[
-                'mt-3 text-body text-text-secondary',
-                isDescriptionExpanded ? '' : 'line-clamp-4',
-              ].join(' ')}
-            >
-              {media.description}
-            </p>
-            <button
-              type="button"
-              className="mt-2 text-sm font-semibold text-text-primary transition-colors hover:text-watermark"
-              onClick={() => setIsDescriptionExpanded((current) => !current)}
-              aria-expanded={isDescriptionExpanded}
-            >
-              {isDescriptionExpanded ? 'Свернуть' : 'Подробнее'}
-            </button>
+            <MediaDescriptionPanel compact>
+              <p
+                className={[
+                  'mt-2 text-body text-text-secondary',
+                  isDescriptionExpanded ? '' : 'line-clamp-4',
+                ].join(' ')}
+              >
+                {media.description}
+              </p>
+              <button
+                type="button"
+                className="mt-2 text-sm font-semibold text-text-primary transition-colors hover:text-watermark"
+                onClick={() => setIsDescriptionExpanded((current) => !current)}
+                aria-expanded={isDescriptionExpanded}
+              >
+                {isDescriptionExpanded ? 'Свернуть' : 'Подробнее'}
+              </button>
+            </MediaDescriptionPanel>
           </div>
         )}
+        <UserRating media={media} embedded className="sm:hidden" />
 
         <MediaFacts media={media} className="grid gap-2 text-caption" />
       </section>
 
       {media.description && (
-        <section
-          aria-label="Полное описание"
-          className="order-3 hidden rounded-card border border-context-border bg-surface-elevated p-6 2xl:col-span-2 2xl:block"
-        >
-          <h2 className="text-heading text-text-primary">Описание</h2>
+        <MediaDescriptionPanel className="order-4 hidden 2xl:col-span-2 2xl:block">
           <p className="mt-3 max-w-5xl text-body text-text-secondary">{media.description}</p>
-        </section>
+        </MediaDescriptionPanel>
       )}
+      <UserRating media={media} embedded className="order-5 hidden 2xl:col-span-2 2xl:block" />
 
-      <MediaCast persons={media.persons} className="order-4 xl:col-span-2" />
+      <MediaCommunity media={media} />
+
+      <MediaCast persons={media.persons} className="order-7 xl:col-span-2" />
     </div>
   );
 }

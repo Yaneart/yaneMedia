@@ -40,7 +40,6 @@ export function AppShell() {
     useAppScrollRestoration();
 
   const isHomePage = pathname === routePaths.home;
-
   const normalizedPathname = pathname.replace(/\/+$/, '') || routePaths.home;
   const mediaRouteMatch = matchPath(routePaths.media, normalizedPathname);
   const isActivePlaybackMediaPage = isActivePlaybackMediaRoute(
@@ -72,7 +71,7 @@ export function AppShell() {
         <div className="relative z-10">
           <DesktopNavigation
             homePath={routePaths.home}
-            profilePath={routePaths.login}
+            profilePath={routePaths.profile}
             primaryItems={primaryNavigationItems}
             secondaryItems={secondaryNavigationItems}
             onItemIntent={prefetchCatalog}
@@ -98,8 +97,7 @@ export function AppShell() {
             homePath={routePaths.home}
             favoritesPath={routePaths.favorites}
             historyPath={routePaths.history}
-            profilePath={routePaths.login}
-            overlay={isHomePage}
+            profilePath={routePaths.profile}
           />
         </div>
         <main

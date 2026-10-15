@@ -63,7 +63,7 @@ export function FavoriteProvider({ children }: FavoriteProviderProps) {
   const { state: authState, setGuest, refresh: refreshAuth } = useAuth();
   const queryClient = useQueryClient();
   const [guestMediaRefs, setGuestMediaRefs] = useState<Set<MediaRef>>(loadFavoriteMediaRefs);
-  const accountUserId = authState.status === 'authenticated' ? authState.user.id : null;
+  const accountUserId = authState.status === 'authenticated' ? authState.user.email : null;
   const currentUserIdRef = useRef(accountUserId);
   const renderedUserIdRef = useRef(accountUserId);
   const activeAccountMutationsRef = useRef(0);

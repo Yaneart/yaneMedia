@@ -5,23 +5,34 @@ import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 import { ApiResponseInterceptor } from './platform/http/api-response/api-response.interceptor';
 import { ApiExceptionFilter } from './platform/http/api-error/api-exception/api-exception.filter';
-import type { NextFunction, Response, Request } from 'express';
+import type { Express, NextFunction, Response, Request } from 'express';
 import { AppLogger } from './platform/logging/app-logger';
 import {
   DiscoveryResponseMetricsInterceptor,
   discoveryPerformanceMiddleware,
 } from './platform/http/discovery-performance/discovery-performance';
+import { socialPerformanceMiddleware } from './platform/http/social-performance/social-performance';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
+  const expressApplication = app.getHttpAdapter().getInstance() as Express;
+
+  expressApplication.disable('etag');
 
   app.setGlobalPrefix('api/v1');
 
   app.use(discoveryPerformanceMiddleware(app.get(AppLogger)));
+  app.use(socialPerformanceMiddleware(app.get(AppLogger)));
 
   app.use(
-    ['/api/v1/auth', '/api/v1/favorites', '/api/v1/history', '/api/v1/continue-watching'],
+    [
+      '/api/v1/auth',
+      '/api/v1/favorites',
+      '/api/v1/history',
+      '/api/v1/continue-watching',
+      '/api/v1/profile',
+    ],
     (_request: Request, response: Response, next: NextFunction) => {
       response.setHeader('Cache-Control', 'no-store');
       next();
@@ -33,7 +44,7 @@ async function bootstrap() {
   app.enableCors({
     origin: configService.getOrThrow<string>('FRONTEND_ORIGIN'),
     credentials: true,
-    exposedHeaders: ['Retry-After', 'ETag'],
+    exposedHeaders: ['Retry-After', 'ETag', 'Content-Location'],
   });
 
   app.useGlobalFilters(app.get(ApiExceptionFilter));

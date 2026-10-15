@@ -23,6 +23,7 @@ export type SelectProps = Omit<ComponentPropsWithoutRef<'div'>, 'onChange'> & {
   matchMenuWidth?: boolean;
   allowEmpty?: boolean;
   menuPlacement?: 'top' | 'bottom';
+  menuAlign?: 'start' | 'end';
 };
 
 export function Select({
@@ -34,6 +35,7 @@ export function Select({
   matchMenuWidth = false,
   allowEmpty = true,
   menuPlacement = 'bottom',
+  menuAlign = 'start',
   className = '',
   ...props
 }: SelectProps) {
@@ -184,7 +186,7 @@ export function Select({
           aria-label={ariaLabel}
           onKeyDown={handleListboxKeyDown}
           className={[
-            'absolute left-0 z-30 max-h-[20.5rem]',
+            `absolute z-30 max-h-[20.5rem] ${menuAlign === 'end' ? 'right-0' : 'left-0'}`,
             menuPlacement === 'top' ? 'bottom-full mb-2' : 'top-full mt-2',
             matchMenuWidth ? 'w-full' : 'w-max min-w-full',
             'overflow-x-hidden overflow-y-auto',

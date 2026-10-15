@@ -17,7 +17,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
 
   const requestRef = useRef<AbortController | null>(null);
-  const authenticatedUserIdRef = useRef<string | null>(null);
+  const authenticatedAccountKeyRef = useRef<string | null>(null);
 
   const cancelRequest = useCallback(() => {
     requestRef.current?.abort();
@@ -28,12 +28,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     (user: AuthUser) => {
       cancelRequest();
 
-      const previousUserId = authenticatedUserIdRef.current;
-      if (previousUserId && previousUserId !== user.id) {
-        clearAccountQueries(queryClient, previousUserId);
+      const previousAccountKey = authenticatedAccountKeyRef.current;
+      if (previousAccountKey && previousAccountKey !== user.email) {
+        clearAccountQueries(queryClient, previousAccountKey);
       }
 
-      authenticatedUserIdRef.current = user.id;
+      authenticatedAccountKeyRef.current = user.email;
       setState({ status: 'authenticated', user });
     },
     [cancelRequest, queryClient],
@@ -41,8 +41,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const setGuest = useCallback(() => {
     cancelRequest();
-    clearAccountQueries(queryClient, authenticatedUserIdRef.current ?? undefined);
-    authenticatedUserIdRef.current = null;
+    clearAccountQueries(queryClient, authenticatedAccountKeyRef.current ?? undefined);
+    authenticatedAccountKeyRef.current = null;
     setState({ status: 'guest', user: null });
   }, [cancelRequest, queryClient]);
 

@@ -48,6 +48,9 @@ describe('editorial query persistence', () => {
     ] as const;
     const excludedKeys = [
       ['account', 'me'],
+      ['account', 'owner@example.com', 'social', 'profile'],
+      ['social', 'public', 'profiles', 'owner'],
+      ['social', 'guest', 'reviews', 'review_1'],
       ['favorites', 'user-1'],
       ['media', 'details', 'imdb:tt1234567'],
       ['media', 'availability', 'imdb:tt1234567'],

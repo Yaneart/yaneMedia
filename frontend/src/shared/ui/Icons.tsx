@@ -35,5 +35,11 @@ export { default as VolumeIcon } from '@mingcute/react/core-regular/volume';
 export { default as VolumeMuteIcon } from '@mingcute/react/core-regular/volume-mute';
 export { default as DeleteIcon } from '@mingcute/react/core-regular/delete-2';
 export { default as DeviceIcon } from '@mingcute/react/core-regular/device';
+export { default as ExitIcon } from '@mingcute/react/core-regular/exit-door';
+export { default as ArrowRightIcon } from '@mingcute/react/core-regular/arrow-right';
+export { default as CommentIcon } from '@mingcute/react/core-regular/comment';
+export { default as MailIcon } from '@mingcute/react/core-regular/mail';
+export { default as ShieldIcon } from '@mingcute/react/core-regular/shield';
+export { default as StarIcon } from '@mingcute/react/core-regular/star';
 
 export type { IconProps } from '@mingcute/react';

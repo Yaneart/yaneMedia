@@ -26,13 +26,14 @@ export class AuthRepository {
   async findUserBySessionHash(
     tokenHash: string,
     now = new Date(),
-  ): Promise<Pick<User, 'id' | 'displayName' | 'email' | 'createdAt'> | undefined> {
+  ): Promise<Pick<User, 'id' | 'displayName' | 'email' | 'createdAt' | 'role'> | undefined> {
     const [user] = await this.databaseService.db
       .select({
         id: users.id,
         displayName: users.displayName,
         email: users.email,
         createdAt: users.createdAt,
+        role: users.role,
       })
       .from(sessions)
       .innerJoin(users, eq(sessions.userId, users.id))

@@ -31,7 +31,7 @@ const KIND_DIRECTORIES: Record<MediaAssetKind, string> = {
 export const MEDIA_ASSET_MAX_DIMENSIONS: Record<MediaAssetKind, { width: number; height: number }> =
   {
     poster: { width: 640, height: 960 },
-    backdrop: { width: 1920, height: 1080 },
+    backdrop: { width: 3840, height: 2160 },
   };
 const MEDIA_ASSET_WEBP_QUALITY = 82;
 

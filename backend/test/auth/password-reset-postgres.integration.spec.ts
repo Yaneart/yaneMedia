@@ -35,11 +35,13 @@ describePostgres('password reset with PostgreSQL', () => {
     const database = drizzle(client);
     const oldPassword = 'Old password 123';
     const newPassword = 'New password 456';
+    const suffix = randomUUID().replaceAll('-', '').slice(0, 16);
     const [user] = await database
       .insert(users)
       .values({
+        handle: `reset_${suffix}`,
         displayName: 'Password reset probe',
-        email: `password-reset-${randomUUID()}@example.com`,
+        email: `password-reset-${suffix}@example.com`,
         emailVerifiedAt: new Date(),
         passwordHash: await hashPassword(oldPassword),
       })

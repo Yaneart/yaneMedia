@@ -18,3 +18,29 @@ export function YaneMark({ className = '', ...props }: YaneMarkProps) {
     </svg>
   );
 }
+
+const backgroundMarks = [
+  'left-[7%] top-[12%] size-44 rotate-[22deg] opacity-[0.28]',
+  'left-[18%] top-[30%] size-24 -rotate-[28deg] opacity-[0.24]',
+  'left-[42%] -top-8 size-56 rotate-[138deg] opacity-[0.26]',
+  'left-[68%] top-[18%] size-32 rotate-[35deg] opacity-[0.27]',
+  '-right-10 top-[42%] size-56 -rotate-[20deg] opacity-[0.3]',
+  'left-[7%] top-[64%] size-28 rotate-[142deg] opacity-[0.22]',
+  'left-[35%] top-[72%] size-40 rotate-[28deg] opacity-[0.25]',
+  'left-[59%] top-[52%] size-24 -rotate-[18deg] opacity-[0.22]',
+  'left-[84%] top-[78%] size-40 rotate-[145deg] opacity-[0.28]',
+  'left-[25%] bottom-0 size-40 rotate-[24deg] opacity-[0.28]',
+] as const;
+
+export function YaneMarkField() {
+  return (
+    <>
+      {backgroundMarks.map((className) => (
+        <YaneMark
+          key={className}
+          className={`absolute text-watermark ${className}`}
+        />
+      ))}
+    </>
+  );
+}

@@ -48,8 +48,15 @@ export class AuthController {
 
   @Get('me')
   async me(@Req() request: AuthRequest): Promise<{ user: AuthUserDto | null }> {
+    const user = await this.sessionGuard.findUser(request.cookies?.[SESSION_COOKIE_NAME]);
     return {
-      user: await this.sessionGuard.findUser(request.cookies?.[SESSION_COOKIE_NAME]),
+      user: user
+        ? {
+            displayName: user.displayName,
+            email: user.email,
+            createdAt: user.createdAt,
+          }
+        : null,
     };
   }
 

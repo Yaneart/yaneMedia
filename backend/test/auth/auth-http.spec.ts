@@ -134,7 +134,6 @@ describe('auth HTTP contract', () => {
     expect(await response.json()).toEqual({
       data: {
         user: {
-          id,
           displayName: 'Artem',
           email: 'artem@example.com',
           createdAt: createdAt.toISOString(),
@@ -164,7 +163,7 @@ describe('auth HTTP contract', () => {
     const response = await register(dto);
     expect(response.status).toBe(409);
     expect(await response.json()).toEqual({
-      error: { code: 'CONFLICT', message: 'Этот email уже занят' },
+      error: { code: 'RESOURCE_CONFLICT', message: 'Этот email уже занят' },
     });
   });
 
@@ -173,7 +172,7 @@ describe('auth HTTP contract', () => {
     const response = await register(dto);
     expect(response.status).toBe(500);
     expect(await response.json()).toEqual({
-      error: { code: 'INTERNAL_SERVER_ERROR', message: 'Internal server error' },
+      error: { code: 'INTERNAL_ERROR', message: 'Internal server error' },
     });
   });
 
@@ -198,6 +197,7 @@ describe('auth HTTP contract', () => {
       displayName: 'Artem',
       email: 'artem@example.com',
       createdAt,
+      role: 'admin',
     });
 
     const response = await fetch(`${url}/me`, {
@@ -208,7 +208,6 @@ describe('auth HTTP contract', () => {
     expect(await response.json()).toEqual({
       data: {
         user: {
-          id,
           displayName: 'Artem',
           email: 'artem@example.com',
           createdAt: createdAt.toISOString(),
@@ -236,12 +235,12 @@ describe('auth HTTP contract', () => {
     async (environment) => {
       config.set('NODE_ENV', environment);
       const publicUser = {
-        id,
         displayName: 'Artem',
         email: 'artem@example.com',
         createdAt: createdAt.toISOString(),
       };
       findByEmail.mockResolvedValue({
+        id,
         ...publicUser,
         handle: 'yaneart',
         bio: '',
@@ -289,7 +288,7 @@ describe('auth HTTP contract', () => {
 
     expect(response.status).toBe(401);
     expect(await response.json()).toEqual({
-      error: { code: 'UNAUTHORIZED', message: 'Неверный email или пароль' },
+      error: { code: 'AUTH_REQUIRED', message: 'Неверный email или пароль' },
     });
     expect(response.headers.get('set-cookie')).toBeNull();
     expect(createSession).not.toHaveBeenCalled();

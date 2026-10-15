@@ -1,15 +1,19 @@
 export { Logo } from './ui/Logo';
 
 export { YaneMark } from './ui/YaneMark';
+export { YaneMarkField } from './ui/YaneMark';
 export type { YaneMarkProps } from './ui/YaneMark';
 
 export {
+  ArrowRightIcon,
   AnimeIcon,
   AnimeFilledIcon,
   CloseIcon,
+  CommentIcon,
   DeleteIcon,
   DeviceIcon,
   DownIcon,
+  ExitIcon,
   FullscreenIcon,
   FullscreenExitIcon,
   FavoriteIcon,
@@ -18,6 +22,7 @@ export {
   HistoryFilledIcon,
   HomeIcon,
   HomeFilledIcon,
+  MailIcon,
   MoonIcon,
   MoonFilledIcon,
   MoreIcon,
@@ -28,7 +33,9 @@ export {
   ProfileIcon,
   SearchIcon,
   SearchFilledIcon,
+  ShieldIcon,
   SkipForwardIcon,
+  StarIcon,
   SeriesIcon,
   SeriesFilledIcon,
   SunIcon,
@@ -67,6 +74,9 @@ export type { SkeletonProps } from './ui/Skeleton';
 export { MediaPageSkeleton } from './ui/MediaPageSkeleton';
 export { SearchPageSkeleton } from './ui/SearchPageSkeleton';
 export { EditorialCollectionPageSkeleton } from './ui/EditorialCollectionPageSkeleton';
+export { SocialPageSkeleton } from './ui/SocialPageSkeleton';
+export type { SocialPageSkeletonProps } from './ui/SocialPageSkeleton';
+export { SocialNotFoundState } from './ui/SocialNotFoundState';
 
 export { EmptyState } from './ui/EmptyState';
 export type { EmptyStateProps } from './ui/EmptyState';
@@ -75,7 +85,7 @@ export { ErrorState } from './ui/ErrorState';
 export type { ErrorStateProps, ErrorStateTone, ErrorStateVariant } from './ui/ErrorState';
 
 export { Popover } from './ui/Popover';
-export type { PopoverAlign, PopoverProps } from './ui/Popover';
+export type { PopoverAlign, PopoverProps, PopoverSide } from './ui/Popover';
 
 export { ContentRow } from './ui/ContentRow';
 export type { ContentRowProps, ContentRowVariant } from './ui/ContentRow';

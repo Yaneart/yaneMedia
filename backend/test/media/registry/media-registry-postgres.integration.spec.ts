@@ -144,6 +144,7 @@ describePostgres('media registry with PostgreSQL', () => {
     const [user] = await drizzle(client)
       .insert(users)
       .values({
+        handle: `registry_${fixtureId}`,
         displayName: 'Registry merge probe',
         email: `registry-merge-${randomUUID()}@example.com`,
         passwordHash: 'unused',

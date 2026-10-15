@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Post, UseGuards } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import type { AuthUserDto } from '../auth/dto/auth-user.dto';
+import type { AuthenticatedUser } from '../auth/auth-request';
 import { CsrfGuard } from '../auth/guards/csrf.guard';
 import { SessionGuard } from '../auth/guards/session.guard';
 import { HistoryResponseDto } from './dto/history-response.dto';
@@ -13,27 +13,27 @@ export class HistoryController {
   constructor(private readonly historyService: HistoryService) {}
 
   @Get()
-  async list(@CurrentUser() user: AuthUserDto): Promise<HistoryResponseDto> {
+  async list(@CurrentUser() user: AuthenticatedUser): Promise<HistoryResponseDto> {
     return { entries: await this.historyService.listEntries(user.id) };
   }
 
   @Post()
   @HttpCode(200)
   async record(
-    @CurrentUser() user: AuthUserDto,
+    @CurrentUser() user: AuthenticatedUser,
     @Body() dto: RecordHistoryDto,
   ): Promise<HistoryResponseDto> {
     return { entries: await this.historyService.recordOpening(user.id, dto.mediaRef) };
   }
 
   @Delete()
-  async clear(@CurrentUser() user: AuthUserDto): Promise<HistoryResponseDto> {
+  async clear(@CurrentUser() user: AuthenticatedUser): Promise<HistoryResponseDto> {
     return { entries: await this.historyService.clearEntries(user.id) };
   }
 
   @Delete(':mediaRef')
   async remove(
-    @CurrentUser() user: AuthUserDto,
+    @CurrentUser() user: AuthenticatedUser,
     @Param() dto: HistoryMediaRefDto,
   ): Promise<HistoryResponseDto> {
     return { entries: await this.historyService.removeEntry(user.id, dto.mediaRef) };

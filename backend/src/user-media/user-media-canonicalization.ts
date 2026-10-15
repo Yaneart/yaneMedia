@@ -3,6 +3,8 @@ import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { continueWatchingItems } from '../continue-watching/entities/continue-watching-item.entity';
 import { favorites } from '../favorites/entities/favorite.entity';
 import { historyItems } from '../history/entities/history-item.entity';
+import { ratings } from '../ratings/entities/rating.entity';
+import { reviews } from '../reviews/entities/review.entity';
 import { users } from '../users/entities/user.entity';
 
 export interface MediaRefMapping {
@@ -11,7 +13,7 @@ export interface MediaRefMapping {
 }
 
 type Database = NodePgDatabase;
-type UserMediaDatabase = Pick<Database, 'select' | 'delete' | 'insert' | 'execute'>;
+type UserMediaDatabase = Pick<Database, 'select' | 'delete' | 'insert' | 'update' | 'execute'>;
 
 export async function canonicalizeUserMedia(
   database: Database,
@@ -118,6 +120,69 @@ export async function canonicalizeUserMediaInTransaction(
           mediaRef: canonicalMediaRef,
         })),
       );
+    }
+
+    const ratingUserCondition = userId ? eq(ratings.userId, userId) : undefined;
+    const ratingRows = await transaction
+      .select()
+      .from(ratings)
+      .where(and(ratingUserCondition, inArray(ratings.mediaRef, mediaRefs)));
+    const ratingByUser = new Map<string, (typeof ratingRows)[number]>();
+    for (const row of ratingRows) {
+      const current = ratingByUser.get(row.userId);
+      if (
+        !current ||
+        row.updatedAt > current.updatedAt ||
+        (row.updatedAt.getTime() === current.updatedAt.getTime() &&
+          row.mediaRef === canonicalMediaRef)
+      ) {
+        ratingByUser.set(row.userId, row);
+      }
+    }
+    if (ratingRows.length > 0) {
+      await transaction
+        .delete(ratings)
+        .where(and(ratingUserCondition, inArray(ratings.mediaRef, mediaRefs)));
+      await transaction.insert(ratings).values(
+        [...ratingByUser.values()].map((row) => ({
+          ...row,
+          mediaRef: canonicalMediaRef,
+        })),
+      );
+    }
+
+    const reviewUserCondition = userId ? eq(reviews.userId, userId) : undefined;
+    const reviewRows = await transaction
+      .select()
+      .from(reviews)
+      .where(and(reviewUserCondition, inArray(reviews.mediaRef, mediaRefs)));
+    const activeReviewByUser = new Map<string, (typeof reviewRows)[number]>();
+    const duplicateActiveReviewIds: string[] = [];
+    for (const row of reviewRows) {
+      if (!row.userId || row.deletedAt) continue;
+      const current = activeReviewByUser.get(row.userId);
+      if (!current) {
+        activeReviewByUser.set(row.userId, row);
+        continue;
+      }
+      const rowIsNewer =
+        row.updatedAt > current.updatedAt ||
+        (row.updatedAt.getTime() === current.updatedAt.getTime() &&
+          row.reviewId > current.reviewId);
+      duplicateActiveReviewIds.push(rowIsNewer ? current.reviewId : row.reviewId);
+      if (rowIsNewer) activeReviewByUser.set(row.userId, row);
+    }
+    if (duplicateActiveReviewIds.length > 0) {
+      await transaction
+        .update(reviews)
+        .set({ deletedAt: new Date() })
+        .where(inArray(reviews.reviewId, duplicateActiveReviewIds));
+    }
+    if (reviewRows.length > 0) {
+      await transaction
+        .update(reviews)
+        .set({ mediaRef: canonicalMediaRef })
+        .where(and(reviewUserCondition, inArray(reviews.mediaRef, [...sourceRefs])));
     }
   }
 }

@@ -2,16 +2,17 @@ import { Logo, mainContentId, Skeleton, YaneMark } from '@/shared';
 import { authBackgroundMarks } from './authBackgroundMarks';
 
 export type AuthFormLayoutSkeletonProps = {
-  variant: 'login' | 'register';
+  variant: 'login' | 'register' | 'forgot-password';
 };
 
 const fieldMessageSpace = {
   login: [true, true],
   register: [true, false, true, false],
+  'forgot-password': [true],
 } satisfies Record<AuthFormLayoutSkeletonProps['variant'], boolean[]>;
 
 export function AuthFormLayoutSkeleton({ variant }: AuthFormLayoutSkeletonProps) {
-  const compactMobile = variant === 'register';
+  const compactMobile = variant !== 'login';
 
   return (
     <div

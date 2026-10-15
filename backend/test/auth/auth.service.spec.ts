@@ -93,7 +93,6 @@ describe('AuthService', () => {
   it('hashes the exact password, persists allowed fields and sends verification', async () => {
     await expect(service.register({ ...dto, role: 'admin' } as typeof dto)).resolves.toEqual({
       user: {
-        id: user.id,
         displayName: user.displayName,
         email: user.email,
         createdAt: user.createdAt.toISOString(),
@@ -164,7 +163,6 @@ describe('AuthService', () => {
       expect(findByEmail).toHaveBeenCalledWith(dto.email);
       expect(password.verifyPassword).toHaveBeenCalledWith(user.passwordHash, dto.password);
       expect(first.user).toEqual({
-        id: user.id,
         displayName: user.displayName,
         email: user.email,
         createdAt: user.createdAt.toISOString(),

@@ -128,7 +128,7 @@ export function MediaPlayer({
       <div
         className={[
           'relative isolate aspect-video overflow-hidden bg-black',
-          embedded ? '' : 'rounded-card border border-border shadow-surface',
+          embedded ? 'rounded-b-card' : 'rounded-card border border-border shadow-surface',
         ].join(' ')}
       >
         {!isStarted && backdrop && (

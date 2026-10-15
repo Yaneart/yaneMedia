@@ -1,4 +1,5 @@
 import { Skeleton } from './Skeleton';
+import { YaneMark, YaneMarkField } from './YaneMark';
 
 export function MediaPageSkeleton() {
   return (
@@ -15,19 +16,30 @@ export function MediaPageSkeleton() {
         className="order-2 min-w-0 space-y-8 xl:order-none xl:col-start-2 xl:row-start-1"
       >
         <div className="min-w-0 overflow-hidden rounded-card border border-context-border bg-surface shadow-surface">
-          <div className="grid min-w-0 grid-cols-2 gap-3 bg-surface-elevated px-4 py-3 sm:px-5 2xl:flex 2xl:items-center">
-            <Skeleton className="h-11 w-full rounded-control 2xl:w-40" />
-            <Skeleton className="h-11 w-full rounded-control 2xl:w-48" />
-            <Skeleton className="col-span-2 h-10 w-full rounded-control 2xl:ml-auto 2xl:w-44" />
+          <div className="relative isolate overflow-hidden rounded-t-card border-b border-context-border bg-linear-to-br from-watermark/28 via-watermark/18 to-watermark/24">
+            <div
+              className="pointer-events-none absolute inset-0 overflow-hidden"
+              aria-hidden="true"
+            >
+              <YaneMarkField />
+              <YaneMark className="absolute -top-12 right-[30%] size-48 rotate-[138deg] text-watermark opacity-[0.26]" />
+            </div>
+            <div className="relative z-10 grid min-w-0 grid-cols-2 gap-3 bg-surface/70 px-4 py-3 sm:px-5 2xl:flex 2xl:items-center">
+              <Skeleton className="h-11 w-full rounded-control 2xl:w-40" />
+              <Skeleton className="h-11 w-full rounded-control 2xl:w-48" />
+              <Skeleton className="col-span-2 h-10 w-full rounded-control 2xl:ml-auto 2xl:w-44" />
+            </div>
           </div>
-          <Skeleton className="aspect-video w-full rounded-none" />
+          <Skeleton className="aspect-video w-full !rounded-none" />
         </div>
 
-        <div className="hidden space-y-3 rounded-card border border-context-border bg-surface-elevated p-6 xl:block 2xl:hidden">
-          <Skeleton className="h-7 w-36" />
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-4 w-5/6" />
-          <Skeleton className="h-4 w-2/3" />
+        <div className="hidden rounded-card border border-context-border bg-linear-to-br from-watermark/28 via-watermark/18 to-watermark/24 p-2 xl:block 2xl:hidden">
+          <div className="space-y-3 rounded-card border border-context-border/80 bg-surface/70 p-4 sm:p-5">
+            <Skeleton className="h-7 w-36" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-5/6" />
+            <Skeleton className="h-4 w-2/3" />
+          </div>
         </div>
       </div>
 
@@ -46,11 +58,13 @@ export function MediaPageSkeleton() {
           <Skeleton className="order-2 mt-1 h-4 w-2/5 xl:order-3" />
           <Skeleton className="order-4 mt-4 h-11 w-40 rounded-control sm:hidden xl:block" />
 
-          <div className="order-5 mt-5 hidden space-y-2 sm:block xl:hidden">
-            <Skeleton className="h-7 w-36" />
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-5/6" />
-            <Skeleton className="h-4 w-2/3" />
+          <div className="order-5 mt-5 hidden rounded-card border border-context-border bg-linear-to-br from-watermark/28 via-watermark/18 to-watermark/24 p-2 sm:block xl:hidden">
+            <div className="space-y-2 rounded-card border border-context-border/80 bg-surface/70 p-3 sm:p-4">
+              <Skeleton className="h-7 w-36" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-5/6" />
+              <Skeleton className="h-4 w-2/3" />
+            </div>
           </div>
         </div>
 
@@ -59,12 +73,14 @@ export function MediaPageSkeleton() {
 
       <div
         aria-hidden="true"
-        className="order-3 hidden space-y-3 rounded-card border border-context-border bg-surface-elevated p-6 2xl:col-span-2 2xl:block"
+        className="order-3 hidden rounded-card border border-context-border bg-linear-to-br from-watermark/28 via-watermark/18 to-watermark/24 p-2 2xl:col-span-2 2xl:block"
       >
-        <Skeleton className="h-7 w-36" />
-        <Skeleton className="h-4 w-full" />
-        <Skeleton className="h-4 w-5/6" />
-        <Skeleton className="h-4 w-2/3" />
+        <div className="space-y-3 rounded-card border border-context-border/80 bg-surface/70 p-4 sm:p-5">
+          <Skeleton className="h-7 w-36" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-5/6" />
+          <Skeleton className="h-4 w-2/3" />
+        </div>
       </div>
     </section>
   );

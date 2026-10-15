@@ -45,10 +45,24 @@ export interface DiscoveryMediaEnginePerformanceEvent {
   warnings: number;
 }
 
+export interface SocialHttpPerformanceEvent {
+  event: 'social.http';
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+  area: 'profile' | 'rating' | 'review' | 'comment' | 'report' | 'moderation';
+  route: string;
+  result: 'success' | 'error';
+  status: number;
+  durationMs: number;
+  responseBytes: number;
+  responseBudgetBytes: number;
+  responseBudgetExceeded: boolean;
+}
+
 export type PerformanceEvent =
   | DiscoveryHttpPerformanceEvent
   | DiscoveryCatalogReadPerformanceEvent
-  | DiscoveryMediaEnginePerformanceEvent;
+  | DiscoveryMediaEnginePerformanceEvent
+  | SocialHttpPerformanceEvent;
 
 export type ProviderDiagnosticEvent = ProviderDiagnostic & { event: 'media.provider_diagnostic' };
 

@@ -3,11 +3,14 @@ import { Test } from '@nestjs/testing';
 import { randomUUID } from 'node:crypto';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Client } from 'pg';
+import type { NextFunction, Request, Response } from 'express';
+import cookieParser from 'cookie-parser';
 import { AuthModule } from '../../src/auth/auth.module';
 import { AuthRepository } from '../../src/auth/auth.repository';
 import { verifyPassword } from '../../src/auth/password';
 import { hashToken } from '../../src/auth/token';
 import { DatabaseService } from '../../src/database/database.service';
+import { MailService } from '../../src/mail/mail.service';
 import { ApiExceptionFilter } from '../../src/platform/http/api-error/api-exception/api-exception.filter';
 import { ApiResponseInterceptor } from '../../src/platform/http/api-response/api-response.interceptor';
 import type { AppLogger } from '../../src/platform/logging/app-logger';
@@ -31,8 +34,15 @@ describePostgres('auth with PostgreSQL', () => {
     const module = await Test.createTestingModule({ imports: [AuthModule] })
       .overrideProvider(DatabaseService)
       .useValue({ db: drizzle(client) })
+      .overrideProvider(MailService)
+      .useValue({ sendVerificationEmail: jest.fn().mockResolvedValue(undefined) })
       .compile();
     app = module.createNestApplication();
+    app.use(cookieParser());
+    app.use((_request: Request, response: Response, next: NextFunction) => {
+      response.setHeader('Cache-Control', 'no-store');
+      next();
+    });
     app.setGlobalPrefix('api/v1');
     app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
     app.useGlobalInterceptors(new ApiResponseInterceptor());
@@ -61,7 +71,7 @@ describePostgres('auth with PostgreSQL', () => {
   function register(body: object) {
     return fetch(`${url}/register`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-YaneMedia-CSRF': '1' },
       body: JSON.stringify(body),
     });
   }
@@ -87,7 +97,6 @@ describePostgres('auth with PostgreSQL', () => {
     expect(await response.json()).toEqual({
       data: {
         user: {
-          id: stored.id,
           displayName: 'Probe',
           email,
           createdAt: stored.createdAt.toISOString(),
@@ -109,7 +118,7 @@ describePostgres('auth with PostgreSQL', () => {
     const raced = await register(duplicate);
     expect(raced.status).toBe(409);
     expect(await raced.json()).toEqual({
-      error: { code: 'CONFLICT', message: 'Этот email уже занят' },
+      error: { code: 'RESOURCE_CONFLICT', message: 'Этот email уже занят' },
     });
     await client.query('ROLLBACK TO SAVEPOINT duplicate_probe');
     const count = await client.query<{ count: string }>(
@@ -125,6 +134,7 @@ describePostgres('auth with PostgreSQL', () => {
       email: `session-probe-${randomUUID()}@example.com`,
       passwordHash: 'unused-in-session-lookup',
     });
+    await client.query('UPDATE users SET email_verified_at = now() WHERE id = $1', [user.id]);
     const now = new Date('2026-09-05T10:00:00.000Z');
     const expiresAt = new Date(now.getTime() + 1000);
     const tokenHash = hashToken(randomUUID());
@@ -138,6 +148,7 @@ describePostgres('auth with PostgreSQL', () => {
       displayName: user.displayName,
       email: user.email,
       createdAt: user.createdAt,
+      role: 'user',
     });
     await expect(
       authRepository.findUserBySessionHash(tokenHash, expiresAt),
@@ -160,13 +171,15 @@ describePostgres('auth with PostgreSQL', () => {
     const registered = await register({ displayName: 'Login probe', email, password });
     expect(registered.status).toBe(201);
     const publicResponse: unknown = await registered.json();
+    expect(publicResponse).not.toHaveProperty('data.user.id');
     const user = await usersService.findByEmail(email);
     if (!user) throw new Error('Missing registered user');
+    await client.query('UPDATE users SET email_verified_at = now() WHERE id = $1', [user.id]);
 
     function login(body: object) {
       return fetch(`${url}/login`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-YaneMedia-CSRF': '1' },
         body: JSON.stringify(body),
       });
     }
@@ -185,6 +198,11 @@ describePostgres('auth with PostgreSQL', () => {
       const token = /^yanemedia_session=([A-Za-z0-9_-]{43});/.exec(cookie)?.[1];
       if (!token) throw new Error('Missing session cookie');
       tokens.push(token);
+      const meResponse = await fetch(`${url}/me`, {
+        headers: { Cookie: `yanemedia_session=${token}` },
+      });
+      expect(meResponse.status).toBe(200);
+      expect(await meResponse.json()).toEqual(publicResponse);
       const stored = await client.query<{ token_hash: string; user_id: string; expires_at: Date }>(
         'SELECT token_hash, user_id, expires_at FROM sessions WHERE token_hash = $1',
         [hashToken(token)],
@@ -205,7 +223,7 @@ describePostgres('auth with PostgreSQL', () => {
       const response = await login(body);
       expect(response.status).toBe(401);
       expect(await response.json()).toEqual({
-        error: { code: 'UNAUTHORIZED', message: 'Неверный email или пароль' },
+        error: { code: 'AUTH_REQUIRED', message: 'Неверный email или пароль' },
       });
       expect(response.headers.get('set-cookie')).toBeNull();
     }

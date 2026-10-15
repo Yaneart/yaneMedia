@@ -15,6 +15,7 @@ describe('public user identity schema', () => {
       'avatar_asset_id',
       'ratings_public',
       'favorites_public',
+      'role',
       'email',
       'email_verified_at',
       'password_hash',

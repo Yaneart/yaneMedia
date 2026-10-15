@@ -15,7 +15,7 @@ export const favorites = pgTable(
   },
   (table) => [
     primaryKey({ columns: [table.userId, table.mediaRef] }),
-    index('favorites_user_id_added_at_index').on(table.userId, table.addedAt),
+    index('favorites_user_id_added_at_index').on(table.userId, table.addedAt, table.mediaRef),
   ],
 );
 

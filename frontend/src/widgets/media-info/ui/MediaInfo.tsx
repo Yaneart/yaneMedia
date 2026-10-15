@@ -1,4 +1,6 @@
 import { MediaPosterFallback, type MediaDetails, type MediaPersonRole } from '@/entities/media';
+import { UserRating } from '@/features/user-rating';
+import { YaneMark, YaneMarkField } from '@/shared';
 import type { ReactNode } from 'react';
 
 export type MediaInfoProps = {
@@ -11,6 +13,35 @@ export type MediaFactsProps = {
   media: MediaDetails;
   className?: string;
 };
+
+export function MediaDescriptionPanel({
+  children,
+  className = '',
+  compact = false,
+}: {
+  children: ReactNode;
+  className?: string;
+  compact?: boolean;
+}) {
+  return (
+    <section
+      aria-label="Полное описание"
+      className={`relative isolate overflow-hidden rounded-card border border-context-border bg-linear-to-br from-watermark/28 via-watermark/18 to-watermark/24 p-2 shadow-surface sm:p-3 ${className}`}
+    >
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-0 overflow-hidden rounded-card">
+        <YaneMarkField />
+        <YaneMark className="absolute -top-10 -right-12 size-56 rotate-[138deg] text-watermark opacity-[0.26]" />
+        <div className="absolute inset-0 bg-linear-to-br from-transparent via-transparent to-watermark/8" />
+      </div>
+      <div
+        className={`relative z-10 rounded-card border border-context-border/80 bg-surface/70 ${compact ? 'p-3 sm:p-4' : 'p-4 sm:p-5'}`}
+      >
+        <h2 className="text-heading text-text-primary">Описание</h2>
+        {children}
+      </div>
+    </section>
+  );
+}
 
 const typeLabels = {
   movie: 'Фильм',
@@ -70,12 +101,12 @@ export function MediaInfo({ media, actions, variant = 'default' }: MediaInfoProp
     typeLabels[media.type],
     media.year?.toString(),
     media.runtimeMinutes ? formatRuntime(media.runtimeMinutes) : undefined,
-    media.rating ? `${media.rating.value} / ${media.rating.scale}` : undefined,
+    media.rating ? `Рейтинг каталога: ${media.rating.value} / ${media.rating.scale}` : undefined,
   ].filter((item): item is string => item !== undefined);
   const mobileMetadata = [
     media.year?.toString(),
     media.runtimeMinutes ? formatRuntime(media.runtimeMinutes) : undefined,
-    media.rating?.value.toString(),
+    media.rating ? `Каталог: ${media.rating.value}` : undefined,
   ].filter((item): item is string => item !== undefined);
 
   const fullWidthOnMobile = media.poster
@@ -203,10 +234,13 @@ export function MediaInfo({ media, actions, variant = 'default' }: MediaInfoProp
         )}
 
         {isWatchLayout && media.description && (
-          <div className="order-5 mt-5 hidden sm:block xl:hidden">
-            <h2 className="text-heading text-text-primary">Описание</h2>
+          <MediaDescriptionPanel className="order-5 mt-5 hidden sm:block xl:hidden" compact>
             <p className="mt-2 line-clamp-6 text-body text-text-secondary">{media.description}</p>
-          </div>
+          </MediaDescriptionPanel>
+        )}
+
+        {isWatchLayout && (
+          <UserRating media={media} embedded className="order-6 mt-4 hidden sm:block xl:hidden" />
         )}
       </div>
 
