@@ -252,10 +252,9 @@ export function HomePage() {
                     to="/collections/editorial-picks"
                     aria-label={`Открыть все ${collection.total} произведений из выбора редакции`}
                     className={[
-                      'group relative col-span-2 aspect-video w-full overflow-hidden rounded-card',
+                      'group relative col-span-2 aspect-video w-full overflow-hidden rounded-card border border-context-border',
+                      'bg-linear-to-br from-watermark/38 via-watermark/26 to-watermark/32 p-2 text-left shadow-surface sm:p-3',
                       'md:col-span-1 md:aspect-2/3',
-                      'border border-context-border bg-linear-to-br',
-                      'from-watermark/35 via-watermark/15 to-surface-elevated text-left',
                       'transition-[transform,border-color] duration-200 ease-out',
                       'hover:border-watermark/60 active:scale-[0.992]',
                       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action',
@@ -263,17 +262,28 @@ export function HomePage() {
                   >
                     <YaneMark
                       aria-hidden="true"
-                      className="absolute -top-12 -right-10 h-[150%] w-[75%] rotate-12 text-watermark/45 transition-transform duration-300 group-hover:scale-105"
+                      className="absolute -top-10 -right-12 h-[125%] w-[90%] rotate-12 text-watermark/45 transition-transform duration-300 group-hover:scale-105"
+                    />
+                    <YaneMark
+                      aria-hidden="true"
+                      className="absolute top-5 left-5 size-10 -rotate-12 text-watermark/35"
+                    />
+                    <YaneMark
+                      aria-hidden="true"
+                      className="absolute top-[42%] left-[12%] size-12 rotate-[28deg] text-watermark/30"
                     />
 
-                    <div className="relative flex size-full flex-col justify-end bg-linear-to-t from-black/70 via-black/10 to-transparent p-4 text-white">
-                      <span className="text-caption text-white/65">Редакционная коллекция</span>
-                      <span className="mt-1 text-lg font-semibold">
-                        Все {collection.total} произведений
-                      </span>
-                      <span className="mt-2 text-caption font-semibold text-white/85">
-                        Показать подборку →
-                      </span>
+                    <div className="relative flex size-full flex-col justify-end overflow-hidden rounded-control border border-context-border/80 bg-surface/35 p-3 sm:p-4">
+                      <div className="pointer-events-none absolute inset-0 bg-linear-to-t from-surface-elevated/70 via-transparent to-transparent" />
+                      <div className="relative">
+                        <span className="text-caption font-semibold tracking-wide text-accent-text uppercase">Редакционная коллекция</span>
+                        <span className="mt-1 block text-lg font-semibold text-text-primary">
+                          Все {collection.total} произведений
+                        </span>
+                        <span className="mt-2 inline-flex items-center gap-1 text-caption font-semibold text-accent-text transition-colors group-hover:text-text-primary">
+                          Показать подборку <span aria-hidden="true">→</span>
+                        </span>
+                      </div>
                     </div>
                   </Link>
                 )}

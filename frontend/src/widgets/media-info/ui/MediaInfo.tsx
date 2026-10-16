@@ -1,5 +1,4 @@
 import { MediaPosterFallback, type MediaDetails, type MediaPersonRole } from '@/entities/media';
-import { UserRating } from '@/features/user-rating';
 import { YaneMark, YaneMarkField } from '@/shared';
 import type { ReactNode } from 'react';
 
@@ -12,6 +11,7 @@ export type MediaInfoProps = {
 export type MediaFactsProps = {
   media: MediaDetails;
   className?: string;
+  showGenres?: boolean;
 };
 
 export function MediaDescriptionPanel({
@@ -64,7 +64,7 @@ function findPeopleByRole(media: MediaDetails, role: MediaPersonRole) {
   return media.persons.filter((credit) => credit.roles.includes(role));
 }
 
-export function MediaFacts({ media, className = '' }: MediaFactsProps) {
+export function MediaFacts({ media, className = '', showGenres = true }: MediaFactsProps) {
   const directors = findPeopleByRole(media, 'director');
 
   return (
@@ -85,7 +85,7 @@ export function MediaFacts({ media, className = '' }: MediaFactsProps) {
         </div>
       )}
 
-      {media.genres.length > 0 && (
+      {showGenres && media.genres.length > 0 && (
         <div className="col-span-2 grid min-w-0 grid-cols-subgrid">
           <dt className="shrink-0 text-text-secondary">Жанры:</dt>
           <dd className="min-w-0 text-text-primary">{media.genres.join(', ')}</dd>
@@ -227,6 +227,13 @@ export function MediaInfo({ media, actions, variant = 'default' }: MediaInfoProp
           </p>
         )}
 
+        {isWatchLayout && media.genres.length > 0 && (
+          <p className="order-3 mt-3 text-caption text-text-secondary xl:hidden">
+            <span>Жанры: </span>
+            <span className="text-text-primary">{media.genres.join(', ')}</span>
+          </p>
+        )}
+
         {isWatchLayout && actions && (
           <div className="order-4 mt-4 flex w-full flex-wrap gap-3 sm:hidden xl:flex">
             {actions}
@@ -239,9 +246,6 @@ export function MediaInfo({ media, actions, variant = 'default' }: MediaInfoProp
           </MediaDescriptionPanel>
         )}
 
-        {isWatchLayout && (
-          <UserRating media={media} embedded className="order-6 mt-4 hidden sm:block xl:hidden" />
-        )}
       </div>
 
       {media.description && !isWatchLayout && (

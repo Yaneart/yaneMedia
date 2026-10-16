@@ -68,17 +68,17 @@ export function FeaturedMedia({ media }: FeaturedMediaProps) {
           mediaRef={media.mediaRef}
           summary={media}
           className={[
-            'inline-flex min-h-12 items-center justify-center gap-2 rounded-pill',
-            'bg-hero-button pr-5 pl-2 text-base font-semibold text-hero-button-text',
-            'shadow-[0_10px_28px_rgb(0_0_0/22%)]',
+            'inline-flex min-h-12 items-center justify-center gap-2 rounded-pill border border-watermark/45',
+            'bg-watermark/20 pr-5 pl-2 text-base font-semibold text-hero-text backdrop-blur-md',
+            'shadow-[0_8px_24px_rgb(0_0_0/18%)]',
             'transition-[background-color,color,opacity,transform,box-shadow] duration-200 ease-out',
-            'hover:-translate-y-0.5 hover:bg-hero-button-hover hover:shadow-[0_14px_34px_rgb(0_0_0/28%)]',
+            'hover:shadow-[0_0_0_1px_rgb(49_95_189/32%),0_0_18px_rgb(49_95_189/42%)]',
             'active:scale-[0.985] active:duration-75',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-watermark/50',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/30',
             'motion-reduce:transform-none motion-reduce:transition-none',
           ].join(' ')}
         >
-          <span className="flex size-7 items-center justify-center rounded-full bg-hero-button-text/10">
+          <span className="flex size-7 items-center justify-center rounded-full bg-watermark/35 text-white">
             <PlayIcon className="size-4" />
           </span>
           Смотреть

@@ -17,7 +17,7 @@ const triggerClassName = [
   'relative flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-control',
   'border border-navigation-border bg-background text-text-primary',
   'transition-[background-color,border-color,color,transform,box-shadow] duration-200 ease-out',
-  'hover:border-action/40 hover:bg-interactive-hover',
+  'hover:shadow-[0_0_0_1px_rgb(49_95_189/32%),0_0_18px_rgb(49_95_189/42%)]',
   'aria-expanded:border-action/40 aria-expanded:bg-navigation-active aria-expanded:text-navigation-active-text',
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/30',
   'motion-reduce:transform-none motion-reduce:transition-none',

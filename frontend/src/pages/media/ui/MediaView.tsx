@@ -86,10 +86,15 @@ const emptyAvailability: MediaAvailability = {
   hasExpiredSources: false,
 };
 
-function AvailabilityToolbarStatus() {
+function AvailabilityToolbarStatus({ hasEpisodeControls }: { hasEpisodeControls: boolean }) {
   return (
     <div
-      className="col-span-2 flex min-h-12 w-full items-center justify-center 2xl:flex-1"
+      className={[
+        'col-span-2 flex w-full items-center justify-center 2xl:flex-1',
+        hasEpisodeControls
+          ? 'min-h-32 sm:min-h-25 2xl:min-h-11'
+          : 'min-h-11',
+      ].join(' ')}
       aria-live="polite"
     >
       <Spinner size="medium" label="Подбираем варианты просмотра" />
@@ -764,7 +769,7 @@ export function MediaView({
               </div>
               <div className="relative z-10 grid min-w-0 grid-cols-2 gap-3 rounded-t-card bg-surface/70 px-4 py-3 sm:px-5 2xl:flex 2xl:flex-nowrap 2xl:items-center 2xl:gap-x-3">
                 {isToolbarLoading ? (
-                  <AvailabilityToolbarStatus />
+                  <AvailabilityToolbarStatus hasEpisodeControls={showLocalEpisodeControls} />
                 ) : (
                   <>
                     {showLocalEpisodeControls && animeSeasonSelector && (
@@ -881,7 +886,7 @@ export function MediaView({
             <p className="mt-3 text-body text-text-secondary">{media.description}</p>
           </MediaDescriptionPanel>
         )}
-        <UserRating media={media} embedded className="hidden xl:block 2xl:hidden" />
+        <UserRating media={media} embedded className="hidden sm:block 2xl:hidden" />
       </div>
 
       <div className="contents xl:col-start-1 xl:row-start-1 xl:block">
@@ -930,7 +935,7 @@ export function MediaView({
         )}
         <UserRating media={media} embedded className="sm:hidden" />
 
-        <MediaFacts media={media} className="grid gap-2 text-caption" />
+        <MediaFacts media={media} className="grid gap-2 text-caption" showGenres={false} />
       </section>
 
       {media.description && (
