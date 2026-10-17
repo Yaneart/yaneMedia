@@ -85,9 +85,14 @@ services:
       MEDIA_ASSETS_ROOT: /app/storage/media-assets
       PROFILE_ASSETS_ROOT: /app/storage/profile-assets
       SESSION_TTL_DAYS: "30"
+      TORRENT_STREAMING_ENABLED: "true"
       TORRSERVER_BASE_URL: http://torrserver:8090
       TORRSERVER_USERNAME_FILE: /run/secrets/torrserver_username
       TORRSERVER_PASSWORD_FILE: /run/secrets/torrserver_password
+      TORRSERVER_CONNECT_TIMEOUT_MS: "3000"
+      TORRSERVER_HEADERS_TIMEOUT_MS: "30000"
+      TORRSERVER_BODY_TIMEOUT_MS: "30000"
+      TORRSERVER_METADATA_TIMEOUT_MS: "120000"
     ports:
       - "3000:3000"
     volumes:
