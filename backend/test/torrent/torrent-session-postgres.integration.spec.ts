@@ -110,4 +110,50 @@ describePostgres('torrent session PostgreSQL persistence', () => {
     expect(replacement.session.sessionId).not.toBe(old.session.sessionId);
     expect(await repository.findVisible(owners[2], old.session.sessionId, now)).toBeUndefined();
   });
+
+  it('publishes file mappings atomically with the state transition', async () => {
+    const accepted = await repository.reserve({
+      ownerId: owners[0],
+      route: 'file',
+      idempotencyKey: 'metadata-publish-1',
+      inputDigest: 'a'.repeat(64),
+    });
+    const pending = await repository.transition(accepted.session.sessionId, 1, 'fetching_metadata');
+    const file = {
+      fileRef: `torrent_file_${randomBytes(16).toString('base64url')}`,
+      engineFileIndex: 1,
+      displayName: 'film.mkv',
+      sizeBytes: 100,
+    };
+    const published = await repository.replaceFiles(pending.sessionId, pending.version, [file]);
+    expect(published.state).toBe('probing');
+    expect(published.selectedFileRef).toBe(file.fileRef);
+    expect(await repository.listFiles(pending.sessionId)).toEqual([
+      { fileRef: file.fileRef, displayName: 'film.mkv', sizeBytes: 100, mediaKind: 'video' },
+    ]);
+    await expect(
+      repository.replaceFiles(pending.sessionId, pending.version, [file]),
+    ).rejects.toBeInstanceOf(TorrentSessionConflict);
+    expect(await repository.listFiles(pending.sessionId)).toHaveLength(1);
+
+    await repository.requestStop(owners[0], pending.sessionId);
+    const second = await repository.reserve({
+      ownerId: owners[0],
+      route: 'file',
+      idempotencyKey: 'metadata-publish-2',
+      inputDigest: 'b'.repeat(64),
+    });
+    const multi = await repository.transition(second.session.sessionId, 1, 'fetching_metadata');
+    const awaiting = await repository.replaceFiles(multi.sessionId, multi.version, [
+      { ...file, fileRef: `torrent_file_${randomBytes(16).toString('base64url')}` },
+      {
+        ...file,
+        fileRef: `torrent_file_${randomBytes(16).toString('base64url')}`,
+        engineFileIndex: 2,
+      },
+    ]);
+    expect(awaiting.state).toBe('awaiting_file');
+    expect(awaiting.selectedFileRef).toBeNull();
+    expect(await repository.listFiles(multi.sessionId)).toHaveLength(2);
+  });
 });

@@ -1,10 +1,12 @@
 import {
   Body,
   Controller,
+  Get,
   Headers,
   HttpCode,
   HttpException,
   Post,
+  Param,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -26,6 +28,12 @@ const bad = (status: number, code: string): never => {
 @UseGuards(TorrentAuthGuard, CsrfGuard)
 export class TorrentInputController {
   constructor(private readonly input: TorrentInputService) {}
+
+  @Get(':sessionId')
+  @NoStore()
+  get(@CurrentUser() user: AuthenticatedUser, @Param('sessionId') sessionId: string) {
+    return this.input.get(user.id, sessionId);
+  }
 
   @Post('magnet')
   @HttpCode(202)

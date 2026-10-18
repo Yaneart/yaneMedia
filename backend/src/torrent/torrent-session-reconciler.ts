@@ -1,9 +1,11 @@
 import { Injectable, Logger, type OnApplicationShutdown, type OnModuleInit } from '@nestjs/common';
 import type { EngineTorrentKey } from './torrent-engine.port';
+import { mapTorrentFiles, TorrentMetadataError } from './torrent-metadata';
 import { TorrentSessionRepository } from './torrent-session.repository';
 import { TorrServerClient } from './torrserver.client';
 
 const SWEEP_MS = 60_000;
+const METADATA_POLL_MS = 2_000;
 const ORPHAN_GRACE_MS = 120_000;
 
 @Injectable()
@@ -11,7 +13,9 @@ export class TorrentSessionReconciler implements OnModuleInit, OnApplicationShut
   private readonly logger = new Logger(TorrentSessionReconciler.name);
   private readonly orphanSeenAt = new Map<EngineTorrentKey, number>();
   private timer?: NodeJS.Timeout;
+  private metadataTimer?: NodeJS.Timeout;
   private running = false;
+  private pollingMetadata = false;
   private startup = true;
 
   constructor(
@@ -26,10 +30,60 @@ export class TorrentSessionReconciler implements OnModuleInit, OnApplicationShut
       void this.sweep().catch(() => this.logger.warn('Torrent reconciliation deferred'));
     }, SWEEP_MS);
     this.timer.unref();
+    this.metadataTimer = setInterval(() => {
+      void this.pollMetadata().catch(() => this.logger.warn('Torrent metadata polling deferred'));
+    }, METADATA_POLL_MS);
+    this.metadataTimer.unref();
   }
 
   onApplicationShutdown(): void {
     if (this.timer) clearInterval(this.timer);
+    if (this.metadataTimer) clearInterval(this.metadataTimer);
+  }
+
+  async pollMetadata(now = new Date()): Promise<void> {
+    if (!this.engine.enabled || this.pollingMetadata) return;
+    this.pollingMetadata = true;
+    try {
+      const records = await this.repository.listForReconciliation();
+      for (const { session, engineKey } of records) {
+        if (session.state !== 'fetching_metadata' || !engineKey) continue;
+        if (session.expiresAt <= now || session.idleExpiresAt <= now) continue;
+        const deadline = session.updatedAt.getTime() + this.engine.metadataTimeoutMs;
+        if (now.getTime() >= deadline) {
+          await this.failMetadata(
+            session.sessionId,
+            session.version,
+            'TORRENT_METADATA_TIMEOUT',
+            now,
+          );
+          continue;
+        }
+        try {
+          const status = await this.engine.getStatus(engineKey, AbortSignal.timeout(5_000));
+          if (!['preloading', 'working', 'stored'].includes(status.state)) continue;
+          const files = mapTorrentFiles(status);
+          await this.repository.replaceFiles(session.sessionId, session.version, files, now);
+        } catch (error) {
+          if (error instanceof TorrentMetadataError)
+            await this.failMetadata(session.sessionId, session.version, error.code, now);
+          // Upstream and version races are retried at the next bounded poll.
+        }
+      }
+    } finally {
+      this.pollingMetadata = false;
+    }
+  }
+
+  private async failMetadata(
+    sessionId: string,
+    version: number,
+    code: 'TORRENT_METADATA_TIMEOUT' | 'TORRENT_NO_VIDEO_FILES' | 'TORRENT_SIZE_LIMIT_EXCEEDED',
+    now: Date,
+  ): Promise<void> {
+    await this.repository
+      .transition(sessionId, version, 'failed', { failureCode: code }, now)
+      .catch(() => undefined);
   }
 
   async sweep(now = new Date()): Promise<void> {
@@ -108,7 +162,7 @@ export class TorrentSessionReconciler implements OnModuleInit, OnApplicationShut
             );
           } else if (
             session.state === 'fetching_metadata' &&
-            now.getTime() - session.updatedAt.getTime() > 120_000
+            now.getTime() - session.updatedAt.getTime() >= this.engine.metadataTimeoutMs
           ) {
             await this.repository.transition(
               session.sessionId,

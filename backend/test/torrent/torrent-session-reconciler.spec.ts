@@ -36,14 +36,23 @@ describe('torrent session reconciliation', () => {
   const purgeTombstones = jest.fn().mockResolvedValue(undefined);
   const listOwned = jest.fn();
   const drop = jest.fn().mockResolvedValue(undefined);
+  const replaceFiles = jest.fn().mockResolvedValue(undefined);
+  const getStatus = jest.fn();
   const repository = {
     listForReconciliation,
     transition,
+    replaceFiles,
     clearEngine,
     purgeExpiredIdempotency,
     purgeTombstones,
   } as unknown as TorrentSessionRepository;
-  const engine = { enabled: true, listOwned, drop } as unknown as TorrServerClient;
+  const engine = {
+    enabled: true,
+    metadataTimeoutMs: 120_000,
+    listOwned,
+    drop,
+    getStatus,
+  } as unknown as TorrServerClient;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -83,5 +92,53 @@ describe('torrent session reconciliation', () => {
     expect(drop).not.toHaveBeenCalled();
     await reconciler.sweep(new Date(now.getTime() + 181_000));
     expect(drop).toHaveBeenCalledTimes(1);
+  });
+
+  it('publishes completed metadata and selects a single video', async () => {
+    listForReconciliation.mockResolvedValue([
+      { session: session('fetching_metadata'), engineKey: key },
+    ]);
+    getStatus.mockResolvedValue({
+      state: 'working',
+      totalBytes: 100,
+      files: [{ key: 1, path: 'film.mkv', length: 100 }],
+    });
+    await new TorrentSessionReconciler(repository, engine).pollMetadata(now);
+    const calls = replaceFiles.mock.calls as unknown as Array<
+      Parameters<TorrentSessionRepository['replaceFiles']>
+    >;
+    const mapped = calls[0]?.[2];
+    expect(mapped?.[0]?.fileRef).toMatch(/^torrent_file_[A-Za-z0-9_-]{22}$/);
+    expect(replaceFiles).toHaveBeenCalledWith(
+      session('fetching_metadata').sessionId,
+      3,
+      [
+        {
+          fileRef: mapped?.[0]?.fileRef,
+          engineFileIndex: 1,
+          displayName: 'film.mkv',
+          sizeBytes: 100,
+        },
+      ],
+      now,
+    );
+  });
+
+  it('fails metadata after the configured deadline without querying engine', async () => {
+    listForReconciliation.mockResolvedValue([
+      {
+        session: { ...session('fetching_metadata'), updatedAt: new Date(now.getTime() - 120_000) },
+        engineKey: key,
+      },
+    ]);
+    await new TorrentSessionReconciler(repository, engine).pollMetadata(now);
+    expect(getStatus).not.toHaveBeenCalled();
+    expect(transition).toHaveBeenCalledWith(
+      session('fetching_metadata').sessionId,
+      3,
+      'failed',
+      { failureCode: 'TORRENT_METADATA_TIMEOUT' },
+      now,
+    );
   });
 });

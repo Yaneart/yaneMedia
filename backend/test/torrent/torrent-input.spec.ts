@@ -109,6 +109,7 @@ describe('torrent input orchestration', () => {
     const repository = {
       findReplay: jest.fn().mockResolvedValueOnce(undefined).mockResolvedValueOnce(session),
       reserve: jest.fn().mockResolvedValue({ session, replay: false }),
+      listFiles: jest.fn().mockResolvedValue([]),
       bindEngine: jest.fn(),
       transition: jest
         .fn()
@@ -144,5 +145,40 @@ describe('torrent input orchestration', () => {
     const calls = repository.reserve.mock.calls as unknown as Array<[{ inputDigest: string }]>;
     const reserved = calls[0][0];
     expect(reserved.inputDigest).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it('returns only the owner session and its safe file list', async () => {
+    const ready = { ...session, state: 'awaiting_file' as const };
+    const repository = {
+      findVisible: jest.fn().mockResolvedValueOnce(undefined).mockResolvedValueOnce(ready),
+      listFiles: jest.fn().mockResolvedValue([
+        {
+          fileRef: `torrent_file_${'a'.repeat(22)}`,
+          displayName: 'film.mkv',
+          sizeBytes: 100,
+          mediaKind: 'video',
+        },
+      ]),
+    };
+    const input = new TorrentInputService(
+      { get: jest.fn() } as unknown as ConfigService,
+      repository as unknown as TorrentSessionRepository,
+      { enabled: false } as TorrServerClient,
+      {} as MediaRegistryService,
+    );
+    await expect(input.get('other-owner', session.sessionId)).rejects.toMatchObject({
+      status: 404,
+    });
+    const view = await input.get('owner', session.sessionId);
+    expect(view.files).toEqual([
+      {
+        fileRef: `torrent_file_${'a'.repeat(22)}`,
+        displayName: 'film.mkv',
+        sizeBytes: 100,
+        mediaKind: 'video',
+      },
+    ]);
+    expect(view.state).toBe('awaiting_file');
+    expect(repository.listFiles).toHaveBeenCalledTimes(1);
   });
 });

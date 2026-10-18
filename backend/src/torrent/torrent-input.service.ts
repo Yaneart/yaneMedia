@@ -13,7 +13,7 @@ import type { ValidatedMagnet, ValidatedMetainfo } from './torrent-engine.port';
 import { TorrServerClient } from './torrserver.client';
 import { TorrServerError } from './torrserver.error';
 
-export type TorrentSessionView = ReturnType<typeof toSessionView>;
+export type TorrentSessionView = Awaited<ReturnType<TorrentInputService['get']>>;
 const WINDOW_MS = 10 * 60_000;
 
 @Injectable()
@@ -62,7 +62,7 @@ export class TorrentInputService {
       .digest('hex');
     try {
       const replay = await this.repository.findReplay(ownerId, route, key, digest);
-      if (replay) return toSessionView(replay);
+      if (replay) return this.view(replay);
       this.admit(ownerId);
       const reserved = await this.repository.reserve({
         ownerId,
@@ -71,9 +71,9 @@ export class TorrentInputService {
         idempotencyKey: key,
         inputDigest: digest,
       });
-      if (reserved.replay) return toSessionView(reserved.session);
+      if (reserved.replay) return this.view(reserved.session);
       void this.start(reserved.session, route, input);
-      return toSessionView(reserved.session);
+      return this.view(reserved.session);
     } catch (error) {
       if (error instanceof TorrentSessionNotFound) throw this.error(404, error.message);
       if (error instanceof TorrentSessionConflict) {
@@ -82,6 +82,19 @@ export class TorrentInputService {
       }
       throw error;
     }
+  }
+
+  async get(ownerId: string, sessionId: string) {
+    if (!/^torrent_session_[A-Za-z0-9_-]{22}$/.test(sessionId))
+      throw this.error(404, 'TORRENT_SESSION_NOT_FOUND');
+    const session = await this.repository.findVisible(ownerId, sessionId);
+    if (!session) throw this.error(404, 'TORRENT_SESSION_NOT_FOUND');
+    return this.view(session);
+  }
+
+  private async view(session: TorrentSessionRow) {
+    const files = await this.repository.listFiles(session.sessionId);
+    return toSessionView(session, files);
   }
 
   private async start(
@@ -135,7 +148,10 @@ export class TorrentInputService {
   }
 }
 
-function toSessionView(session: TorrentSessionRow) {
+function toSessionView(
+  session: TorrentSessionRow,
+  files: Awaited<ReturnType<TorrentSessionRepository['listFiles']>>,
+) {
   return {
     sessionId: session.sessionId,
     mediaRef: session.mediaRef,
@@ -150,12 +166,22 @@ function toSessionView(session: TorrentSessionRow) {
       peers: 0,
       downloadedBytes: 0,
     },
-    files: [],
+    files,
     selectedFileRef: session.selectedFileRef,
     audioTracks: [],
     playback: null,
     failure: session.failureCode
-      ? { code: session.failureCode, retryable: true, retryAction: 'create_session' as const }
+      ? {
+          code: session.failureCode,
+          retryable: !['TORRENT_NO_VIDEO_FILES', 'TORRENT_SIZE_LIMIT_EXCEEDED'].includes(
+            session.failureCode,
+          ),
+          retryAction: ['TORRENT_NO_VIDEO_FILES', 'TORRENT_SIZE_LIMIT_EXCEEDED'].includes(
+            session.failureCode,
+          )
+            ? null
+            : ('create_session' as const),
+        }
       : null,
   };
 }

@@ -341,13 +341,15 @@ export class TorrentSessionRepository {
 
   async replaceFiles(
     sessionId: string,
+    expectedVersion: number,
     files: Array<{
       fileRef: string;
       engineFileIndex: number;
       displayName: string;
       sizeBytes: number;
     }>,
-  ): Promise<void> {
+    now = new Date(),
+  ): Promise<TorrentSessionRow> {
     if (
       files.length > 500 ||
       files.some(
@@ -368,18 +370,51 @@ export class TorrentSessionRepository {
       )
     )
       throw new Error('Invalid torrent file mapping');
-    await this.database.db.transaction(async (tx) => {
+    return this.database.db.transaction(async (tx) => {
       const [session] = await tx
         .select()
         .from(torrentSessions)
         .where(eq(torrentSessions.sessionId, sessionId))
         .for('update');
-      if (!session || session.state !== 'fetching_metadata')
-        throw new Error('Torrent metadata is no longer pending');
+      if (!session || session.version !== expectedVersion || session.state !== 'fetching_metadata')
+        throw new TorrentSessionConflict('TORRENT_SESSION_CHANGED', session?.version);
+      if (session.expiresAt <= now || session.idleExpiresAt <= now)
+        throw new TorrentSessionConflict('TORRENT_SESSION_CHANGED', session.version);
+      if (files.length === 0) throw new Error('Torrent video file mapping is empty');
       await tx.delete(torrentSessionFiles).where(eq(torrentSessionFiles.sessionId, sessionId));
-      if (files.length)
-        await tx.insert(torrentSessionFiles).values(files.map((file) => ({ ...file, sessionId })));
+      await tx.insert(torrentSessionFiles).values(files.map((file) => ({ ...file, sessionId })));
+      const [updated] = await tx
+        .update(torrentSessions)
+        .set({
+          state: files.length === 1 ? 'probing' : 'awaiting_file',
+          selectedFileRef: files.length === 1 ? files[0].fileRef : null,
+          version: session.version + 1,
+          updatedAt: now,
+        })
+        .where(eq(torrentSessions.sessionId, sessionId))
+        .returning();
+      return updated;
     });
+  }
+
+  async listFiles(sessionId: string): Promise<
+    Array<{
+      fileRef: string;
+      displayName: string;
+      sizeBytes: number;
+      mediaKind: 'video';
+    }>
+  > {
+    const files = await this.database.db
+      .select({
+        fileRef: torrentSessionFiles.fileRef,
+        displayName: torrentSessionFiles.displayName,
+        sizeBytes: torrentSessionFiles.sizeBytes,
+      })
+      .from(torrentSessionFiles)
+      .where(eq(torrentSessionFiles.sessionId, sessionId))
+      .orderBy(torrentSessionFiles.engineFileIndex);
+    return files.map((file) => ({ ...file, mediaKind: 'video' as const }));
   }
 
   async findFile(
