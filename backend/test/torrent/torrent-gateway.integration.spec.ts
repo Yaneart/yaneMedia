@@ -1,11 +1,12 @@
 import { randomBytes } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { createReadStream } from 'node:fs';
-import { mkdtemp, rm, stat } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { EngineFileKey, EngineTorrentKey } from '../../src/torrent/torrent-engine.port';
 import { TorrentStreamGateway } from '../../src/torrent/torrent-stream.gateway';
+import { parseTorrentPlaylist } from '../../src/torrent/torrent-hls-playlist';
 import type { TorrentSessionRepository } from '../../src/torrent/torrent-session.repository';
 import type { TorrServerClient } from '../../src/torrent/torrserver.client';
 
@@ -79,6 +80,10 @@ describeGateway('FFmpeg gateway with a local seekable fixture', () => {
       await gateway.start(sessionId, 1, source, probe, probe.audioTracks[0], 0);
       await gateway.waitReady(sessionId, 1, AbortSignal.timeout(30_000));
       expect((await stat(join(directory, '1', 'init.mp4'))).size).toBeGreaterThan(0);
+      expect(
+        parseTorrentPlaylist(await readFile(join(directory, '1', 'media.m3u8'), 'utf8')).segments
+          .length,
+      ).toBeGreaterThan(0);
       expect(openFileStream).toHaveBeenCalled();
     } finally {
       await gateway.stop(sessionId);

@@ -88,6 +88,17 @@ export class TorrentStreamGateway implements OnApplicationShutdown {
     );
   }
 
+  artifactDirectory(sessionId: string, generation: number): string | undefined {
+    const worker = this.workers.get(sessionId);
+    if (worker?.generation === generation) return worker.directory;
+    const completed = this.completed.get(sessionId);
+    return completed?.generation === generation ? completed.directory : undefined;
+  }
+
+  isCompleted(sessionId: string, generation: number): boolean {
+    return this.completed.get(sessionId)?.generation === generation;
+  }
+
   async start(
     sessionId: string,
     generation: number,

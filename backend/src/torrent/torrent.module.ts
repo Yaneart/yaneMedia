@@ -9,6 +9,8 @@ import { TorrentInputController } from './torrent-input.controller';
 import { TorrentInputService } from './torrent-input.service';
 import { TorrentPlaybackService } from './torrent-playback.service';
 import { TorrentStreamGateway } from './torrent-stream.gateway';
+import { TorrentHlsController } from './torrent-hls.controller';
+import { TorrentHlsService } from './torrent-hls.service';
 import { TorrentSessionReconciler } from './torrent-session-reconciler';
 import { TorrentSessionRepository } from './torrent-session.repository';
 import { TORRSERVER_CONFIG, createTorrServerConfig } from './torrserver.config';
@@ -16,7 +18,7 @@ import { TorrServerClient } from './torrserver.client';
 
 @Module({
   imports: [AppConfigModule, DatabaseModule, AuthModule, MediaModule],
-  controllers: [TorrentInputController],
+  controllers: [TorrentInputController, TorrentHlsController],
   providers: [
     {
       provide: TORRSERVER_CONFIG,
@@ -30,6 +32,7 @@ import { TorrServerClient } from './torrserver.client';
     TorrentInputService,
     TorrentPlaybackService,
     TorrentStreamGateway,
+    TorrentHlsService,
   ],
   exports: [TORRSERVER_CONFIG, TorrServerClient, TorrentSessionRepository, TorrentStreamGateway],
 })
