@@ -28,7 +28,11 @@ export class AuthRepository {
   async findUserBySessionHash(
     tokenHash: string,
     now = new Date(),
-  ): Promise<Pick<User, 'id' | 'displayName' | 'email' | 'createdAt' | 'role'> | undefined> {
+    requireVerified = true,
+  ): Promise<
+    | Pick<User, 'id' | 'displayName' | 'email' | 'createdAt' | 'role' | 'emailVerifiedAt'>
+    | undefined
+  > {
     const [user] = await this.databaseService.db
       .select({
         id: users.id,
@@ -36,6 +40,7 @@ export class AuthRepository {
         email: users.email,
         createdAt: users.createdAt,
         role: users.role,
+        emailVerifiedAt: users.emailVerifiedAt,
       })
       .from(sessions)
       .innerJoin(users, eq(sessions.userId, users.id))
@@ -43,7 +48,7 @@ export class AuthRepository {
         and(
           eq(sessions.tokenHash, tokenHash),
           gt(sessions.expiresAt, now),
-          isNotNull(users.emailVerifiedAt),
+          ...(requireVerified ? [isNotNull(users.emailVerifiedAt)] : []),
         ),
       )
       .limit(1);

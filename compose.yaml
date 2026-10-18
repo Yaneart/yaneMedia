@@ -19,6 +19,8 @@ services:
       - database
 
   torrserver:
+    logging:
+      driver: none
     build:
       context: ./torrserver
       args:
@@ -89,6 +91,7 @@ services:
       TORRSERVER_BASE_URL: http://torrserver:8090
       TORRSERVER_USERNAME_FILE: /run/secrets/torrserver_username
       TORRSERVER_PASSWORD_FILE: /run/secrets/torrserver_password
+      TORRENT_IDEMPOTENCY_SECRET_FILE: /run/secrets/torrent_idempotency
       TORRSERVER_CONNECT_TIMEOUT_MS: "3000"
       TORRSERVER_HEADERS_TIMEOUT_MS: "30000"
       TORRSERVER_BODY_TIMEOUT_MS: "30000"
@@ -106,6 +109,7 @@ services:
     secrets:
       - torrserver_username
       - torrserver_password
+      - torrent_idempotency
     networks:
       - app
       - database
@@ -130,6 +134,8 @@ secrets:
     file: ./storage/torrent-engine/secrets/username
   torrserver_password:
     file: ./storage/torrent-engine/secrets/password
+  torrent_idempotency:
+    file: ./storage/torrent-engine/secrets/idempotency
 
 networks:
   app:

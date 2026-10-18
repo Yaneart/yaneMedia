@@ -16,6 +16,7 @@ import { ReviewsModule } from './reviews/reviews.module';
 import { ReviewCommentsModule } from './comments/review-comments.module';
 import { ModerationModule } from './moderation/moderation.module';
 import { MediaCommentsModule } from './media-comments/media-comments.module';
+import { TorrentModule } from './torrent/torrent.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { MediaCommentsModule } from './media-comments/media-comments.module';
     MediaCommentsModule,
     ModerationModule,
     ProfileModule,
+    TorrentModule,
   ],
   providers: [AppLogger, ApiExceptionFilter],
 })

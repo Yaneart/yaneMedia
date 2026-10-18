@@ -57,6 +57,11 @@ export const appConfigValidationSchema = Joi.object({
     then: secretFileSchema.required(),
     otherwise: secretFileSchema.optional(),
   }),
+  TORRENT_IDEMPOTENCY_SECRET_FILE: Joi.when('TORRENT_STREAMING_ENABLED', {
+    is: true,
+    then: secretFileSchema.required(),
+    otherwise: secretFileSchema.optional(),
+  }),
   TORRSERVER_CONNECT_TIMEOUT_MS: Joi.number().integer().min(100).max(30_000).default(3_000),
   TORRSERVER_HEADERS_TIMEOUT_MS: Joi.number().integer().min(100).max(120_000).default(30_000),
   TORRSERVER_BODY_TIMEOUT_MS: Joi.number().integer().min(100).max(120_000).default(30_000),

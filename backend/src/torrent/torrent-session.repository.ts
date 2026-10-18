@@ -66,6 +66,37 @@ export interface ReserveTorrentSession {
 export class TorrentSessionRepository {
   constructor(private readonly database: DatabaseService) {}
 
+  async findReplay(
+    ownerId: string,
+    route: string,
+    key: string,
+    digest: string,
+  ): Promise<TorrentSessionRow | undefined> {
+    const [existing] = await this.database.db
+      .select()
+      .from(torrentIdempotency)
+      .where(
+        and(
+          eq(torrentIdempotency.ownerId, ownerId),
+          eq(torrentIdempotency.route, route),
+          eq(torrentIdempotency.key, key),
+        ),
+      );
+    if (!existing || existing.expiresAt <= new Date()) return undefined;
+    if (existing.inputDigest !== digest) throw new TorrentSessionConflict('IDEMPOTENCY_KEY_REUSED');
+    const session = await this.findVisible(ownerId, existing.sessionId);
+    if (!session) throw new TorrentSessionNotFound();
+    return session;
+  }
+
+  async isEngineBound(engineKey: EngineTorrentKey): Promise<boolean> {
+    const [binding] = await this.database.db
+      .select({ sessionId: torrentEngineBindings.sessionId })
+      .from(torrentEngineBindings)
+      .where(eq(torrentEngineBindings.engineKey, engineKey));
+    return Boolean(binding);
+  }
+
   async reserve(
     input: ReserveTorrentSession,
   ): Promise<{ session: TorrentSessionRow; replay: boolean }> {
