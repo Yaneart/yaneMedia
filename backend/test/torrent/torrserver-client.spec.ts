@@ -273,7 +273,10 @@ describe('torrent configuration and readiness', () => {
 
   it('keeps liveness independent and checks TorrServer only for readiness', async () => {
     const checkReady = jest.fn().mockResolvedValue(undefined);
-    const controller = new HealthController({ checkReady } as unknown as TorrServerClient);
+    const controller = new HealthController(
+      { checkReady } as unknown as TorrServerClient,
+      { checkReady: jest.fn().mockResolvedValue(undefined) } as never,
+    );
     expect(controller.check()).toEqual({ status: 'ok' });
     await expect(controller.ready()).resolves.toEqual({ status: 'ready' });
     expect(checkReady).toHaveBeenCalledTimes(1);

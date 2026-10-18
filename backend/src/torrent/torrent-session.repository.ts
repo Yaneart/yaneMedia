@@ -7,6 +7,7 @@ import {
   torrentEngineBindings,
   torrentIdempotency,
   torrentSessionFiles,
+  torrentSessionProbes,
   torrentSessions,
   type TorrentSessionRow,
   type TorrentSessionState,
@@ -16,6 +17,7 @@ import {
   canTransitionTorrentSession,
   isVisibleTorrentSession,
 } from './torrent-session.state';
+import type { TorrentProbe } from './torrent-media-policy';
 
 const HOUR_MS = 60 * 60 * 1000;
 const IDLE_MS = 20 * 60 * 1000;
@@ -254,6 +256,8 @@ export class TorrentSessionRepository {
       selectedFileRef?: string | null;
       failureCode?: TorrentFailureCode | null;
       generation?: number;
+      selectedAudioTrackRef?: string | null;
+      playbackPositionSeconds?: number | null;
       cleanupAfter?: Date | null;
     } = {},
     now = new Date(),
@@ -432,6 +436,234 @@ export class TorrentSessionRepository {
         and(eq(torrentSessionFiles.sessionId, sessionId), eq(torrentSessionFiles.fileRef, fileRef)),
       );
     return file;
+  }
+
+  async findEngineKey(sessionId: string): Promise<EngineTorrentKey | undefined> {
+    const [binding] = await this.database.db
+      .select({ engineKey: torrentEngineBindings.engineKey })
+      .from(torrentEngineBindings)
+      .where(eq(torrentEngineBindings.sessionId, sessionId));
+    return binding?.engineKey as EngineTorrentKey | undefined;
+  }
+
+  async extendWorkerLease(sessionId: string, generation: number): Promise<void> {
+    const now = new Date();
+    await this.database.db
+      .update(torrentSessions)
+      .set({ idleExpiresAt: new Date(now.getTime() + IDLE_MS) })
+      .where(
+        and(
+          eq(torrentSessions.sessionId, sessionId),
+          eq(torrentSessions.generation, generation),
+          inArray(torrentSessions.state, ['preparing', 'ready']),
+          sql`${torrentSessions.expiresAt} > ${now}`,
+        ),
+      );
+  }
+
+  async getProbe(sessionId: string): Promise<TorrentProbe | undefined> {
+    const [row] = await this.database.db
+      .select({ probe: torrentSessionProbes.probe })
+      .from(torrentSessionProbes)
+      .where(eq(torrentSessionProbes.sessionId, sessionId));
+    return row?.probe;
+  }
+
+  async saveProbe(sessionId: string, expectedVersion: number, probe: TorrentProbe): Promise<void> {
+    await this.database.db.transaction(async (tx) => {
+      const [session] = await tx
+        .select()
+        .from(torrentSessions)
+        .where(eq(torrentSessions.sessionId, sessionId))
+        .for('update');
+      if (
+        !session ||
+        session.version !== expectedVersion ||
+        session.state !== 'probing' ||
+        session.selectedFileRef !== probe.fileRef ||
+        session.expiresAt <= new Date() ||
+        session.idleExpiresAt <= new Date()
+      )
+        throw new TorrentSessionConflict('TORRENT_SESSION_CHANGED', session?.version);
+      await tx
+        .insert(torrentSessionProbes)
+        .values({ sessionId, fileRef: probe.fileRef, probe })
+        .onConflictDoUpdate({
+          target: torrentSessionProbes.sessionId,
+          set: { fileRef: probe.fileRef, probe },
+        });
+      await tx
+        .update(torrentSessions)
+        .set({
+          state: 'awaiting_playback',
+          selectedAudioTrackRef:
+            probe.audioTracks.find((track) => track.isDefault)?.trackRef ??
+            probe.audioTracks[0].trackRef,
+          version: session.version + 1,
+          updatedAt: new Date(),
+          failureCode: null,
+        })
+        .where(eq(torrentSessions.sessionId, sessionId));
+    });
+  }
+
+  async selectFile(
+    ownerId: string,
+    sessionId: string,
+    fileRef: string,
+    expectedVersion: number,
+  ): Promise<TorrentSessionRow> {
+    return this.database.db.transaction(async (tx) => {
+      const [session] = await tx
+        .select()
+        .from(torrentSessions)
+        .where(and(eq(torrentSessions.sessionId, sessionId), eq(torrentSessions.ownerId, ownerId)))
+        .for('update');
+      if (
+        !session ||
+        !isVisibleTorrentSession(session.state) ||
+        session.state === 'failed' ||
+        session.expiresAt <= new Date() ||
+        session.idleExpiresAt <= new Date()
+      )
+        throw new TorrentSessionNotFound();
+      if (session.version !== expectedVersion)
+        throw new TorrentSessionConflict('TORRENT_SESSION_CHANGED', session.version);
+      const [file] = await tx
+        .select({ fileRef: torrentSessionFiles.fileRef })
+        .from(torrentSessionFiles)
+        .where(
+          and(
+            eq(torrentSessionFiles.sessionId, sessionId),
+            eq(torrentSessionFiles.fileRef, fileRef),
+          ),
+        );
+      if (!file) throw new TorrentSessionNotFound();
+      if (session.selectedFileRef === fileRef) return session;
+      if (!['awaiting_file', 'awaiting_playback', 'ready'].includes(session.state))
+        throw new TorrentSessionConflict('TORRENT_SESSION_CHANGED', session.version);
+      await tx.delete(torrentSessionProbes).where(eq(torrentSessionProbes.sessionId, sessionId));
+      const [updated] = await tx
+        .update(torrentSessions)
+        .set({
+          selectedFileRef: fileRef,
+          selectedAudioTrackRef: null,
+          playbackPositionSeconds: null,
+          state: 'probing',
+          version: session.version + 1,
+          generation: session.generation + 1,
+          updatedAt: new Date(),
+          failureCode: null,
+        })
+        .where(eq(torrentSessions.sessionId, sessionId))
+        .returning();
+      return updated;
+    });
+  }
+
+  async beginPlayback(
+    ownerId: string,
+    sessionId: string,
+    expectedVersion: number,
+    audioTrackRef: string,
+    position: number,
+    idempotencyKey: string,
+    digest: string,
+  ): Promise<{ session: TorrentSessionRow; replay: boolean }> {
+    return this.database.db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(725134, 6)`);
+      const [existing] = await tx
+        .select()
+        .from(torrentIdempotency)
+        .where(
+          and(
+            eq(torrentIdempotency.ownerId, ownerId),
+            eq(torrentIdempotency.route, 'playback'),
+            eq(torrentIdempotency.key, idempotencyKey),
+          ),
+        );
+      if (existing && existing.expiresAt > new Date()) {
+        if (existing.inputDigest !== digest || existing.sessionId !== sessionId)
+          throw new TorrentSessionConflict('IDEMPOTENCY_KEY_REUSED');
+        const [replay] = await tx
+          .select()
+          .from(torrentSessions)
+          .where(eq(torrentSessions.sessionId, sessionId));
+        if (
+          !replay ||
+          !isVisibleTorrentSession(replay.state) ||
+          replay.expiresAt <= new Date() ||
+          replay.idleExpiresAt <= new Date()
+        )
+          throw new TorrentSessionNotFound();
+        return { session: replay, replay: true };
+      }
+      if (existing)
+        await tx
+          .delete(torrentIdempotency)
+          .where(
+            and(
+              eq(torrentIdempotency.ownerId, ownerId),
+              eq(torrentIdempotency.route, 'playback'),
+              eq(torrentIdempotency.key, idempotencyKey),
+            ),
+          );
+      const [session] = await tx
+        .select()
+        .from(torrentSessions)
+        .where(and(eq(torrentSessions.sessionId, sessionId), eq(torrentSessions.ownerId, ownerId)))
+        .for('update');
+      if (
+        !session ||
+        !isVisibleTorrentSession(session.state) ||
+        session.state === 'failed' ||
+        session.expiresAt <= new Date() ||
+        session.idleExpiresAt <= new Date()
+      )
+        throw new TorrentSessionNotFound();
+      if (session.version !== expectedVersion)
+        throw new TorrentSessionConflict('TORRENT_SESSION_CHANGED', session.version);
+      const [row] = await tx
+        .select({ probe: torrentSessionProbes.probe })
+        .from(torrentSessionProbes)
+        .where(eq(torrentSessionProbes.sessionId, sessionId));
+      if (!row || !row.probe.audioTracks.some((track) => track.trackRef === audioTrackRef))
+        throw new TorrentSessionNotFound();
+      if (row.probe.durationSeconds !== null && position >= row.probe.durationSeconds)
+        throw new TorrentSessionNotFound();
+      if (!['awaiting_playback', 'ready'].includes(session.state))
+        throw new TorrentSessionConflict('TORRENT_SESSION_CHANGED', session.version);
+      let updated = session;
+      if (!(
+        session.state === 'ready' &&
+        session.selectedAudioTrackRef === audioTrackRef &&
+        session.playbackPositionSeconds === position
+      )) {
+        [updated] = await tx
+          .update(torrentSessions)
+          .set({
+            state: 'preparing',
+            version: session.version + 1,
+            generation: session.generation + 1,
+            selectedAudioTrackRef: audioTrackRef,
+            playbackPositionSeconds: position,
+            idleExpiresAt: new Date(Date.now() + IDLE_MS),
+            updatedAt: new Date(),
+            failureCode: null,
+          })
+          .where(eq(torrentSessions.sessionId, sessionId))
+          .returning();
+      }
+      await tx.insert(torrentIdempotency).values({
+        ownerId,
+        route: 'playback',
+        key: idempotencyKey,
+        inputDigest: digest,
+        sessionId,
+        expiresAt: new Date(Date.now() + 24 * HOUR_MS),
+      });
+      return { session: updated, replay: false };
+    });
   }
 
   async listForReconciliation(): Promise<

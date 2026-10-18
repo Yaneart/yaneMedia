@@ -2,8 +2,10 @@ import { sql } from 'drizzle-orm';
 import {
   bigint,
   check,
+  doublePrecision,
   index,
   integer,
+  jsonb,
   pgEnum,
   pgTable,
   primaryKey,
@@ -43,6 +45,8 @@ export const torrentSessions = pgTable(
     state: torrentSessionState('state').notNull().default('created'),
     version: integer('version').notNull().default(1),
     selectedFileRef: varchar('selected_file_ref', { length: 40 }),
+    selectedAudioTrackRef: varchar('selected_audio_track_ref', { length: 40 }),
+    playbackPositionSeconds: doublePrecision('playback_position_seconds'),
     failureCode: varchar('failure_code', { length: 64 }),
     generation: integer('generation').notNull().default(0),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -108,6 +112,14 @@ export const torrentSessionFiles = pgTable(
     ),
   ],
 );
+
+export const torrentSessionProbes = pgTable('torrent_session_probes', {
+  sessionId: varchar('session_id', { length: 40 })
+    .primaryKey()
+    .references(() => torrentSessions.sessionId, { onDelete: 'cascade' }),
+  fileRef: varchar('file_ref', { length: 37 }).notNull(),
+  probe: jsonb('probe').$type<import('./torrent-media-policy').TorrentProbe>().notNull(),
+});
 
 export const torrentIdempotency = pgTable(
   'torrent_idempotency',

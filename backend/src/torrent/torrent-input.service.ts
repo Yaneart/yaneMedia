@@ -92,9 +92,21 @@ export class TorrentInputService {
     return this.view(session);
   }
 
-  private async view(session: TorrentSessionRow) {
+  digestPlayback(sessionId: string, position: number, trackRef: string): string {
+    return createHmac('sha256', this.secret)
+      .update('playback\0')
+      .update(sessionId)
+      .update('\0')
+      .update(String(position))
+      .update('\0')
+      .update(trackRef)
+      .digest('hex');
+  }
+
+  async view(session: TorrentSessionRow) {
     const files = await this.repository.listFiles(session.sessionId);
-    return toSessionView(session, files);
+    const probe = await this.repository.getProbe(session.sessionId);
+    return toSessionView(session, files, probe);
   }
 
   private async start(
@@ -151,7 +163,16 @@ export class TorrentInputService {
 function toSessionView(
   session: TorrentSessionRow,
   files: Awaited<ReturnType<TorrentSessionRepository['listFiles']>>,
+  probe: Awaited<ReturnType<TorrentSessionRepository['getProbe']>>,
 ) {
+  const audioTracks =
+    probe?.audioTracks.map(({ trackRef, label, language, channels, isDefault }) => ({
+      trackRef,
+      label,
+      language,
+      channels,
+      isDefault,
+    })) ?? [];
   return {
     sessionId: session.sessionId,
     mediaRef: session.mediaRef,
@@ -168,8 +189,22 @@ function toSessionView(
     },
     files,
     selectedFileRef: session.selectedFileRef,
-    audioTracks: [],
-    playback: null,
+    audioTracks,
+    playback:
+      session.state === 'ready' && probe && session.selectedAudioTrackRef !== null
+        ? {
+            source: {
+              type: 'hls' as const,
+              url: `/api/v1/torrent-sessions/${session.sessionId}/hls/master.m3u8`,
+            },
+            generation: session.generation,
+            startPositionSeconds: session.playbackPositionSeconds ?? 0,
+            durationSeconds: probe.durationSeconds,
+            selectedAudioTrackRef: session.selectedAudioTrackRef,
+            audioTracks,
+            supportsSubtitleSelection: false as const,
+          }
+        : null,
     failure: session.failureCode
       ? {
           code: session.failureCode,
@@ -180,7 +215,9 @@ function toSessionView(
             session.failureCode,
           )
             ? null
-            : ('create_session' as const),
+            : session.state === 'awaiting_playback'
+              ? ('start_playback' as const)
+              : ('create_session' as const),
         }
       : null,
   };

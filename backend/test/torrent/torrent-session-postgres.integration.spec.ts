@@ -136,6 +136,76 @@ describePostgres('torrent session PostgreSQL persistence', () => {
     ).rejects.toBeInstanceOf(TorrentSessionConflict);
     expect(await repository.listFiles(pending.sessionId)).toHaveLength(1);
 
+    const probe = {
+      fileRef: file.fileRef,
+      durationSeconds: 42.5,
+      videoStreamIndex: 0,
+      copyVideo: true,
+      audioTracks: [
+        {
+          trackRef: `torrent_track_${randomBytes(16).toString('base64url')}`,
+          streamIndex: 1,
+          label: 'English',
+          language: 'eng',
+          channels: 2,
+          isDefault: true,
+          copy: true,
+        },
+      ],
+    };
+    await repository.saveProbe(pending.sessionId, published.version, probe);
+    const prepared = await repository.findVisible(owners[0], pending.sessionId);
+    expect(prepared?.state).toBe('awaiting_playback');
+    expect((await repository.getProbe(pending.sessionId))?.audioTracks[0].trackRef).toBe(
+      probe.audioTracks[0].trackRef,
+    );
+    await expect(
+      repository.beginPlayback(
+        owners[0],
+        pending.sessionId,
+        prepared!.version,
+        'torrent_track_unknown',
+        0,
+        'playback-invalid-1',
+        'e'.repeat(64),
+      ),
+    ).rejects.toBeInstanceOf(TorrentSessionNotFound);
+    await expect(
+      repository.beginPlayback(
+        owners[0],
+        pending.sessionId,
+        prepared!.version,
+        probe.audioTracks[0].trackRef,
+        42.5,
+        'playback-invalid-2',
+        'f'.repeat(64),
+      ),
+    ).rejects.toBeInstanceOf(TorrentSessionNotFound);
+    const command = [
+      owners[0],
+      pending.sessionId,
+      prepared!.version,
+      probe.audioTracks[0].trackRef,
+      1.5,
+      'playback-command-1',
+      'c'.repeat(64),
+    ] as const;
+    const started = await repository.beginPlayback(...command);
+    expect(started.session.state).toBe('preparing');
+    expect(started.session.playbackPositionSeconds).toBe(1.5);
+    expect((await repository.beginPlayback(...command)).replay).toBe(true);
+    await expect(
+      repository.beginPlayback(
+        owners[0],
+        pending.sessionId,
+        prepared!.version,
+        probe.audioTracks[0].trackRef,
+        1.5,
+        'playback-command-1',
+        'd'.repeat(64),
+      ),
+    ).rejects.toMatchObject({ code: 'IDEMPOTENCY_KEY_REUSED' });
+
     await repository.requestStop(owners[0], pending.sessionId);
     const second = await repository.reserve({
       ownerId: owners[0],
@@ -155,5 +225,17 @@ describePostgres('torrent session PostgreSQL persistence', () => {
     expect(awaiting.state).toBe('awaiting_file');
     expect(awaiting.selectedFileRef).toBeNull();
     expect(await repository.listFiles(multi.sessionId)).toHaveLength(2);
+    await expect(
+      repository.selectFile(owners[0], multi.sessionId, 'torrent_file_unknown', awaiting.version),
+    ).rejects.toBeInstanceOf(TorrentSessionNotFound);
+    const choice = (await repository.listFiles(multi.sessionId))[1];
+    const selected = await repository.selectFile(
+      owners[0],
+      multi.sessionId,
+      choice.fileRef,
+      awaiting.version,
+    );
+    expect(selected.state).toBe('probing');
+    expect(selected.selectedFileRef).toBe(choice.fileRef);
   });
 });

@@ -45,5 +45,6 @@ export {
   torrentSessions,
   torrentEngineBindings,
   torrentSessionFiles,
+  torrentSessionProbes,
   torrentIdempotency,
 } from '../torrent/torrent-session.entity';

@@ -13,6 +13,8 @@ const session = (state: TorrentSessionRow['state']): TorrentSessionRow => ({
   state,
   version: 3,
   selectedFileRef: null,
+  selectedAudioTrackRef: null,
+  playbackPositionSeconds: null,
   failureCode: null,
   generation: 1,
   createdAt: new Date(now.getTime() - 60_000),
@@ -53,6 +55,8 @@ describe('torrent session reconciliation', () => {
     drop,
     getStatus,
   } as unknown as TorrServerClient;
+  const hasGeneration = jest.fn().mockReturnValue(false);
+  const gateway = { stop: jest.fn().mockResolvedValue(undefined), hasGeneration } as never;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -68,7 +72,7 @@ describe('torrent session reconciliation', () => {
     const expired = { ...session('ready'), expiresAt: new Date(now.getTime() - 1) };
     listOwned.mockResolvedValue([key]);
     listForReconciliation.mockResolvedValue([{ session: expired, engineKey: key }]);
-    await new TorrentSessionReconciler(repository, engine).sweep(now);
+    await new TorrentSessionReconciler(repository, engine, gateway).sweep(now);
     expect(transition.mock.calls.map((call) => call[2])).toEqual(['expiring', 'expired']);
     expect(drop).toHaveBeenCalledWith(key, expect.any(AbortSignal));
     expect(clearEngine).toHaveBeenCalledWith(expired.sessionId);
@@ -79,7 +83,7 @@ describe('torrent session reconciliation', () => {
     listForReconciliation
       .mockResolvedValueOnce([{ session: session('ready'), engineKey: key }])
       .mockResolvedValue([]);
-    const reconciler = new TorrentSessionReconciler(repository, engine);
+    const reconciler = new TorrentSessionReconciler(repository, engine, gateway);
     await reconciler.sweep(now);
     expect(transition).toHaveBeenCalledWith(
       session('ready').sessionId,
@@ -103,7 +107,7 @@ describe('torrent session reconciliation', () => {
       totalBytes: 100,
       files: [{ key: 1, path: 'film.mkv', length: 100 }],
     });
-    await new TorrentSessionReconciler(repository, engine).pollMetadata(now);
+    await new TorrentSessionReconciler(repository, engine, gateway).pollMetadata(now);
     const calls = replaceFiles.mock.calls as unknown as Array<
       Parameters<TorrentSessionRepository['replaceFiles']>
     >;
@@ -124,6 +128,24 @@ describe('torrent session reconciliation', () => {
     );
   });
 
+  it('invalidates ready playback when its FFmpeg generation disappears', async () => {
+    listOwned.mockResolvedValue([key]);
+    listForReconciliation
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ session: session('ready'), engineKey: key }]);
+    const reconciler = new TorrentSessionReconciler(repository, engine, gateway);
+    await reconciler.sweep(now);
+    await reconciler.sweep(new Date(now.getTime() + 1_000));
+    expect(hasGeneration).toHaveBeenCalledWith(session('ready').sessionId, 1);
+    expect(transition).toHaveBeenCalledWith(
+      session('ready').sessionId,
+      3,
+      'awaiting_playback',
+      { generation: 2, failureCode: 'TORRENT_TRANSCODE_FAILED' },
+      new Date(now.getTime() + 1_000),
+    );
+  });
+
   it('fails metadata after the configured deadline without querying engine', async () => {
     listForReconciliation.mockResolvedValue([
       {
@@ -131,7 +153,7 @@ describe('torrent session reconciliation', () => {
         engineKey: key,
       },
     ]);
-    await new TorrentSessionReconciler(repository, engine).pollMetadata(now);
+    await new TorrentSessionReconciler(repository, engine, gateway).pollMetadata(now);
     expect(getStatus).not.toHaveBeenCalled();
     expect(transition).toHaveBeenCalledWith(
       session('fetching_metadata').sessionId,

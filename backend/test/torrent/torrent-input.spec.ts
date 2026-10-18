@@ -110,6 +110,7 @@ describe('torrent input orchestration', () => {
       findReplay: jest.fn().mockResolvedValueOnce(undefined).mockResolvedValueOnce(session),
       reserve: jest.fn().mockResolvedValue({ session, replay: false }),
       listFiles: jest.fn().mockResolvedValue([]),
+      getProbe: jest.fn().mockResolvedValue(undefined),
       bindEngine: jest.fn(),
       transition: jest
         .fn()
@@ -159,6 +160,7 @@ describe('torrent input orchestration', () => {
           mediaKind: 'video',
         },
       ]),
+      getProbe: jest.fn().mockResolvedValue(undefined),
     };
     const input = new TorrentInputService(
       { get: jest.fn() } as unknown as ConfigService,

@@ -3,6 +3,9 @@ import type { EngineTorrentKey } from './torrent-engine.port';
 import { mapTorrentFiles, TorrentMetadataError } from './torrent-metadata';
 import { TorrentSessionRepository } from './torrent-session.repository';
 import { TorrServerClient } from './torrserver.client';
+import { TorrentStreamGateway } from './torrent-stream.gateway';
+import { UnsupportedTorrentMedia } from './torrent-media-policy';
+import type { EngineFileKey } from './torrent-engine.port';
 
 const SWEEP_MS = 60_000;
 const METADATA_POLL_MS = 2_000;
@@ -16,11 +19,13 @@ export class TorrentSessionReconciler implements OnModuleInit, OnApplicationShut
   private metadataTimer?: NodeJS.Timeout;
   private running = false;
   private pollingMetadata = false;
+  private pollingProbes = false;
   private startup = true;
 
   constructor(
     private readonly repository: TorrentSessionRepository,
     private readonly engine: TorrServerClient,
+    private readonly gateway: TorrentStreamGateway,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -32,8 +37,46 @@ export class TorrentSessionReconciler implements OnModuleInit, OnApplicationShut
     this.timer.unref();
     this.metadataTimer = setInterval(() => {
       void this.pollMetadata().catch(() => this.logger.warn('Torrent metadata polling deferred'));
+      void this.pollProbes().catch(() => this.logger.warn('Torrent probing deferred'));
     }, METADATA_POLL_MS);
     this.metadataTimer.unref();
+  }
+
+  async pollProbes(now = new Date()): Promise<void> {
+    if (!this.engine.enabled || this.pollingProbes) return;
+    this.pollingProbes = true;
+    try {
+      const records = await this.repository.listForReconciliation();
+      for (const { session, engineKey } of records) {
+        if (
+          session.state !== 'probing' ||
+          !engineKey ||
+          !session.selectedFileRef ||
+          session.expiresAt <= now ||
+          session.idleExpiresAt <= now
+        )
+          continue;
+        const file = await this.repository.findFile(session.sessionId, session.selectedFileRef);
+        if (!file) continue;
+        try {
+          const probe = await this.gateway.probe(
+            { key: engineKey, file: file.engineFileIndex as EngineFileKey, size: file.sizeBytes },
+            session.selectedFileRef,
+          );
+          await this.repository.saveProbe(session.sessionId, session.version, probe);
+        } catch (error) {
+          const code =
+            error instanceof UnsupportedTorrentMedia
+              ? 'TORRENT_UNSUPPORTED_MEDIA'
+              : 'TORRENT_PROBE_TIMEOUT';
+          await this.repository
+            .transition(session.sessionId, session.version, 'failed', { failureCode: code })
+            .catch(() => undefined);
+        }
+      }
+    } finally {
+      this.pollingProbes = false;
+    }
   }
 
   onApplicationShutdown(): void {
@@ -107,6 +150,7 @@ export class TorrentSessionReconciler implements OnModuleInit, OnApplicationShut
             session.expiresAt <= now ||
             session.idleExpiresAt <= now
           ) {
+            await this.gateway.stop(session.sessionId);
             const target = session.state === 'stopping' ? 'stopped' : 'expired';
             const intermediate = target === 'stopped' ? 'stopping' : 'expiring';
             const current =
@@ -129,6 +173,7 @@ export class TorrentSessionReconciler implements OnModuleInit, OnApplicationShut
               now,
             );
           } else if (session.state === 'failed') {
+            await this.gateway.stop(session.sessionId);
             if (engineKey && owned.has(engineKey)) await this.engine.drop(engineKey, signal);
             if (engineKey) await this.repository.clearEngine(session.sessionId);
           } else if (!engineKey || !owned.has(engineKey)) {
@@ -153,11 +198,24 @@ export class TorrentSessionReconciler implements OnModuleInit, OnApplicationShut
               now,
             );
           } else if (this.startup && (session.state === 'preparing' || session.state === 'ready')) {
+            await this.gateway.stop(session.sessionId);
             await this.repository.transition(
               session.sessionId,
               session.version,
               'awaiting_playback',
               { generation: session.generation + 1 },
+              now,
+            );
+          } else if (
+            session.state === 'ready' &&
+            !this.gateway.hasGeneration(session.sessionId, session.generation)
+          ) {
+            await this.gateway.stop(session.sessionId);
+            await this.repository.transition(
+              session.sessionId,
+              session.version,
+              'awaiting_playback',
+              { generation: session.generation + 1, failureCode: 'TORRENT_TRANSCODE_FAILED' },
               now,
             );
           } else if (

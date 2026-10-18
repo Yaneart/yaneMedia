@@ -6,18 +6,22 @@ import {
   HttpCode,
   HttpException,
   Post,
+  Res,
   Param,
+  Put,
   UploadedFile,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import type { Response } from 'express';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/auth-request';
 import { CsrfGuard } from '../auth/guards/csrf.guard';
 import { NoStore } from '../platform/http/cache-policy';
 import { TorrentAuthGuard } from './torrent-auth.guard';
 import { TorrentInputService } from './torrent-input.service';
+import { TorrentPlaybackService } from './torrent-playback.service';
 import { TorrentInputError, validateMagnet, validateMetainfo } from './torrent-input.validation';
 
 const bad = (status: number, code: string): never => {
@@ -27,12 +31,47 @@ const bad = (status: number, code: string): never => {
 @Controller('torrent-sessions')
 @UseGuards(TorrentAuthGuard, CsrfGuard)
 export class TorrentInputController {
-  constructor(private readonly input: TorrentInputService) {}
+  constructor(
+    private readonly input: TorrentInputService,
+    private readonly playbackService: TorrentPlaybackService,
+  ) {}
 
   @Get(':sessionId')
   @NoStore()
   get(@CurrentUser() user: AuthenticatedUser, @Param('sessionId') sessionId: string) {
     return this.input.get(user.id, sessionId);
+  }
+
+  @Put(':sessionId/file')
+  @HttpCode(202)
+  @NoStore()
+  selectFile(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('sessionId') sessionId: string,
+    @Body() body: unknown,
+  ) {
+    return this.playbackService.selectFile(user.id, sessionId, body);
+  }
+
+  @Post(':sessionId/playback')
+  @HttpCode(202)
+  @NoStore()
+  playback(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('sessionId') sessionId: string,
+    @Headers('idempotency-key') key: string,
+    @Body() body: unknown,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    return this.playbackService.playback(user.id, sessionId, body, key).catch((error: unknown) => {
+      if (
+        error instanceof HttpException &&
+        error.getStatus() === 503 &&
+        (error.getResponse() as { code?: string }).code === 'TORRENT_CAPACITY_EXCEEDED'
+      )
+        response.setHeader('Retry-After', '5');
+      throw error;
+    });
   }
 
   @Post('magnet')
