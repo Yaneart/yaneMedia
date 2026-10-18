@@ -155,6 +155,13 @@
       "when": 1792072410651,
       "tag": "0021_fixed_black_panther",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1792350650275,
+      "tag": "0022_tranquil_ogun",
+      "breakpoints": true
     }
   ]
 }
