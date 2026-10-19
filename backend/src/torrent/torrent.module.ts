@@ -15,6 +15,9 @@ import { TorrentSessionReconciler } from './torrent-session-reconciler';
 import { TorrentSessionRepository } from './torrent-session.repository';
 import { TORRSERVER_CONFIG, createTorrServerConfig } from './torrserver.config';
 import { TorrServerClient } from './torrserver.client';
+import { PROWLARR_CONFIG, createProwlarrConfig } from './prowlarr.config';
+import { ProwlarrClient } from './prowlarr.client';
+import { TORRENT_DISCOVERY_PORT } from './torrent-discovery.port';
 
 @Module({
   imports: [AppConfigModule, DatabaseModule, AuthModule, MediaModule],
@@ -26,6 +29,13 @@ import { TorrServerClient } from './torrserver.client';
       useFactory: createTorrServerConfig,
     },
     TorrServerClient,
+    {
+      provide: PROWLARR_CONFIG,
+      inject: [ConfigService],
+      useFactory: createProwlarrConfig,
+    },
+    ProwlarrClient,
+    { provide: TORRENT_DISCOVERY_PORT, useExisting: ProwlarrClient },
     TorrentSessionRepository,
     TorrentSessionReconciler,
     TorrentAuthGuard,
@@ -34,6 +44,12 @@ import { TorrServerClient } from './torrserver.client';
     TorrentStreamGateway,
     TorrentHlsService,
   ],
-  exports: [TORRSERVER_CONFIG, TorrServerClient, TorrentSessionRepository, TorrentStreamGateway],
+  exports: [
+    TORRSERVER_CONFIG,
+    TorrServerClient,
+    TORRENT_DISCOVERY_PORT,
+    TorrentSessionRepository,
+    TorrentStreamGateway,
+  ],
 })
 export class TorrentModule {}

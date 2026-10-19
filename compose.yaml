@@ -77,6 +77,19 @@ services:
       - torrent-control
       - torrent-egress
 
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr@sha256:4e992f9b9229bc8c97c666b10b042a7360bce1d99b196e8aa29fd9805849cbf1
+    restart: unless-stopped
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: Europe/Moscow
+    volumes:
+      - prowlarr-config:/config
+    networks:
+      - discovery-control
+      - discovery-egress
+
   backend:
     build: ./backend
     env_file:
@@ -96,6 +109,8 @@ services:
       TORRSERVER_HEADERS_TIMEOUT_MS: "30000"
       TORRSERVER_BODY_TIMEOUT_MS: "30000"
       TORRSERVER_METADATA_TIMEOUT_MS: "120000"
+      PROWLARR_BASE_URL: http://prowlarr:9696
+      PROWLARR_API_KEY_FILE: /run/secrets/prowlarr_api_key
     ports:
       - "3000:3000"
     volumes:
@@ -110,10 +125,12 @@ services:
       - torrserver_username
       - torrserver_password
       - torrent_idempotency
+      - prowlarr_api_key
     networks:
       - app
       - database
       - torrent-control
+      - discovery-control
 
   frontend:
     build: ./frontend
@@ -128,6 +145,7 @@ volumes:
   postgres-data:
   torrserver-config:
   torrserver-cache:
+  prowlarr-config:
 
 secrets:
   torrserver_username:
@@ -136,6 +154,8 @@ secrets:
     file: ./storage/torrent-engine/secrets/password
   torrent_idempotency:
     file: ./storage/torrent-engine/secrets/idempotency
+  prowlarr_api_key:
+    file: ./storage/torrent-discovery/secrets/api-key
 
 networks:
   app:
@@ -144,3 +164,6 @@ networks:
   torrent-control:
     internal: true
   torrent-egress:
+  discovery-control:
+    internal: true
+  discovery-egress:

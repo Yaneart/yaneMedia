@@ -66,6 +66,9 @@ export const appConfigValidationSchema = Joi.object({
   TORRSERVER_HEADERS_TIMEOUT_MS: Joi.number().integer().min(100).max(120_000).default(30_000),
   TORRSERVER_BODY_TIMEOUT_MS: Joi.number().integer().min(100).max(120_000).default(30_000),
   TORRSERVER_METADATA_TIMEOUT_MS: Joi.number().integer().min(1_000).max(180_000).default(120_000),
+  PROWLARR_BASE_URL: torrServerOriginSchema.optional(),
+  PROWLARR_API_KEY_FILE: secretFileSchema.optional(),
+  PROWLARR_TIMEOUT_MS: Joi.number().integer().min(1_000).max(30_000).default(10_000),
 });
 
 @Module({
