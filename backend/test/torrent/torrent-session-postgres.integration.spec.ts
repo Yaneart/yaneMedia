@@ -10,6 +10,7 @@ import {
 } from '../../src/torrent/torrent-session.repository';
 import { users } from '../../src/users/entities/user.entity';
 import { eq } from 'drizzle-orm';
+import type { EngineTorrentKey } from '../../src/torrent/torrent-engine.port';
 
 const describePostgres = process.env.TORRENT_POSTGRES_TEST === '1' ? describe : describe.skip;
 
@@ -73,6 +74,8 @@ describePostgres('torrent session PostgreSQL persistence', () => {
     ).rejects.toMatchObject({ code: 'TORRENT_CAPACITY_EXCEEDED' });
 
     const next = await repository.transition(accepted.session.sessionId, 1, 'fetching_metadata');
+    const engineKey = 'a'.repeat(40) as EngineTorrentKey;
+    await repository.bindEngine(next.sessionId, engineKey);
     expect(next.version).toBe(2);
     await expect(repository.transition(next.sessionId, 1, 'awaiting_file')).rejects.toBeInstanceOf(
       TorrentSessionConflict,
@@ -83,6 +86,10 @@ describePostgres('torrent session PostgreSQL persistence', () => {
     expect(await repository.requestStop(owners[2], next.sessionId)).toBe(false);
     expect(await repository.requestStop(owners[0], next.sessionId)).toBe(true);
     expect(await repository.requestStop(owners[0], next.sessionId)).toBe(true);
+    expect((await repository.findOwned(owners[0], next.sessionId))?.state).toBe('stopping');
+    expect((await repository.findForCleanup(next.sessionId))?.engineKey).toBe(engineKey);
+    expect(await repository.hasOtherEngineReference(next.sessionId, engineKey)).toBe(false);
+    expect(await repository.findOwned(owners[1], next.sessionId)).toBeUndefined();
     expect(await repository.findVisible(owners[0], next.sessionId)).toBeUndefined();
     await expect(repository.reserve(first)).rejects.toBeInstanceOf(TorrentSessionNotFound);
 

@@ -248,6 +248,45 @@ export class TorrentSessionRepository {
     });
   }
 
+  async findOwned(ownerId: string, sessionId: string): Promise<TorrentSessionRow | undefined> {
+    const [session] = await this.database.db
+      .select()
+      .from(torrentSessions)
+      .where(and(eq(torrentSessions.ownerId, ownerId), eq(torrentSessions.sessionId, sessionId)));
+    return session;
+  }
+
+  async findForCleanup(sessionId: string): Promise<{
+    session: TorrentSessionRow;
+    engineKey: EngineTorrentKey | null;
+  } | null> {
+    const [row] = await this.database.db
+      .select({ session: torrentSessions, engineKey: torrentEngineBindings.engineKey })
+      .from(torrentSessions)
+      .leftJoin(
+        torrentEngineBindings,
+        eq(torrentSessions.sessionId, torrentEngineBindings.sessionId),
+      )
+      .where(eq(torrentSessions.sessionId, sessionId));
+    return row
+      ? { session: row.session, engineKey: row.engineKey as EngineTorrentKey | null }
+      : null;
+  }
+
+  async hasOtherEngineReference(sessionId: string, engineKey: EngineTorrentKey): Promise<boolean> {
+    const [reference] = await this.database.db
+      .select({ sessionId: torrentEngineBindings.sessionId })
+      .from(torrentEngineBindings)
+      .where(
+        and(
+          eq(torrentEngineBindings.engineKey, engineKey),
+          sql`${torrentEngineBindings.sessionId} <> ${sessionId}`,
+        ),
+      )
+      .limit(1);
+    return Boolean(reference);
+  }
+
   async transition(
     sessionId: string,
     expectedVersion: number,

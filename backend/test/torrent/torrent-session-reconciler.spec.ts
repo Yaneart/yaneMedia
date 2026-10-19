@@ -34,6 +34,10 @@ describe('torrent session reconciliation', () => {
     Parameters<TorrentSessionRepository['transition']>
   >();
   const clearEngine = jest.fn().mockResolvedValue(undefined);
+  const hasOtherEngineReference = jest.fn().mockResolvedValue(false);
+  const requestStop = jest.fn().mockResolvedValue(true);
+  const findOwned = jest.fn();
+  const findForCleanup = jest.fn();
   const purgeExpiredIdempotency = jest.fn().mockResolvedValue(undefined);
   const purgeTombstones = jest.fn().mockResolvedValue(undefined);
   const listOwned = jest.fn();
@@ -45,6 +49,10 @@ describe('torrent session reconciliation', () => {
     transition,
     replaceFiles,
     clearEngine,
+    hasOtherEngineReference,
+    requestStop,
+    findOwned,
+    findForCleanup,
     purgeExpiredIdempotency,
     purgeTombstones,
   } as unknown as TorrentSessionRepository;
@@ -56,15 +64,73 @@ describe('torrent session reconciliation', () => {
     getStatus,
   } as unknown as TorrServerClient;
   const hasGeneration = jest.fn().mockReturnValue(false);
-  const gateway = { stop: jest.fn().mockResolvedValue(undefined), hasGeneration } as never;
+  const gateway = {
+    stop: jest.fn().mockResolvedValue(undefined),
+    hasGeneration,
+    cleanupStaleDirectories: jest.fn().mockResolvedValue(undefined),
+  } as never;
 
   beforeEach(() => {
     jest.clearAllMocks();
+    listForReconciliation.mockReset();
+    hasOtherEngineReference.mockResolvedValue(false);
     transition.mockImplementation((_id, version, state) =>
       Promise.resolve({
         ...session(state),
         version: version + 1,
       }),
+    );
+  });
+
+  it('stops an owned session immediately and remains idempotent', async () => {
+    const stopping = session('stopping');
+    findForCleanup.mockResolvedValue({ session: stopping, engineKey: key });
+    listOwned.mockResolvedValue([key]);
+    const reconciler = new TorrentSessionReconciler(repository, engine, gateway);
+    await reconciler.stop(stopping.ownerId, stopping.sessionId);
+    expect(gateway.stop).toHaveBeenCalledWith(stopping.sessionId);
+    expect(drop).toHaveBeenCalledWith(key, expect.any(AbortSignal));
+    expect(transition).toHaveBeenCalledWith(
+      stopping.sessionId,
+      stopping.version,
+      'stopped',
+      { cleanupAfter: null },
+      expect.any(Date),
+    );
+    requestStop.mockResolvedValueOnce(false);
+    findOwned.mockResolvedValueOnce(session('stopped'));
+    await expect(reconciler.stop(stopping.ownerId, stopping.sessionId)).resolves.toBeUndefined();
+  });
+
+  it('preserves another session’s engine reference during stop', async () => {
+    const stopping = session('stopping');
+    findForCleanup.mockResolvedValue({ session: stopping, engineKey: key });
+    listOwned.mockResolvedValue([key]);
+    hasOtherEngineReference.mockResolvedValue(true);
+    await new TorrentSessionReconciler(repository, engine, gateway).stop(
+      stopping.ownerId,
+      stopping.sessionId,
+    );
+    expect(drop).not.toHaveBeenCalled();
+    expect(clearEngine).toHaveBeenCalledWith(stopping.sessionId);
+  });
+
+  it('retains the stopping audit and retries after TorrServer returns', async () => {
+    const stopping = session('stopping');
+    findForCleanup.mockResolvedValue({ session: stopping, engineKey: key });
+    listOwned.mockRejectedValueOnce(new Error('unavailable')).mockResolvedValueOnce([key]);
+    const reconciler = new TorrentSessionReconciler(repository, engine, gateway);
+    await reconciler.stop(stopping.ownerId, stopping.sessionId);
+    expect(clearEngine).not.toHaveBeenCalled();
+    expect(transition).not.toHaveBeenCalled();
+    listForReconciliation.mockResolvedValue([{ session: stopping, engineKey: key }]);
+    await reconciler.sweep(now);
+    expect(transition).toHaveBeenCalledWith(
+      stopping.sessionId,
+      stopping.version,
+      'stopped',
+      { cleanupAfter: null },
+      now,
     );
   });
 

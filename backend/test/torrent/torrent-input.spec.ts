@@ -146,6 +146,8 @@ describe('torrent input orchestration', () => {
     const calls = repository.reserve.mock.calls as unknown as Array<[{ inputDigest: string }]>;
     const reserved = calls[0][0];
     expect(reserved.inputDigest).toMatch(/^[0-9a-f]{64}$/);
+    await input.beforeApplicationShutdown();
+    await expect(input.create(...args)).rejects.toMatchObject({ status: 503 });
   });
 
   it('returns only the owner session and its safe file list', async () => {

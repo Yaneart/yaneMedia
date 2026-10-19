@@ -1,11 +1,11 @@
 import { randomBytes } from 'node:crypto';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
-import { mkdir, readFile, rm, stat } from 'node:fs/promises';
+import { lstat, mkdir, readFile, readdir, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
-import { Injectable, type OnApplicationShutdown } from '@nestjs/common';
+import { Injectable, type BeforeApplicationShutdown } from '@nestjs/common';
 import type { EngineFileKey, EngineTorrentKey } from './torrent-engine.port';
 import {
   parseTorrentProbe,
@@ -30,13 +30,16 @@ export class TorrentGatewayCapacity extends Error {}
 export class TorrentGatewayTimeout extends Error {}
 
 @Injectable()
-export class TorrentStreamGateway implements OnApplicationShutdown {
+export class TorrentStreamGateway implements BeforeApplicationShutdown {
   private readonly workers = new Map<string, Worker>();
   private readonly completed = new Map<string, { generation: number; directory: string }>();
   private readonly starting = new Map<
     string,
     { generation: number; video: boolean; cancelled: boolean }
   >();
+  private closing = false;
+  private readonly commands = new Set<ChildProcess>();
+  private readonly stopping = new Map<string, Promise<void>>();
 
   constructor(
     private readonly engine: TorrServerClient,
@@ -107,6 +110,7 @@ export class TorrentStreamGateway implements OnApplicationShutdown {
     audio: AudioTrack,
     position: number,
   ): Promise<void> {
+    if (this.closing) throw new TorrentGatewayCapacity();
     const videoTranscode = !probe.copyVideo;
     if (this.starting.has(sessionId)) throw new TorrentGatewayCapacity();
     if (!this.hasCapacity(videoTranscode, sessionId)) throw new TorrentGatewayCapacity();
@@ -260,6 +264,22 @@ export class TorrentStreamGateway implements OnApplicationShutdown {
       (generation === undefined || starting.generation === generation)
     )
       starting.cancelled = true;
+    const inProgress = this.stopping.get(sessionId);
+    if (inProgress) {
+      await inProgress;
+      return;
+    }
+    const task = this.stopWorker(sessionId, generation);
+    this.stopping.set(sessionId, task);
+    try {
+      await task;
+    } finally {
+      if (this.stopping.get(sessionId) === task) this.stopping.delete(sessionId);
+    }
+  }
+
+  private async stopWorker(sessionId: string, generation?: number): Promise<void> {
+    const starting = this.starting.get(sessionId);
     const worker = this.workers.get(sessionId);
     const completed = this.completed.get(sessionId);
     if (generation !== undefined && completed && completed.generation !== generation && !worker)
@@ -279,20 +299,58 @@ export class TorrentStreamGateway implements OnApplicationShutdown {
     this.completed.delete(sessionId);
     clearInterval(worker.heartbeat);
     worker.process.kill('SIGTERM');
-    await Promise.race([
-      new Promise<void>((resolve) => worker.process.once('exit', () => resolve())),
-      new Promise<void>((resolve) => setTimeout(resolve, 5_000)),
-    ]);
-    if (worker.process.exitCode === null) worker.process.kill('SIGKILL');
+    let timer: NodeJS.Timeout | undefined;
+    try {
+      await Promise.race([
+        new Promise<void>((resolve) => worker.process.once('exit', () => resolve())),
+        new Promise<void>((resolve) => {
+          timer = setTimeout(resolve, 5_000);
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+    if (worker.process.exitCode === null && worker.process.signalCode === null)
+      worker.process.kill('SIGKILL');
     worker.server.closeAllConnections();
     worker.server.close();
     await rm(join(tmpdir(), 'yanemedia-torrent-hls', sessionId), { recursive: true, force: true });
   }
 
-  async onApplicationShutdown(): Promise<void> {
-    await Promise.all(
-      [...new Set([...this.workers.keys(), ...this.completed.keys()])].map((id) => this.stop(id)),
+  async beforeApplicationShutdown(): Promise<void> {
+    this.closing = true;
+    for (const reservation of this.starting.values()) reservation.cancelled = true;
+    for (const command of this.commands) command.kill('SIGKILL');
+    await Promise.allSettled(
+      [...new Set([...this.workers.keys(), ...this.completed.keys(), ...this.starting.keys()])].map(
+        (id) => this.stop(id),
+      ),
     );
+  }
+
+  async cleanupStaleDirectories(protectedSessions: Set<string>, before: number): Promise<void> {
+    const root = join(tmpdir(), 'yanemedia-torrent-hls');
+    const entries = await readdir(root, { withFileTypes: true }).catch(
+      (error: NodeJS.ErrnoException) => {
+        if (error.code === 'ENOENT') return [];
+        throw error;
+      },
+    );
+    for (const entry of entries) {
+      const id = entry.name;
+      if (
+        !entry.isDirectory() ||
+        !/^torrent_session_[A-Za-z0-9_-]{22}$/.test(id) ||
+        protectedSessions.has(id) ||
+        this.workers.has(id) ||
+        this.starting.has(id)
+      )
+        continue;
+      const directory = join(root, id);
+      const info = await lstat(directory).catch(() => null);
+      if (info?.isDirectory() && info.mtimeMs < before)
+        await rm(directory, { recursive: true, force: true });
+    }
   }
 
   private async inputServer(source: Source): Promise<{ server: Server; url: string }> {
@@ -349,8 +407,10 @@ export class TorrentStreamGateway implements OnApplicationShutdown {
   }
 
   private run(binary: string, args: string[], timeoutMs: number): Promise<string> {
+    if (this.closing) return Promise.reject(new Error('Torrent gateway is closing'));
     return new Promise((resolve, reject) => {
       const child = spawn(binary, args, { stdio: ['ignore', 'pipe', 'ignore'] });
+      this.commands.add(child);
       let output = '';
       let timedOut = false;
       const timer = setTimeout(() => {
@@ -363,10 +423,12 @@ export class TorrentStreamGateway implements OnApplicationShutdown {
       });
       child.once('error', (error) => {
         clearTimeout(timer);
+        this.commands.delete(child);
         reject(error);
       });
       child.once('exit', (code) => {
         clearTimeout(timer);
+        this.commands.delete(child);
         if (code === 0) resolve(output);
         else reject(timedOut ? new TorrentGatewayTimeout() : new Error(`${binary} failed`));
       });

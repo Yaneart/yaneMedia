@@ -3,7 +3,7 @@ import { constants, createReadStream } from 'node:fs';
 import { open, readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
-import { HttpException, Injectable } from '@nestjs/common';
+import { HttpException, Injectable, type BeforeApplicationShutdown } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import {
   InvalidTorrentPlaylist,
@@ -28,10 +28,12 @@ const missing = () =>
   );
 
 @Injectable()
-export class TorrentHlsService {
+export class TorrentHlsService implements BeforeApplicationShutdown {
   private readonly manifests = new Map<string, Manifest>();
   private readonly active = new Map<string, number>();
   private totalActive = 0;
+  private closing = false;
+  private readonly streams = new Set<AbortController>();
 
   constructor(
     private readonly repository: TorrentSessionRepository,
@@ -46,6 +48,7 @@ export class TorrentHlsService {
     request: Request,
     response: Response,
   ): Promise<void> {
+    if (this.closing) throw missing();
     response.setHeader('Cache-Control', 'private, no-store');
     response.setHeader('Vary', 'Cookie');
     response.setHeader('X-Content-Type-Options', 'nosniff');
@@ -131,6 +134,7 @@ export class TorrentHlsService {
         response.setHeader('Content-Type', 'video/mp4');
         response.setHeader('Content-Length', String(info.size));
         const abort = new AbortController();
+        this.streams.add(abort);
         const timer = setTimeout(() => abort.abort(), 30_000);
         response.once('close', () => abort.abort());
         try {
@@ -141,6 +145,7 @@ export class TorrentHlsService {
           response.destroy();
         } finally {
           clearTimeout(timer);
+          this.streams.delete(abort);
         }
       } finally {
         await fd.close();
@@ -151,6 +156,11 @@ export class TorrentHlsService {
       else this.active.delete(sessionId);
       this.totalActive--;
     }
+  }
+
+  beforeApplicationShutdown(): void {
+    this.closing = true;
+    for (const stream of this.streams) stream.abort();
   }
 
   private manifest(sessionId: string, generation: number): Manifest {

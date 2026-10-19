@@ -6,6 +6,7 @@ import {
   HttpCode,
   HttpException,
   Post,
+  Delete,
   Res,
   Param,
   Put,
@@ -22,6 +23,7 @@ import { NoStore } from '../platform/http/cache-policy';
 import { TorrentAuthGuard } from './torrent-auth.guard';
 import { TorrentInputService } from './torrent-input.service';
 import { TorrentPlaybackService } from './torrent-playback.service';
+import { TorrentSessionReconciler } from './torrent-session-reconciler';
 import { TorrentInputError, validateMagnet, validateMetainfo } from './torrent-input.validation';
 
 const bad = (status: number, code: string): never => {
@@ -34,12 +36,20 @@ export class TorrentInputController {
   constructor(
     private readonly input: TorrentInputService,
     private readonly playbackService: TorrentPlaybackService,
+    private readonly reconciler: TorrentSessionReconciler,
   ) {}
 
   @Get(':sessionId')
   @NoStore()
   get(@CurrentUser() user: AuthenticatedUser, @Param('sessionId') sessionId: string) {
     return this.input.get(user.id, sessionId);
+  }
+
+  @Delete(':sessionId')
+  @HttpCode(204)
+  @NoStore()
+  stop(@CurrentUser() user: AuthenticatedUser, @Param('sessionId') sessionId: string) {
+    return this.reconciler.stop(user.id, sessionId);
   }
 
   @Put(':sessionId/file')

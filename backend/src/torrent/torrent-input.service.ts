@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { HttpException, Injectable } from '@nestjs/common';
+import { HttpException, Injectable, type BeforeApplicationShutdown } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { MediaRegistryService } from '../media/registry/media-registry.service';
 import type { TorrentSessionRow } from './torrent-session.entity';
@@ -17,9 +17,11 @@ export type TorrentSessionView = Awaited<ReturnType<TorrentInputService['get']>>
 const WINDOW_MS = 10 * 60_000;
 
 @Injectable()
-export class TorrentInputService {
+export class TorrentInputService implements BeforeApplicationShutdown {
   private readonly secret: Buffer;
   private readonly attempts = new Map<string, number[]>();
+  private closing = false;
+  private readonly starts = new Set<Promise<void>>();
 
   constructor(
     config: ConfigService,
@@ -41,6 +43,7 @@ export class TorrentInputService {
     key: string,
     digestSource: string | Uint8Array = input,
   ): Promise<TorrentSessionView> {
+    if (this.closing) throw this.error(503, 'TORRENT_UPSTREAM_UNAVAILABLE');
     if (!this.engine.enabled) throw this.error(503, 'TORRENT_UPSTREAM_UNAVAILABLE');
     if (!/^[\x21-\x7e]{16,128}$/.test(key)) throw this.error(400, 'VALIDATION_FAILED');
     if (mediaRef !== undefined) {
@@ -72,7 +75,9 @@ export class TorrentInputService {
         inputDigest: digest,
       });
       if (reserved.replay) return this.view(reserved.session);
-      void this.start(reserved.session, route, input);
+      const started = this.start(reserved.session, route, input);
+      this.starts.add(started);
+      void started.finally(() => this.starts.delete(started)).catch(() => undefined);
       return this.view(reserved.session);
     } catch (error) {
       if (error instanceof TorrentSessionNotFound) throw this.error(404, error.message);
@@ -81,6 +86,21 @@ export class TorrentInputService {
         throw this.error(status, error.code);
       }
       throw error;
+    }
+  }
+
+  async beforeApplicationShutdown(): Promise<void> {
+    this.closing = true;
+    let timer: NodeJS.Timeout | undefined;
+    try {
+      await Promise.race([
+        Promise.allSettled([...this.starts]),
+        new Promise<void>((resolve) => {
+          timer = setTimeout(resolve, 16_000);
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
     }
   }
 
