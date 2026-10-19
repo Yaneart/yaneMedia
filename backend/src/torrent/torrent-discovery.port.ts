@@ -9,7 +9,7 @@ export interface DiscoverySearch {
 }
 
 export interface DiscoveryRelease {
-  guid: string;
+  guid: string | null;
   title: string;
   tracker: string;
   size: number;

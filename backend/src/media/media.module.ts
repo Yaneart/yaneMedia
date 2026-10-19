@@ -44,6 +44,7 @@ import { createMediaEngine } from './media-engine.config';
     AppLogger,
   ],
   exports: [
+    MediaService,
     MediaRegistryService,
     MediaCatalogService,
     EditorialCatalogRepository,

@@ -58,9 +58,7 @@ export class ProwlarrClient implements TorrentDiscoveryPort {
       if (!isRecord(item) || item.protocol !== 'torrent') return [];
       const { guid, title, indexer, size, seeders, publishDate, downloadUrl, infoHash } = item;
       if (
-        typeof guid !== 'string' ||
-        guid.length < 1 ||
-        guid.length > 2048 ||
+        (guid != null && (typeof guid !== 'string' || guid.length < 1 || guid.length > 2048)) ||
         typeof title !== 'string' ||
         title.length < 1 ||
         title.length > 512 ||
@@ -82,7 +80,7 @@ export class ProwlarrClient implements TorrentDiscoveryPort {
         return [];
       return [
         {
-          guid,
+          guid: guid ?? null,
           title,
           tracker: indexer,
           size,

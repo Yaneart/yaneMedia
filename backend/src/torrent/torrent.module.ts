@@ -18,10 +18,12 @@ import { TorrServerClient } from './torrserver.client';
 import { PROWLARR_CONFIG, createProwlarrConfig } from './prowlarr.config';
 import { ProwlarrClient } from './prowlarr.client';
 import { TORRENT_DISCOVERY_PORT } from './torrent-discovery.port';
+import { TorrentDiscoveryController } from './torrent-discovery.controller';
+import { TorrentDiscoveryService } from './torrent-discovery.service';
 
 @Module({
   imports: [AppConfigModule, DatabaseModule, AuthModule, MediaModule],
-  controllers: [TorrentInputController, TorrentHlsController],
+  controllers: [TorrentInputController, TorrentHlsController, TorrentDiscoveryController],
   providers: [
     {
       provide: TORRSERVER_CONFIG,
@@ -36,6 +38,7 @@ import { TORRENT_DISCOVERY_PORT } from './torrent-discovery.port';
     },
     ProwlarrClient,
     { provide: TORRENT_DISCOVERY_PORT, useExisting: ProwlarrClient },
+    TorrentDiscoveryService,
     TorrentSessionRepository,
     TorrentSessionReconciler,
     TorrentAuthGuard,
