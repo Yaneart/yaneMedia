@@ -45,7 +45,7 @@ export function torrentSessionQueryOptions(accountKey: string, sessionId: string
     queryFn: ({ signal }) => getTorrentSession(sessionId, signal),
     staleTime: 0,
     gcTime: 0,
-    refetchOnWindowFocus: false,
+    refetchOnWindowFocus: true,
     refetchIntervalInBackground: true,
     refetchInterval: (query) =>
       torrentPollInterval(

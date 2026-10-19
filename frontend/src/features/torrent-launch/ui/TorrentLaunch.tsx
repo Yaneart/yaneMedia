@@ -7,7 +7,9 @@ import {
   createFileSession,
   createMagnetSession,
   newTorrentIdempotencyKey,
+  selectTorrentFile,
   stopTorrentSession,
+  torrentSessionQueryOptions,
   TorrentRequestError,
   type TorrentSession,
 } from '@/entities/torrent-session';
@@ -37,6 +39,51 @@ function describeCreateError(error: unknown): string {
   return 'Не удалось создать сессию. Попробуйте снова.';
 }
 
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} Б`;
+  const unit = bytes < 1024 ** 2 ? 'КиБ' : bytes < 1024 ** 3 ? 'МиБ' : 'ГиБ';
+  const divisor = unit === 'КиБ' ? 1024 : unit === 'МиБ' ? 1024 ** 2 : 1024 ** 3;
+  return `${(bytes / divisor).toLocaleString('ru-RU', { maximumFractionDigits: 1 })} ${unit}`;
+}
+
+function describeFailure(session: TorrentSession): string {
+  switch (session.failure?.code) {
+    case 'TORRENT_METADATA_TIMEOUT':
+      return 'Не удалось получить данные раздачи вовремя. Проверьте доступность участников и попробуйте снова.';
+    case 'TORRENT_NO_VIDEO_FILES':
+      return 'В раздаче нет подходящих видеофайлов. Выберите другой торрент.';
+    case 'TORRENT_SIZE_LIMIT_EXCEEDED':
+      return 'Размер раздачи или видео превышает допустимый предел. Выберите другой торрент.';
+    case 'TORRENT_CAPACITY_EXCEEDED':
+    case 'TORRENT_RESOURCE_LIMIT':
+      return 'Сервис сейчас занят. Попробуйте позже.';
+    case 'TORRENT_UPSTREAM_UNAVAILABLE':
+    case 'TORRENT_UNAVAILABLE':
+      return 'Торрент-сервис временно недоступен. Попробуйте позже.';
+    default:
+      return 'Не удалось подготовить торрент. Попробуйте снова или выберите другой.';
+  }
+}
+
+function preparationLabel(session: TorrentSession): string {
+  switch (session.state) {
+    case 'created':
+      return 'Подключаем торрент-сервис…';
+    case 'fetching_metadata':
+      return 'Получаем данные раздачи…';
+    case 'probing':
+      return 'Проверяем видеофайл…';
+    case 'preparing':
+      return 'Готовим видео к просмотру…';
+    case 'awaiting_playback':
+      return 'Файл готов к следующему этапу просмотра.';
+    case 'ready':
+      return 'Видео подготовлено к просмотру.';
+    default:
+      return 'Подготовка торрента';
+  }
+}
+
 export function TorrentLaunch({ mediaRef }: { mediaRef: string }) {
   const { state: authState, refresh } = useAuth();
   const accountKey = authState.status === 'authenticated' ? authState.user.email : 'inactive';
@@ -50,11 +97,17 @@ export function TorrentLaunch({ mediaRef }: { mediaRef: string }) {
   const [magnet, setMagnet] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [session, setSession] = useState<TorrentSession | null>(null);
+  const [fileRef, setFileRef] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestRef = useRef<AbortController | null>(null);
   const createKeyRef = useRef<string | null>(null);
   const previousAccountRef = useRef(accountKey);
+  const sessionQuery = useQuery({
+    ...torrentSessionQueryOptions(accountKey, session?.id ?? 'inactive'),
+    enabled: open && authState.status === 'authenticated' && !!session,
+  });
+  const currentSession = session ? (sessionQuery.data ?? session) : null;
 
   useRestoreSocialAction('torrent', () => setOpen(true));
 
@@ -63,6 +116,7 @@ export function TorrentLaunch({ mediaRef }: { mediaRef: string }) {
     previousAccountRef.current = accountKey;
     requestRef.current?.abort();
     setSession(null);
+    setFileRef(null);
     setError(null);
     setPending(false);
     setMagnet('');
@@ -107,8 +161,7 @@ export function TorrentLaunch({ mediaRef }: { mediaRef: string }) {
       if (controller.signal.aborted) return;
       cacheTorrentSession(queryClient, accountKey, created);
       setSession(created);
-      setMagnet('');
-      setFile(null);
+      setFileRef(null);
       createKeyRef.current = null;
     } catch (cause) {
       if (!controller.signal.aborted) setError(describeCreateError(cause));
@@ -130,10 +183,46 @@ export function TorrentLaunch({ mediaRef }: { mediaRef: string }) {
       await stopTorrentSession(session.id, controller.signal);
       if (controller.signal.aborted) return;
       setSession(null);
+      setFileRef(null);
     } catch (cause) {
       if (!controller.signal.aborted) {
-        if (cause instanceof TorrentRequestError && cause.status === 404) setSession(null);
-        else setError('Не удалось остановить сессию. Попробуйте снова.');
+        if (cause instanceof TorrentRequestError && cause.status === 404) {
+          setSession(null);
+          setFileRef(null);
+        } else setError('Не удалось остановить сессию. Попробуйте снова.');
+      }
+    } finally {
+      if (requestRef.current === controller) {
+        requestRef.current = null;
+        setPending(false);
+      }
+    }
+  };
+
+  const chooseFile = async () => {
+    if (!currentSession || !fileRef || pending) return;
+    const controller = new AbortController();
+    requestRef.current = controller;
+    setPending(true);
+    setError(null);
+    try {
+      const updated = await selectTorrentFile(
+        currentSession.id,
+        fileRef,
+        currentSession.version,
+        controller.signal,
+      );
+      if (controller.signal.aborted) return;
+      cacheTorrentSession(queryClient, accountKey, updated);
+      setSession(updated);
+    } catch (cause) {
+      if (!controller.signal.aborted) {
+        setError(
+          cause instanceof TorrentRequestError && cause.code === 'TORRENT_SESSION_CHANGED'
+            ? 'Состояние торрента изменилось. Обновите данные и выберите файл снова.'
+            : 'Не удалось выбрать файл. Попробуйте снова.',
+        );
+        void sessionQuery.refetch();
       }
     } finally {
       if (requestRef.current === controller) {
@@ -193,19 +282,109 @@ export function TorrentLaunch({ mediaRef }: { mediaRef: string }) {
               <ResendVerification email={profileQuery.data.email} />
             </div>
           ) : authState.status === 'authenticated' && profileQuery.data?.emailVerified ? (
-            session ? (
-              <div className="space-y-3" role="status">
-                <p className="text-sm text-text-primary">
-                  Сессия создана, подготовка торрента началась. Вы можете остановить её здесь.
-                </p>
-                <Button
-                  variant="secondary"
-                  size="small"
-                  disabled={pending}
-                  onClick={() => void stop()}
-                >
-                  {pending ? 'Останавливаем…' : 'Остановить сессию'}
-                </Button>
+            currentSession ? (
+              <div className="space-y-4">
+                {sessionQuery.isError ? (
+                  <div className="flex flex-wrap items-center gap-3">
+                    <p role="alert" className="text-sm text-error">
+                      {sessionQuery.error instanceof TorrentRequestError &&
+                      sessionQuery.error.status === 404
+                        ? 'Сессия завершилась или срок её действия истёк.'
+                        : 'Не удалось обновить состояние торрента.'}
+                    </p>
+                    {sessionQuery.error instanceof TorrentRequestError &&
+                    sessionQuery.error.status === 404 ? (
+                      <Button variant="secondary" size="small" onClick={() => setSession(null)}>
+                        Начать заново
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="secondary"
+                        size="small"
+                        onClick={() => void sessionQuery.refetch()}
+                      >
+                        Обновить
+                      </Button>
+                    )}
+                  </div>
+                ) : null}
+                {currentSession.state === 'failed' ? (
+                  <p role="alert" className="text-sm text-error">
+                    {describeFailure(currentSession)}
+                  </p>
+                ) : currentSession.state === 'awaiting_file' ? (
+                  <fieldset className="space-y-3">
+                    <legend className="text-sm font-semibold text-text-primary">
+                      Выберите видеофайл
+                    </legend>
+                    <div className="max-h-64 space-y-2 overflow-y-auto">
+                      {currentSession.files.map((item) => (
+                        <label
+                          key={item.ref}
+                          className="flex cursor-pointer items-start gap-3 rounded-control border border-border px-3 py-2 text-sm text-text-primary"
+                        >
+                          <input
+                            type="radio"
+                            name="torrent-file"
+                            value={item.ref}
+                            checked={fileRef === item.ref}
+                            onChange={() => setFileRef(item.ref)}
+                            className="mt-1"
+                          />
+                          <span className="min-w-0 break-words">
+                            {item.name}{' '}
+                            <span className="text-text-secondary">
+                              ({formatBytes(item.sizeBytes)})
+                            </span>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                    <Button
+                      size="small"
+                      disabled={!fileRef || pending || sessionQuery.isError}
+                      onClick={() => void chooseFile()}
+                    >
+                      {pending ? 'Выбираем…' : 'Подтвердить выбор'}
+                    </Button>
+                  </fieldset>
+                ) : (
+                  <div className="min-h-24 space-y-2 text-sm text-text-primary" role="status">
+                    <p className="font-semibold">{preparationLabel(currentSession)}</p>
+                    {currentSession.state === 'fetching_metadata' &&
+                      currentSession.progress.peers === 0 && (
+                        <p className="text-text-secondary">
+                          Пока нет подключённых участников. Поиск может занять несколько минут.
+                        </p>
+                      )}
+                    {['created', 'fetching_metadata', 'probing', 'preparing'].includes(
+                      currentSession.state,
+                    ) && (
+                      <p className="tabular-nums text-text-secondary">
+                        {currentSession.progress.basisPoints === null
+                          ? 'Прогресс: ожидаем данные'
+                          : `Прогресс: ${(currentSession.progress.basisPoints / 100).toLocaleString('ru-RU', { maximumFractionDigits: 1 })} %`}
+                        {' · '}Участники: {currentSession.progress.peers}
+                        {' · '}Скорость: {formatBytes(currentSession.progress.speedBytesPerSecond)}
+                        /с
+                      </p>
+                    )}
+                  </div>
+                )}
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="secondary"
+                    size="small"
+                    disabled={pending}
+                    onClick={() => void stop()}
+                  >
+                    {pending
+                      ? 'Останавливаем…'
+                      : currentSession.state === 'failed'
+                        ? 'Начать заново'
+                        : 'Остановить сессию'}
+                  </Button>
+                </div>
               </div>
             ) : (
               <form onSubmit={(event) => void submit(event)} className="space-y-4">

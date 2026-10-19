@@ -163,6 +163,7 @@ describe('torrent input orchestration', () => {
         },
       ]),
       getProbe: jest.fn().mockResolvedValue(undefined),
+      findEngineKey: jest.fn().mockResolvedValue(undefined),
     };
     const input = new TorrentInputService(
       { get: jest.fn() } as unknown as ConfigService,
@@ -184,5 +185,43 @@ describe('torrent input orchestration', () => {
     ]);
     expect(view.state).toBe('awaiting_file');
     expect(repository.listFiles).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns bounded live progress and keeps status available when the engine is offline', async () => {
+    const active = { ...session, state: 'fetching_metadata' as const };
+    const repository = {
+      findVisible: jest.fn().mockResolvedValue(active),
+      listFiles: jest.fn().mockResolvedValue([]),
+      getProbe: jest.fn().mockResolvedValue(undefined),
+      findEngineKey: jest.fn().mockResolvedValue(hash),
+    };
+    const engine = {
+      enabled: false,
+      getStatus: jest
+        .fn()
+        .mockResolvedValueOnce({
+          loadedBytes: 500,
+          totalBytes: 1_000,
+          downloadBytesPerSecond: 200,
+          activePeers: 3,
+        })
+        .mockRejectedValueOnce(new Error('offline')),
+    };
+    const input = new TorrentInputService(
+      { get: jest.fn() } as unknown as ConfigService,
+      repository as unknown as TorrentSessionRepository,
+      engine as unknown as TorrServerClient,
+      {} as MediaRegistryService,
+    );
+    const live = await input.get('owner', session.sessionId);
+    expect(live.status).toEqual({
+      progressBasisPoints: 5_000,
+      downloadSpeedBytesPerSecond: 200,
+      peers: 3,
+      downloadedBytes: 500,
+    });
+    const offline = await input.get('owner', session.sessionId);
+    expect(offline.status.progressBasisPoints).toBeNull();
+    expect(offline.status.peers).toBe(0);
   });
 });

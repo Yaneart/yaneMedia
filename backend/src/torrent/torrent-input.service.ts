@@ -9,7 +9,11 @@ import {
   TorrentSessionNotFound,
   TorrentSessionRepository,
 } from './torrent-session.repository';
-import type { ValidatedMagnet, ValidatedMetainfo } from './torrent-engine.port';
+import type {
+  EngineTorrentStatus,
+  ValidatedMagnet,
+  ValidatedMetainfo,
+} from './torrent-engine.port';
 import { TorrServerClient } from './torrserver.client';
 import { TorrServerError } from './torrserver.error';
 
@@ -109,7 +113,7 @@ export class TorrentInputService implements BeforeApplicationShutdown {
       throw this.error(404, 'TORRENT_SESSION_NOT_FOUND');
     const session = await this.repository.findVisible(ownerId, sessionId);
     if (!session) throw this.error(404, 'TORRENT_SESSION_NOT_FOUND');
-    return this.view(session);
+    return this.view(session, true);
   }
 
   digestPlayback(sessionId: string, position: number, trackRef: string): string {
@@ -123,10 +127,17 @@ export class TorrentInputService implements BeforeApplicationShutdown {
       .digest('hex');
   }
 
-  async view(session: TorrentSessionRow) {
+  async view(session: TorrentSessionRow, withProgress = false) {
     const files = await this.repository.listFiles(session.sessionId);
     const probe = await this.repository.getProbe(session.sessionId);
-    return toSessionView(session, files, probe);
+    let status: EngineTorrentStatus | null = null;
+    if (withProgress && !['created', 'failed'].includes(session.state)) {
+      const key = await this.repository.findEngineKey(session.sessionId);
+      if (key) {
+        status = await this.engine.getStatus(key, AbortSignal.timeout(2_000)).catch(() => null);
+      }
+    }
+    return toSessionView(session, files, probe, status);
   }
 
   private async start(
@@ -184,6 +195,7 @@ function toSessionView(
   session: TorrentSessionRow,
   files: Awaited<ReturnType<TorrentSessionRepository['listFiles']>>,
   probe: Awaited<ReturnType<TorrentSessionRepository['getProbe']>>,
+  status: EngineTorrentStatus | null,
 ) {
   const audioTracks =
     probe?.audioTracks.map(({ trackRef, label, language, channels, isDefault }) => ({
@@ -202,10 +214,13 @@ function toSessionView(
     expiresAt: session.expiresAt.toISOString(),
     idleExpiresAt: session.idleExpiresAt.toISOString(),
     status: {
-      progressBasisPoints: null,
-      downloadSpeedBytesPerSecond: 0,
-      peers: 0,
-      downloadedBytes: 0,
+      progressBasisPoints:
+        status && status.totalBytes > 0
+          ? Math.min(10_000, Math.round((status.loadedBytes / status.totalBytes) * 10_000))
+          : null,
+      downloadSpeedBytesPerSecond: status?.downloadBytesPerSecond ?? 0,
+      peers: status?.activePeers ?? 0,
+      downloadedBytes: status?.loadedBytes ?? 0,
     },
     files,
     selectedFileRef: session.selectedFileRef,
