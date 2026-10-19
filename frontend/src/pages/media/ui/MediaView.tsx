@@ -12,6 +12,7 @@ import { usePlaybackSession } from '@/features/playback-session';
 import { MediaCommunity } from '@/features/media-community';
 import { UserRating } from '@/features/user-rating';
 import { SeasonSelector } from '@/features/season-selection';
+import { TorrentLaunch } from '@/features/torrent-launch';
 import {
   createPlaybackSourceCatalog,
   PlaybackSourcePicker,
@@ -875,6 +876,8 @@ export function MediaView({
             />
           </div>
         </div>
+
+        <TorrentLaunch mediaRef={media.mediaRef} />
 
         {media.description && (
           <MediaDescriptionPanel className="hidden xl:block 2xl:hidden">

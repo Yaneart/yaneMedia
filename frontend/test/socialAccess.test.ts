@@ -28,6 +28,10 @@ describe('protected social access', () => {
     expect(readSocialIntentState(createSocialIntentState('profile'))).toBe('profile');
     expect(readSocialIntentState({ socialActionIntent: 'unknown' })).toBeNull();
     expect(getSocialLoginDescription('report')).toContain('жалобу');
+    expect(
+      new URLSearchParams(createSocialLoginSearch('/media/work_1', 'torrent')).get('intent'),
+    ).toBe('torrent');
+    expect(readSocialIntentState(createSocialIntentState('torrent'))).toBe('torrent');
   });
 
   test('distinguishes protected-action failures and includes retry-after', () => {
