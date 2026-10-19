@@ -7,7 +7,6 @@ import { join } from 'node:path';
 import type { EngineFileKey, EngineTorrentKey } from '../../src/torrent/torrent-engine.port';
 import { TorrentStreamGateway } from '../../src/torrent/torrent-stream.gateway';
 import { parseTorrentPlaylist } from '../../src/torrent/torrent-hls-playlist';
-import type { TorrentSessionRepository } from '../../src/torrent/torrent-session.repository';
 import type { TorrServerClient } from '../../src/torrent/torrserver.client';
 
 const describeGateway = process.env.TORRENT_GATEWAY_TEST === '1' ? describe : describe.skip;
@@ -74,10 +73,7 @@ describeGateway('FFmpeg gateway with a local seekable fixture', () => {
       openFileStream,
       heartbeat: jest.fn().mockResolvedValue(undefined),
     } as unknown as TorrServerClient;
-    const repository = {
-      extendWorkerLease: jest.fn().mockResolvedValue(undefined),
-    } as unknown as TorrentSessionRepository;
-    const gateway = new TorrentStreamGateway(engine, repository);
+    const gateway = new TorrentStreamGateway(engine);
     try {
       await gateway.checkReady();
       const source = { key: 'a'.repeat(40) as EngineTorrentKey, file: 1 as EngineFileKey, size };

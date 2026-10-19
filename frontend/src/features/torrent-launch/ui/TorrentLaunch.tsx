@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 
 import { useAuth } from '@/entities/auth';
 import {
@@ -29,6 +29,8 @@ function describeCreateError(error: unknown): string {
     return 'Не удалось создать сессию. Попробуйте снова.';
   if (error.code === 'TORRENT_ACTIVE_SESSION_EXISTS')
     return 'У вас уже есть активный торрент. Завершите его перед запуском нового.';
+  if (error.code === 'TORRENT_CAPACITY_EXCEEDED' || error.code === 'TORRENT_RESOURCE_LIMIT')
+    return 'Сервис сейчас занят. Попробуйте позже.';
   if (error.code === 'TORRENT_INVALID_INPUT' || error.code === 'VALIDATION_FAILED')
     return 'Проверьте magnet-ссылку или файл .torrent.';
   if (error.code === 'TORRENT_FILE_TYPE_UNSUPPORTED') return 'Выберите корректный файл .torrent.';
@@ -57,6 +59,14 @@ function describeFailure(session: TorrentSession): string {
       return 'В раздаче нет подходящих видеофайлов. Выберите другой торрент.';
     case 'TORRENT_SIZE_LIMIT_EXCEEDED':
       return 'Размер раздачи или видео превышает допустимый предел. Выберите другой торрент.';
+    case 'TORRENT_UNSUPPORTED_MEDIA':
+      return 'Формат этого видео не поддерживается. Выберите другой файл или торрент.';
+    case 'TORRENT_PROBE_TIMEOUT':
+      return 'Не удалось проверить видео вовремя. Проверьте скорость раздачи и попробуйте снова.';
+    case 'TORRENT_PLAYBACK_TIMEOUT':
+      return 'Видео слишком долго загружается от участников. Попробуйте позже или выберите другую раздачу.';
+    case 'TORRENT_TRANSCODE_FAILED':
+      return 'Не удалось преобразовать видео для браузера. Попробуйте другой файл.';
     case 'TORRENT_CAPACITY_EXCEEDED':
     case 'TORRENT_RESOURCE_LIMIT':
       return 'Сервис сейчас занят. Попробуйте позже.';
@@ -66,6 +76,20 @@ function describeFailure(session: TorrentSession): string {
     default:
       return 'Не удалось подготовить торрент. Попробуйте снова или выберите другой.';
   }
+}
+
+function describeCommandError(error: unknown, action: string): string {
+  if (error instanceof TorrentRequestError) {
+    if (error.status === 404)
+      return 'Сессия завершилась или срок её действия истёк. Начните заново.';
+    if (error.code === 'TORRENT_SESSION_CHANGED')
+      return 'Состояние торрента изменилось. Обновите данные и повторите действие.';
+    if (error.code === 'TORRENT_CAPACITY_EXCEEDED' || error.code === 'TORRENT_RESOURCE_LIMIT')
+      return 'Сервис сейчас занят. Попробуйте позже.';
+    if (error.status === 503 || error.kind === 'network')
+      return 'Торрент-сервис временно недоступен. Попробуйте позже.';
+  }
+  return `Не удалось ${action}. Попробуйте снова.`;
 }
 
 function preparationLabel(session: TorrentSession): string {
@@ -104,6 +128,9 @@ export function TorrentLaunch({
   const accountKey = authState.status === 'authenticated' ? authState.user.email : 'inactive';
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
+  const panelId = useId();
+  const magnetInputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const profileQuery = useQuery({
     ...privateProfileQueryOptions(accountKey),
     enabled: open && authState.status === 'authenticated',
@@ -237,7 +264,11 @@ export function TorrentLaunch({
       queryClient.setQueryData(torrentSessionQueryKeys.active(accountKey, mediaRef), null);
       onSessionChange(null);
       setFileRef(null);
+      setFile(null);
       playbackRequestedRef.current = false;
+      requestAnimationFrame(() =>
+        (inputKind === 'magnet' ? magnetInputRef.current : fileInputRef.current)?.focus(),
+      );
     } catch (cause) {
       if (!controller.signal.aborted) {
         if (cause instanceof TorrentRequestError && cause.status === 404) {
@@ -245,7 +276,11 @@ export function TorrentLaunch({
           queryClient.setQueryData(torrentSessionQueryKeys.active(accountKey, mediaRef), null);
           onSessionChange(null);
           setFileRef(null);
-        } else setError('Не удалось остановить сессию. Попробуйте снова.');
+          setFile(null);
+          requestAnimationFrame(() =>
+            (inputKind === 'magnet' ? magnetInputRef.current : fileInputRef.current)?.focus(),
+          );
+        } else setError(describeCommandError(cause, 'остановить сессию'));
       }
     } finally {
       if (requestRef.current === controller) {
@@ -273,11 +308,7 @@ export function TorrentLaunch({
       setSession(updated);
     } catch (cause) {
       if (!controller.signal.aborted) {
-        setError(
-          cause instanceof TorrentRequestError && cause.code === 'TORRENT_SESSION_CHANGED'
-            ? 'Состояние торрента изменилось. Обновите данные и выберите файл снова.'
-            : 'Не удалось выбрать файл. Попробуйте снова.',
-        );
+        setError(describeCommandError(cause, 'выбрать файл'));
         void sessionQuery.refetch();
       }
     } finally {
@@ -327,11 +358,7 @@ export function TorrentLaunch({
       onSessionChange(updated);
     } catch (cause) {
       if (!controller.signal.aborted) {
-        setError(
-          cause instanceof TorrentRequestError && cause.status === 503
-            ? 'Сервис сейчас занят. Попробуйте позже.'
-            : 'Не удалось подготовить воспроизведение. Попробуйте снова.',
-        );
+        setError(describeCommandError(cause, 'подготовить воспроизведение'));
         void sessionQuery.refetch();
       }
     } finally {
@@ -350,12 +377,13 @@ export function TorrentLaunch({
       <Button
         variant="secondary"
         aria-expanded={open}
+        aria-controls={panelId}
         onClick={() => setOpen((current) => !current)}
       >
         Смотреть торрент
       </Button>
       {open && (
-        <div className="mt-4 space-y-4">
+        <div id={panelId} className="mt-4 space-y-4">
           <p className="text-sm text-text-secondary">
             Вы сами предоставляете magnet-ссылку или файл .torrent. yaneMedia не предоставляет
             контент. Ваш IP-адрес может быть виден другим участникам раздачи. Одновременно доступен
@@ -577,6 +605,7 @@ export function TorrentLaunch({
                   <label className="block space-y-2 text-sm font-semibold text-text-primary">
                     <span>Magnet-ссылка</span>
                     <textarea
+                      ref={magnetInputRef}
                       rows={3}
                       value={magnet}
                       onChange={(event) => {
@@ -595,6 +624,7 @@ export function TorrentLaunch({
                   <label className="block space-y-2 text-sm font-semibold text-text-primary">
                     <span>Файл .torrent (до 2 МиБ)</span>
                     <input
+                      ref={fileInputRef}
                       type="file"
                       accept=".torrent,application/x-bittorrent"
                       onChange={(event) => {

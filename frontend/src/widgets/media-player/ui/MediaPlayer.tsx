@@ -40,6 +40,7 @@ export type MediaPlayerProps = {
     reason?: 'periodic' | 'metadata' | 'seek' | 'pause' | 'ended',
   ) => void;
   onRetry?: () => void;
+  errorDescription?: string;
   emptyState?: MediaPlayerEmptyState;
   embedded?: boolean;
   directControls?: MediaVideoDirectControls;
@@ -110,6 +111,7 @@ export function MediaPlayer({
   onPause,
   onProgress,
   onRetry,
+  errorDescription,
   emptyState,
   embedded = false,
   directControls,
@@ -243,7 +245,7 @@ export function MediaPlayer({
             <ErrorState
               variant="player"
               title="Не удалось загрузить плеер"
-              description="Проверьте подключение и попробуйте ещё раз."
+              description={errorDescription ?? 'Проверьте подключение и попробуйте ещё раз.'}
               onRetry={onRetry}
               retryLabel="Повторить"
               visualLabel="Плеер недоступен"

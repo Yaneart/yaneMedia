@@ -84,6 +84,7 @@ export class TorrentHlsService implements BeforeApplicationShutdown {
         throw missing();
       if (kind === 'master') {
         await this.refresh(sessionId, session.generation, directory, manifest, session.version);
+        await this.repository.recordViewerActivity(sessionId, session.generation);
         const base = `/api/v1/torrent-sessions/${sessionId}/hls`;
         sendPlaylist(
           response,
@@ -100,6 +101,7 @@ export class TorrentHlsService implements BeforeApplicationShutdown {
       );
       const base = `/api/v1/torrent-sessions/${sessionId}/hls`;
       if (kind === 'media') {
+        await this.repository.recordViewerActivity(sessionId, session.generation);
         const lines = [
           '#EXTM3U',
           '#EXT-X-VERSION:7',
@@ -131,6 +133,7 @@ export class TorrentHlsService implements BeforeApplicationShutdown {
       try {
         const info = await fd.stat();
         if (!info.isFile() || info.size <= 0 || info.size > 32 * 1024 * 1024) throw missing();
+        await this.repository.recordViewerActivity(sessionId, session.generation);
         response.setHeader('Content-Type', 'video/mp4');
         response.setHeader('Content-Length', String(info.size));
         const abort = new AbortController();

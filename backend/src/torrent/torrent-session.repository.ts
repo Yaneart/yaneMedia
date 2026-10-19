@@ -21,6 +21,7 @@ import type { TorrentProbe } from './torrent-media-policy';
 
 const HOUR_MS = 60 * 60 * 1000;
 const IDLE_MS = 20 * 60 * 1000;
+const VIEWER_GRACE_MS = 2 * 60 * 1000;
 
 export class TorrentSessionConflict extends Error {
   constructor(
@@ -506,17 +507,18 @@ export class TorrentSessionRepository {
     return binding?.engineKey as EngineTorrentKey | undefined;
   }
 
-  async extendWorkerLease(sessionId: string, generation: number): Promise<void> {
+  async recordViewerActivity(sessionId: string, generation: number): Promise<void> {
     const now = new Date();
     await this.database.db
       .update(torrentSessions)
-      .set({ idleExpiresAt: new Date(now.getTime() + IDLE_MS) })
+      .set({ idleExpiresAt: new Date(now.getTime() + VIEWER_GRACE_MS) })
       .where(
         and(
           eq(torrentSessions.sessionId, sessionId),
           eq(torrentSessions.generation, generation),
-          inArray(torrentSessions.state, ['preparing', 'ready']),
+          eq(torrentSessions.state, 'ready'),
           sql`${torrentSessions.expiresAt} > ${now}`,
+          sql`${torrentSessions.idleExpiresAt} > ${now}`,
         ),
       );
   }

@@ -16,6 +16,7 @@ import {
   torrentPlaybackSourceRef,
   torrentSessionQueryOptions,
   type TorrentSession,
+  TorrentRequestError,
 } from '@/entities/torrent-session';
 import { EpisodeSelector } from '@/features/episode-selection';
 import { FavoriteButton, useFavorites } from '@/features/favorite';
@@ -287,6 +288,8 @@ export function MediaView({
   const torrentQuery = useQuery({
     ...torrentSessionQueryOptions(accountKey, activeTorrentId ?? 'inactive'),
     enabled: authState.status === 'authenticated' && !!activeTorrentId,
+    refetchInterval: activeTorrentId ? 60_000 : false,
+    refetchIntervalInBackground: false,
   });
   const torrentSession = activeTorrentId
     ? torrentQuery.data?.id === activeTorrentId
@@ -300,6 +303,19 @@ export function MediaView({
     torrentQuery.isError ||
     (torrentSession !== null &&
       ['failed', 'awaiting_playback', 'awaiting_file'].includes(torrentSession.state));
+  const torrentErrorDescription = torrentQuery.isError
+    ? torrentQuery.error instanceof TorrentRequestError && torrentQuery.error.status === 404
+      ? 'Торрент-сессия завершилась. Начните просмотр заново в панели ниже.'
+      : 'Не удалось связаться с торрент-сервисом. Проверьте подключение и повторите попытку.'
+    : torrentSession?.failure?.code === 'TORRENT_TRANSCODE_FAILED'
+      ? 'Не удалось преобразовать видео для браузера. Попробуйте другой файл.'
+      : torrentSession?.failure?.code === 'TORRENT_PLAYBACK_TIMEOUT'
+        ? 'Видео слишком медленно загружается от участников. Попробуйте позже.'
+        : torrentSession?.failure?.code === 'TORRENT_UNSUPPORTED_MEDIA'
+          ? 'Формат видео не поддерживается. Выберите другой файл.'
+          : torrentSession?.failure?.code === 'TORRENT_CAPACITY_EXCEEDED'
+            ? 'Сервис сейчас занят. Попробуйте позже.'
+            : 'Посмотрите состояние торрента в панели ниже и повторите запуск.';
   const torrentSource: MediaSourceOption | undefined =
     torrentPlayback && torrentSession
       ? {
@@ -983,6 +999,7 @@ export function MediaView({
               onPause={pauseSession}
               onProgress={updateProgress}
               onRetry={activeTorrentId ? () => void torrentQuery.refetch() : loadPlayer}
+              errorDescription={activeTorrentId ? torrentErrorDescription : undefined}
               emptyState={playerEmptyState}
               embedded
               torrentTimeline={

@@ -14,7 +14,6 @@ import {
   type TorrentProbe,
 } from './torrent-media-policy';
 import { TorrServerClient } from './torrserver.client';
-import { TorrentSessionRepository } from './torrent-session.repository';
 
 type Source = { key: EngineTorrentKey; file: EngineFileKey; size: number };
 type Worker = {
@@ -41,10 +40,7 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
   private readonly commands = new Set<ChildProcess>();
   private readonly stopping = new Map<string, Promise<void>>();
 
-  constructor(
-    private readonly engine: TorrServerClient,
-    private readonly repository: TorrentSessionRepository,
-  ) {}
+  constructor(private readonly engine: TorrServerClient) {}
 
   async checkReady(): Promise<void> {
     if (!this.engine.enabled) return;
@@ -189,10 +185,7 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
       ];
       const process = spawn('ffmpeg', args, { stdio: 'ignore' });
       const heartbeat = setInterval(() => {
-        void this.engine
-          .heartbeat(source.key, AbortSignal.timeout(5_000))
-          .then(() => this.repository.extendWorkerLease(sessionId, generation))
-          .catch(() => undefined);
+        void this.engine.heartbeat(source.key, AbortSignal.timeout(5_000)).catch(() => undefined);
       }, 60_000);
       heartbeat.unref();
       this.workers.set(sessionId, {

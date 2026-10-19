@@ -187,6 +187,30 @@ describe('torrent input orchestration', () => {
     expect(repository.listFiles).toHaveBeenCalledTimes(1);
   });
 
+  it('extends the viewer lease only when the owner reads a ready session', async () => {
+    const ready = { ...session, state: 'ready' as const, generation: 3 };
+    const recordViewerActivity = jest.fn().mockResolvedValue(undefined);
+    const repository = {
+      findVisible: jest.fn().mockResolvedValueOnce(undefined).mockResolvedValueOnce(ready),
+      recordViewerActivity,
+      listFiles: jest.fn().mockResolvedValue([]),
+      getProbe: jest.fn().mockResolvedValue(undefined),
+      findEngineKey: jest.fn().mockResolvedValue(undefined),
+    };
+    const input = new TorrentInputService(
+      { get: jest.fn() } as unknown as ConfigService,
+      repository as unknown as TorrentSessionRepository,
+      { enabled: false } as TorrServerClient,
+      {} as MediaRegistryService,
+    );
+    await expect(input.get('other-owner', session.sessionId)).rejects.toMatchObject({
+      status: 404,
+    });
+    expect(recordViewerActivity).not.toHaveBeenCalled();
+    await input.get('owner', session.sessionId);
+    expect(recordViewerActivity).toHaveBeenCalledWith(session.sessionId, 3);
+  });
+
   it('recovers the active session only for a canonical media reference', async () => {
     const mediaRef = 'work_0b02a880-8fdd-43b6-92f2-7a093d9eab60';
     const repository = {

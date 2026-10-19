@@ -103,11 +103,13 @@ describe('torrent HLS gateway', () => {
     let generation = 1;
     const transition = jest.fn().mockResolvedValue(undefined);
     const stop = jest.fn().mockResolvedValue(undefined);
+    const recordViewerActivity = jest.fn().mockResolvedValue(undefined);
     const repository = {
       findVisible: jest.fn((owner: string) =>
         Promise.resolve(owner === 'owner' ? { state: 'ready', generation, version: 1 } : undefined),
       ),
       transition,
+      recordViewerActivity,
     } as unknown as TorrentSessionRepository;
     const gateway = {
       artifactDirectory: jest.fn((_id: string, requested: number) =>
@@ -163,10 +165,12 @@ describe('torrent HLS gateway', () => {
       const segmentResponse = await get(`/segments/${segmentRef}`);
       expect(segmentResponse.headers.get('content-type')).toBe('video/mp4');
       expect(await segmentResponse.text()).toBe('segment');
+      expect(recordViewerActivity).toHaveBeenCalledTimes(4);
       expect((await get(`/segments/${segmentRef}`, 'other')).status).toBe(404);
       expect((await get(`/segments/${segmentRef}`, 'owner', { Range: 'bytes=0-1' })).status).toBe(
         416,
       );
+      expect(recordViewerActivity).toHaveBeenCalledTimes(4);
       await writeFile(
         join(directory, 'media.m3u8'),
         playlist.replaceAll('000000', '000001').replace('SEQUENCE:0', 'SEQUENCE:1'),

@@ -113,6 +113,8 @@ export class TorrentInputService implements BeforeApplicationShutdown {
       throw this.error(404, 'TORRENT_SESSION_NOT_FOUND');
     const session = await this.repository.findVisible(ownerId, sessionId);
     if (!session) throw this.error(404, 'TORRENT_SESSION_NOT_FOUND');
+    if (session.state === 'ready')
+      await this.repository.recordViewerActivity(sessionId, session.generation);
     return this.view(session, true);
   }
 

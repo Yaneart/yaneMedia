@@ -3,7 +3,11 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 
 import { clearAccountQueries, useAuth } from '@/entities/auth';
 import type { CanonicalMediaRef, MediaLocator } from '@/entities/media';
-import { isTorrentPlaybackSourceRef, registerTorrentPlayerStop } from '@/entities/torrent-session';
+import {
+  isTorrentPlaybackSourceRef,
+  registerTorrentPlayerStop,
+  stopTorrentSession,
+} from '@/entities/torrent-session';
 import type {
   ContinueWatchingEntry,
   ContinueWatchingProgressEntry,
@@ -559,6 +563,16 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
   const startSession = useCallback(
     (input: StartPlaybackSessionInput) => {
       if (resolvedOwnerId === undefined) return;
+      const previous = sessionRef.current;
+      if (
+        previous &&
+        previous.sourceRef !== input.sourceRef &&
+        isTorrentPlaybackSourceRef(previous.sourceRef)
+      )
+        void stopTorrentSession(
+          previous.sourceRef.slice('torrent:'.length),
+          new AbortController().signal,
+        ).catch(() => undefined);
 
       const durationSeconds = normalizeDuration(input.durationSeconds ?? null);
       const nextSession: PlaybackSession = {
@@ -715,6 +729,11 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
     const current = sessionRef.current;
     if (current && !isPlaybackCompleted(current)) recordSession(current, true);
     storeSession(null);
+    if (current && isTorrentPlaybackSourceRef(current.sourceRef))
+      void stopTorrentSession(
+        current.sourceRef.slice('torrent:'.length),
+        new AbortController().signal,
+      ).catch(() => undefined);
   }, [recordSession, storeSession]);
 
   const retry = useCallback(() => {
