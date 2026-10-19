@@ -35,11 +35,17 @@ describeGateway('FFmpeg gateway with a local seekable fixture', () => {
         '-i',
         'sine=frequency=440:sample_rate=48000',
         '-t',
-        '5',
+        '12',
         '-c:v',
         'libx264',
         '-threads',
         '2',
+        '-g',
+        '48',
+        '-keyint_min',
+        '48',
+        '-sc_threshold',
+        '0',
         '-pix_fmt',
         'yuv420p',
         '-b:v',
@@ -79,6 +85,7 @@ describeGateway('FFmpeg gateway with a local seekable fixture', () => {
       expect(probe.audioTracks).toHaveLength(1);
       await gateway.start(sessionId, 1, source, probe, probe.audioTracks[0], 0);
       await gateway.waitReady(sessionId, 1, AbortSignal.timeout(30_000));
+      expect(gateway.isCompleted(sessionId, 1)).toBe(false);
       expect((await stat(join(directory, '1', 'init.mp4'))).size).toBeGreaterThan(0);
       expect(
         parseTorrentPlaylist(await readFile(join(directory, '1', 'media.m3u8'), 'utf8')).segments

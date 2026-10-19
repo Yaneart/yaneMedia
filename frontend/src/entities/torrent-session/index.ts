@@ -2,6 +2,7 @@ export {
   createMagnetSession,
   createFileSession,
   getTorrentSession,
+  getActiveTorrentSession,
   selectTorrentFile,
   startTorrentPlayback,
   stopTorrentSession,
@@ -11,6 +12,7 @@ export {
 } from './api/torrentSessionApi';
 export {
   cacheTorrentSession,
+  activeTorrentSessionQueryOptions,
   torrentPollInterval,
   torrentSessionQueryKeys,
   torrentSessionQueryOptions,

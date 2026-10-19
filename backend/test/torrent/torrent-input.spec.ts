@@ -187,6 +187,28 @@ describe('torrent input orchestration', () => {
     expect(repository.listFiles).toHaveBeenCalledTimes(1);
   });
 
+  it('recovers the active session only for a canonical media reference', async () => {
+    const mediaRef = 'work_0b02a880-8fdd-43b6-92f2-7a093d9eab60';
+    const repository = {
+      findActiveForMedia: jest.fn().mockResolvedValueOnce(session).mockResolvedValueOnce(undefined),
+      listFiles: jest.fn().mockResolvedValue([]),
+      getProbe: jest.fn().mockResolvedValue(undefined),
+      findEngineKey: jest.fn().mockResolvedValue(undefined),
+    };
+    const input = new TorrentInputService(
+      { get: jest.fn() } as unknown as ConfigService,
+      repository as unknown as TorrentSessionRepository,
+      { enabled: false } as TorrServerClient,
+      {} as MediaRegistryService,
+    );
+    await expect(input.getActiveForMedia('owner', 'invalid')).rejects.toMatchObject({
+      status: 400,
+    });
+    expect((await input.getActiveForMedia('owner', mediaRef))?.sessionId).toBe(session.sessionId);
+    expect(await input.getActiveForMedia('owner', mediaRef)).toBeNull();
+    expect(repository.findActiveForMedia).toHaveBeenCalledWith('owner', mediaRef);
+  });
+
   it('returns bounded live progress and keeps status available when the engine is offline', async () => {
     const active = { ...session, state: 'fetching_metadata' as const };
     const repository = {

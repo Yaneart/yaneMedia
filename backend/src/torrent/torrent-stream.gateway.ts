@@ -135,6 +135,7 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
         ...(position > 0 ? ['-ss', String(position)] : []),
         '-rw_timeout',
         '120000000',
+        '-re',
         '-i',
         input.url,
         '-map',

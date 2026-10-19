@@ -10,6 +10,7 @@ const {
   cacheTorrentSession,
   createFileSession,
   createMagnetSession,
+  getActiveTorrentSession,
   getTorrentSession,
   registerTorrentPlayerStop,
   resetTorrentClientScope,
@@ -53,6 +54,12 @@ afterEach(() => {
 
 describe('torrent API boundary', () => {
   test('maps wire DTO and rejects arbitrary HLS URLs', () => {
+    expect(
+      mapTorrentSession({
+        ...wire,
+        status: { ...wire.status, downloadSpeedBytesPerSecond: 1234.5 },
+      }).progress.speedBytesPerSecond,
+    ).toBe(1234.5);
     const playback = {
       source: { type: 'hls', url: `/api/v1/torrent-sessions/${id}/hls/master.m3u8` },
       generation: 1,
@@ -91,6 +98,16 @@ describe('torrent API boundary', () => {
         playback: { ...playback, source: { type: 'hls', url: 'https://example.com/master.m3u8' } },
       }),
     ).toThrow();
+  });
+
+  test('recovers an account session and accepts an empty active result', async () => {
+    const mediaRef = 'work_0b02a880-8fdd-43b6-92f2-7a093d9eab60';
+    globalThis.fetch = mock(async () =>
+      Response.json({ data: { ...wire, mediaRef } }),
+    ) as typeof fetch;
+    expect((await getActiveTorrentSession(mediaRef, new AbortController().signal))?.id).toBe(id);
+    globalThis.fetch = mock(async () => Response.json({ data: null })) as typeof fetch;
+    expect(await getActiveTorrentSession(mediaRef, new AbortController().signal)).toBeNull();
   });
 
   test('sends each command with credentials, CSRF and the supplied idempotency key', async () => {

@@ -3,20 +3,23 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 
 import { useAuth } from '@/entities/auth';
 import {
+  activeTorrentSessionQueryOptions,
   cacheTorrentSession,
   createFileSession,
   createMagnetSession,
   newTorrentIdempotencyKey,
   selectTorrentFile,
+  startTorrentPlayback,
   stopTorrentSession,
   torrentSessionQueryOptions,
+  torrentSessionQueryKeys,
   TorrentRequestError,
   type TorrentSession,
 } from '@/entities/torrent-session';
 import { ResendVerification } from '@/features/auth-form';
 import { privateProfileQueryOptions } from '@/features/social-data';
 import { SocialLoginLink, useRestoreSocialAction } from '@/features/social-access';
-import { Button } from '@/shared';
+import { Button, Spinner } from '@/shared';
 
 const maxTorrentFileBytes = 2 * 1024 * 1024;
 const maxMagnetBytes = 4096;
@@ -84,7 +87,19 @@ function preparationLabel(session: TorrentSession): string {
   }
 }
 
-export function TorrentLaunch({ mediaRef }: { mediaRef: string }) {
+export function TorrentLaunch({
+  mediaRef,
+  activeSession,
+  resumePositionSeconds,
+  onPlaybackReady,
+  onSessionChange,
+}: {
+  mediaRef: string;
+  activeSession: TorrentSession | null;
+  resumePositionSeconds: number;
+  onPlaybackReady: (session: TorrentSession) => void;
+  onSessionChange: (session: TorrentSession | null) => void;
+}) {
   const { state: authState, refresh } = useAuth();
   const accountKey = authState.status === 'authenticated' ? authState.user.email : 'inactive';
   const queryClient = useQueryClient();
@@ -102,12 +117,43 @@ export function TorrentLaunch({ mediaRef }: { mediaRef: string }) {
   const [error, setError] = useState<string | null>(null);
   const requestRef = useRef<AbortController | null>(null);
   const createKeyRef = useRef<string | null>(null);
+  const playbackKeyRef = useRef<string | null>(null);
+  const playbackRequestedRef = useRef(false);
   const previousAccountRef = useRef(accountKey);
+  const activeQuery = useQuery({
+    ...activeTorrentSessionQueryOptions(accountKey, mediaRef),
+    enabled:
+      open && authState.status === 'authenticated' && profileQuery.data?.emailVerified === true,
+  });
   const sessionQuery = useQuery({
     ...torrentSessionQueryOptions(accountKey, session?.id ?? 'inactive'),
-    enabled: open && authState.status === 'authenticated' && !!session,
+    enabled:
+      (open || playbackRequestedRef.current) && authState.status === 'authenticated' && !!session,
   });
   const currentSession = session ? (sessionQuery.data ?? session) : null;
+
+  useEffect(() => {
+    if (!session && activeSession && activeSession.mediaRef === mediaRef) setSession(activeSession);
+  }, [activeSession, mediaRef, session]);
+
+  useEffect(() => {
+    if (!session && activeQuery.data?.mediaRef === mediaRef) setSession(activeQuery.data);
+  }, [activeQuery.data, mediaRef, session]);
+
+  useEffect(() => {
+    if (session && sessionQuery.data?.id === session.id) onSessionChange(sessionQuery.data);
+  }, [onSessionChange, session, sessionQuery.data]);
+
+  useEffect(() => {
+    if (
+      playbackRequestedRef.current &&
+      currentSession?.state === 'ready' &&
+      currentSession.playback
+    ) {
+      playbackRequestedRef.current = false;
+      onPlaybackReady(currentSession);
+    }
+  }, [currentSession, onPlaybackReady]);
 
   useRestoreSocialAction('torrent', () => setOpen(true));
 
@@ -116,13 +162,16 @@ export function TorrentLaunch({ mediaRef }: { mediaRef: string }) {
     previousAccountRef.current = accountKey;
     requestRef.current?.abort();
     setSession(null);
+    onSessionChange(null);
     setFileRef(null);
     setError(null);
     setPending(false);
     setMagnet('');
     setFile(null);
     createKeyRef.current = null;
-  }, [accountKey]);
+    playbackKeyRef.current = null;
+    playbackRequestedRef.current = false;
+  }, [accountKey, onSessionChange]);
 
   useEffect(() => () => requestRef.current?.abort(), []);
 
@@ -160,7 +209,9 @@ export function TorrentLaunch({ mediaRef }: { mediaRef: string }) {
           : await createFileSession(file!, createKey, controller.signal, mediaRef);
       if (controller.signal.aborted) return;
       cacheTorrentSession(queryClient, accountKey, created);
+      queryClient.setQueryData(torrentSessionQueryKeys.active(accountKey, mediaRef), created);
       setSession(created);
+      onSessionChange(created);
       setFileRef(null);
       createKeyRef.current = null;
     } catch (cause) {
@@ -183,11 +234,16 @@ export function TorrentLaunch({ mediaRef }: { mediaRef: string }) {
       await stopTorrentSession(session.id, controller.signal);
       if (controller.signal.aborted) return;
       setSession(null);
+      queryClient.setQueryData(torrentSessionQueryKeys.active(accountKey, mediaRef), null);
+      onSessionChange(null);
       setFileRef(null);
+      playbackRequestedRef.current = false;
     } catch (cause) {
       if (!controller.signal.aborted) {
         if (cause instanceof TorrentRequestError && cause.status === 404) {
           setSession(null);
+          queryClient.setQueryData(torrentSessionQueryKeys.active(accountKey, mediaRef), null);
+          onSessionChange(null);
           setFileRef(null);
         } else setError('Не удалось остановить сессию. Попробуйте снова.');
       }
@@ -221,6 +277,60 @@ export function TorrentLaunch({ mediaRef }: { mediaRef: string }) {
           cause instanceof TorrentRequestError && cause.code === 'TORRENT_SESSION_CHANGED'
             ? 'Состояние торрента изменилось. Обновите данные и выберите файл снова.'
             : 'Не удалось выбрать файл. Попробуйте снова.',
+        );
+        void sessionQuery.refetch();
+      }
+    } finally {
+      if (requestRef.current === controller) {
+        requestRef.current = null;
+        setPending(false);
+      }
+    }
+  };
+
+  const play = async () => {
+    if (!currentSession || pending || sessionQuery.isError) return;
+    const savedPosition =
+      Number.isFinite(resumePositionSeconds) && resumePositionSeconds > 0
+        ? resumePositionSeconds
+        : 0;
+    const duration = currentSession.playback?.durationSeconds;
+    const startPositionSeconds =
+      duration !== null && duration !== undefined && savedPosition >= duration ? 0 : savedPosition;
+    if (
+      currentSession.state === 'ready' &&
+      currentSession.playback &&
+      Math.abs(currentSession.playback.startPositionSeconds - startPositionSeconds) < 10
+    ) {
+      onPlaybackReady(currentSession);
+      return;
+    }
+    if (currentSession.state !== 'awaiting_playback' && currentSession.state !== 'ready') return;
+    const controller = new AbortController();
+    requestRef.current = controller;
+    setPending(true);
+    setError(null);
+    const key = (playbackKeyRef.current ??= newTorrentIdempotencyKey());
+    try {
+      const updated = await startTorrentPlayback(
+        currentSession.id,
+        startPositionSeconds,
+        currentSession.version,
+        key,
+        controller.signal,
+      );
+      if (controller.signal.aborted) return;
+      playbackRequestedRef.current = true;
+      playbackKeyRef.current = null;
+      cacheTorrentSession(queryClient, accountKey, updated);
+      setSession(updated);
+      onSessionChange(updated);
+    } catch (cause) {
+      if (!controller.signal.aborted) {
+        setError(
+          cause instanceof TorrentRequestError && cause.status === 503
+            ? 'Сервис сейчас занят. Попробуйте позже.'
+            : 'Не удалось подготовить воспроизведение. Попробуйте снова.',
         );
         void sessionQuery.refetch();
       }
@@ -290,11 +400,22 @@ export function TorrentLaunch({ mediaRef }: { mediaRef: string }) {
                       {sessionQuery.error instanceof TorrentRequestError &&
                       sessionQuery.error.status === 404
                         ? 'Сессия завершилась или срок её действия истёк.'
-                        : 'Не удалось обновить состояние торрента.'}
+                        : 'Не удалось получить новое состояние. Подготовка на сервере может продолжаться; ниже показаны последние данные.'}
                     </p>
                     {sessionQuery.error instanceof TorrentRequestError &&
                     sessionQuery.error.status === 404 ? (
-                      <Button variant="secondary" size="small" onClick={() => setSession(null)}>
+                      <Button
+                        variant="secondary"
+                        size="small"
+                        onClick={() => {
+                          setSession(null);
+                          queryClient.setQueryData(
+                            torrentSessionQueryKeys.active(accountKey, mediaRef),
+                            null,
+                          );
+                          onSessionChange(null);
+                        }}
+                      >
                         Начать заново
                       </Button>
                     ) : (
@@ -350,7 +471,15 @@ export function TorrentLaunch({ mediaRef }: { mediaRef: string }) {
                   </fieldset>
                 ) : (
                   <div className="min-h-24 space-y-2 text-sm text-text-primary" role="status">
-                    <p className="font-semibold">{preparationLabel(currentSession)}</p>
+                    <div className="flex flex-wrap items-center gap-3">
+                      <p className="font-semibold">{preparationLabel(currentSession)}</p>
+                      {['created', 'fetching_metadata', 'probing', 'preparing'].includes(
+                        currentSession.state,
+                      ) &&
+                        !sessionQuery.isError && (
+                          <Spinner size="small" label="Подготовка продолжается" />
+                        )}
+                    </div>
                     {currentSession.state === 'fetching_metadata' &&
                       currentSession.progress.peers === 0 && (
                         <p className="text-text-secondary">
@@ -371,6 +500,22 @@ export function TorrentLaunch({ mediaRef }: { mediaRef: string }) {
                     )}
                   </div>
                 )}
+                {(currentSession.state === 'awaiting_playback' ||
+                  currentSession.state === 'ready') && (
+                  <div className="space-y-2">
+                    <Button
+                      size="small"
+                      disabled={pending || sessionQuery.isError}
+                      onClick={() => void play()}
+                    >
+                      {pending ? 'Запускаем…' : 'Воспроизвести'}
+                    </Button>
+                    <p className="text-xs text-text-secondary">
+                      В первом выпуске используется аудиодорожка по умолчанию; выбор субтитров
+                      недоступен.
+                    </p>
+                  </div>
+                )}
                 <div className="flex flex-wrap gap-2">
                   <Button
                     variant="secondary"
@@ -385,6 +530,17 @@ export function TorrentLaunch({ mediaRef }: { mediaRef: string }) {
                         : 'Остановить сессию'}
                   </Button>
                 </div>
+              </div>
+            ) : activeQuery.isPending ? (
+              <Spinner size="small" label="Проверяем активную сессию торрента" />
+            ) : activeQuery.isError ? (
+              <div className="flex flex-wrap items-center gap-3">
+                <p role="alert" className="text-sm text-error">
+                  Не удалось проверить активную сессию.
+                </p>
+                <Button variant="secondary" size="small" onClick={() => void activeQuery.refetch()}>
+                  Повторить
+                </Button>
               </div>
             ) : (
               <form onSubmit={(event) => void submit(event)} className="space-y-4">

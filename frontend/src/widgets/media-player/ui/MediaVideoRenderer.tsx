@@ -23,12 +23,19 @@ export type MediaVideoDirectControls = {
   onNextEpisode?: () => void;
 };
 
+export type TorrentVideoTimeline = {
+  startPositionSeconds: number;
+  durationSeconds: number | null;
+  onSeek: (positionSeconds: number) => void;
+};
+
 type MediaVideoRendererProps = {
   source: MediaSourceOption;
   mediaTitle: string;
   shouldAutoPlay: boolean;
   initialPositionSeconds: number;
   directControls?: MediaVideoDirectControls;
+  torrentTimeline?: TorrentVideoTimeline;
   onReady: () => void;
   onError: () => void;
   onPlay: () => void;
@@ -68,6 +75,7 @@ export function MediaVideoRenderer({
   shouldAutoPlay,
   initialPositionSeconds,
   directControls,
+  torrentTimeline,
   onReady,
   onError,
   onPlay,
@@ -77,6 +85,7 @@ export function MediaVideoRenderer({
   const containerRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const sourceUrlRef = useRef(source.url);
+  const isTorrentSource = torrentTimeline !== undefined;
   const hasRestoredPositionRef = useRef(false);
   const lastReportedProgressBucketRef = useRef<number | null>(null);
   const suppressPauseRef = useRef(false);
@@ -94,9 +103,12 @@ export function MediaVideoRenderer({
     reason: 'periodic' | 'metadata' | 'seek' | 'pause' | 'ended' = 'periodic',
     force = false,
   ) => {
-    const positionSeconds = Number.isFinite(video.currentTime) ? Math.max(0, video.currentTime) : 0;
+    const positionSeconds =
+      (torrentTimeline?.startPositionSeconds ?? 0) +
+      (Number.isFinite(video.currentTime) ? Math.max(0, video.currentTime) : 0);
     const durationSeconds =
-      Number.isFinite(video.duration) && video.duration > 0 ? video.duration : undefined;
+      torrentTimeline?.durationSeconds ??
+      (Number.isFinite(video.duration) && video.duration > 0 ? video.duration : undefined);
     const progressBucket = Math.floor(positionSeconds / PROGRESS_REPORT_INTERVAL_SECONDS);
 
     setPositionSeconds(positionSeconds);
@@ -111,6 +123,7 @@ export function MediaVideoRenderer({
   };
 
   const restoreInitialPosition = (video: HTMLVideoElement) => {
+    if (torrentTimeline) return;
     if (hasRestoredPositionRef.current) {
       return;
     }
@@ -227,7 +240,15 @@ export function MediaVideoRenderer({
         }
 
         if (Hls.isSupported()) {
-          const hls = new Hls();
+          const hls = new Hls(
+            isTorrentSource
+              ? {
+                  xhrSetup: (xhr) => {
+                    xhr.withCredentials = true;
+                  },
+                }
+              : {},
+          );
 
           destroyHls = () => hls.destroy();
 
@@ -243,6 +264,7 @@ export function MediaVideoRenderer({
         }
 
         if (video.canPlayType(HLS_MIME_TYPE)) {
+          if (isTorrentSource) video.crossOrigin = 'use-credentials';
           video.src = sourceUrl;
           video.load();
 
@@ -266,7 +288,7 @@ export function MediaVideoRenderer({
       video.removeAttribute('src');
       video.load();
     };
-  }, [onError, source.kind, source.sourceRef]);
+  }, [isTorrentSource, onError, source.kind, source.sourceRef]);
 
   return (
     <div ref={containerRef} className="absolute inset-0 z-0 size-full bg-black">
@@ -281,6 +303,7 @@ export function MediaVideoRenderer({
         onDoubleClick={() => void toggleFullscreen()}
         onLoadedMetadata={handleLoadedMetadata}
         onDurationChange={(event) => {
+          if (torrentTimeline) return;
           const nextDuration = event.currentTarget.duration;
           setDurationSeconds(Number.isFinite(nextDuration) && nextDuration > 0 ? nextDuration : 0);
         }}
@@ -323,7 +346,17 @@ export function MediaVideoRenderer({
             const nextPosition = Number(event.currentTarget.value);
 
             if (!video || !Number.isFinite(nextPosition)) return;
-            video.currentTime = nextPosition;
+            if (torrentTimeline) {
+              const relative = nextPosition - torrentTimeline.startPositionSeconds;
+              const ranges = video.seekable;
+              if (
+                Array.from({ length: ranges.length }).some(
+                  (_, index) => relative >= ranges.start(index) && relative <= ranges.end(index),
+                )
+              )
+                video.currentTime = relative;
+              else torrentTimeline.onSeek(nextPosition);
+            } else video.currentTime = nextPosition;
             setPositionSeconds(nextPosition);
           }}
         />

@@ -88,7 +88,7 @@ export function mapTorrentSession(value: unknown): TorrentSession {
     !record(status) ||
     (status.progressBasisPoints !== null &&
       (!count(status.progressBasisPoints) || status.progressBasisPoints > 10_000)) ||
-    !count(status.downloadSpeedBytesPerSecond) ||
+    !nonNegative(status.downloadSpeedBytesPerSecond) ||
     !count(status.peers) ||
     !count(status.downloadedBytes) ||
     !Array.isArray(dto.files) ||

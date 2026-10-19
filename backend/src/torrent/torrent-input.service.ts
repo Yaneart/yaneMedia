@@ -116,6 +116,17 @@ export class TorrentInputService implements BeforeApplicationShutdown {
     return this.view(session, true);
   }
 
+  async getActiveForMedia(ownerId: string, mediaRef: string) {
+    if (
+      !/^work_[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
+        mediaRef,
+      )
+    )
+      throw this.error(400, 'MEDIA_REF_INVALID');
+    const session = await this.repository.findActiveForMedia(ownerId, mediaRef);
+    return session ? this.view(session, true) : null;
+  }
+
   digestPlayback(sessionId: string, position: number, trackRef: string): string {
     return createHmac('sha256', this.secret)
       .update('playback\0')

@@ -1,3 +1,5 @@
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/entities/auth';
 import type { AnimeSeasonChainEntry, MediaDetails, MediaEpisode } from '@/entities/media';
 import {
   getMediaSourcePlaybackIssue,
@@ -6,6 +8,15 @@ import {
   type MediaSourceOption,
 } from '@/entities/media-source';
 import type { PlaybackEpisodeSelection } from '@/entities/playback';
+import {
+  cacheTorrentSession,
+  isTorrentPlaybackSourceRef,
+  newTorrentIdempotencyKey,
+  startTorrentPlayback,
+  torrentPlaybackSourceRef,
+  torrentSessionQueryOptions,
+  type TorrentSession,
+} from '@/entities/torrent-session';
 import { EpisodeSelector } from '@/features/episode-selection';
 import { FavoriteButton, useFavorites } from '@/features/favorite';
 import { usePlaybackSession } from '@/features/playback-session';
@@ -249,12 +260,58 @@ export function MediaView({
   availabilityPending,
   availabilityStatus,
 }: MediaViewProps) {
-  const { session, startSession, pauseSession, resumeSession, updateProgress, endSession } =
-    usePlaybackSession();
+  const {
+    session,
+    continueWatchingEntries,
+    startSession,
+    pauseSession,
+    resumeSession,
+    updateProgress,
+    endSession,
+  } = usePlaybackSession();
   const { isFavorite, isFavoriteUpdating, addFavorite, removeFavorite, canUpdateFavorites } =
     useFavorites();
   const mediaIsFavorite = isFavorite(media.mediaRef);
   const mediaSession = session?.mediaRef === media.mediaRef ? session : null;
+  const { state: authState } = useAuth();
+  const accountKey = authState.status === 'authenticated' ? authState.user.email : 'inactive';
+  const queryClient = useQueryClient();
+  const [launchedTorrent, setLaunchedTorrent] = useState<{
+    accountKey: string;
+    session: TorrentSession;
+  } | null>(null);
+  const activeTorrentId =
+    mediaSession && isTorrentPlaybackSourceRef(mediaSession.sourceRef)
+      ? mediaSession.sourceRef.slice('torrent:'.length)
+      : null;
+  const torrentQuery = useQuery({
+    ...torrentSessionQueryOptions(accountKey, activeTorrentId ?? 'inactive'),
+    enabled: authState.status === 'authenticated' && !!activeTorrentId,
+  });
+  const torrentSession = activeTorrentId
+    ? torrentQuery.data?.id === activeTorrentId
+      ? torrentQuery.data
+      : launchedTorrent?.accountKey === accountKey && launchedTorrent.session.id === activeTorrentId
+        ? launchedTorrent.session
+        : null
+    : null;
+  const torrentPlayback = torrentSession?.state === 'ready' ? torrentSession.playback : null;
+  const torrentUnavailable =
+    torrentQuery.isError ||
+    (torrentSession !== null &&
+      ['failed', 'awaiting_playback', 'awaiting_file'].includes(torrentSession.state));
+  const torrentSource: MediaSourceOption | undefined =
+    torrentPlayback && torrentSession
+      ? {
+          sourceRef: `${torrentPlaybackSourceRef(torrentSession.id)}:${torrentPlayback.generation}`,
+          provider: 'torrent',
+          kind: 'hls',
+          label: 'Торрент',
+          url: torrentPlayback.hlsUrl,
+          availability: 'available',
+          browserSupported: true,
+        }
+      : undefined;
 
   const catalog = createPlaybackSourceCatalog(
     availability ?? emptyAvailability,
@@ -495,7 +552,11 @@ export function MediaView({
     selectedDirectTrackKey,
   ]);
 
-  const selectedSource = playbackMode === 'embed' ? selectedEmbedSource : selectedDirectSource;
+  const selectedSource = activeTorrentId
+    ? torrentSource
+    : playbackMode === 'embed'
+      ? selectedEmbedSource
+      : selectedDirectSource;
   const selectedSourceRef = selectedSource?.sourceRef ?? null;
 
   const directTracks = getDirectTrackOptions(currentDirectSources);
@@ -539,8 +600,73 @@ export function MediaView({
       : null;
   const sessionPlaybackEpisode = mediaSession?.episode ?? null;
   const isPlayerStarted =
-    mediaSession?.sourceRef === selectedSourceRef &&
-    (playbackMode === 'embed' || hasSameEpisode(sessionPlaybackEpisode, selectedPlaybackEpisode));
+    activeTorrentId !== null
+      ? true
+      : mediaSession?.sourceRef === selectedSourceRef &&
+        (playbackMode === 'embed' ||
+          hasSameEpisode(sessionPlaybackEpisode, selectedPlaybackEpisode));
+
+  const handleTorrentReady = useCallback(
+    (ready: TorrentSession) => {
+      if (!ready.playback) return;
+      setLaunchedTorrent({ accountKey, session: ready });
+      startSession({
+        mediaRef: media.mediaRef,
+        mediaSnapshot: {
+          title: media.title,
+          slug: media.slug,
+          artwork: media.backdrop ?? media.poster,
+        },
+        sourceRef: torrentPlaybackSourceRef(ready.id),
+        episode: null,
+        positionSeconds: ready.playback.startPositionSeconds,
+        durationSeconds: ready.playback.durationSeconds,
+      });
+      setPlayerStatus('loading');
+    },
+    [accountKey, media, startSession],
+  );
+
+  const handleTorrentSessionChange = useCallback(
+    (updated: TorrentSession | null) => {
+      setLaunchedTorrent(updated ? { accountKey, session: updated } : null);
+      if (!updated && mediaSession && isTorrentPlaybackSourceRef(mediaSession.sourceRef))
+        endSession();
+    },
+    [accountKey, endSession, mediaSession],
+  );
+
+  const seekTorrent = useCallback(
+    async (positionSeconds: number) => {
+      if (!torrentSession || !torrentPlayback || !activeTorrentId) return;
+      setPlayerStatus('loading');
+      updateProgress(positionSeconds, torrentPlayback.durationSeconds, 'seek');
+      try {
+        const updated = await startTorrentPlayback(
+          activeTorrentId,
+          positionSeconds,
+          torrentSession.version,
+          newTorrentIdempotencyKey(),
+          new AbortController().signal,
+          torrentPlayback.selectedAudioTrackRef,
+        );
+        cacheTorrentSession(queryClient, accountKey, updated);
+        setLaunchedTorrent({ accountKey, session: updated });
+      } catch {
+        setPlayerStatus('error');
+        void torrentQuery.refetch();
+      }
+    },
+    [
+      accountKey,
+      activeTorrentId,
+      queryClient,
+      torrentPlayback,
+      torrentQuery,
+      torrentSession,
+      updateProgress,
+    ],
+  );
 
   const resetPlayer = useCallback(() => {
     if (mediaSession) {
@@ -812,18 +938,21 @@ export function MediaView({
                         selectedDirectSource={selectedDirectSource}
                         selectedTrackKey={selectedDirectTrackKey}
                         onEmbedSelect={(sourceRef) => {
+                          if (activeTorrentId) resetPlayer();
                           if (playbackMode !== 'embed') selectPlaybackMode('embed');
                           selectEmbedSource(sourceRef);
                         }}
                         onDirectSelect={(trackKey) => {
+                          if (activeTorrentId) resetPlayer();
                           if (playbackMode !== 'direct') selectPlaybackMode('direct');
                           selectTrack(trackKey);
                         }}
-                        onQualitySelect={(sourceRef) =>
+                        onQualitySelect={(sourceRef) => {
+                          if (activeTorrentId) resetPlayer();
                           selectDirectSource(
                             currentDirectSources.find((source) => source.sourceRef === sourceRef),
-                          )
-                        }
+                          );
+                        }}
                         isLoading={sourcesPending && sourceSearchSettledMediaRef !== media.mediaRef}
                         align="end"
                       />
@@ -840,18 +969,33 @@ export function MediaView({
               isStarted={isPlayerStarted}
               shouldAutoPlay={mediaSession?.state === 'playing'}
               initialPositionSeconds={mediaSession?.positionSeconds ?? 0}
-              status={playerStatus}
+              status={
+                activeTorrentId && torrentUnavailable
+                  ? 'error'
+                  : activeTorrentId && !torrentPlayback
+                    ? 'loading'
+                    : playerStatus
+              }
               onStart={loadPlayer}
               onReady={handlePlayerReady}
               onError={handlePlayerError}
               onPlay={resumeSession}
               onPause={pauseSession}
               onProgress={updateProgress}
-              onRetry={loadPlayer}
+              onRetry={activeTorrentId ? () => void torrentQuery.refetch() : loadPlayer}
               emptyState={playerEmptyState}
               embedded
+              torrentTimeline={
+                torrentPlayback
+                  ? {
+                      startPositionSeconds: torrentPlayback.startPositionSeconds,
+                      durationSeconds: torrentPlayback.durationSeconds,
+                      onSeek: (position) => void seekTorrent(position),
+                    }
+                  : undefined
+              }
               directControls={
-                selectedDirectSource
+                !activeTorrentId && selectedDirectSource
                   ? {
                       tracks: directTracks.map((track) => ({
                         value: track.key,
@@ -877,7 +1021,25 @@ export function MediaView({
           </div>
         </div>
 
-        <TorrentLaunch mediaRef={media.mediaRef} />
+        <TorrentLaunch
+          mediaRef={media.mediaRef}
+          activeSession={torrentSession}
+          resumePositionSeconds={
+            continueWatchingEntries.find(
+              (entry) =>
+                entry.mediaRef === media.mediaRef &&
+                entry.sourceRef ===
+                  torrentPlaybackSourceRef(
+                    activeTorrentId ??
+                      (launchedTorrent?.accountKey === accountKey
+                        ? launchedTorrent.session.id
+                        : ''),
+                  ),
+            )?.positionSeconds ?? 0
+          }
+          onPlaybackReady={handleTorrentReady}
+          onSessionChange={handleTorrentSessionChange}
+        />
 
         {media.description && (
           <MediaDescriptionPanel className="hidden xl:block 2xl:hidden">

@@ -111,6 +111,17 @@ export function getTorrentSession(sessionId: string, signal: AbortSignal): Promi
   return request(sessionPath(sessionId), { signal }, mapTorrentSession);
 }
 
+export function getActiveTorrentSession(
+  mediaRef: string,
+  signal: AbortSignal,
+): Promise<TorrentSession | null> {
+  return request(
+    `/torrent-sessions/active?mediaRef=${encodeURIComponent(mediaRef)}`,
+    { signal },
+    (value) => (value === null ? null : mapTorrentSession(value)),
+  );
+}
+
 export function selectTorrentFile(
   sessionId: string,
   fileRef: string,

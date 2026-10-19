@@ -9,6 +9,7 @@ import {
   Delete,
   Res,
   Param,
+  Query,
   Put,
   UploadedFile,
   UseGuards,
@@ -38,6 +39,12 @@ export class TorrentInputController {
     private readonly playbackService: TorrentPlaybackService,
     private readonly reconciler: TorrentSessionReconciler,
   ) {}
+
+  @Get('active')
+  @NoStore()
+  getActive(@CurrentUser() user: AuthenticatedUser, @Query('mediaRef') mediaRef: string) {
+    return this.input.getActiveForMedia(user.id, mediaRef);
+  }
 
   @Get(':sessionId')
   @NoStore()

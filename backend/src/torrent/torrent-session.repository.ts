@@ -219,6 +219,27 @@ export class TorrentSessionRepository {
       : undefined;
   }
 
+  async findActiveForMedia(
+    ownerId: string,
+    mediaRef: string,
+    now = new Date(),
+  ): Promise<TorrentSessionRow | undefined> {
+    const [session] = await this.database.db
+      .select()
+      .from(torrentSessions)
+      .where(
+        and(
+          eq(torrentSessions.ownerId, ownerId),
+          eq(torrentSessions.mediaRef, mediaRef),
+          inArray(torrentSessions.state, activeTorrentStates),
+          sql`${torrentSessions.expiresAt} > ${now}`,
+          sql`${torrentSessions.idleExpiresAt} > ${now}`,
+        ),
+      )
+      .limit(1);
+    return session;
+  }
+
   async requestStop(ownerId: string, sessionId: string, now = new Date()): Promise<boolean> {
     return this.database.db.transaction(async (tx) => {
       const [session] = await tx

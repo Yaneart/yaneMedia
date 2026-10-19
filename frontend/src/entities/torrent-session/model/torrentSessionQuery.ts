@@ -1,5 +1,9 @@
 import { queryOptions, type QueryClient } from '@tanstack/react-query';
-import { getTorrentSession, TorrentRequestError } from '../api/torrentSessionApi';
+import {
+  getActiveTorrentSession,
+  getTorrentSession,
+  TorrentRequestError,
+} from '../api/torrentSessionApi';
 import type { TorrentSession } from './torrentSession';
 
 const backgroundIntervalMs = 15_000;
@@ -9,7 +13,19 @@ export const torrentSessionQueryKeys = {
   root: (accountKey: string) => ['account', accountKey, 'torrent-sessions'] as const,
   session: (accountKey: string, sessionId: string) =>
     [...torrentSessionQueryKeys.root(accountKey), sessionId] as const,
+  active: (accountKey: string, mediaRef: string) =>
+    [...torrentSessionQueryKeys.root(accountKey), 'active', mediaRef] as const,
 };
+
+export function activeTorrentSessionQueryOptions(accountKey: string, mediaRef: string) {
+  return queryOptions({
+    queryKey: torrentSessionQueryKeys.active(accountKey, mediaRef),
+    queryFn: ({ signal }) => getActiveTorrentSession(mediaRef, signal),
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnWindowFocus: true,
+  });
+}
 
 export function cacheTorrentSession(
   queryClient: QueryClient,
