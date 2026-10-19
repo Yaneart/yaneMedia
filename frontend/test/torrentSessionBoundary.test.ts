@@ -1,0 +1,225 @@
+import { afterEach, describe, expect, mock, test } from 'bun:test';
+import { QueryClient } from '@tanstack/react-query';
+import { isEditorialQueryKey } from '../src/app/providers/editorialQueryPersistence';
+import { clearAccountQueries } from '../src/entities/auth/model/accountQuery';
+
+const sharedApi = await import('../src/shared/api/index');
+mock.module('@/shared/api', () => sharedApi);
+
+const {
+  cacheTorrentSession,
+  createFileSession,
+  createMagnetSession,
+  getTorrentSession,
+  registerTorrentPlayerStop,
+  resetTorrentClientScope,
+  selectTorrentFile,
+  startTorrentPlayback,
+  stopTorrentSession,
+  torrentPollInterval,
+  torrentSessionQueryKeys,
+  TorrentRequestError,
+} = await import('../src/entities/torrent-session');
+const { mapTorrentSession } = await import('../src/entities/torrent-session/api/mapTorrentSession');
+
+const originalFetch = globalThis.fetch;
+const id = 'torrent_session_abcdefghijklmnopqrstuv';
+const createdAt = '2026-10-19T12:00:00.000Z';
+const wire = {
+  sessionId: id,
+  mediaRef: null,
+  state: 'created',
+  version: 1,
+  createdAt,
+  expiresAt: '2026-10-19T20:00:00.000Z',
+  idleExpiresAt: '2026-10-19T12:20:00.000Z',
+  status: {
+    progressBasisPoints: null,
+    downloadSpeedBytesPerSecond: 0,
+    peers: 0,
+    downloadedBytes: 0,
+  },
+  files: [],
+  selectedFileRef: null,
+  audioTracks: [],
+  playback: null,
+  failure: null,
+};
+
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+  resetTorrentClientScope();
+});
+
+describe('torrent API boundary', () => {
+  test('maps wire DTO and rejects arbitrary HLS URLs', () => {
+    const playback = {
+      source: { type: 'hls', url: `/api/v1/torrent-sessions/${id}/hls/master.m3u8` },
+      generation: 1,
+      startPositionSeconds: 4,
+      durationSeconds: 120,
+      selectedAudioTrackRef: 'track-1',
+      audioTracks: [
+        { trackRef: 'track-1', label: 'Main', language: null, channels: 2, isDefault: true },
+      ],
+      supportsSubtitleSelection: false,
+    };
+    const session = mapTorrentSession({ ...wire, state: 'ready', playback });
+    expect(session.id).toBe(id);
+    expect(session.playback?.hlsUrl).toEndWith('/hls/master.m3u8');
+    expect(session.playback?.audioTracks[0].ref).toBe('track-1');
+    const awaitingFile = mapTorrentSession({
+      ...wire,
+      state: 'awaiting_file',
+      files: [
+        {
+          fileRef: 'torrent_file_abcdefghijklmnopqrstuv',
+          displayName: 'Episode.mkv',
+          sizeBytes: 1024,
+          mediaKind: 'video',
+        },
+      ],
+    });
+    expect(awaitingFile.files[0]).toEqual({
+      ref: 'torrent_file_abcdefghijklmnopqrstuv',
+      name: 'Episode.mkv',
+      sizeBytes: 1024,
+    });
+    expect(() =>
+      mapTorrentSession({
+        ...wire,
+        playback: { ...playback, source: { type: 'hls', url: 'https://example.com/master.m3u8' } },
+      }),
+    ).toThrow();
+  });
+
+  test('sends each command with credentials, CSRF and the supplied idempotency key', async () => {
+    const calls: Array<[string, RequestInit]> = [];
+    globalThis.fetch = mock(async (url: string, init: RequestInit) => {
+      calls.push([url, init]);
+      return init.method === 'DELETE'
+        ? new Response(null, { status: 204 })
+        : Response.json({ data: wire }, { status: init.method === 'GET' ? 200 : 202 });
+    }) as typeof fetch;
+    const signal = new AbortController().signal;
+    const key = '1234567890abcdef';
+    await createMagnetSession('magnet:?xt=urn:btih:abc', key, signal);
+    await createFileSession(new File(['torrent'], 'sample.torrent'), key, signal);
+    await getTorrentSession(id, signal);
+    await selectTorrentFile(id, 'file-1', 1, signal);
+    await startTorrentPlayback(id, 10, 2, key, signal, 'track-1');
+    await stopTorrentSession(id, signal);
+
+    expect(calls.map(([, init]) => init.method ?? 'GET')).toEqual([
+      'POST',
+      'POST',
+      'GET',
+      'PUT',
+      'POST',
+      'DELETE',
+    ]);
+    expect(calls.every(([, init]) => init.credentials === 'include')).toBe(true);
+    expect(
+      calls
+        .filter(([, init]) => init.method !== undefined && init.method !== 'GET')
+        .every(([, init]) => (init.headers as Record<string, string>)['X-YaneMedia-CSRF'] === '1'),
+    ).toBe(true);
+    expect((calls[0][1].headers as Record<string, string>)['Idempotency-Key']).toBe(key);
+    expect((calls[4][1].headers as Record<string, string>)['Idempotency-Key']).toBe(key);
+    expect(calls[1][1].body).toBeInstanceOf(FormData);
+    expect((calls[1][1].headers as Record<string, string>)['Content-Type']).toBeUndefined();
+  });
+
+  test('logout aborts a pending request and stops the registered player', async () => {
+    globalThis.fetch = mock(
+      (_url: string, init: RequestInit) =>
+        new Promise<Response>((_, reject) => {
+          init.signal?.addEventListener('abort', () =>
+            reject(new DOMException('Aborted', 'AbortError')),
+          );
+        }),
+    ) as typeof fetch;
+    const stop = mock(() => {});
+    const unregister = registerTorrentPlayerStop(stop);
+    const request = getTorrentSession(id, new AbortController().signal);
+    resetTorrentClientScope();
+    await expect(request).rejects.toMatchObject({ kind: 'aborted', code: 'ABORTED' });
+    expect(stop).toHaveBeenCalledTimes(1);
+    unregister();
+  });
+
+  test('normalizes API and malformed-response errors', async () => {
+    globalThis.fetch = mock(async () =>
+      Response.json(
+        {
+          error: {
+            code: 'TORRENT_SESSION_CHANGED',
+            message: 'Changed',
+          },
+        },
+        { status: 409 },
+      ),
+    ) as typeof fetch;
+    await expect(getTorrentSession(id, new AbortController().signal)).rejects.toMatchObject({
+      kind: 'http',
+      code: 'TORRENT_SESSION_CHANGED',
+      status: 409,
+    });
+    globalThis.fetch = mock(async () =>
+      Response.json({ data: { ...wire, files: null } }),
+    ) as typeof fetch;
+    await expect(getTorrentSession(id, new AbortController().signal)).rejects.toMatchObject({
+      kind: 'invalid_response',
+      code: 'INVALID_RESPONSE',
+    });
+  });
+
+  test('polls by elapsed time and stops at user-action and terminal states', () => {
+    const session = mapTorrentSession(wire);
+    const fastInterval = torrentPollInterval(session, null, false, Date.parse(createdAt) + 10_000);
+    expect(fastInterval).toBeGreaterThanOrEqual(800);
+    expect(fastInterval).toBeLessThanOrEqual(1200);
+    expect(torrentPollInterval(session, null, true, Date.parse(createdAt) + 70_000)).toBe(15_000);
+    expect(torrentPollInterval({ ...session, state: 'awaiting_file' }, null, false)).toBe(false);
+    expect(
+      torrentPollInterval(
+        session,
+        new TorrentRequestError('http', 'RATE_LIMITED', 429, 20_000, 'Slow down'),
+        true,
+      ),
+    ).toBe(20_000);
+    expect(
+      torrentPollInterval(
+        session,
+        new TorrentRequestError('http', 'AUTH_REQUIRED', 401, null, 'Login'),
+        false,
+      ),
+    ).toBe(false);
+    expect(
+      torrentPollInterval(
+        session,
+        new TorrentRequestError('network', 'NETWORK_ERROR', null, null, 'Unavailable'),
+        false,
+      ),
+    ).toBe(false);
+  });
+
+  test('stores sessions only under the current account query key', () => {
+    const client = new QueryClient();
+    const session = mapTorrentSession(wire);
+    cacheTorrentSession(client, 'alice@example.com', session);
+    expect(client.getQueryData(torrentSessionQueryKeys.session('alice@example.com', id))).toEqual(
+      session,
+    );
+    expect(
+      client.getQueryData(torrentSessionQueryKeys.session('bob@example.com', id)),
+    ).toBeUndefined();
+    expect(isEditorialQueryKey(torrentSessionQueryKeys.session('alice@example.com', id))).toBe(
+      false,
+    );
+    clearAccountQueries(client, 'alice@example.com');
+    expect(
+      client.getQueryData(torrentSessionQueryKeys.session('alice@example.com', id)),
+    ).toBeUndefined();
+  });
+});

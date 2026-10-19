@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 
 import { clearAccountQueries, useAuth } from '@/entities/auth';
 import type { CanonicalMediaRef, MediaLocator } from '@/entities/media';
+import { isTorrentPlaybackSourceRef, registerTorrentPlayerStop } from '@/entities/torrent-session';
 import type {
   ContinueWatchingEntry,
   ContinueWatchingProgressEntry,
@@ -412,6 +413,17 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
       setStoredSession(nextStoredSession);
     },
     [],
+  );
+
+  useEffect(
+    () =>
+      registerTorrentPlayerStop(() => {
+        if (sessionRef.current && isTorrentPlaybackSourceRef(sessionRef.current.sourceRef)) {
+          removePlaybackSession();
+          storeSession(null);
+        }
+      }),
+    [storeSession],
   );
 
   useEffect(() => {
