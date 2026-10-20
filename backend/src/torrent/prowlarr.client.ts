@@ -3,6 +3,7 @@ import { PROWLARR_CONFIG, type ProwlarrConfig } from './prowlarr.config';
 import type {
   DiscoveryRelease,
   DiscoverySearch,
+  DiscoverySearchResult,
   TorrentDiscoveryPort,
 } from './torrent-discovery.port';
 
@@ -23,8 +24,8 @@ export class ProwlarrClient implements TorrentDiscoveryPort {
     return Boolean(this.config.baseUrl && this.config.apiKey);
   }
 
-  async search(input: DiscoverySearch, signal: AbortSignal): Promise<DiscoveryRelease[]> {
-    if (!this.enabled) return [];
+  async search(input: DiscoverySearch, signal: AbortSignal): Promise<DiscoverySearchResult> {
+    if (!this.enabled) return { releases: [], degraded: false };
     if (
       !Object.hasOwn(CATEGORIES, input.kind) ||
       !Number.isInteger(input.limit) ||
@@ -50,11 +51,31 @@ export class ProwlarrClient implements TorrentDiscoveryPort {
       limit: String(input.limit),
       offset: String(input.offset),
     }).toString();
-    const response = await this.request(url, signal);
-    if (!Array.isArray(response) || response.length > input.limit) {
+    let response: unknown;
+    let degraded = false;
+    if (this.config.indexerIds?.length) {
+      const searches = await Promise.allSettled(
+        this.config.indexerIds.map(async (id) => {
+          const sourceUrl = new URL(url);
+          sourceUrl.searchParams.set('indexerIds', String(id));
+          const items = await this.request(
+            sourceUrl,
+            signal,
+            Math.min(this.config.timeoutMs, 8000),
+          );
+          if (!Array.isArray(items)) throw new ProwlarrError('protocol');
+          return items as unknown[];
+        }),
+      );
+      const succeeded = searches.filter((item) => item.status === 'fulfilled');
+      if (!succeeded.length) throw new ProwlarrError('unavailable');
+      degraded = succeeded.length < searches.length;
+      response = succeeded.flatMap((item) => item.value);
+    } else response = await this.request(url, signal);
+    if (!Array.isArray(response)) {
       throw new ProwlarrError('protocol');
     }
-    return response.flatMap((item): DiscoveryRelease[] => {
+    const releases = response.flatMap((item): DiscoveryRelease[] => {
       if (!isRecord(item) || item.protocol !== 'torrent') return [];
       const { guid, title, indexer, size, seeders, publishDate, downloadUrl, infoHash } = item;
       if (
@@ -75,7 +96,8 @@ export class ProwlarrClient implements TorrentDiscoveryPort {
         !/^(magnet:\?|https?:\/\/)/i.test(downloadUrl) ||
         (publishDate != null &&
           (typeof publishDate !== 'string' || !Number.isFinite(Date.parse(publishDate)))) ||
-        (infoHash != null && (typeof infoHash !== 'string' || !/^[a-f0-9]{40}$/i.test(infoHash)))
+        (infoHash != null &&
+          (typeof infoHash !== 'string' || (infoHash !== '' && !/^[a-f0-9]{40}$/i.test(infoHash))))
       )
         return [];
       return [
@@ -87,15 +109,35 @@ export class ProwlarrClient implements TorrentDiscoveryPort {
           seeders: (seeders as number | null | undefined) ?? null,
           publishedAt: publishDate ?? null,
           downloadUrl,
-          infoHash: infoHash ?? null,
+          infoHash: infoHash || null,
         },
       ];
     });
+    const trackers = new Set(releases.map((release) => release.tracker));
+    const reservedPerTracker = Math.max(1, Math.floor(input.limit / (trackers.size || 1)));
+    const counts = new Map<string, number>();
+    const selected = new Set<DiscoveryRelease>();
+    for (const release of releases) {
+      if (selected.size >= input.limit) break;
+      const count = counts.get(release.tracker) ?? 0;
+      if (count >= reservedPerTracker) continue;
+      selected.add(release);
+      counts.set(release.tracker, count + 1);
+    }
+    for (const release of releases) {
+      if (selected.size >= input.limit) break;
+      selected.add(release);
+    }
+    return { releases: [...selected], degraded };
   }
 
-  private async request(url: URL, signal: AbortSignal): Promise<unknown> {
+  private async request(
+    url: URL,
+    signal: AbortSignal,
+    timeoutMs = this.config.timeoutMs,
+  ): Promise<unknown> {
     let response: Response;
-    const timeoutSignal = AbortSignal.timeout(this.config.timeoutMs);
+    const timeoutSignal = AbortSignal.timeout(timeoutMs);
     try {
       response = await fetch(url, {
         headers: { 'X-Api-Key': this.config.apiKey!, Accept: 'application/json' },

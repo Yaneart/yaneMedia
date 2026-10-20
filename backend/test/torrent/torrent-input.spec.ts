@@ -57,6 +57,23 @@ describe('torrent input validation', () => {
     expect(validateMetainfo(metainfo(basicInfo))).toBeInstanceOf(Uint8Array);
   });
 
+  it('removes local trackers without changing the info dictionary', () => {
+    const info = encode(basicInfo);
+    const input = encode({
+      announce: 'http://retracker.local/announce',
+      'announce-list': [['http://retracker.local/announce'], ['udp://tracker.example.org:80']],
+      publisher: 'Example',
+      'publisher-url': 'https://example.org/',
+      info: basicInfo,
+    });
+    const sanitized = validateMetainfo(input);
+    expect(sanitized.toString()).not.toContain('retracker.local');
+    expect(sanitized.toString()).not.toContain('publisher');
+    expect(sanitized.toString()).toContain('tracker.example.org');
+    expect(sanitized.includes(info)).toBe(true);
+    expect(validateMetainfo(sanitized)).toEqual(sanitized);
+  });
+
   it('rejects web seeds and private tracker targets in metainfo', () => {
     expect(() =>
       validateMetainfo(encode({ info: basicInfo, 'url-list': 'http://example.org/file' })),

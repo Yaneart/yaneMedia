@@ -16,10 +16,11 @@ const release: DiscoveryRelease = {
   downloadUrl: `magnet:?xt=urn:btih:${'a'.repeat(40)}`,
   infoHash: 'a'.repeat(40),
 };
+const found = { releases: [release], degraded: false };
 
 describe('torrent discovery', () => {
   afterEach(() => jest.restoreAllMocks());
-  const discovery = { search: jest.fn().mockResolvedValue([release]) };
+  const discovery = { search: jest.fn().mockResolvedValue(found) };
   const registry = { resolve: jest.fn().mockResolvedValue({ mediaRef, type: 'series' }) };
   const media = {
     getSummaryByRef: jest.fn().mockResolvedValue({
@@ -42,7 +43,7 @@ describe('torrent discovery', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    discovery.search.mockResolvedValue([release]);
+    discovery.search.mockResolvedValue(found);
   });
 
   it('builds bounded trusted queries, ranks and hides download targets', async () => {
@@ -84,17 +85,53 @@ describe('torrent discovery', () => {
     await expect(service.search('owner-3', mediaRef, undefined, 2)).rejects.toMatchObject({
       status: 400,
     });
-    discovery.search.mockResolvedValue([
-      { ...release, infoHash: null, downloadUrl: 'https://tracker.example/file' },
-    ]);
+    discovery.search.mockResolvedValue({
+      releases: [{ ...release, infoHash: null, downloadUrl: 'https://tracker.example/file' }],
+      degraded: false,
+    });
     const { candidates } = await service.search('owner-3', mediaRef);
     expect(candidates).toHaveLength(0);
   });
 
+  it('keeps successful searches when another query fails', async () => {
+    discovery.search.mockRejectedValueOnce(new Error('indexer timeout')).mockResolvedValue(found);
+    const result = await service.search('owner-partial', mediaRef);
+    expect(result.degraded).toBe(true);
+    expect(result.candidates).toHaveLength(1);
+  });
+
+  it('reports a failed indexer while retaining other candidates', async () => {
+    discovery.search.mockResolvedValue({ ...found, degraded: true });
+    const result = await service.search('owner-source-partial', mediaRef);
+    expect(result.degraded).toBe(true);
+    expect(result.candidates).toHaveLength(1);
+  });
+
+  it('does not run tracker searches concurrently', async () => {
+    let active = 0;
+    let peak = 0;
+    discovery.search.mockImplementation(async () => {
+      peak = Math.max(peak, ++active);
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      active--;
+      return found;
+    });
+    await service.search('owner-sequential', mediaRef);
+    expect(discovery.search).toHaveBeenCalledTimes(2);
+    expect(peak).toBe(1);
+  });
+
   it('downloads only from the configured adapter origin and validates metainfo', async () => {
-    discovery.search.mockResolvedValueOnce([
-      { ...release, infoHash: null, downloadUrl: 'http://prowlarr:9696/api/v1/indexer/1/download' },
-    ]);
+    discovery.search.mockResolvedValueOnce({
+      releases: [
+        {
+          ...release,
+          infoHash: null,
+          downloadUrl: 'http://prowlarr:9696/api/v1/indexer/1/download',
+        },
+      ],
+      degraded: false,
+    });
     const { candidates } = await service.search('owner-4', mediaRef);
     const body = Buffer.from(
       'd4:infod6:lengthi10e4:name9:movie.mkv12:piece lengthi16e6:pieces20:aaaaaaaaaaaaaaaaaaaaee',
@@ -112,6 +149,37 @@ describe('torrent discovery', () => {
       mediaRef,
       'y'.repeat(16),
     );
+  });
+
+  it('accepts Prowlarr proxy links while removing the URL API key', async () => {
+    const downloadUrl = `http://prowlarr:9696/1/download?apikey=${'a'.repeat(32)}&link=${'A'.repeat(144)}&file=movie.torrent`;
+    discovery.search.mockResolvedValue({
+      releases: [{ ...release, infoHash: null, downloadUrl }],
+      degraded: false,
+    });
+    const { candidates } = await service.search('owner-5', mediaRef);
+    expect(candidates).toHaveLength(1);
+    expect(JSON.stringify(candidates)).not.toContain('apikey');
+    const body = Buffer.from(
+      'd4:infod6:lengthi10e4:name9:movie.mkv12:piece lengthi16e6:pieces20:aaaaaaaaaaaaaaaaaaaaee',
+    );
+    const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue(new Response(body));
+    await service.create('owner-5', candidates[0].candidateRef, 'z'.repeat(16));
+    const [target, options] = fetchSpy.mock.calls[0];
+    expect((target as URL).pathname).toBe('/1/download');
+    expect((target as URL).searchParams.has('apikey')).toBe(false);
+    expect(options?.headers).toEqual({ 'X-Api-Key': 'a'.repeat(32) });
+    discovery.search.mockResolvedValue({
+      releases: [
+        {
+          ...release,
+          infoHash: null,
+          downloadUrl: downloadUrl.replace('a'.repeat(32), 'b'.repeat(32)),
+        },
+      ],
+      degraded: false,
+    });
+    expect((await service.search('owner-6', mediaRef)).candidates).toHaveLength(0);
   });
 
   it('deduplicates by hash and fallback attributes and penalizes mismatches', () => {
@@ -135,5 +203,27 @@ describe('torrent discovery', () => {
     );
     expect(good.score).toBeGreaterThan(bad.score);
     expect(bad.reasons).toContain('season_mismatch');
+  });
+
+  it('recognizes quality and voice claims from real Russian release title patterns', () => {
+    const identity = { titles: ['Сёгун', 'Shogun'], kind: 'tv' as const, season: 1, episode: 1 };
+    const ranked = rankRelease(
+      {
+        ...release,
+        title: 'Сёгун / Shogun / S1E1-10 (2024) BDRemux [1080p] Red Head Sound, Ю. Сербин',
+      },
+      identity,
+    );
+    expect(ranked).toMatchObject({ quality: 'BDREMUX', studio: 'Red Head Sound' });
+    expect(ranked.reasons).toContain('studio_claim');
+    expect(rankRelease({ ...release, title: 'Сёгун / Shogun [1080p] МВО' }, identity).voice).toBe(
+      'МВО',
+    );
+    expect(
+      rankRelease(
+        { ...release, title: 'Oppenheimer (2023) HDRip-AVC Dub (Bravo Records Georgia)' },
+        { titles: ['Oppenheimer'], kind: 'movie', year: 2023 },
+      ),
+    ).toMatchObject({ quality: 'HDRIP', voice: 'DUB', studio: 'Bravo Records Georgia' });
   });
 });

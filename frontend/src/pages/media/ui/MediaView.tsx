@@ -1040,6 +1040,12 @@ export function MediaView({
 
         <TorrentLaunch
           mediaRef={media.mediaRef}
+          season={usesEpisodePlayback(media) ? selectedDirectEpisode?.seasonNumber : undefined}
+          episode={
+            usesEpisodePlayback(media) && selectedDirectEpisode?.seasonNumber !== undefined
+              ? selectedDirectEpisode.episodeNumber
+              : undefined
+          }
           activeSession={torrentSession}
           resumePositionSeconds={
             continueWatchingEntries.find(

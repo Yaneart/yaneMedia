@@ -19,7 +19,12 @@ export interface DiscoveryRelease {
   infoHash: string | null;
 }
 
+export interface DiscoverySearchResult {
+  releases: DiscoveryRelease[];
+  degraded: boolean;
+}
+
 // The download URL is server-only. API controllers must map it to an opaque candidateRef.
 export interface TorrentDiscoveryPort {
-  search(input: DiscoverySearch, signal: AbortSignal): Promise<DiscoveryRelease[]>;
+  search(input: DiscoverySearch, signal: AbortSignal): Promise<DiscoverySearchResult>;
 }

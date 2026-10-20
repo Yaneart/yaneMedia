@@ -17,7 +17,7 @@ describe('Prowlarr discovery boundary', () => {
         { query: 'Test', kind: 'movie', limit: 20, offset: 0 },
         AbortSignal.timeout(1000),
       ),
-    ).toEqual([]);
+    ).toEqual({ releases: [], degraded: false });
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
@@ -45,18 +45,21 @@ describe('Prowlarr discovery boundary', () => {
       { query: 'My anime', kind: 'anime', limit: 20, offset: 0 },
       AbortSignal.timeout(1000),
     );
-    expect(releases).toEqual([
-      {
-        guid: 'release-1',
-        title: 'A release',
-        tracker: 'Example',
-        size: 1024,
-        seeders: 12,
-        publishedAt: '2026-10-01T00:00:00Z',
-        downloadUrl: 'magnet:?xt=urn:btih:abc',
-        infoHash: 'a'.repeat(40),
-      },
-    ]);
+    expect(releases).toEqual({
+      releases: [
+        {
+          guid: 'release-1',
+          title: 'A release',
+          tracker: 'Example',
+          size: 1024,
+          seeders: 12,
+          publishedAt: '2026-10-01T00:00:00Z',
+          downloadUrl: 'magnet:?xt=urn:btih:abc',
+          infoHash: 'a'.repeat(40),
+        },
+      ],
+      degraded: false,
+    });
     const [url, options] = fetchSpy.mock.calls[0];
     expect(url).toBeInstanceOf(URL);
     expect((url as URL).pathname).toBe('/api/v1/search');
@@ -84,5 +87,115 @@ describe('Prowlarr discovery boundary', () => {
         AbortSignal.timeout(1000),
       ),
     ).rejects.toBeInstanceOf(ProwlarrError);
+  });
+
+  it('caps results when Prowlarr ignores the requested limit', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify(
+          Array.from({ length: 50 }, (_, index) => ({
+            protocol: 'torrent',
+            title: `Release ${index}`,
+            indexer: 'Example',
+            size: 1024,
+            downloadUrl: `magnet:?xt=urn:btih:${'a'.repeat(40)}`,
+          })),
+        ),
+        { headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    const releases = await new ProwlarrClient(config).search(
+      { query: 'Release', kind: 'movie', limit: 30, offset: 0 },
+      AbortSignal.timeout(1000),
+    );
+    expect(releases.releases).toHaveLength(30);
+    expect(releases.releases.at(-1)?.title).toBe('Release 29');
+  });
+
+  it('keeps a smaller source visible when a larger source fills the upstream response', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify(
+          Array.from({ length: 44 }, (_, index) => ({
+            protocol: 'torrent',
+            title: `Release ${index}`,
+            indexer: index < 38 ? 'NoNaMe Club' : 'BigFANGroup',
+            size: 1024,
+            downloadUrl: `magnet:?xt=urn:btih:${'a'.repeat(40)}`,
+          })),
+        ),
+        { headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    const releases = await new ProwlarrClient(config).search(
+      { query: 'Oppenheimer', kind: 'movie', limit: 30, offset: 0 },
+      AbortSignal.timeout(1000),
+    );
+    expect(releases.releases).toHaveLength(30);
+    expect(releases.releases.filter((release) => release.tracker === 'BigFANGroup')).toHaveLength(
+      6,
+    );
+  });
+
+  it('accepts the empty info hash returned by a Jackett Torznab indexer', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify([
+          {
+            protocol: 'torrent',
+            guid: 'kinozal-1',
+            title: 'Oppenheimer 2023 BDRip 1080p',
+            indexer: 'Kinozal via Jackett',
+            size: 5_304_284_610,
+            seeders: 11,
+            publishDate: '2026-10-01T00:00:00Z',
+            downloadUrl: 'http://prowlarr:9696/5/download?link=opaque',
+            infoHash: '',
+          },
+        ]),
+        { headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    const releases = await new ProwlarrClient(config).search(
+      { query: 'Oppenheimer 2023', kind: 'movie', limit: 30, offset: 0 },
+      AbortSignal.timeout(1000),
+    );
+    expect(releases.releases).toHaveLength(1);
+    expect(releases.releases[0].infoHash).toBeNull();
+  });
+
+  it('keeps fast indexers available when another indexer times out', async () => {
+    const fetchSpy = jest
+      .spyOn(global, 'fetch')
+      .mockRejectedValueOnce(new Error('slow protected source'))
+      .mockImplementation((url) =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify([
+              {
+                protocol: 'torrent',
+                title: `Release from ${(url as URL).searchParams.get('indexerIds')}`,
+                indexer: 'Example',
+                size: 1024,
+                downloadUrl: `magnet:?xt=urn:btih:${'a'.repeat(40)}`,
+              },
+            ]),
+            { headers: { 'Content-Type': 'application/json' } },
+          ),
+        ),
+      );
+    const releases = await new ProwlarrClient({ ...config, indexerIds: [1, 2, 3] }).search(
+      { query: 'Oppenheimer', kind: 'movie', limit: 30, offset: 0 },
+      AbortSignal.timeout(1000),
+    );
+    expect(releases.releases.map((release) => release.title)).toEqual([
+      'Release from 2',
+      'Release from 3',
+    ]);
+    expect(releases.degraded).toBe(true);
+    expect(fetchSpy).toHaveBeenCalledTimes(3);
+    expect(fetchSpy.mock.calls.every(([url]) => (url as URL).searchParams.has('indexerIds'))).toBe(
+      true,
+    );
   });
 });

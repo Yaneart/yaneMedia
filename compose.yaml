@@ -90,6 +90,48 @@ services:
       - discovery-control
       - discovery-egress
 
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:v3.5.2@sha256:c80ae007ce2ccdcd217a12426e4f039ef763ff90738c808d38810c3e59323767
+    restart: unless-stopped
+    logging:
+      driver: none
+    environment:
+      LOG_LEVEL: warn
+      LOG_HTML: "false"
+      TZ: Europe/Moscow
+      LANG: en_US.UTF-8
+      TEST_URL: https://example.com
+    cpus: 2
+    mem_limit: 1g
+    memswap_limit: 1g
+    pids_limit: 256
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - discovery-egress
+
+  jackett:
+    image: lscr.io/linuxserver/jackett@sha256:104a82c2f75892745d36b65a8c1244761e9f66678424ca547b203ff2ed708975
+    restart: unless-stopped
+    logging:
+      driver: none
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: Europe/Moscow
+      AUTO_UPDATE: "false"
+    cpus: 2
+    mem_limit: 512m
+    memswap_limit: 512m
+    pids_limit: 128
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - jackett-config:/config
+    networks:
+      - discovery-control
+      - discovery-egress
+
   backend:
     build: ./backend
     env_file:
@@ -146,6 +188,7 @@ volumes:
   torrserver-config:
   torrserver-cache:
   prowlarr-config:
+  jackett-config:
 
 secrets:
   torrserver_username:

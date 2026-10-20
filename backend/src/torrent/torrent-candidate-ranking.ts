@@ -78,7 +78,9 @@ export function rankRelease(release: DiscoveryRelease, identity: SearchIdentity)
   const resolution =
     /\b(2160p|1080p|720p|480p|4k)\b/i.exec(release.title)?.[1]?.toLowerCase() ?? null;
   const quality =
-    /\b(BluRay|WEB[- .]?DL|WEBRip|HDTV|CAM|TS)\b/i.exec(release.title)?.[1]?.toUpperCase() ?? null;
+    /\b(BDRemux|BDRip|Blu[- ]?Ray|Remux|HDRip|WEB[- .]?DL|WEBRip|HDTV|CAM|TS)\b/i
+      .exec(release.title)?.[1]
+      ?.toUpperCase() ?? null;
   if (quality === 'CAM' || quality === 'TS') {
     score -= 40;
     reasons.push('low_quality');
@@ -86,11 +88,14 @@ export function rankRelease(release: DiscoveryRelease, identity: SearchIdentity)
     score += 8;
     reasons.push('quality_label');
   }
+  const voiceLabel =
+    /(?:^|[^\p{L}\p{N}])(DUB|MVO|DVO|AVO|VO|МВО|ДВО|АВО|Лицензия)(?=$|[^\p{L}\p{N}])/iu.exec(
+      release.title,
+    )?.[1] ?? null;
   const voice =
-    /\b(DUB|MVO|DVO|AVO|VO)\b/i.exec(release.title)?.[1]?.toUpperCase() ??
-    (/Лицензия/i.test(release.title) ? 'Лицензия' : null);
+    voiceLabel?.toLowerCase() === 'лицензия' ? 'Лицензия' : (voiceLabel?.toUpperCase() ?? null);
   const studio =
-    /(?:^|[^\p{L}\p{N}])(Кубик в Кубе|LostFilm|NewStudio|HDRezka Studio|AniLibria|AniDub)(?=$|[^\p{L}\p{N}])/iu.exec(
+    /(?:^|[^\p{L}\p{N}])(Кубик в Кубе|LostFilm|NewStudio|HDRezka(?: Studio)?|AniLibria|AniDub|Red Head Sound|Bravo Records Georgia|Kubik|RuDub|Jaskier|NewComers|TVShows|WinMedia|Ю(?:рий|\.) Сербин)(?=$|[^\p{L}\p{N}])/iu.exec(
       release.title,
     )?.[1] ?? null;
   const russianSubtitles = /rus(?:sian)?[ ._-]?sub|рус(?:ские)?[ ._-]?субтитры/i.test(

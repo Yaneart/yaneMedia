@@ -35,11 +35,33 @@ export function validateMagnet(value: unknown): ValidatedMagnet {
 
 type BValue = Buffer | number | BValue[] | Map<string, BValue>;
 
+function encode(value: BValue): Buffer {
+  if (Buffer.isBuffer(value)) return Buffer.concat([Buffer.from(`${value.length}:`), value]);
+  if (typeof value === 'number') return Buffer.from(`i${value}e`);
+  if (Array.isArray(value))
+    return Buffer.concat([Buffer.from('l'), ...value.map(encode), Buffer.from('e')]);
+  return Buffer.concat([
+    Buffer.from('d'),
+    ...[...value].flatMap(([key, item]) => [encode(Buffer.from(key)), encode(item)]),
+    Buffer.from('e'),
+  ]);
+}
+
+function isLocalTracker(raw: string): boolean {
+  try {
+    const host = new URL(raw).hostname.toLowerCase();
+    return host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local');
+  } catch {
+    return false;
+  }
+}
+
 export function validateMetainfo(input: Uint8Array): ValidatedMetainfo {
   if (input.byteLength === 0 || input.byteLength > 2 * 1024 * 1024) return invalid();
   const bytes = Buffer.from(input);
   let offset = 0;
   let nodes = 0;
+  const infoRange = { start: -1, end: -1 };
   const utf8 = new TextDecoder('utf-8', { fatal: true });
   const decode = (value: Buffer): string => {
     try {
@@ -77,7 +99,13 @@ export function validateMetainfo(input: Uint8Array): ValidatedMetainfo {
         if (!Buffer.isBuffer(key)) return invalid();
         const name = decode(key);
         if (dict.has(name)) return invalid();
-        dict.set(name, parse(depth + 1));
+        const start = offset;
+        const item = parse(depth + 1);
+        if (depth === 0 && name === 'info') {
+          infoRange.start = start;
+          infoRange.end = offset;
+        }
+        dict.set(name, item);
       }
       offset++;
       return dict;
@@ -99,6 +127,14 @@ export function validateMetainfo(input: Uint8Array): ValidatedMetainfo {
   };
   const root = parse(0);
   if (offset !== bytes.length || !(root instanceof Map)) return invalid();
+  let removedPublisherMetadata = false;
+  for (const key of ['publisher', 'publisher-url']) {
+    const value = root.get(key);
+    if (value === undefined) continue;
+    if (!Buffer.isBuffer(value) || value.length > 512) return invalid();
+    root.delete(key);
+    removedPublisherMetadata = true;
+  }
   if (
     [...root.keys()].some(
       (key) =>
@@ -115,24 +151,41 @@ export function validateMetainfo(input: Uint8Array): ValidatedMetainfo {
   )
     return invalid();
   const trackerUrls: string[] = [];
+  let removedLocalTracker = false;
   const announce = root.get('announce');
   if (announce !== undefined) {
     if (!Buffer.isBuffer(announce)) return invalid();
     trackerUrls.push(decode(announce));
   }
   const tiers = root.get('announce-list');
+  const safeTiers: BValue[][] = [];
   if (tiers !== undefined) {
     if (!Array.isArray(tiers) || tiers.length > 20) return invalid();
     for (const tier of tiers) {
       if (!Array.isArray(tier) || tier.length === 0 || tier.length > 20) return invalid();
+      const safeTier: BValue[] = [];
       for (const tracker of tier) {
         if (!Buffer.isBuffer(tracker)) return invalid();
-        trackerUrls.push(decode(tracker));
+        const url = decode(tracker);
+        trackerUrls.push(url);
+        if (isLocalTracker(url)) removedLocalTracker = true;
+        else safeTier.push(tracker);
       }
+      if (safeTier.length) safeTiers.push(safeTier);
     }
   }
   if (trackerUrls.length > 20) return invalid();
-  for (const tracker of trackerUrls) validateTracker(tracker);
+  const publicTrackers = trackerUrls.filter((tracker) => !isLocalTracker(tracker));
+  for (const tracker of publicTrackers) validateTracker(tracker);
+  if (announce !== undefined && isLocalTracker(decode(announce))) {
+    removedLocalTracker = true;
+    if (publicTrackers.length) root.set('announce', Buffer.from(publicTrackers[0]));
+    else root.delete('announce');
+  }
+  if (removedLocalTracker && tiers !== undefined) {
+    if (safeTiers.length) root.set('announce-list', safeTiers);
+    else root.delete('announce-list');
+  }
   const info = root.get('info');
   if (!(info instanceof Map) || info.has('meta version')) return invalid();
   const name = info.get('name.utf-8') ?? info.get('name');
@@ -180,7 +233,11 @@ export function validateMetainfo(input: Uint8Array): ValidatedMetainfo {
     }
   } else addLength(single);
   if (total === 0 || pieces.length !== Math.ceil(total / pieceLength) * 20) return invalid();
-  return bytes as unknown as ValidatedMetainfo;
+  if (!removedLocalTracker && !removedPublisherMetadata)
+    return bytes as unknown as ValidatedMetainfo;
+  if (infoRange.start < 0 || !encode(info).equals(bytes.subarray(infoRange.start, infoRange.end)))
+    return invalid();
+  return encode(root) as unknown as ValidatedMetainfo;
 }
 
 function validateTracker(raw: string): void {

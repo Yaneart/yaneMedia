@@ -56,7 +56,7 @@ export class TorrentDiscoveryService {
     if (!summary || summary.mediaRef !== mediaRef) throw error(503, 'MEDIA_METADATA_UNAVAILABLE');
     const titles = [
       ...new Set(
-        [summary.title, summary.originalTitle]
+        [summary.originalTitle, summary.title]
           .filter((value): value is string => Boolean(value?.trim()))
           .map((value) => value.trim()),
       ),
@@ -85,19 +85,26 @@ export class TorrentDiscoveryService {
       })
       .slice(0, 4);
     try {
-      const results = await Promise.allSettled(
-        queries.map((query) =>
-          this.discovery.search(
+      const results: DiscoveryRelease[][] = [];
+      let failed = 0;
+      for (const query of queries) {
+        if (controller.signal.aborted) break;
+        try {
+          const result = await this.discovery.search(
             { query, kind: identity.kind, limit: 30, offset: 0 },
             controller.signal,
-          ),
-        ),
+          );
+          results.push(result.releases);
+          if (result.degraded) failed++;
+        } catch {
+          failed++;
+        }
+        if (dedupeReleases(results.flat()).length >= 15) break;
+      }
+      if (!results.length && failed) throw error(503, 'TORRENT_DISCOVERY_UNAVAILABLE');
+      const releases = dedupeReleases(results.flat()).filter((release) =>
+        this.usable(release.downloadUrl),
       );
-      const failed = results.filter((result) => result.status === 'rejected').length;
-      if (failed === results.length && failed) throw error(503, 'TORRENT_DISCOVERY_UNAVAILABLE');
-      const releases = dedupeReleases(
-        results.flatMap((result) => (result.status === 'fulfilled' ? result.value : [])),
-      ).filter((release) => this.usable(release.downloadUrl));
       this.sweep();
       const candidates = releases
         .map((release) => ({ release, rank: rankRelease(release, identity) }))
@@ -151,16 +158,8 @@ export class TorrentDiscoveryService {
           release.downloadUrl,
         );
       }
-      const url = new URL(release.downloadUrl);
-      if (
-        !this.config.baseUrl ||
-        url.origin !== this.config.baseUrl.origin ||
-        !/^\/api\/v1\/indexer\/\d+\/download$/.test(url.pathname) ||
-        url.username ||
-        url.password ||
-        url.hash
-      )
-        throw error(422, 'TORRENT_CANDIDATE_UNSAFE');
+      const url = this.safeDownloadUrl(release.downloadUrl);
+      if (!url) throw error(422, 'TORRENT_CANDIDATE_UNSAFE');
       const response = await fetch(url, {
         headers: { 'X-Api-Key': this.config.apiKey! },
         redirect: 'manual',
@@ -220,18 +219,35 @@ export class TorrentDiscoveryService {
         return false;
       }
     }
+    return this.safeDownloadUrl(downloadUrl) !== null;
+  }
+
+  private safeDownloadUrl(downloadUrl: string): URL | null {
     try {
       const url = new URL(downloadUrl);
-      return Boolean(
-        this.config.baseUrl &&
-        url.origin === this.config.baseUrl.origin &&
-        /^\/api\/v1\/indexer\/\d+\/download$/.test(url.pathname) &&
-        !url.username &&
-        !url.password &&
-        !url.hash,
-      );
+      if (
+        !this.config.baseUrl ||
+        url.origin !== this.config.baseUrl.origin ||
+        url.username ||
+        url.password ||
+        url.hash
+      )
+        return null;
+      if (/^\/api\/v1\/indexer\/\d+\/download$/.test(url.pathname) && !url.search) return url;
+      if (!/^\/\d+\/download$/.test(url.pathname)) return null;
+      const params = url.searchParams;
+      if (
+        [...params.keys()].sort().join(',') !== 'apikey,file,link' ||
+        params.get('apikey') !== this.config.apiKey ||
+        !/^[A-Za-z0-9_-]{16,1024}$/.test(params.get('link') ?? '') ||
+        !params.get('file') ||
+        params.get('file')!.length > 512
+      )
+        return null;
+      params.delete('apikey');
+      return url;
     } catch {
-      return false;
+      return null;
     }
   }
 

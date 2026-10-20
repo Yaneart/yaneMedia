@@ -7,6 +7,8 @@ import {
   cacheTorrentSession,
   createFileSession,
   createMagnetSession,
+  createCandidateSession,
+  getTorrentCandidates,
   newTorrentIdempotencyKey,
   selectTorrentFile,
   startTorrentPlayback,
@@ -15,6 +17,7 @@ import {
   torrentSessionQueryKeys,
   TorrentRequestError,
   type TorrentSession,
+  type TorrentCandidate,
 } from '@/entities/torrent-session';
 import { ResendVerification } from '@/features/auth-form';
 import { privateProfileQueryOptions } from '@/features/social-data';
@@ -49,6 +52,62 @@ function formatBytes(bytes: number): string {
   const unit = bytes < 1024 ** 2 ? 'КиБ' : bytes < 1024 ** 3 ? 'МиБ' : 'ГиБ';
   const divisor = unit === 'КиБ' ? 1024 : unit === 'МиБ' ? 1024 ** 2 : 1024 ** 3;
   return `${(bytes / divisor).toLocaleString('ru-RU', { maximumFractionDigits: 1 })} ${unit}`;
+}
+
+const reasonLabels: Record<string, string> = {
+  title_match: 'совпадение названия',
+  title_mismatch: 'название может не совпадать',
+  year_match: 'совпадение года',
+  year_mismatch: 'другой год',
+  season_match: 'совпадение сезона',
+  season_mismatch: 'другой сезон',
+  episode_match: 'совпадение серии',
+  episode_mismatch: 'другая серия',
+  quality_label: 'указано качество',
+  low_quality: 'низкое качество',
+  russian_voice_claim: 'заявлена русская озвучка',
+  studio_claim: 'указана студия',
+  russian_subtitles_claim: 'заявлены русские субтитры',
+  seeders: 'есть раздающие',
+  no_seeders: 'нет раздающих',
+  large_size: 'большой размер',
+  recent: 'недавняя публикация',
+  suspicious_title: 'подозрительное название',
+  type_mismatch: 'другой тип',
+};
+
+function CandidateCard({
+  candidate,
+  pending,
+  onSelect,
+}: {
+  candidate: TorrentCandidate;
+  pending: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <article className="min-w-0 space-y-2 rounded-control border border-border p-3 text-sm">
+      <p className="break-words font-semibold text-text-primary">{candidate.title}</p>
+      <p className="text-text-secondary">
+        {candidate.tracker} · {formatBytes(candidate.size)} · Раздающих:{' '}
+        {candidate.seeders ?? 'нет данных'}
+      </p>
+      <p className="text-text-secondary">
+        {[candidate.resolution, candidate.quality, candidate.voice, candidate.studio]
+          .filter(Boolean)
+          .join(' · ') || 'Качество и озвучка не указаны'}
+        {candidate.russianSubtitles ? ' · заявлены русские субтитры' : ''}
+      </p>
+      {candidate.reasons.length > 0 && (
+        <p className="text-xs text-text-secondary">
+          Порядок: {candidate.reasons.map((reason) => reasonLabels[reason] ?? reason).join(', ')}
+        </p>
+      )}
+      <Button size="small" disabled={pending} onClick={onSelect}>
+        {pending ? 'Запускаем…' : 'Выбрать раздачу'}
+      </Button>
+    </article>
+  );
 }
 
 function describeFailure(session: TorrentSession): string {
@@ -113,12 +172,16 @@ function preparationLabel(session: TorrentSession): string {
 
 export function TorrentLaunch({
   mediaRef,
+  season,
+  episode,
   activeSession,
   resumePositionSeconds,
   onPlaybackReady,
   onSessionChange,
 }: {
   mediaRef: string;
+  season?: number;
+  episode?: number;
   activeSession: TorrentSession | null;
   resumePositionSeconds: number;
   onPlaybackReady: (session: TorrentSession) => void;
@@ -128,9 +191,12 @@ export function TorrentLaunch({
   const accountKey = authState.status === 'authenticated' ? authState.user.email : 'inactive';
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [showAll, setShowAll] = useState(false);
   const panelId = useId();
   const magnetInputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const manualDetailsRef = useRef<HTMLDetailsElement>(null);
+  const manualSourceRef = useRef(false);
   const profileQuery = useQuery({
     ...privateProfileQueryOptions(accountKey),
     enabled: open && authState.status === 'authenticated',
@@ -144,6 +210,7 @@ export function TorrentLaunch({
   const [error, setError] = useState<string | null>(null);
   const requestRef = useRef<AbortController | null>(null);
   const createKeyRef = useRef<string | null>(null);
+  const candidateKeyRef = useRef<{ ref: string; key: string } | null>(null);
   const playbackKeyRef = useRef<string | null>(null);
   const playbackRequestedRef = useRef(false);
   const previousAccountRef = useRef(accountKey);
@@ -158,6 +225,21 @@ export function TorrentLaunch({
       (open || playbackRequestedRef.current) && authState.status === 'authenticated' && !!session,
   });
   const currentSession = session ? (sessionQuery.data ?? session) : null;
+  const discoveryQuery = useQuery({
+    queryKey: ['account', accountKey, 'torrent-discovery', mediaRef, season, episode],
+    queryFn: ({ signal }) => getTorrentCandidates(mediaRef, season, episode, signal),
+    enabled:
+      open &&
+      authState.status === 'authenticated' &&
+      profileQuery.data?.emailVerified === true &&
+      !session &&
+      activeQuery.isSuccess &&
+      !activeQuery.data,
+    staleTime: 0,
+    gcTime: 0,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
 
   useEffect(() => {
     if (!session && activeSession && activeSession.mediaRef === mediaRef) setSession(activeSession);
@@ -196,6 +278,8 @@ export function TorrentLaunch({
     setMagnet('');
     setFile(null);
     createKeyRef.current = null;
+    candidateKeyRef.current = null;
+    setShowAll(false);
     playbackKeyRef.current = null;
     playbackRequestedRef.current = false;
   }, [accountKey, onSessionChange]);
@@ -238,6 +322,7 @@ export function TorrentLaunch({
       cacheTorrentSession(queryClient, accountKey, created);
       queryClient.setQueryData(torrentSessionQueryKeys.active(accountKey, mediaRef), created);
       setSession(created);
+      manualSourceRef.current = true;
       onSessionChange(created);
       setFileRef(null);
       createKeyRef.current = null;
@@ -249,6 +334,60 @@ export function TorrentLaunch({
         setPending(false);
       }
     }
+  };
+
+  const chooseCandidate = async (candidate: TorrentCandidate) => {
+    if (pending || session || authState.status !== 'authenticated') return;
+    if (!discoveryQuery.data || Date.now() >= discoveryQuery.data.expiresAt) {
+      setError('Результаты поиска устарели. Обновите список и выберите раздачу снова.');
+      void discoveryQuery.refetch();
+      return;
+    }
+    const controller = new AbortController();
+    requestRef.current = controller;
+    const key =
+      candidateKeyRef.current?.ref === candidate.candidateRef
+        ? candidateKeyRef.current.key
+        : newTorrentIdempotencyKey();
+    candidateKeyRef.current = { ref: candidate.candidateRef, key };
+    setPending(true);
+    setError(null);
+    try {
+      const created = await createCandidateSession(candidate.candidateRef, key, controller.signal);
+      if (controller.signal.aborted) return;
+      cacheTorrentSession(queryClient, accountKey, created);
+      queryClient.setQueryData(torrentSessionQueryKeys.active(accountKey, mediaRef), created);
+      setSession(created);
+      manualSourceRef.current = false;
+      onSessionChange(created);
+      setFileRef(null);
+      candidateKeyRef.current = null;
+    } catch (cause) {
+      if (!controller.signal.aborted) {
+        setError(
+          cause instanceof TorrentRequestError && cause.status === 404
+            ? 'Раздача больше недоступна. Обновите поиск и выберите другую.'
+            : cause instanceof TorrentRequestError && cause.code === 'TORRENT_CANDIDATE_UNSAFE'
+              ? 'Файл раздачи не прошёл проверку. Выберите другую раздачу.'
+              : describeCreateError(cause),
+        );
+        if (cause instanceof TorrentRequestError && cause.status === 404)
+          void discoveryQuery.refetch();
+      }
+    } finally {
+      if (requestRef.current === controller) {
+        requestRef.current = null;
+        setPending(false);
+      }
+    }
+  };
+
+  const focusAfterStop = () => {
+    if (!manualSourceRef.current) return;
+    requestAnimationFrame(() => {
+      if (manualDetailsRef.current) manualDetailsRef.current.open = true;
+      (inputKind === 'magnet' ? magnetInputRef.current : fileInputRef.current)?.focus();
+    });
   };
 
   const stop = async () => {
@@ -266,9 +405,7 @@ export function TorrentLaunch({
       setFileRef(null);
       setFile(null);
       playbackRequestedRef.current = false;
-      requestAnimationFrame(() =>
-        (inputKind === 'magnet' ? magnetInputRef.current : fileInputRef.current)?.focus(),
-      );
+      focusAfterStop();
     } catch (cause) {
       if (!controller.signal.aborted) {
         if (cause instanceof TorrentRequestError && cause.status === 404) {
@@ -277,9 +414,7 @@ export function TorrentLaunch({
           onSessionChange(null);
           setFileRef(null);
           setFile(null);
-          requestAnimationFrame(() =>
-            (inputKind === 'magnet' ? magnetInputRef.current : fileInputRef.current)?.focus(),
-          );
+          focusAfterStop();
         } else setError(describeCommandError(cause, 'остановить сессию'));
       }
     } finally {
@@ -385,10 +520,10 @@ export function TorrentLaunch({
       {open && (
         <div id={panelId} className="mt-4 space-y-4">
           <p className="text-sm text-text-secondary">
-            Вы сами предоставляете magnet-ссылку или файл .torrent. yaneMedia не предоставляет
+            Поиск показывает раздачи из подключённых внешних источников. yaneMedia не предоставляет
             контент. Ваш IP-адрес может быть виден другим участникам раздачи. Одновременно доступен
-            один просмотр; размер раздачи ограничен 200 ГиБ, видео — 30 ГиБ. Подготовка не
-            начинается до нажатия «Запустить».
+            один просмотр; размер раздачи ограничен 200 ГиБ, видео — 30 ГиБ. Подготовка начинается
+            только после выбора раздачи или ручного запуска.
           </p>
           {authState.status === 'guest' ? (
             <SocialLoginLink intent="torrent" className="font-semibold text-action hover:underline">
@@ -571,75 +706,154 @@ export function TorrentLaunch({
                 </Button>
               </div>
             ) : (
-              <form onSubmit={(event) => void submit(event)} className="space-y-4">
-                <fieldset className="flex flex-wrap gap-4 text-sm text-text-primary">
-                  <legend className="mb-2 font-semibold">Источник торрента</legend>
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="radio"
-                      name="torrent-input"
-                      checked={inputKind === 'magnet'}
-                      onChange={() => {
-                        setInputKind('magnet');
+              <div className="space-y-4">
+                <div className="space-y-3" aria-label="Найденные раздачи">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="font-semibold text-text-primary">Найденные раздачи</h3>
+                    <Button
+                      variant="secondary"
+                      size="small"
+                      disabled={discoveryQuery.isFetching}
+                      onClick={() => {
                         setError(null);
-                        createKeyRef.current = null;
+                        candidateKeyRef.current = null;
+                        void discoveryQuery.refetch();
                       }}
-                    />
-                    Magnet-ссылка
-                  </label>
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="radio"
-                      name="torrent-input"
-                      checked={inputKind === 'file'}
-                      onChange={() => {
-                        setInputKind('file');
-                        setError(null);
-                        createKeyRef.current = null;
-                      }}
-                    />
-                    Файл .torrent
-                  </label>
-                </fieldset>
-                {inputKind === 'magnet' ? (
-                  <label className="block space-y-2 text-sm font-semibold text-text-primary">
-                    <span>Magnet-ссылка</span>
-                    <textarea
-                      ref={magnetInputRef}
-                      rows={3}
-                      value={magnet}
-                      onChange={(event) => {
-                        setMagnet(event.target.value);
-                        setError(null);
-                        createKeyRef.current = null;
-                      }}
-                      placeholder="magnet:?xt=urn:btih:…"
-                      spellCheck={false}
-                      autoCapitalize="off"
-                      autoComplete="off"
-                      className="w-full resize-y rounded-control border border-border bg-surface px-3 py-2 font-normal text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/20"
-                    />
-                  </label>
-                ) : (
-                  <label className="block space-y-2 text-sm font-semibold text-text-primary">
-                    <span>Файл .torrent (до 2 МиБ)</span>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept=".torrent,application/x-bittorrent"
-                      onChange={(event) => {
-                        setFile(event.target.files?.[0] ?? null);
-                        setError(null);
-                        createKeyRef.current = null;
-                      }}
-                      className="block w-full text-sm font-normal"
-                    />
-                  </label>
-                )}
-                <Button type="submit" disabled={pending}>
-                  {pending ? 'Запускаем…' : 'Запустить'}
-                </Button>
-              </form>
+                    >
+                      Обновить поиск
+                    </Button>
+                  </div>
+                  {discoveryQuery.isPending ||
+                  (discoveryQuery.isFetching && !discoveryQuery.data) ? (
+                    <Spinner size="small" label="Ищем раздачи" />
+                  ) : discoveryQuery.isError ? (
+                    <p role="alert" className="text-sm text-error">
+                      Поиск сейчас недоступен. Повторите попытку или добавьте торрент вручную.
+                    </p>
+                  ) : discoveryQuery.data ? (
+                    <>
+                      {discoveryQuery.data.degraded && (
+                        <p role="status" className="text-sm text-text-secondary">
+                          Часть источников не ответила. Показаны доступные результаты.
+                        </p>
+                      )}
+                      {discoveryQuery.data.candidates.length === 0 ? (
+                        <p className="text-sm text-text-secondary">
+                          Подходящих раздач не найдено. Попробуйте обновить поиск или добавить
+                          торрент вручную.
+                        </p>
+                      ) : (
+                        <>
+                          <p className="text-xs text-text-secondary">
+                            Название, качество и озвучка заявлены внешним источником. После проверки
+                            файла фактические аудиодорожки могут отличаться.
+                          </p>
+                          <div className="space-y-2">
+                            {discoveryQuery.data.candidates
+                              .slice(0, showAll ? undefined : 5)
+                              .map((candidate) => (
+                                <CandidateCard
+                                  key={candidate.candidateRef}
+                                  candidate={candidate}
+                                  pending={pending}
+                                  onSelect={() => void chooseCandidate(candidate)}
+                                />
+                              ))}
+                          </div>
+                          {discoveryQuery.data.candidates.length > 5 && (
+                            <Button
+                              variant="secondary"
+                              size="small"
+                              onClick={() => setShowAll((current) => !current)}
+                            >
+                              {showAll
+                                ? 'Скрыть остальные'
+                                : `Показать остальные (${discoveryQuery.data.candidates.length - 5})`}
+                            </Button>
+                          )}
+                        </>
+                      )}
+                    </>
+                  ) : null}
+                </div>
+                <details
+                  ref={manualDetailsRef}
+                  className="rounded-control border border-border p-3"
+                >
+                  <summary className="cursor-pointer font-semibold text-text-primary">
+                    Добавить вручную
+                  </summary>
+                  <form onSubmit={(event) => void submit(event)} className="mt-4 space-y-4">
+                    <fieldset className="flex flex-wrap gap-4 text-sm text-text-primary">
+                      <legend className="mb-2 font-semibold">Источник торрента</legend>
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name="torrent-input"
+                          checked={inputKind === 'magnet'}
+                          onChange={() => {
+                            setInputKind('magnet');
+                            setError(null);
+                            createKeyRef.current = null;
+                          }}
+                        />
+                        Magnet-ссылка
+                      </label>
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name="torrent-input"
+                          checked={inputKind === 'file'}
+                          onChange={() => {
+                            setInputKind('file');
+                            setError(null);
+                            createKeyRef.current = null;
+                          }}
+                        />
+                        Файл .torrent
+                      </label>
+                    </fieldset>
+                    {inputKind === 'magnet' ? (
+                      <label className="block space-y-2 text-sm font-semibold text-text-primary">
+                        <span>Magnet-ссылка</span>
+                        <textarea
+                          ref={magnetInputRef}
+                          rows={3}
+                          value={magnet}
+                          onChange={(event) => {
+                            setMagnet(event.target.value);
+                            setError(null);
+                            createKeyRef.current = null;
+                          }}
+                          placeholder="magnet:?xt=urn:btih:…"
+                          spellCheck={false}
+                          autoCapitalize="off"
+                          autoComplete="off"
+                          className="w-full resize-y rounded-control border border-border bg-surface px-3 py-2 font-normal text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/20"
+                        />
+                      </label>
+                    ) : (
+                      <label className="block space-y-2 text-sm font-semibold text-text-primary">
+                        <span>Файл .torrent (до 2 МиБ)</span>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept=".torrent,application/x-bittorrent"
+                          onChange={(event) => {
+                            setFile(event.target.files?.[0] ?? null);
+                            setError(null);
+                            createKeyRef.current = null;
+                          }}
+                          className="block w-full text-sm font-normal"
+                        />
+                      </label>
+                    )}
+                    <Button type="submit" disabled={pending}>
+                      {pending ? 'Запускаем…' : 'Запустить'}
+                    </Button>
+                  </form>
+                </details>
+              </div>
             )
           ) : (
             <p className="text-sm text-text-secondary">Проверяем доступ…</p>
