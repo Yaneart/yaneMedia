@@ -1,4 +1,0 @@
-services:
-  jackett:
-    ports:
-      - "127.0.0.1:9117:9117"

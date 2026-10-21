@@ -23,6 +23,13 @@ import { ResendVerification } from '@/features/auth-form';
 import { privateProfileQueryOptions } from '@/features/social-data';
 import { SocialLoginLink, useRestoreSocialAction } from '@/features/social-access';
 import { Button, Spinner } from '@/shared';
+import {
+  candidateOptions,
+  emptyCandidateFilters,
+  selectCandidates,
+  type CandidateFilters,
+  type CandidateSort,
+} from '../model/candidateView';
 
 const maxTorrentFileBytes = 2 * 1024 * 1024;
 const maxMagnetBytes = 4096;
@@ -91,6 +98,8 @@ function CandidateCard({
       <p className="text-text-secondary">
         {candidate.tracker} · {formatBytes(candidate.size)} · Раздающих:{' '}
         {candidate.seeders ?? 'нет данных'}
+        {candidate.publishedAt &&
+          ` · Опубликовано: ${new Date(candidate.publishedAt).toLocaleDateString('ru-RU')}`}
       </p>
       <p className="text-text-secondary">
         {[candidate.resolution, candidate.quality, candidate.voice, candidate.studio]
@@ -192,6 +201,8 @@ export function TorrentLaunch({
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [showAll, setShowAll] = useState(false);
+  const [candidateSort, setCandidateSort] = useState<CandidateSort>('best');
+  const [candidateFilters, setCandidateFilters] = useState<CandidateFilters>(emptyCandidateFilters);
   const panelId = useId();
   const magnetInputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -240,6 +251,19 @@ export function TorrentLaunch({
     retry: false,
     refetchOnWindowFocus: false,
   });
+  const allCandidates = discoveryQuery.data?.candidates ?? [];
+  const visibleCandidates = selectCandidates(allCandidates, candidateSort, candidateFilters);
+  const hasCandidateFilters = Object.values(candidateFilters).some(Boolean);
+  const updateCandidateFilter = (key: keyof CandidateFilters, value: string | boolean) => {
+    setCandidateFilters((current) => ({ ...current, [key]: value }));
+    setShowAll(false);
+  };
+
+  useEffect(() => {
+    setCandidateSort('best');
+    setCandidateFilters(emptyCandidateFilters);
+    setShowAll(false);
+  }, [accountKey, mediaRef, season, episode]);
 
   useEffect(() => {
     if (!session && activeSession && activeSession.mediaRef === mediaRef) setSession(activeSession);
@@ -279,7 +303,6 @@ export function TorrentLaunch({
     setFile(null);
     createKeyRef.current = null;
     candidateKeyRef.current = null;
-    setShowAll(false);
     playbackKeyRef.current = null;
     playbackRequestedRef.current = false;
   }, [accountKey, onSessionChange]);
@@ -748,8 +771,96 @@ export function TorrentLaunch({
                             Название, качество и озвучка заявлены внешним источником. После проверки
                             файла фактические аудиодорожки могут отличаться.
                           </p>
+                          <div className="grid gap-2 rounded-control border border-border p-3 sm:grid-cols-2 xl:grid-cols-3">
+                            <label className="text-sm text-text-primary">
+                              Сортировка
+                              <select
+                                value={candidateSort}
+                                onChange={(event) =>
+                                  setCandidateSort(event.target.value as CandidateSort)
+                                }
+                                className="mt-1 block w-full rounded-control border border-border bg-surface px-2 py-2 text-text-primary"
+                              >
+                                <option value="best">Лучшие</option>
+                                <option value="newest">Сначала новые</option>
+                                <option value="seeders">Больше раздающих</option>
+                              </select>
+                            </label>
+                            {(['tracker', 'resolution', 'quality', 'voice'] as const).map(
+                              (field) => (
+                                <label key={field} className="text-sm text-text-primary">
+                                  {
+                                    {
+                                      tracker: 'Источник',
+                                      resolution: 'Разрешение',
+                                      quality: 'Качество',
+                                      voice: 'Озвучка',
+                                    }[field]
+                                  }
+                                  <select
+                                    value={candidateFilters[field]}
+                                    onChange={(event) =>
+                                      updateCandidateFilter(field, event.target.value)
+                                    }
+                                    className="mt-1 block w-full rounded-control border border-border bg-surface px-2 py-2 text-text-primary"
+                                  >
+                                    <option value="">Все</option>
+                                    {candidateOptions(allCandidates, field).map(
+                                      ({ value, count }) => (
+                                        <option key={value} value={value}>
+                                          {value} ({count})
+                                        </option>
+                                      ),
+                                    )}
+                                  </select>
+                                </label>
+                              ),
+                            )}
+                            {allCandidates.some((item) => item.seeders !== null) && (
+                              <label className="flex items-center gap-2 self-end py-2 text-sm text-text-primary">
+                                <input
+                                  type="checkbox"
+                                  checked={candidateFilters.seededOnly}
+                                  onChange={(event) =>
+                                    updateCandidateFilter('seededOnly', event.target.checked)
+                                  }
+                                />
+                                Только с раздающими
+                              </label>
+                            )}
+                          </div>
+                          <div
+                            className="flex flex-wrap items-center gap-3 text-sm text-text-secondary"
+                            role="status"
+                          >
+                            <span>
+                              Показано {visibleCandidates.length} из {allCandidates.length} ·{' '}
+                              {
+                                {
+                                  best: 'Лучшие',
+                                  newest: 'Сначала новые',
+                                  seeders: 'Больше раздающих',
+                                }[candidateSort]
+                              }
+                            </span>
+                            {hasCandidateFilters && (
+                              <Button
+                                variant="secondary"
+                                size="small"
+                                onClick={() => setCandidateFilters(emptyCandidateFilters)}
+                              >
+                                Сбросить фильтры
+                              </Button>
+                            )}
+                          </div>
+                          {visibleCandidates.length === 0 && (
+                            <p className="text-sm text-text-secondary">
+                              Варианты скрыты выбранными фильтрами. Сбросьте фильтры или обновите
+                              поиск.
+                            </p>
+                          )}
                           <div className="space-y-2">
-                            {discoveryQuery.data.candidates
+                            {visibleCandidates
                               .slice(0, showAll ? undefined : 5)
                               .map((candidate) => (
                                 <CandidateCard
@@ -760,7 +871,7 @@ export function TorrentLaunch({
                                 />
                               ))}
                           </div>
-                          {discoveryQuery.data.candidates.length > 5 && (
+                          {visibleCandidates.length > 5 && (
                             <Button
                               variant="secondary"
                               size="small"
@@ -768,7 +879,7 @@ export function TorrentLaunch({
                             >
                               {showAll
                                 ? 'Скрыть остальные'
-                                : `Показать остальные (${discoveryQuery.data.candidates.length - 5})`}
+                                : `Показать остальные (${visibleCandidates.length - 5})`}
                             </Button>
                           )}
                         </>

@@ -53,7 +53,7 @@ describe('torrent discovery', () => {
       expect.objectContaining({
         query: 'Interstellar S01E02',
         kind: 'tv',
-        limit: 30,
+        limit: 50,
         offset: 0,
       }),
       expect.any(AbortSignal),
@@ -62,6 +62,22 @@ describe('torrent discovery', () => {
     expect(result.candidates[0]).toMatchObject({ voice: 'DUB', season: 1, episode: 2 });
     expect(JSON.stringify(result)).not.toContain('magnet:');
     expect(JSON.stringify(result)).not.toContain('infoHash');
+  });
+
+  it('keeps a bounded set with stable ties', async () => {
+    discovery.search.mockResolvedValue({
+      releases: Array.from({ length: 55 }, (_, index) => ({
+        ...release,
+        guid: String(index),
+        title: `Interstellar 2014 1080p WEB-DL ${String(54 - index).padStart(2, '0')}`,
+        infoHash: null,
+      })),
+      degraded: false,
+    });
+    const result = await service.search('owner-bounded', mediaRef);
+    expect(result.candidates).toHaveLength(50);
+    expect(result.candidates[0].title).toContain('00');
+    expect(result.candidates.at(-1)?.title).toContain('49');
   });
 
   it('binds candidates to the owner and uses validated input', async () => {

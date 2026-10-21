@@ -91,7 +91,7 @@ export class TorrentDiscoveryService {
         if (controller.signal.aborted) break;
         try {
           const result = await this.discovery.search(
-            { query, kind: identity.kind, limit: 30, offset: 0 },
+            { query, kind: identity.kind, limit: 50, offset: 0 },
             controller.signal,
           );
           results.push(result.releases);
@@ -111,7 +111,10 @@ export class TorrentDiscoveryService {
         .filter(({ rank, release }) => rank.score > -50 && release.size <= 200 * 1024 ** 3)
         .sort(
           (a, b) =>
-            b.rank.score - a.rank.score || (b.release.seeders ?? 0) - (a.release.seeders ?? 0),
+            b.rank.score - a.rank.score ||
+            a.release.tracker.localeCompare(b.release.tracker, 'ru') ||
+            a.release.title.localeCompare(b.release.title, 'ru') ||
+            a.release.size - b.release.size,
         )
         .slice(0, 50)
         .map(({ release, rank }) => {
