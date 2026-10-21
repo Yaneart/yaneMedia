@@ -69,7 +69,7 @@ export class TorrentDiscoveryService {
       episode,
     };
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 12_000);
+    const timeout = setTimeout(() => controller.abort(), 25_000);
     const queries = titles
       .flatMap((title) => {
         const clean = safeText(title).replace(/\s+/g, ' ').trim().slice(0, 120);

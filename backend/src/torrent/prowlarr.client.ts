@@ -9,6 +9,8 @@ import type {
 
 const CATEGORIES = { movie: 2000, tv: 5000, anime: 5070 } as const;
 const MAX_BODY_BYTES = 1024 * 1024;
+const CACHE_TTL_MS = 60 * 60_000;
+const MAX_CACHE_ENTRIES = 128;
 
 export class ProwlarrError extends Error {
   constructor(readonly code: 'unavailable' | 'timeout' | 'protocol' | 'invalid') {
@@ -18,6 +20,8 @@ export class ProwlarrError extends Error {
 
 @Injectable()
 export class ProwlarrClient implements TorrentDiscoveryPort {
+  private readonly sourceCache = new Map<string, { items: unknown[]; expiresAt: number }>();
+
   constructor(@Inject(PROWLARR_CONFIG) private readonly config: ProwlarrConfig) {}
 
   get enabled(): boolean {
@@ -58,19 +62,36 @@ export class ProwlarrClient implements TorrentDiscoveryPort {
         this.config.indexerIds.map(async (id) => {
           const sourceUrl = new URL(url);
           sourceUrl.searchParams.set('indexerIds', String(id));
-          const items = await this.request(
-            sourceUrl,
-            signal,
-            Math.min(this.config.timeoutMs, 8000),
-          );
-          if (!Array.isArray(items)) throw new ProwlarrError('protocol');
-          return items as unknown[];
+          const key = sourceUrl.toString();
+          try {
+            const response = await this.request(sourceUrl, signal);
+            if (!Array.isArray(response)) throw new ProwlarrError('protocol');
+            const items: unknown[] = response;
+            const cached = this.sourceCache.get(key);
+            if (!items.length && cached?.items.length && cached.expiresAt > Date.now())
+              return { items: cached.items, stale: true };
+            this.sourceCache.delete(key);
+            this.sourceCache.set(key, { items, expiresAt: Date.now() + CACHE_TTL_MS });
+            while (this.sourceCache.size > MAX_CACHE_ENTRIES) {
+              for (const oldest of this.sourceCache.keys()) {
+                this.sourceCache.delete(oldest);
+                break;
+              }
+            }
+            return { items, stale: false };
+          } catch (cause) {
+            const cached = this.sourceCache.get(key);
+            if (cached && cached.expiresAt > Date.now())
+              return { items: cached.items, stale: true };
+            this.sourceCache.delete(key);
+            throw cause;
+          }
         }),
       );
       const succeeded = searches.filter((item) => item.status === 'fulfilled');
       if (!succeeded.length) throw new ProwlarrError('unavailable');
-      degraded = succeeded.length < searches.length;
-      response = succeeded.flatMap((item) => item.value);
+      degraded = succeeded.length < searches.length || succeeded.some((item) => item.value.stale);
+      response = succeeded.flatMap((item) => item.value.items);
     } else response = await this.request(url, signal);
     if (!Array.isArray(response)) {
       throw new ProwlarrError('protocol');

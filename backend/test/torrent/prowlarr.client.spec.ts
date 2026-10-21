@@ -198,4 +198,31 @@ describe('Prowlarr discovery boundary', () => {
       true,
     );
   });
+
+  it('keeps a recent source result when that source fails, and marks it degraded', async () => {
+    const release = {
+      protocol: 'torrent',
+      title: 'Protected release',
+      indexer: 'Kinozal',
+      size: 1024,
+      downloadUrl: `magnet:?xt=urn:btih:${'a'.repeat(40)}`,
+    };
+    const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValueOnce(
+      new Response(JSON.stringify([release]), {
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
+    const client = new ProwlarrClient({ ...config, indexerIds: [4] });
+    const input = { query: 'Oppenheimer', kind: 'movie' as const, limit: 30, offset: 0 };
+    expect((await client.search(input, AbortSignal.timeout(1000))).degraded).toBe(false);
+    fetchSpy.mockRejectedValueOnce(new Error('challenge timeout'));
+    const cached = await client.search(input, AbortSignal.timeout(1000));
+    expect(cached.releases.map((item) => item.title)).toEqual(['Protected release']);
+    expect(cached.degraded).toBe(true);
+    fetchSpy.mockResolvedValueOnce(
+      new Response('[]', { headers: { 'Content-Type': 'application/json' } }),
+    );
+    expect((await client.search(input, AbortSignal.timeout(1000))).releases).toHaveLength(1);
+    expect(fetchSpy).toHaveBeenCalledTimes(3);
+  });
 });
