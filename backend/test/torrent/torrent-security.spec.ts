@@ -245,8 +245,11 @@ describe('torrent HTTP security boundary', () => {
       aborted = resolve;
     });
     const server = app.getHttpServer() as Server;
-    server.once('request', (req: import('node:http').IncomingMessage) => {
-      req.once('aborted', aborted);
+    const received = new Promise<void>((resolve) => {
+      server.once('request', (req: import('node:http').IncomingMessage) => {
+        req.once('aborted', aborted);
+        resolve();
+      });
     });
     const upload = httpRequest(`${base}/torrent-sessions/file`, {
       method: 'POST',
@@ -262,8 +265,17 @@ describe('torrent HTTP security boundary', () => {
     upload.write(
       '--test\r\nContent-Disposition: form-data; name="torrent"; filename="test.torrent"\r\n\r\npartial',
     );
-    // A round trip guarantees that the incomplete upload has reached the server.
-    expect((await request(`/torrent-sessions/${sessionId}/hls/master.m3u8`)).status).toBe(204);
+    // Wait for this upload itself; another socket's round trip can arrive first.
+    await received;
+    expect(
+      (
+        await request('/torrent-sessions/magnet', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-yanemedia-csrf': '1' },
+          body: JSON.stringify({ magnet }),
+        })
+      ).status,
+    ).toBe(429);
     upload.destroy();
     await disconnected;
     await new Promise((resolve) => setImmediate(resolve));

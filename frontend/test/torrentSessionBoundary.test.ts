@@ -284,6 +284,8 @@ describe('torrent API boundary', () => {
     expect(fastInterval).toBeLessThanOrEqual(1200);
     expect(torrentPollInterval(session, null, true, Date.parse(createdAt) + 70_000)).toBe(15_000);
     expect(torrentPollInterval({ ...session, state: 'awaiting_file' }, null, false)).toBe(false);
+    for (const state of ['awaiting_playback', 'ready', 'failed'] as const)
+      expect(torrentPollInterval({ ...session, state }, null, false)).toBe(false);
     expect(
       torrentPollInterval(
         session,
@@ -305,6 +307,28 @@ describe('torrent API boundary', () => {
         false,
       ),
     ).toBe(false);
+  });
+
+  test('bounds automatic retries and carries caller cancellation without poisoning later requests', async () => {
+    const { torrentSessionQueryOptions } = await import('../src/entities/torrent-session');
+    const { retry } = torrentSessionQueryOptions('alice@example.com', id);
+    expect(typeof retry).toBe('function');
+    if (typeof retry !== 'function') throw new Error('Expected retry policy');
+    for (const status of [400, 401, 403, 404, 409, 429, 503])
+      expect(retry(0, new TorrentRequestError('http', 'ERROR', status, null, 'Failed'))).toBe(
+        false,
+      );
+    const networkError = new TorrentRequestError('network', 'NETWORK_ERROR', null, null, 'Failed');
+    expect(retry(2, networkError)).toBe(true);
+    expect(retry(3, networkError)).toBe(false);
+    const aborted = new AbortController();
+    aborted.abort();
+    globalThis.fetch = mock(async (_url: string, init: RequestInit) => {
+      init.signal?.throwIfAborted();
+      return Response.json({ data: wire });
+    }) as typeof fetch;
+    await expect(getTorrentSession(id, aborted.signal)).rejects.toMatchObject({ kind: 'aborted' });
+    expect((await getTorrentSession(id, new AbortController().signal)).id).toBe(id);
   });
 
   test('stores sessions only under the current account query key', () => {

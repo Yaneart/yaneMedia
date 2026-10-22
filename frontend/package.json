@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "test": "bun test",
+    "test:torrent": "bun test ./test/torrentSessionBoundary.test.ts ./test/socialAccess.test.ts ./test/playbackModeResolution.test.ts ./test/candidateView.test.ts && bun test ./test/torrentLifecycle.test.tsx",
     "lint": "oxlint",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -24,8 +25,10 @@
   },
   "devDependencies": {
     "@babel/core": "^7.29.7",
+    "@happy-dom/global-registrator": "^21.0.4",
     "@rolldown/plugin-babel": "^0.2.3",
     "@tailwindcss/vite": "^4.3.3",
+    "@testing-library/react": "^16.3.3",
     "@types/babel__core": "^7.20.5",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.17",
