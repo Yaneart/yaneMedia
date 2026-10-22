@@ -1,5 +1,8 @@
 # Private TorrServer
 
+Operator procedures: [эксплуатация, диагностика, обновление, rollback и отключение](OPERATIONS.md).
+Browser/codec evidence and limits: [acceptance](ACCEPTANCE.md).
+
 The image downloads the pinned `MatriX.146.2` GStreamer binary verified by `T-002` and validates
 its SHA-256 during the build. GStreamer routes are not used by the product playback path.
 
