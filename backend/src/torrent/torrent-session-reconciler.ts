@@ -13,6 +13,7 @@ import { TorrServerClient } from './torrserver.client';
 import { TorrentStreamGateway } from './torrent-stream.gateway';
 import { UnsupportedTorrentMedia } from './torrent-media-policy';
 import type { EngineFileKey } from './torrent-engine.port';
+import { TorrentMetrics } from './torrent-metrics';
 
 const SWEEP_MS = 60_000;
 const METADATA_POLL_MS = 2_000;
@@ -35,6 +36,7 @@ export class TorrentSessionReconciler implements OnModuleInit, BeforeApplication
     private readonly repository: TorrentSessionRepository,
     private readonly engine: TorrServerClient,
     private readonly gateway: TorrentStreamGateway,
+    private readonly metrics: TorrentMetrics,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -341,21 +343,30 @@ export class TorrentSessionReconciler implements OnModuleInit, BeforeApplication
     owned?: Set<EngineTorrentKey>,
     signal = AbortSignal.timeout(10_000),
   ): Promise<void> {
-    await this.gateway.stop(session.sessionId);
-    if (engineKey) {
-      const present = owned
-        ? owned.has(engineKey)
-        : (await this.engine.listOwned(signal)).includes(engineKey);
-      if (present && !(await this.repository.hasOtherEngineReference(session.sessionId, engineKey)))
-        await this.engine.drop(engineKey, signal);
-      await this.repository.clearEngine(session.sessionId);
+    try {
+      await this.gateway.stop(session.sessionId);
+      if (engineKey) {
+        const present = owned
+          ? owned.has(engineKey)
+          : (await this.engine.listOwned(signal)).includes(engineKey);
+        if (
+          present &&
+          !(await this.repository.hasOtherEngineReference(session.sessionId, engineKey))
+        )
+          await this.engine.drop(engineKey, signal);
+        await this.repository.clearEngine(session.sessionId);
+      }
+      await this.repository.transition(
+        session.sessionId,
+        session.version,
+        session.state === 'stopping' ? 'stopped' : 'expired',
+        { cleanupAfter: null },
+        now,
+      );
+      this.metrics.cleanupResult('success');
+    } catch (error) {
+      this.metrics.cleanupResult('deferred');
+      throw error;
     }
-    await this.repository.transition(
-      session.sessionId,
-      session.version,
-      session.state === 'stopping' ? 'stopped' : 'expired',
-      { cleanupAfter: null },
-      now,
-    );
   }
 }

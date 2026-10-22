@@ -3,6 +3,7 @@ import { constants, createReadStream } from 'node:fs';
 import { open, readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
+import { Transform } from 'node:stream';
 import { HttpException, Injectable, type BeforeApplicationShutdown } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import {
@@ -12,6 +13,7 @@ import {
 } from './torrent-hls-playlist';
 import { TorrentSessionRepository } from './torrent-session.repository';
 import { TorrentStreamGateway } from './torrent-stream.gateway';
+import { TorrentMetrics } from './torrent-metrics';
 
 type Manifest = {
   generation: number;
@@ -38,6 +40,7 @@ export class TorrentHlsService implements BeforeApplicationShutdown {
   constructor(
     private readonly repository: TorrentSessionRepository,
     private readonly gateway: TorrentStreamGateway,
+    private readonly metrics: TorrentMetrics,
   ) {}
 
   async serve(
@@ -89,6 +92,7 @@ export class TorrentHlsService implements BeforeApplicationShutdown {
         sendPlaylist(
           response,
           `#EXTM3U\n#EXT-X-VERSION:7\n#EXT-X-STREAM-INF:BANDWIDTH=10000000\n${base}/media/${manifest.playlistRef}.m3u8\n`,
+          this.metrics,
         );
         return;
       }
@@ -118,7 +122,7 @@ export class TorrentHlsService implements BeforeApplicationShutdown {
         }
         if (playlist.ended && this.gateway.isCompleted(sessionId, session.generation))
           lines.push('#EXT-X-ENDLIST');
-        sendPlaylist(response, `${lines.join('\n')}\n`);
+        sendPlaylist(response, `${lines.join('\n')}\n`, this.metrics);
         return;
       }
       const filename =
@@ -141,7 +145,13 @@ export class TorrentHlsService implements BeforeApplicationShutdown {
         const timer = setTimeout(() => abort.abort(), 30_000);
         response.once('close', () => abort.abort());
         try {
-          await pipeline(createReadStream(file, { fd: fd.fd, autoClose: false }), response, {
+          const count = new Transform({
+            transform: (chunk: Buffer, _encoding, callback) => {
+              this.metrics.proxiedBytes(chunk.length);
+              callback(null, chunk);
+            },
+          });
+          await pipeline(createReadStream(file, { fd: fd.fd, autoClose: false }), count, response, {
             signal: abort.signal,
           });
         } catch {
@@ -217,7 +227,8 @@ export class TorrentHlsService implements BeforeApplicationShutdown {
   }
 }
 
-function sendPlaylist(response: Response, body: string): void {
+function sendPlaylist(response: Response, body: string, metrics: TorrentMetrics): void {
   response.setHeader('Content-Type', 'application/vnd.apple.mpegurl; charset=utf-8');
   response.end(body);
+  metrics.proxiedBytes(Buffer.byteLength(body));
 }

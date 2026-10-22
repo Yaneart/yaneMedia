@@ -293,17 +293,30 @@ describe('torrent configuration and readiness', () => {
     }
   });
 
-  it('keeps liveness independent and checks TorrServer only for readiness', async () => {
+  it('keeps core readiness available when torrent playback is degraded', async () => {
     const checkReady = jest.fn().mockResolvedValue(undefined);
     const controller = new HealthController(
-      { checkReady } as unknown as TorrServerClient,
+      { enabled: true, checkReady } as unknown as TorrServerClient,
       { checkReady: jest.fn().mockResolvedValue(undefined) } as never,
     );
     expect(controller.check()).toEqual({ status: 'ok' });
-    await expect(controller.ready()).resolves.toEqual({ status: 'ready' });
+    await expect(controller.ready()).resolves.toEqual({
+      status: 'ready',
+      features: { torrent: { status: 'ready' } },
+    });
     expect(checkReady).toHaveBeenCalledTimes(1);
 
-    checkReady.mockRejectedValueOnce(new Error('private upstream details'));
-    await expect(controller.ready()).rejects.toMatchObject({ status: 503 });
+    const degraded = new HealthController(
+      {
+        enabled: true,
+        checkReady: jest.fn().mockRejectedValue(new Error('private upstream details')),
+      } as unknown as TorrServerClient,
+      { checkReady: jest.fn().mockResolvedValue(undefined) } as never,
+    );
+    await expect(degraded.ready()).resolves.toEqual({
+      status: 'ready',
+      features: { torrent: { status: 'degraded' } },
+    });
+    await expect(degraded.torrentReady()).rejects.toMatchObject({ status: 503 });
   });
 });

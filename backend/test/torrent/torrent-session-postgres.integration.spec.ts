@@ -1,3 +1,4 @@
+import { TorrentMetrics } from '../../src/torrent/torrent-metrics';
 import { ConfigService } from '@nestjs/config';
 import { randomBytes } from 'node:crypto';
 import { AuthRepository } from '../../src/auth/auth.repository';
@@ -15,6 +16,7 @@ import type { EngineTorrentKey } from '../../src/torrent/torrent-engine.port';
 const describePostgres = process.env.TORRENT_POSTGRES_TEST === '1' ? describe : describe.skip;
 
 describePostgres('torrent session PostgreSQL persistence', () => {
+  const metrics = new TorrentMetrics();
   let database: DatabaseService;
   let repository: TorrentSessionRepository;
   const owners: string[] = [];
@@ -22,7 +24,7 @@ describePostgres('torrent session PostgreSQL persistence', () => {
   beforeAll(async () => {
     database = new DatabaseService(new ConfigService({ DATABASE_URL: process.env.DATABASE_URL }));
     await database.onModuleInit();
-    repository = new TorrentSessionRepository(database);
+    repository = new TorrentSessionRepository(database, metrics);
     for (let i = 0; i < 3; i += 1) {
       const token = randomBytes(6).toString('hex');
       const [user] = await database.db
@@ -133,6 +135,8 @@ describePostgres('torrent session PostgreSQL persistence', () => {
       sizeBytes: 100,
     };
     const published = await repository.replaceFiles(pending.sessionId, pending.version, [file]);
+    expect(await metrics.registry.metrics()).toContain('torrent_time_to_metadata_seconds_count 1');
+    expect(await repository.countByState()).toContainEqual({ state: 'probing', count: 1 });
     expect(published.state).toBe('probing');
     expect(published.selectedFileRef).toBe(file.fileRef);
     expect(await repository.listFiles(pending.sessionId)).toEqual([
@@ -142,6 +146,7 @@ describePostgres('torrent session PostgreSQL persistence', () => {
       repository.replaceFiles(pending.sessionId, pending.version, [file]),
     ).rejects.toBeInstanceOf(TorrentSessionConflict);
     expect(await repository.listFiles(pending.sessionId)).toHaveLength(1);
+    expect(await metrics.registry.metrics()).toContain('torrent_time_to_metadata_seconds_count 1');
 
     const probe = {
       fileRef: file.fileRef,
@@ -201,6 +206,19 @@ describePostgres('torrent session PostgreSQL persistence', () => {
     expect(started.session.state).toBe('preparing');
     expect(started.session.playbackPositionSeconds).toBe(1.5);
     expect((await repository.beginPlayback(...command)).replay).toBe(true);
+    const ready = await repository.transition(pending.sessionId, started.session.version, 'ready');
+    await expect(
+      repository.transition(pending.sessionId, started.session.version, 'ready'),
+    ).rejects.toBeInstanceOf(TorrentSessionConflict);
+    expect(await metrics.registry.metrics()).toContain(
+      'torrent_time_to_first_frame_ready_seconds_count 1',
+    );
+    await repository.transition(pending.sessionId, ready.version, 'awaiting_playback', {
+      failureCode: 'TORRENT_TRANSCODE_FAILED',
+    });
+    expect(await metrics.registry.metrics()).toContain(
+      'torrent_failures_total{code="TORRENT_TRANSCODE_FAILED"} 1',
+    );
     await expect(
       repository.beginPlayback(
         owners[0],

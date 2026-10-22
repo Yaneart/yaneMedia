@@ -18,6 +18,7 @@ import {
   isVisibleTorrentSession,
 } from './torrent-session.state';
 import type { TorrentProbe } from './torrent-media-policy';
+import { TorrentMetrics } from './torrent-metrics';
 
 const HOUR_MS = 60 * 60 * 1000;
 const IDLE_MS = 20 * 60 * 1000;
@@ -67,7 +68,20 @@ export interface ReserveTorrentSession {
 
 @Injectable()
 export class TorrentSessionRepository {
-  constructor(private readonly database: DatabaseService) {}
+  constructor(
+    private readonly database: DatabaseService,
+    private readonly metrics: TorrentMetrics,
+  ) {}
+
+  async countByState(): Promise<Array<{ state: TorrentSessionState; count: number }>> {
+    return this.database.db.transaction(async (tx) => {
+      await tx.execute(sql`set local statement_timeout = '2000ms'`);
+      return tx
+        .select({ state: torrentSessions.state, count: count() })
+        .from(torrentSessions)
+        .groupBy(torrentSessions.state);
+    });
+  }
 
   async findReplay(
     ownerId: string,
@@ -323,13 +337,15 @@ export class TorrentSessionRepository {
     } = {},
     now = new Date(),
   ): Promise<TorrentSessionRow> {
-    return this.database.db.transaction(async (tx) => {
+    let preparingSince: Date | undefined;
+    const updated = await this.database.db.transaction(async (tx) => {
       const [current] = await tx
         .select()
         .from(torrentSessions)
         .where(eq(torrentSessions.sessionId, sessionId))
         .for('update');
       if (!current) throw new Error('Torrent session not found');
+      if (current.state === 'preparing') preparingSince = current.updatedAt;
       if (current.version !== expectedVersion)
         throw new TorrentSessionConflict('TORRENT_SESSION_CHANGED', current.version);
       if (!canTransitionTorrentSession(current.state, to))
@@ -378,6 +394,11 @@ export class TorrentSessionRepository {
       }
       return updated;
     });
+    // Observe only after the transaction commits; failed version races produce no events.
+    if (patch.failureCode) this.metrics.failure(patch.failureCode);
+    if (to === 'ready' && preparingSince)
+      this.metrics.firstFrameReady(now.getTime() - preparingSince.getTime());
+    return updated;
   }
 
   async bindEngine(sessionId: string, engineKey: EngineTorrentKey): Promise<void> {
@@ -435,7 +456,8 @@ export class TorrentSessionRepository {
       )
     )
       throw new Error('Invalid torrent file mapping');
-    return this.database.db.transaction(async (tx) => {
+    let createdAt: Date | undefined;
+    const updated = await this.database.db.transaction(async (tx) => {
       const [session] = await tx
         .select()
         .from(torrentSessions)
@@ -443,6 +465,7 @@ export class TorrentSessionRepository {
         .for('update');
       if (!session || session.version !== expectedVersion || session.state !== 'fetching_metadata')
         throw new TorrentSessionConflict('TORRENT_SESSION_CHANGED', session?.version);
+      createdAt = session.createdAt;
       if (session.expiresAt <= now || session.idleExpiresAt <= now)
         throw new TorrentSessionConflict('TORRENT_SESSION_CHANGED', session.version);
       if (files.length === 0) throw new Error('Torrent video file mapping is empty');
@@ -460,6 +483,8 @@ export class TorrentSessionRepository {
         .returning();
       return updated;
     });
+    if (createdAt) this.metrics.metadataReady(now.getTime() - createdAt.getTime());
+    return updated;
   }
 
   async listFiles(sessionId: string): Promise<

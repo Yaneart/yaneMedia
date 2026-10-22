@@ -1,3 +1,4 @@
+import { TorrentMetrics } from '../../src/torrent/torrent-metrics';
 import { createServer } from 'node:http';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -128,7 +129,8 @@ describe('torrent HLS gateway', () => {
       isCompleted: jest.fn().mockReturnValue(false),
       stop,
     } as unknown as TorrentStreamGateway;
-    const service = new TorrentHlsService(repository, gateway);
+    const metrics = new TorrentMetrics();
+    const service = new TorrentHlsService(repository, gateway, metrics);
     const app = express();
     const route =
       (kind: 'master' | 'media' | 'init' | 'segment') =>
@@ -174,6 +176,10 @@ describe('torrent HLS gateway', () => {
       const segmentResponse = await get(`/segments/${segmentRef}`);
       expect(segmentResponse.headers.get('content-type')).toBe('video/mp4');
       expect(await segmentResponse.text()).toBe('segment');
+      expect(
+        (await metrics.registry.getSingleMetric('torrent_hls_bytes_proxied_total').get()).values[0]
+          .value,
+      ).toBe(Buffer.byteLength(master) + Buffer.byteLength(media) + 11);
       expect(recordViewerActivity).toHaveBeenCalledTimes(4);
       expect((await get(`/segments/${segmentRef}`, 'other')).status).toBe(404);
       expect((await get(`/segments/${segmentRef}`, 'owner', { Range: 'bytes=0-1' })).status).toBe(

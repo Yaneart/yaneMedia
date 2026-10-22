@@ -28,11 +28,13 @@ import { TorrentDiscoveryClient } from './torrent-discovery.client';
 import { TORRENT_DISCOVERY_PORT } from './torrent-discovery.port';
 import { TorrentDiscoveryController } from './torrent-discovery.controller';
 import { TorrentDiscoveryService } from './torrent-discovery.service';
+import { TorrentMetrics } from './torrent-metrics';
 
 @Module({
   imports: [AppConfigModule, DatabaseModule, AuthModule, MediaModule],
   controllers: [TorrentInputController, TorrentHlsController, TorrentDiscoveryController],
   providers: [
+    TorrentMetrics,
     {
       provide: TORRSERVER_CONFIG,
       inject: [ConfigService],
@@ -62,6 +64,7 @@ import { TorrentDiscoveryService } from './torrent-discovery.service';
     TorrentHlsService,
   ],
   exports: [
+    TorrentMetrics,
     TORRSERVER_CONFIG,
     TorrServerClient,
     TORRENT_DISCOVERY_PORT,

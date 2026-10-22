@@ -72,3 +72,43 @@ References: [Docker network isolation](https://docs.docker.com/reference/compose
 [setpriv capability removal](https://man7.org/linux/man-pages/man1/setpriv.1.html),
 [FFmpeg demuxer controls](https://ffmpeg.org/ffmpeg-formats.html), and
 [input protocol controls](https://ffmpeg.org/ffmpeg-protocols.html).
+
+# Torrent observability
+
+`GET /api/v1/health` remains process liveness. `GET /api/v1/health/ready` returns HTTP 200
+with `{ data: { status: "ready", features: { torrent: { status } } } }`, where torrent status
+is `ready`, `disabled`, or `degraded`. An optional torrent dependency cannot remove the main
+application from service. This does not add a database or catalog dependency probe.
+
+`GET /api/v1/health/ready/torrent` is the strict feature probe: HTTP 503 with a fixed
+`TORRENT_UNAVAILABLE` code on degradation, HTTP 200 for `ready` or intentionally `disabled`.
+Enabled checks run TorrServer and FFmpeg/FFprobe checks together, with existing 5/3-second
+deadlines. Concurrent requests share one probe; results, including failures, are cached for 5 seconds.
+
+`GET /api/v1/health/torrent-metrics` serves Prometheus text directly, without the JSON `data`
+wrapper. It exposes aggregate operational data and needs no account cookie. Configure production
+ingress access for the monitoring audience. Responses use `Cache-Control: no-store`.
+
+| Metric                                      | Meaning / labels                                                                                                     |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `torrent_sessions`                          | Database counts by fixed `state`, including retained stopped/expired tombstones                                      |
+| `torrent_time_to_metadata_seconds`          | Successful creation to committed video metadata, histogram                                                           |
+| `torrent_time_to_first_frame_ready_seconds` | Playback preparation to published init and first complete HLS segment, histogram                                     |
+| `torrent_failures_total`                    | Committed session and playback recovery failures by allowlisted `code`; unknown values collapse to `TORRENT_UNKNOWN` |
+| `torrent_active_transcodes`                 | Running FFmpeg workers by `mode="copy"` or `"transcode"`; excludes completed artifacts, probes and reservations      |
+| `torrent_hls_bytes_proxied_total`           | Playlist and media payload bytes passed into the response pipeline, including partial requests                       |
+| `torrent_cleanup_total`                     | Stop/expiry cleanup attempts by `result="success"` or `"deferred"`; retries count separately                         |
+
+First-frame readiness is a server-side proxy, not browser rendering or search-to-frame latency.
+Byte counts exclude headers and engine input, and do not prove client delivery. Failures exclude
+HTTP validation/rate-limit denials that do not change a session. Counters and histograms reset on
+backend restart; session gauges come from PostgreSQL. One backend replica remains required by
+the existing abuse budgets. No default process metrics, user/session IDs, media titles, hashes,
+magnets, filenames, tracker labels, peer IPs, raw errors or upstream URLs are exported.
+
+Database counts use one coalesced snapshot per 10 seconds with a 2-second SQL statement timeout.
+A failed snapshot returns fixed HTTP 503 `METRICS_UNAVAILABLE`, never stale counts as success.
+Active workers and process counters are sampled on each scrape. A 15-second scrape interval is
+suitable for this local setup. Histogram units, counter suffixes and finite labels follow
+[Prometheus conventions](https://prometheus.io/docs/practices/naming/); the dedicated registry uses
+the maintained [Node client](https://github.com/prometheus/client_js).

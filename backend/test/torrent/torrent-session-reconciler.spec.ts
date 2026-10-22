@@ -1,3 +1,4 @@
+import { TorrentMetrics } from '../../src/torrent/torrent-metrics';
 import { TorrentSessionReconciler } from '../../src/torrent/torrent-session-reconciler';
 import type { TorrentSessionRepository } from '../../src/torrent/torrent-session.repository';
 import type { TorrServerClient } from '../../src/torrent/torrserver.client';
@@ -25,6 +26,7 @@ const session = (state: TorrentSessionRow['state']): TorrentSessionRow => ({
 });
 
 describe('torrent session reconciliation', () => {
+  const metrics = new TorrentMetrics();
   const listForReconciliation = jest.fn<
     ReturnType<TorrentSessionRepository['listForReconciliation']>,
     Parameters<TorrentSessionRepository['listForReconciliation']>
@@ -71,6 +73,7 @@ describe('torrent session reconciliation', () => {
   } as never;
 
   beforeEach(() => {
+    metrics.registry.resetMetrics();
     jest.clearAllMocks();
     listForReconciliation.mockReset();
     hasOtherEngineReference.mockResolvedValue(false);
@@ -86,7 +89,7 @@ describe('torrent session reconciliation', () => {
     const stopping = session('stopping');
     findForCleanup.mockResolvedValue({ session: stopping, engineKey: key });
     listOwned.mockResolvedValue([key]);
-    const reconciler = new TorrentSessionReconciler(repository, engine, gateway);
+    const reconciler = new TorrentSessionReconciler(repository, engine, gateway, metrics);
     await reconciler.stop(stopping.ownerId, stopping.sessionId);
     expect(gateway.stop).toHaveBeenCalledWith(stopping.sessionId);
     expect(drop).toHaveBeenCalledWith(key, expect.any(AbortSignal));
@@ -107,7 +110,7 @@ describe('torrent session reconciliation', () => {
     findForCleanup.mockResolvedValue({ session: stopping, engineKey: key });
     listOwned.mockResolvedValue([key]);
     hasOtherEngineReference.mockResolvedValue(true);
-    await new TorrentSessionReconciler(repository, engine, gateway).stop(
+    await new TorrentSessionReconciler(repository, engine, gateway, metrics).stop(
       stopping.ownerId,
       stopping.sessionId,
     );
@@ -119,12 +122,16 @@ describe('torrent session reconciliation', () => {
     const stopping = session('stopping');
     findForCleanup.mockResolvedValue({ session: stopping, engineKey: key });
     listOwned.mockRejectedValueOnce(new Error('unavailable')).mockResolvedValueOnce([key]);
-    const reconciler = new TorrentSessionReconciler(repository, engine, gateway);
+    const reconciler = new TorrentSessionReconciler(repository, engine, gateway, metrics);
     await reconciler.stop(stopping.ownerId, stopping.sessionId);
     expect(clearEngine).not.toHaveBeenCalled();
+    expect(await metrics.registry.metrics()).toContain(
+      'torrent_cleanup_total{result="deferred"} 1',
+    );
     expect(transition).not.toHaveBeenCalled();
     listForReconciliation.mockResolvedValue([{ session: stopping, engineKey: key }]);
     await reconciler.sweep(now);
+    expect(await metrics.registry.metrics()).toContain('torrent_cleanup_total{result="success"} 1');
     expect(transition).toHaveBeenCalledWith(
       stopping.sessionId,
       stopping.version,
@@ -138,7 +145,7 @@ describe('torrent session reconciliation', () => {
     const expired = { ...session('ready'), expiresAt: new Date(now.getTime() - 1) };
     listOwned.mockResolvedValue([key]);
     listForReconciliation.mockResolvedValue([{ session: expired, engineKey: key }]);
-    await new TorrentSessionReconciler(repository, engine, gateway).sweep(now);
+    await new TorrentSessionReconciler(repository, engine, gateway, metrics).sweep(now);
     expect(transition.mock.calls.map((call) => call[2])).toEqual(['expiring', 'expired']);
     expect(drop).toHaveBeenCalledWith(key, expect.any(AbortSignal));
     expect(clearEngine).toHaveBeenCalledWith(expired.sessionId);
@@ -149,7 +156,7 @@ describe('torrent session reconciliation', () => {
     listForReconciliation
       .mockResolvedValueOnce([{ session: session('ready'), engineKey: key }])
       .mockResolvedValue([]);
-    const reconciler = new TorrentSessionReconciler(repository, engine, gateway);
+    const reconciler = new TorrentSessionReconciler(repository, engine, gateway, metrics);
     await reconciler.sweep(now);
     expect(transition).toHaveBeenCalledWith(
       session('ready').sessionId,
@@ -173,7 +180,7 @@ describe('torrent session reconciliation', () => {
       totalBytes: 100,
       files: [{ key: 1, path: 'film.mkv', length: 100 }],
     });
-    await new TorrentSessionReconciler(repository, engine, gateway).pollMetadata(now);
+    await new TorrentSessionReconciler(repository, engine, gateway, metrics).pollMetadata(now);
     const calls = replaceFiles.mock.calls as unknown as Array<
       Parameters<TorrentSessionRepository['replaceFiles']>
     >;
@@ -199,7 +206,7 @@ describe('torrent session reconciliation', () => {
     listForReconciliation
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([{ session: session('ready'), engineKey: key }]);
-    const reconciler = new TorrentSessionReconciler(repository, engine, gateway);
+    const reconciler = new TorrentSessionReconciler(repository, engine, gateway, metrics);
     await reconciler.sweep(now);
     await reconciler.sweep(new Date(now.getTime() + 1_000));
     expect(hasGeneration).toHaveBeenCalledWith(session('ready').sessionId, 1);
@@ -219,7 +226,7 @@ describe('torrent session reconciliation', () => {
         engineKey: key,
       },
     ]);
-    await new TorrentSessionReconciler(repository, engine, gateway).pollMetadata(now);
+    await new TorrentSessionReconciler(repository, engine, gateway, metrics).pollMetadata(now);
     expect(getStatus).not.toHaveBeenCalled();
     expect(transition).toHaveBeenCalledWith(
       session('fetching_metadata').sessionId,

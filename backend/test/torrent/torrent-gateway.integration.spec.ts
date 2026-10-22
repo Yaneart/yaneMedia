@@ -116,6 +116,7 @@ describeGateway('FFmpeg gateway with a local seekable fixture', () => {
       const probe = await gateway.probe(source, 'torrent_file_safe');
       expect(probe.audioTracks).toHaveLength(1);
       await gateway.start(sessionId, 1, source, probe, probe.audioTracks[0], 0);
+      expect(gateway.activeTranscodes()).toEqual({ copy: 1, transcode: 0 });
       await gateway.waitReady(sessionId, 1, AbortSignal.timeout(30_000));
       expect(gateway.isCompleted(sessionId, 1)).toBe(false);
       expect((await stat(join(directory, '1', 'init.mp4'))).size).toBeGreaterThan(0);
@@ -129,5 +130,6 @@ describeGateway('FFmpeg gateway with a local seekable fixture', () => {
       await rm(root, { recursive: true, force: true });
     }
     await expect(stat(directory)).rejects.toMatchObject({ code: 'ENOENT' });
+    expect(gateway.activeTranscodes()).toEqual({ copy: 0, transcode: 0 });
   }, 45_000);
 });

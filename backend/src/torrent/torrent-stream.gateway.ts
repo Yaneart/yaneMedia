@@ -55,6 +55,14 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
 
   constructor(private readonly engine: TorrServerClient) {}
 
+  activeTranscodes(): { copy: number; transcode: number } {
+    const workers = [...this.workers.values()];
+    return {
+      copy: workers.filter((worker) => !worker.videoTranscode).length,
+      transcode: workers.filter((worker) => worker.videoTranscode).length,
+    };
+  }
+
   async checkReady(): Promise<void> {
     if (!this.engine.enabled) return;
     await Promise.all(['ffmpeg', 'ffprobe'].map((binary) => this.run(binary, ['-version'], 3_000)));
