@@ -5,6 +5,12 @@ import { DatabaseModule } from '../database/database.module';
 import { AuthModule } from '../auth/auth.module';
 import { MediaModule } from '../media/media.module';
 import { TorrentAuthGuard } from './torrent-auth.guard';
+import {
+  TorrentBudgets,
+  TorrentOriginGuard,
+  TorrentRateGuard,
+  TorrentAdmissionInterceptor,
+} from './torrent-security';
 import { TorrentInputController } from './torrent-input.controller';
 import { TorrentInputService } from './torrent-input.service';
 import { TorrentPlaybackService } from './torrent-playback.service';
@@ -46,6 +52,10 @@ import { TorrentDiscoveryService } from './torrent-discovery.service';
     TorrentSessionRepository,
     TorrentSessionReconciler,
     TorrentAuthGuard,
+    TorrentBudgets,
+    TorrentOriginGuard,
+    TorrentRateGuard,
+    TorrentAdmissionInterceptor,
     TorrentInputService,
     TorrentPlaybackService,
     TorrentStreamGateway,

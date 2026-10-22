@@ -85,6 +85,36 @@ describe('torrent input validation', () => {
     ).toThrow(TorrentInputError);
   });
 
+  it('rejects traversal hidden in legacy aliases and symlinks', () => {
+    const hostile = [
+      { ...basicInfo, name: '../escape', 'name.utf-8': 'movie.mkv' },
+      { ...basicInfo, 'symlink path': ['target'] },
+      {
+        name: 'root',
+        'piece length': 16,
+        pieces: 'a'.repeat(20),
+        files: [{ length: 10, path: ['..', 'escape.mkv'], 'path.utf-8': ['movie.mkv'] }],
+      },
+    ];
+    for (const info of hostile)
+      expect(() => validateMetainfo(metainfo(info))).toThrow(TorrentInputError);
+  });
+
+  it('rejects non-ASCII numeric tokens, malformed UTF-8 and excessive nesting', () => {
+    const valid = metainfo(basicInfo);
+    const number = valid.indexOf(Buffer.from('i10e'));
+    const hostile = Buffer.from(valid);
+    hostile[number + 1] = 0xb1; // ASCII decoding would mask this into the digit 1.
+    expect(() => validateMetainfo(hostile)).toThrow(TorrentInputError);
+    const brokenName = Buffer.from(valid);
+    brokenName[valid.indexOf(Buffer.from('movie.mkv'))] = 0xff;
+    expect(() => validateMetainfo(brokenName)).toThrow(TorrentInputError);
+    expect(() => validateMetainfo(Buffer.from('l'.repeat(34) + 'e'.repeat(34)))).toThrow(
+      TorrentInputError,
+    );
+    expect(() => validateMetainfo(Buffer.alloc(2 * 1024 * 1024 + 1))).toThrow(TorrentInputError);
+  });
+
   it.each([
     { ...basicInfo, length: -1 },
     { ...basicInfo, pieces: 'short' },

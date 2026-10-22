@@ -52,7 +52,14 @@ export function parseTorrentProbe(fileRef: string, raw: unknown): TorrentProbe {
     throw new UnsupportedTorrentMedia();
   const width = Number(video.width);
   const height = Number(video.height);
-  if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width < 16 || height < 16)
+  if (
+    !Number.isSafeInteger(width) ||
+    !Number.isSafeInteger(height) ||
+    width < 16 ||
+    height < 16 ||
+    width > 4096 ||
+    height > 2160
+  )
     throw new UnsupportedTorrentMedia();
   const rate = (typeof video.avg_frame_rate === 'string' ? video.avg_frame_rate : '')
     .split('/')

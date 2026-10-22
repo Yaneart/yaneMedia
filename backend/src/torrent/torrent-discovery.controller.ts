@@ -8,19 +8,28 @@ import {
   Post,
   Query,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/auth-request';
 import { CsrfGuard } from '../auth/guards/csrf.guard';
 import { NoStore } from '../platform/http/cache-policy';
 import { TorrentAuthGuard } from './torrent-auth.guard';
+import {
+  TorrentOriginGuard,
+  TorrentRateGuard,
+  TorrentAdmissionInterceptor,
+  TorrentLimit,
+} from './torrent-security';
 import { TorrentDiscoveryService } from './torrent-discovery.service';
 
 @Controller('torrent-discovery')
-@UseGuards(TorrentAuthGuard, CsrfGuard)
+@UseGuards(TorrentOriginGuard, TorrentAuthGuard, CsrfGuard, TorrentRateGuard)
+@UseInterceptors(TorrentAdmissionInterceptor)
 export class TorrentDiscoveryController {
   constructor(private readonly discovery: TorrentDiscoveryService) {}
 
+  @TorrentLimit('discovery')
   @Get('candidates')
   @NoStore()
   search(@CurrentUser() user: AuthenticatedUser, @Query() query: Record<string, unknown>) {
@@ -37,6 +46,7 @@ export class TorrentDiscoveryController {
     );
   }
 
+  @TorrentLimit('create')
   @Post('from-candidate')
   @HttpCode(202)
   @NoStore()

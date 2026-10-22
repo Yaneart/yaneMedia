@@ -7,18 +7,27 @@ import {
   Req,
   Res,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/auth-request';
 import { TorrentAuthGuard } from './torrent-auth.guard';
+import {
+  TorrentOriginGuard,
+  TorrentRateGuard,
+  TorrentAdmissionInterceptor,
+  TorrentLimit,
+} from './torrent-security';
 import { TorrentHlsService } from './torrent-hls.service';
 
 @Controller('torrent-sessions/:sessionId/hls')
-@UseGuards(TorrentAuthGuard)
+@UseGuards(TorrentOriginGuard, TorrentAuthGuard, TorrentRateGuard)
+@UseInterceptors(TorrentAdmissionInterceptor)
 export class TorrentHlsController {
   constructor(private readonly hls: TorrentHlsService) {}
 
+  @TorrentLimit('hls')
   @Get('master.m3u8')
   @HlsHeaders()
   master(
@@ -30,6 +39,7 @@ export class TorrentHlsController {
     return this.hls.serve(user.id, id, 'master', undefined, req, res);
   }
 
+  @TorrentLimit('hls')
   @Get('media/:playlistRef.m3u8')
   @HlsHeaders()
   media(
@@ -42,6 +52,7 @@ export class TorrentHlsController {
     return this.hls.serve(user.id, id, 'media', ref, req, res);
   }
 
+  @TorrentLimit('hls')
   @Get('init/:initRef.mp4')
   @HlsHeaders()
   init(
@@ -54,6 +65,7 @@ export class TorrentHlsController {
     return this.hls.serve(user.id, id, 'init', ref, req, res);
   }
 
+  @TorrentLimit('hls')
   @Get('segments/:segmentRef.m4s')
   @HlsHeaders()
   segment(

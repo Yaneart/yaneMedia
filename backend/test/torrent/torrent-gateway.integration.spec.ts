@@ -4,14 +4,50 @@ import { createReadStream } from 'node:fs';
 import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createServer } from 'node:http';
+import { Readable } from 'node:stream';
 import type { EngineFileKey, EngineTorrentKey } from '../../src/torrent/torrent-engine.port';
 import { TorrentStreamGateway } from '../../src/torrent/torrent-stream.gateway';
 import { parseTorrentPlaylist } from '../../src/torrent/torrent-hls-playlist';
 import type { TorrServerClient } from '../../src/torrent/torrserver.client';
+import { UnsupportedTorrentMedia } from '../../src/torrent/torrent-media-policy';
 
 const describeGateway = process.env.TORRENT_GATEWAY_TEST === '1' ? describe : describe.skip;
 
 describeGateway('FFmpeg gateway with a local seekable fixture', () => {
+  it('rejects a playlist disguised as video without fetching its internal HTTP target', async () => {
+    let requests = 0;
+    const canary = createServer((_req, res) => {
+      requests++;
+      res.end('private');
+    });
+    await new Promise<void>((resolve) => canary.listen(0, '127.0.0.1', resolve));
+    const address = canary.address();
+    if (!address || typeof address === 'string') throw new Error('Missing canary address');
+    const body = Buffer.from(
+      `#EXTM3U\n#EXT-X-TARGETDURATION:2\n#EXTINF:2,\nhttp://127.0.0.1:${address.port}/private.ts\n#EXT-X-ENDLIST\n`,
+    );
+    const engine = {
+      enabled: true,
+      openFileStream: jest.fn((_key, _file, range: { offset: number }) =>
+        Promise.resolve({ body: Readable.from(body.subarray(range.offset)) }),
+      ),
+    } as unknown as TorrServerClient;
+    const gateway = new TorrentStreamGateway(engine);
+    try {
+      await expect(
+        gateway.probe(
+          { key: 'a'.repeat(40) as EngineTorrentKey, file: 1 as EngineFileKey, size: body.length },
+          'file',
+        ),
+      ).rejects.toBeInstanceOf(UnsupportedTorrentMedia);
+      expect(requests).toBe(0);
+    } finally {
+      await gateway.beforeApplicationShutdown();
+      await new Promise<void>((resolve) => canary.close(() => resolve()));
+    }
+  });
+
   it('probes, publishes a complete fMP4 segment, and removes artifacts', async () => {
     const root = await mkdtemp(join(tmpdir(), 'torrent-gateway-test-'));
     const file = join(root, 'fixture.mp4');

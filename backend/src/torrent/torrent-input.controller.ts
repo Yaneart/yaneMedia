@@ -22,6 +22,12 @@ import type { AuthenticatedUser } from '../auth/auth-request';
 import { CsrfGuard } from '../auth/guards/csrf.guard';
 import { NoStore } from '../platform/http/cache-policy';
 import { TorrentAuthGuard } from './torrent-auth.guard';
+import {
+  TorrentOriginGuard,
+  TorrentRateGuard,
+  TorrentAdmissionInterceptor,
+  TorrentLimit,
+} from './torrent-security';
 import { TorrentInputService } from './torrent-input.service';
 import { TorrentPlaybackService } from './torrent-playback.service';
 import { TorrentSessionReconciler } from './torrent-session-reconciler';
@@ -32,7 +38,8 @@ const bad = (status: number, code: string): never => {
 };
 
 @Controller('torrent-sessions')
-@UseGuards(TorrentAuthGuard, CsrfGuard)
+@UseGuards(TorrentOriginGuard, TorrentAuthGuard, CsrfGuard, TorrentRateGuard)
+@UseInterceptors(TorrentAdmissionInterceptor)
 export class TorrentInputController {
   constructor(
     private readonly input: TorrentInputService,
@@ -40,18 +47,21 @@ export class TorrentInputController {
     private readonly reconciler: TorrentSessionReconciler,
   ) {}
 
+  @TorrentLimit('polling')
   @Get('active')
   @NoStore()
   getActive(@CurrentUser() user: AuthenticatedUser, @Query('mediaRef') mediaRef: string) {
     return this.input.getActiveForMedia(user.id, mediaRef);
   }
 
+  @TorrentLimit('polling')
   @Get(':sessionId')
   @NoStore()
   get(@CurrentUser() user: AuthenticatedUser, @Param('sessionId') sessionId: string) {
     return this.input.get(user.id, sessionId);
   }
 
+  @TorrentLimit('stop')
   @Delete(':sessionId')
   @HttpCode(204)
   @NoStore()
@@ -59,6 +69,7 @@ export class TorrentInputController {
     return this.reconciler.stop(user.id, sessionId);
   }
 
+  @TorrentLimit('write')
   @Put(':sessionId/file')
   @HttpCode(202)
   @NoStore()
@@ -70,6 +81,7 @@ export class TorrentInputController {
     return this.playbackService.selectFile(user.id, sessionId, body);
   }
 
+  @TorrentLimit('playback')
   @Post(':sessionId/playback')
   @HttpCode(202)
   @NoStore()
@@ -91,6 +103,7 @@ export class TorrentInputController {
     });
   }
 
+  @TorrentLimit('create')
   @Post('magnet')
   @HttpCode(202)
   @NoStore()
@@ -121,6 +134,7 @@ export class TorrentInputController {
     }
   }
 
+  @TorrentLimit('create')
   @Post('file')
   @HttpCode(202)
   @NoStore()

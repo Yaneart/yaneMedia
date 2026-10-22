@@ -6,6 +6,7 @@ import { AppModule } from './app.module';
 import { ApiResponseInterceptor } from './platform/http/api-response/api-response.interceptor';
 import { ApiExceptionFilter } from './platform/http/api-error/api-exception/api-exception.filter';
 import type { Express, NextFunction, Response, Request } from 'express';
+import type { Server } from 'node:http';
 import { AppLogger } from './platform/logging/app-logger';
 import {
   DiscoveryResponseMetricsInterceptor,
@@ -64,7 +65,10 @@ async function bootstrap() {
 
   const port = configService.getOrThrow<number>('PORT');
 
-  await app.listen(port);
+  const server = (await app.listen(port)) as Server;
+  // Bound incomplete headers/uploads, including multipart requests before controller code runs.
+  server.headersTimeout = 10_000;
+  server.requestTimeout = 30_000;
 }
 
 void bootstrap();

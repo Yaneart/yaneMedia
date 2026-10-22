@@ -192,7 +192,7 @@ export class TorrentInputService implements BeforeApplicationShutdown {
     }
     const user = this.attempts.get(ownerId) ?? [];
     const global = this.attempts.get('*') ?? [];
-    if (user.length >= 3 || global.length >= 20) throw this.error(429, 'RATE_LIMITED');
+    if (user.length >= 20 || global.length >= 20) throw this.error(429, 'RATE_LIMITED');
     user.push(now);
     global.push(now);
     this.attempts.set(ownerId, user);

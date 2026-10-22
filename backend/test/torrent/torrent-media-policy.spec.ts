@@ -74,4 +74,17 @@ describe('torrent FFmpeg probe policy', () => {
       }),
     ).toThrow(UnsupportedTorrentMedia);
   });
+
+  it('rejects excessive decoded dimensions before admitting a transcode', () => {
+    for (const dimensions of [
+      { width: 16384, height: 16384 },
+      { width: 1920, height: 65536 },
+    ])
+      expect(() =>
+        parseTorrentProbe('file', {
+          ...media,
+          streams: [{ ...media.streams[0], ...dimensions }, media.streams[1]],
+        }),
+      ).toThrow(UnsupportedTorrentMedia);
+  });
 });

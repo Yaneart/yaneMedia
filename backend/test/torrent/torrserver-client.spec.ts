@@ -3,6 +3,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { Readable } from 'node:stream';
 import { appConfigValidationSchema } from '../../src/config/config.module';
 import { HealthController } from '../../src/health/health.controller';
 import type {
@@ -209,6 +210,27 @@ describe('TorrServerClient', () => {
     const pending = client.listOwned(controller.signal);
     controller.abort();
     await expect(pending).rejects.toMatchObject({ code: 'aborted' });
+  });
+
+  it('closes a stalled upstream stream when its consumer disconnects', async () => {
+    let closed!: () => void;
+    const disconnected = new Promise<void>((resolve) => {
+      closed = resolve;
+    });
+    const client = await createClient((_req, res) => {
+      res.once('close', closed);
+      res.writeHead(206, { 'Content-Range': 'bytes 0-1023/1024', 'Content-Length': '1024' });
+      res.write('first bytes');
+    });
+    const stream = await client.openFileStream(
+      HASH as EngineTorrentKey,
+      1 as EngineFileKey,
+      { offset: 0 },
+      new AbortController().signal,
+    );
+    expect(stream.body).toBeInstanceOf(Readable);
+    (stream.body as Readable).destroy();
+    await disconnected;
   });
 });
 

@@ -76,7 +76,7 @@ export function validateMetainfo(input: Uint8Array): ValidatedMetainfo {
     if (start === 0x69) {
       const end = bytes.indexOf(0x65, offset);
       if (end < 0) return invalid();
-      const value = bytes.toString('ascii', offset, end);
+      const value = bytes.toString('latin1', offset, end);
       if (!/^(0|-?[1-9][0-9]*)$/.test(value)) return invalid();
       offset = end + 1;
       const number = Number(value);
@@ -116,7 +116,7 @@ export function validateMetainfo(input: Uint8Array): ValidatedMetainfo {
       if (end >= bytes.length || end - offset > 8) return invalid();
       end++;
     }
-    const lengthText = bytes.toString('ascii', offset - 1, end);
+    const lengthText = bytes.toString('latin1', offset - 1, end);
     if (!/^(0|[1-9][0-9]*)$/.test(lengthText)) return invalid();
     const length = Number(lengthText);
     offset = end + 1;
@@ -150,6 +150,13 @@ export function validateMetainfo(input: Uint8Array): ValidatedMetainfo {
     )
   )
     return invalid();
+  for (const key of ['comment', 'created by', 'encoding']) {
+    const value = root.get(key);
+    if (value !== undefined) {
+      if (!Buffer.isBuffer(value)) return invalid();
+      decode(value);
+    }
+  }
   const trackerUrls: string[] = [];
   let removedLocalTracker = false;
   const announce = root.get('announce');
@@ -191,6 +198,14 @@ export function validateMetainfo(input: Uint8Array): ValidatedMetainfo {
   const name = info.get('name.utf-8') ?? info.get('name');
   if (!Buffer.isBuffer(name)) return invalid();
   validatePart(decode(name));
+  for (const key of ['name', 'name.utf-8']) {
+    const value = info.get(key);
+    if (value !== undefined) {
+      if (!Buffer.isBuffer(value)) return invalid();
+      validatePart(decode(value));
+    }
+  }
+  if (info.has('attr') || info.has('symlink path')) return invalid();
   const pieceLength = info.get('piece length');
   const pieces = info.get('pieces');
   if (
@@ -213,10 +228,20 @@ export function validateMetainfo(input: Uint8Array): ValidatedMetainfo {
   if (files !== undefined) {
     if (!Array.isArray(files) || files.length === 0 || files.length > 500) return invalid();
     for (const file of files) {
-      if (!(file instanceof Map) || file.has('attr')) return invalid();
+      if (!(file instanceof Map) || file.has('attr') || file.has('symlink path')) return invalid();
       addLength(file.get('length'));
       const path = file.get('path.utf-8') ?? file.get('path');
       if (!Array.isArray(path) || path.length === 0 || path.length > 16) return invalid();
+      // Validate both aliases: engines may choose the legacy name/path instead of UTF-8.
+      for (const key of ['path', 'path.utf-8']) {
+        const alias = file.get(key);
+        if (alias === undefined) continue;
+        if (!Array.isArray(alias) || alias.length === 0 || alias.length > 16) return invalid();
+        for (const part of alias) {
+          if (!Buffer.isBuffer(part)) return invalid();
+          validatePart(decode(part));
+        }
+      }
       const parts = path.map((part) => {
         if (!Buffer.isBuffer(part)) return invalid();
         return validatePart(decode(part));

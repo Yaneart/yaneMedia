@@ -16,6 +16,19 @@ import {
 import { TorrServerClient } from './torrserver.client';
 
 type Source = { key: EngineTorrentKey; file: EngineFileKey; size: number };
+// Input is an untrusted file, never a playlist that can fetch secondary URLs or local files.
+const INPUT_OPTIONS = [
+  '-protocol_whitelist',
+  'http,tcp',
+  '-format_whitelist',
+  'mov,matroska,webm,avi,flv,mpegts,mpeg,mpegvideo,asf',
+  '-max_streams',
+  '64',
+  '-max_pixels',
+  '8847360',
+  '-threads',
+  '2',
+];
 type Worker = {
   process: ChildProcess;
   server: Server;
@@ -53,7 +66,18 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
       try {
         const output = await this.run(
           'ffprobe',
-          ['-v', 'error', '-show_streams', '-show_format', '-of', 'json', input.url],
+          [
+            '-v',
+            'error',
+            '-max_alloc',
+            '67108864',
+            ...INPUT_OPTIONS,
+            '-show_streams',
+            '-show_format',
+            '-of',
+            'json',
+            input.url,
+          ],
           30_000,
         );
         return parseTorrentProbe(fileRef, JSON.parse(output) as unknown);
@@ -127,11 +151,14 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
         '-hide_banner',
         '-loglevel',
         'error',
+        '-max_alloc',
+        '67108864',
         '-y',
         ...(position > 0 ? ['-ss', String(position)] : []),
         '-rw_timeout',
         '120000000',
         '-re',
+        ...INPUT_OPTIONS,
         '-i',
         input.url,
         '-map',
@@ -167,6 +194,8 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
           : ['-c:a', 'aac', '-b:a', '192k', '-ac', '2', '-ar', '48000']),
         '-sn',
         '-dn',
+        '-threads',
+        '2',
         '-f',
         'hls',
         '-hls_segment_type',

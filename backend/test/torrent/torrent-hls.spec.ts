@@ -12,6 +12,8 @@ import {
   parseTorrentPlaylist,
 } from '../../src/torrent/torrent-hls-playlist';
 import { TorrentHlsService } from '../../src/torrent/torrent-hls.service';
+import { ConfigService } from '@nestjs/config';
+import { TorrentBudgets } from '../../src/torrent/torrent-security';
 import type { TorrentSessionRepository } from '../../src/torrent/torrent-session.repository';
 import type { TorrentStreamGateway } from '../../src/torrent/torrent-stream.gateway';
 
@@ -49,7 +51,14 @@ describe('torrent HLS gateway', () => {
     };
     const module = await Test.createTestingModule({
       controllers: [TorrentHlsController],
-      providers: [{ provide: TorrentHlsService, useValue: { serve } }],
+      providers: [
+        { provide: TorrentHlsService, useValue: { serve } },
+        TorrentBudgets,
+        {
+          provide: ConfigService,
+          useValue: new ConfigService({ FRONTEND_ORIGIN: 'http://localhost:5173' }),
+        },
+      ],
     })
       .overrideGuard(TorrentAuthGuard)
       .useValue(guard)

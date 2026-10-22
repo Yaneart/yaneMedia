@@ -14,9 +14,14 @@ RUN apt-get update \
     && chmod 0555 /opt/torrserver \
     && chown -R 65532:65532 /config /cache /tmp/torrserver
 
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends iptables util-linux \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --chmod=0555 entrypoint.sh /usr/local/bin/torrserver-entrypoint
+COPY --chmod=0555 firewall.sh /usr/local/bin/torrserver-firewall
 COPY --chmod=0444 settings.json /opt/torrserver/settings.json
 COPY --chmod=0444 nginx.conf /etc/nginx/nginx.conf
 
-USER 65532:65532
-ENTRYPOINT ["/usr/local/bin/torrserver-entrypoint"]
+USER 0:0
+ENTRYPOINT ["/usr/local/bin/torrserver-firewall"]
