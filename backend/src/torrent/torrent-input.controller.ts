@@ -140,7 +140,8 @@ export class TorrentInputController {
   @NoStore()
   @UseInterceptors(
     FileInterceptor('torrent', {
-      limits: { fileSize: 2 * 1024 * 1024, files: 1, fields: 1, parts: 2, fieldSize: 128 },
+      // Busboy emits partsLimit when the count reaches this value, including valid parts.
+      limits: { fileSize: 2 * 1024 * 1024, files: 1, fields: 1, parts: 3, fieldSize: 128 },
     }),
   )
   async file(

@@ -226,6 +226,37 @@ describe('torrent HTTP security boundary', () => {
     expect(create).toHaveBeenCalledTimes(1);
   });
 
+  it('accepts a torrent with mediaRef and rejects extra multipart fields or files', async () => {
+    const metainfo = Buffer.concat([
+      Buffer.from('d4:infod6:lengthi1e4:name8:test.mp412:piece lengthi1e6:pieces20:'),
+      Buffer.alloc(20),
+      Buffer.from('ee'),
+    ]);
+    const mediaRef = 'work_12345678-1234-4123-8123-123456789abc';
+    for (const extra of ['none', 'unknown', 'duplicate', 'file']) {
+      const form = new FormData();
+      form.set('torrent', new Blob([metainfo]), 'test.torrent');
+      form.set('mediaRef', mediaRef);
+      if (extra === 'unknown') form.append('unexpected', 'value');
+      if (extra === 'duplicate') form.append('mediaRef', mediaRef);
+      if (extra === 'file') form.append('torrent', new Blob([metainfo]), 'extra.torrent');
+      const response = await request('/torrent-sessions/file', {
+        method: 'POST',
+        headers: { 'x-yanemedia-csrf': '1', 'Idempotency-Key': 'multipart-regression-test' },
+        body: form,
+      });
+      expect(response.status).toBe(extra === 'none' ? 202 : 400);
+    }
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(create).toHaveBeenCalledWith(
+      'owner',
+      'file',
+      metainfo,
+      mediaRef,
+      'multipart-regression-test',
+    );
+  });
+
   it('keeps raw upstream errors, credentials and magnets out of response and log arguments', async () => {
     search.mockRejectedValueOnce(new Error(`private-title apikey=secret ${magnet}`));
     const response = await request('/torrent-discovery/candidates?mediaRef=work_test');
