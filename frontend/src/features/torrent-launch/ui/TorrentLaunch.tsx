@@ -101,6 +101,18 @@ function CandidateCard({
         {candidate.publishedAt &&
           ` · Опубликовано: ${new Date(candidate.publishedAt).toLocaleDateString('ru-RU')}`}
       </p>
+      {candidate.stale && (
+        <p className="text-xs text-text-secondary" role="status">
+          Источник сейчас недоступен. Это вариант из предыдущего поиска; доступность раздачи
+          проверится при выборе.
+        </p>
+      )}
+      {candidate.catalog && (
+        <p className="text-xs text-text-secondary">
+          Найдено через {candidate.catalog}. Данные о раздающих указаны каталогом; доступность
+          проверится при выборе.
+        </p>
+      )}
       <p className="text-text-secondary">
         {[candidate.resolution, candidate.quality, candidate.voice, candidate.studio]
           .filter(Boolean)
@@ -757,7 +769,8 @@ export function TorrentLaunch({
                     <>
                       {discoveryQuery.data.degraded && (
                         <p role="status" className="text-sm text-text-secondary">
-                          Часть источников не ответила. Показаны доступные результаты.
+                          Часть источников не ответила. Некоторые варианты могут быть из предыдущего
+                          поиска и отмечены ниже.
                         </p>
                       )}
                       {discoveryQuery.data.candidates.length === 0 ? (

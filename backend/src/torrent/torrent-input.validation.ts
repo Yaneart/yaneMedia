@@ -128,7 +128,7 @@ export function validateMetainfo(input: Uint8Array): ValidatedMetainfo {
   const root = parse(0);
   if (offset !== bytes.length || !(root instanceof Map)) return invalid();
   let removedPublisherMetadata = false;
-  for (const key of ['publisher', 'publisher-url']) {
+  for (const key of ['publisher', 'publisher-url', 'publisher.utf-8', 'publisher-url.utf-8']) {
     const value = root.get(key);
     if (value === undefined) continue;
     if (!Buffer.isBuffer(value) || value.length > 512) return invalid();

@@ -3,6 +3,7 @@ export const TORRENT_DISCOVERY_PORT = Symbol('TORRENT_DISCOVERY_PORT');
 
 export interface DiscoverySearch {
   query: string;
+  title?: string;
   kind: DiscoveryKind;
   limit: number;
   offset: number;
@@ -17,6 +18,8 @@ export interface DiscoveryRelease {
   publishedAt: string | null;
   downloadUrl: string;
   infoHash: string | null;
+  stale?: boolean;
+  catalog?: 'JacRed';
 }
 
 export interface DiscoverySearchResult {

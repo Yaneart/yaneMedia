@@ -68,6 +68,25 @@ describe('Prowlarr discovery boundary', () => {
     expect(options?.redirect).toBe('manual');
   });
 
+  it('retains magnet-only results returned through the Prowlarr download proxy', async () => {
+    const magnetUrl = `http://prowlarr:9696/7/download?apikey=${config.apiKey}&link=${'a'.repeat(32)}&file=Anime`;
+    jest.spyOn(global, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify([
+          { protocol: 'torrent', title: 'Anime', indexer: 'Nyaa.si', size: 1024, magnetUrl },
+          { protocol: 'torrent', title: 'Bad', indexer: 'Nyaa.si', size: 1024, magnetUrl: 42 },
+        ]),
+        { headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    const result = await new ProwlarrClient(config).search(
+      { query: 'Anime', kind: 'anime', limit: 30, offset: 0 },
+      AbortSignal.timeout(1000),
+    );
+    expect(result.releases).toHaveLength(1);
+    expect(result.releases[0]).toMatchObject({ tracker: 'Nyaa.si', downloadUrl: magnetUrl });
+  });
+
   it('rejects invalid pagination and upstream redirects', async () => {
     const client = new ProwlarrClient(config);
     await expect(
@@ -87,6 +106,46 @@ describe('Prowlarr discovery boundary', () => {
         AbortSignal.timeout(1000),
       ),
     ).rejects.toBeInstanceOf(ProwlarrError);
+  });
+
+  it('retries an empty structured source search with the bounded trusted title', async () => {
+    const fetchSpy = jest.spyOn(global, 'fetch');
+    fetchSpy.mockResolvedValueOnce(
+      new Response('[]', { headers: { 'Content-Type': 'application/json' } }),
+    );
+    fetchSpy.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify([
+          {
+            protocol: 'torrent',
+            title: 'Sousou no Frieren - 01',
+            indexer: 'Nyaa.si',
+            size: 1024,
+            magnetUrl: `magnet:?xt=urn:btih:${'a'.repeat(40)}`,
+          },
+        ]),
+        { headers: { 'Content-Type': 'application/json' } },
+      ),
+    );
+    const result = await new ProwlarrClient({ ...config, indexerIds: [7] }).search(
+      {
+        query: 'Sousou no Frieren S01E01',
+        title: 'Sousou no Frieren',
+        kind: 'anime',
+        limit: 30,
+        offset: 0,
+      },
+      AbortSignal.timeout(1000),
+    );
+    expect(result.releases).toHaveLength(1);
+    expect(result.degraded).toBe(false);
+    expect(fetchSpy.mock.calls.map(([url]) => (url as URL).searchParams.get('query'))).toEqual([
+      'Sousou no Frieren S01E01',
+      'Sousou no Frieren',
+    ]);
+    expect(
+      fetchSpy.mock.calls.every(([url]) => (url as URL).searchParams.get('indexerIds') === '7'),
+    ).toBe(true);
   });
 
   it('caps results when Prowlarr ignores the requested limit', async () => {
@@ -218,6 +277,7 @@ describe('Prowlarr discovery boundary', () => {
     fetchSpy.mockRejectedValueOnce(new Error('challenge timeout'));
     const cached = await client.search(input, AbortSignal.timeout(1000));
     expect(cached.releases.map((item) => item.title)).toEqual(['Protected release']);
+    expect(cached.releases[0].stale).toBe(true);
     expect(cached.degraded).toBe(true);
     fetchSpy.mockResolvedValueOnce(
       new Response('[]', { headers: { 'Content-Type': 'application/json' } }),

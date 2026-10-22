@@ -57,13 +57,15 @@ describe('torrent input validation', () => {
     expect(validateMetainfo(metainfo(basicInfo))).toBeInstanceOf(Uint8Array);
   });
 
-  it('removes local trackers without changing the info dictionary', () => {
+  it('removes local trackers and publisher variants without changing the info dictionary', () => {
     const info = encode(basicInfo);
     const input = encode({
       announce: 'http://retracker.local/announce',
       'announce-list': [['http://retracker.local/announce'], ['udp://tracker.example.org:80']],
       publisher: 'Example',
       'publisher-url': 'https://example.org/',
+      'publisher.utf-8': 'Издатель',
+      'publisher-url.utf-8': 'https://example.org/',
       info: basicInfo,
     });
     const sanitized = validateMetainfo(input);

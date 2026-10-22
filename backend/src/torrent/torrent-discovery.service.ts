@@ -10,7 +10,12 @@ import {
   type DiscoveryRelease,
   type TorrentDiscoveryPort,
 } from './torrent-discovery.port';
-import { dedupeReleases, rankRelease, type SearchIdentity } from './torrent-candidate-ranking';
+import {
+  dedupeReleases,
+  limitByTracker,
+  rankRelease,
+  type SearchIdentity,
+} from './torrent-candidate-ranking';
 
 const TTL_MS = 10 * 60_000;
 const MAX_CANDIDATES = 500;
@@ -74,24 +79,26 @@ export class TorrentDiscoveryService {
       .flatMap((title) => {
         const clean = safeText(title).replace(/\s+/g, ' ').trim().slice(0, 120);
         if (clean.length < 2) return [];
-        if (identity.kind === 'movie' && summary.year) return [`${clean} ${summary.year}`, clean];
-        if (season !== undefined && episode !== undefined)
-          return [
-            `${clean} S${String(season).padStart(2, '0')}E${String(episode).padStart(2, '0')}`,
-            clean,
-          ];
-        if (season !== undefined) return [`${clean} S${String(season).padStart(2, '0')}`, clean];
-        return [clean];
+        const suffix =
+          identity.kind === 'movie' && summary.year
+            ? String(summary.year)
+            : season !== undefined
+              ? `S${String(season).padStart(2, '0')}${episode === undefined ? '' : `E${String(episode).padStart(2, '0')}`}`
+              : '';
+        return (suffix ? [`${clean} ${suffix}`, clean] : [clean]).map((query) => ({
+          query,
+          title: clean,
+        }));
       })
       .slice(0, 4);
     try {
       const results: DiscoveryRelease[][] = [];
       let failed = 0;
-      for (const query of queries) {
+      for (const { query, title } of queries) {
         if (controller.signal.aborted) break;
         try {
           const result = await this.discovery.search(
-            { query, kind: identity.kind, limit: 50, offset: 0 },
+            { query, title, kind: identity.kind, limit: 50, offset: 0 },
             controller.signal,
           );
           results.push(result.releases);
@@ -106,7 +113,7 @@ export class TorrentDiscoveryService {
         this.usable(release.downloadUrl),
       );
       this.sweep();
-      const candidates = releases
+      const ranked = releases
         .map((release) => ({ release, rank: rankRelease(release, identity) }))
         .filter(({ rank, release }) => rank.score > -50 && release.size <= 200 * 1024 ** 3)
         .sort(
@@ -115,9 +122,9 @@ export class TorrentDiscoveryService {
             a.release.tracker.localeCompare(b.release.tracker, 'ru') ||
             a.release.title.localeCompare(b.release.title, 'ru') ||
             a.release.size - b.release.size,
-        )
-        .slice(0, 50)
-        .map(({ release, rank }) => {
+        );
+      const candidates = limitByTracker(ranked, 50, (x) => x.release.tracker).map(
+        ({ release, rank }) => {
           const candidateRef = `candidate_${randomBytes(18).toString('base64url')}`;
           this.candidates.set(candidateRef, {
             ownerId,
@@ -129,12 +136,15 @@ export class TorrentDiscoveryService {
             candidateRef,
             title: safeText(release.title).slice(0, 256),
             tracker: safeText(release.tracker),
+            stale: release.stale === true,
+            ...(release.catalog ? { catalog: release.catalog } : {}),
             size: release.size,
             seeders: release.seeders,
             publishedAt: release.publishedAt,
             ...rank,
           };
-        });
+        },
+      );
       this.sweep();
       return { mediaRef, candidates, degraded: failed > 0, expiresInSeconds: TTL_MS / 1000 };
     } finally {
@@ -166,13 +176,23 @@ export class TorrentDiscoveryService {
       const response = await fetch(url, {
         headers: { 'X-Api-Key': this.config.apiKey! },
         redirect: 'manual',
-        signal: AbortSignal.timeout(10_000),
+        signal: AbortSignal.timeout(this.config.timeoutMs),
       }).catch(() => {
         throw error(503, 'TORRENT_DISCOVERY_UNAVAILABLE');
       });
-      if (!response.ok || response.redirected) throw error(503, 'TORRENT_DISCOVERY_UNAVAILABLE');
-      if (Number(response.headers.get('content-length')) > MAX_DOWNLOAD_BYTES)
+      if ([301, 302, 303, 307, 308].includes(response.status)) {
+        await response.body?.cancel().catch(() => undefined);
+        const magnet = validateMagnet(response.headers.get('location'));
+        return await this.input.create(ownerId, 'magnet', magnet, mediaRef, key, magnet);
+      }
+      if (!response.ok || response.redirected) {
+        await response.body?.cancel().catch(() => undefined);
+        throw error(503, 'TORRENT_DISCOVERY_UNAVAILABLE');
+      }
+      if (Number(response.headers.get('content-length')) > MAX_DOWNLOAD_BYTES) {
+        await response.body?.cancel().catch(() => undefined);
         throw error(422, 'TORRENT_CANDIDATE_UNSAFE');
+      }
       const reader = response.body?.getReader();
       if (!reader) throw error(503, 'TORRENT_DISCOVERY_UNAVAILABLE');
       const parts: Uint8Array[] = [];
@@ -185,6 +205,9 @@ export class TorrentDiscoveryService {
           if (bytes > MAX_DOWNLOAD_BYTES) throw error(422, 'TORRENT_CANDIDATE_UNSAFE');
           parts.push(part.value);
         }
+      } catch (cause) {
+        if (cause instanceof HttpException) throw cause;
+        throw error(503, 'TORRENT_DISCOVERY_UNAVAILABLE');
       } finally {
         await reader.cancel().catch(() => undefined);
         reader.releaseLock();

@@ -8,6 +8,8 @@ export type TorrentCandidate = {
   candidateRef: string;
   title: string;
   tracker: string;
+  stale: boolean;
+  catalog?: 'JacRed';
   size: number;
   seeders: number | null;
   publishedAt: string | null;
@@ -59,6 +61,8 @@ function mapCandidates(value: unknown, mediaRef: string): TorrentCandidates {
         /^candidate_[A-Za-z0-9_-]{24}$/.test(String(item.candidateRef)) &&
         typeof item.title === 'string' &&
         typeof item.tracker === 'string' &&
+        typeof item.stale === 'boolean' &&
+        (item.catalog === undefined || item.catalog === 'JacRed') &&
         typeof item.size === 'number' &&
         Number.isSafeInteger(item.size) &&
         item.size >= 0 &&

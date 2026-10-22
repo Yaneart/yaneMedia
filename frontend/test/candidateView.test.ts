@@ -10,6 +10,7 @@ const item = (title: string, values: Partial<TorrentCandidate> = {}): TorrentCan
   candidateRef: `candidate_${title}`,
   title,
   tracker: 'Source B',
+  stale: false,
   size: 100,
   seeders: null,
   publishedAt: null,

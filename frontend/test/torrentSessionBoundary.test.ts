@@ -63,6 +63,8 @@ describe('torrent API boundary', () => {
       candidateRef,
       title: 'Example S01E02 1080p',
       tracker: 'Indexer',
+      stale: false,
+      catalog: 'JacRed',
       size: 1234,
       seeders: 8,
       publishedAt: null,
@@ -96,6 +98,8 @@ describe('torrent API boundary', () => {
     }) as typeof fetch;
     const results = await getTorrentCandidates(mediaRef, 1, 2, new AbortController().signal);
     expect(results.candidates[0].candidateRef).toBe(candidateRef);
+    expect(results.candidates[0].stale).toBe(false);
+    expect(results.candidates[0].catalog).toBe('JacRed');
     expect(results.expiresAt).toBeGreaterThan(Date.now());
     expect(calls[0][0]).toContain(`season=1&episode=2`);
     expect(

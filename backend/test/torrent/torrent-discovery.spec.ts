@@ -20,6 +20,12 @@ const found = { releases: [release], degraded: false };
 
 describe('torrent discovery', () => {
   afterEach(() => jest.restoreAllMocks());
+  it('matches transliterated titles with and without diacritics', () => {
+    const identity = { titles: ['Shōgun'], kind: 'tv' as const, season: 1, episode: 1 };
+    const rank = rankRelease({ ...release, title: 'Shogun 2024 S01E01 1080p WEB-DL' }, identity);
+    expect(rank.reasons).toContain('title_match');
+    expect(rank.reasons).not.toContain('title_mismatch');
+  });
   const discovery = { search: jest.fn().mockResolvedValue(found) };
   const registry = { resolve: jest.fn().mockResolvedValue({ mediaRef, type: 'series' }) };
   const media = {
@@ -60,6 +66,7 @@ describe('torrent discovery', () => {
     );
     expect(result.candidates).toHaveLength(1);
     expect(result.candidates[0]).toMatchObject({ voice: 'DUB', season: 1, episode: 2 });
+    expect(result.candidates[0].stale).toBe(false);
     expect(JSON.stringify(result)).not.toContain('magnet:');
     expect(JSON.stringify(result)).not.toContain('infoHash');
   });
@@ -78,6 +85,35 @@ describe('torrent discovery', () => {
     expect(result.candidates).toHaveLength(50);
     expect(result.candidates[0].title).toContain('00');
     expect(result.candidates.at(-1)?.title).toContain('49');
+  });
+
+  it('preserves every source after final ranking, including identical hashes from different sources', async () => {
+    discovery.search.mockResolvedValue({
+      releases: [
+        ...Array.from({ length: 55 }, (_, i) => ({ ...release, guid: String(i), infoHash: null })),
+        { ...release, tracker: 'BigFANGroup', title: 'Interstellar' },
+        { ...release, tracker: 'Kinozal', catalog: 'JacRed' },
+      ],
+      degraded: false,
+    });
+    const result = await service.search('owner-source-reservation', mediaRef);
+    expect(result.candidates).toHaveLength(50);
+    expect(new Set(result.candidates.map((x) => x.tracker))).toEqual(
+      new Set(['Example', 'BigFANGroup', 'Kinozal']),
+    );
+    expect(result.candidates.find((x) => x.tracker === 'Kinozal')?.catalog).toBe('JacRed');
+    expect(JSON.stringify(result)).not.toContain('magnet:');
+  });
+
+  it('exposes cached source freshness without exposing its download target', async () => {
+    discovery.search.mockResolvedValue({
+      releases: [{ ...release, stale: true }],
+      degraded: true,
+    });
+    const result = await service.search('owner-stale', mediaRef, 1, 2);
+    expect(result.candidates[0].stale).toBe(true);
+    expect(result.degraded).toBe(true);
+    expect(JSON.stringify(result)).not.toContain('magnet:');
   });
 
   it('binds candidates to the owner and uses validated input', async () => {
@@ -198,8 +234,84 @@ describe('torrent discovery', () => {
     expect((await service.search('owner-6', mediaRef)).candidates).toHaveLength(0);
   });
 
+  it.each([301, 302])(
+    'accepts a validated magnet from a Prowlarr %s without following it',
+    async (status) => {
+      const owner = `owner-redirect-${status}`;
+      discovery.search.mockResolvedValue({
+        releases: [{ ...release, downloadUrl: 'http://prowlarr:9696/api/v1/indexer/1/download' }],
+        degraded: false,
+      });
+      const { candidates } = await service.search(owner, mediaRef);
+      const fetchSpy = jest
+        .spyOn(global, 'fetch')
+        .mockResolvedValue(
+          new Response(null, { status, headers: { Location: release.downloadUrl } }),
+        );
+      await service.create(owner, candidates[0].candidateRef, 'redirect-key-123456');
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      expect(input.create).toHaveBeenCalledWith(
+        owner,
+        'magnet',
+        expect.stringContaining('xt=urn%3Abtih%3A'),
+        mediaRef,
+        'redirect-key-123456',
+        expect.stringContaining('xt=urn%3Abtih%3A'),
+      );
+    },
+  );
+
+  it.each(['https://tracker.example/file', 'http://127.0.0.1/admin', 'magnet:?xt=invalid'])(
+    'rejects an unsafe download redirect: %s',
+    async (location) => {
+      discovery.search.mockResolvedValue({
+        releases: [{ ...release, downloadUrl: 'http://prowlarr:9696/api/v1/indexer/1/download' }],
+        degraded: false,
+      });
+      const { candidates } = await service.search(`owner-unsafe-${location}`, mediaRef);
+      const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue(
+        new Response(null, {
+          status: 302,
+          headers: { Location: location },
+        }),
+      );
+      await expect(
+        service.create(
+          `owner-unsafe-${location}`,
+          candidates[0].candidateRef,
+          'redirect-key-123456',
+        ),
+      ).rejects.toMatchObject({ status: 422 });
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      expect(input.create).not.toHaveBeenCalled();
+    },
+  );
+
+  it('reports an interrupted download body as an upstream failure', async () => {
+    discovery.search.mockResolvedValue({
+      releases: [{ ...release, downloadUrl: 'http://prowlarr:9696/api/v1/indexer/1/download' }],
+      degraded: false,
+    });
+    const { candidates } = await service.search('owner-broken-body', mediaRef);
+    jest.spyOn(global, 'fetch').mockResolvedValue(
+      new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.error(new Error('connection reset'));
+          },
+        }),
+      ),
+    );
+    await expect(
+      service.create('owner-broken-body', candidates[0].candidateRef, 'broken-body-123456'),
+    ).rejects.toMatchObject({ status: 503 });
+    expect(input.create).not.toHaveBeenCalled();
+  });
+
   it('deduplicates by hash and fallback attributes and penalizes mismatches', () => {
     expect(dedupeReleases([release, { ...release, guid: 'two' }])).toHaveLength(1);
+    expect(dedupeReleases([release, { ...release, tracker: 'Other source' }])).toHaveLength(2);
+    expect(dedupeReleases([{ ...release, stale: true }, release])[0].stale).toBeUndefined();
     expect(
       dedupeReleases([
         { ...release, guid: null, infoHash: null },

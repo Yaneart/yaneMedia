@@ -17,6 +17,8 @@ import { TORRSERVER_CONFIG, createTorrServerConfig } from './torrserver.config';
 import { TorrServerClient } from './torrserver.client';
 import { PROWLARR_CONFIG, createProwlarrConfig } from './prowlarr.config';
 import { ProwlarrClient } from './prowlarr.client';
+import { JacredClient } from './jacred.client';
+import { TorrentDiscoveryClient } from './torrent-discovery.client';
 import { TORRENT_DISCOVERY_PORT } from './torrent-discovery.port';
 import { TorrentDiscoveryController } from './torrent-discovery.controller';
 import { TorrentDiscoveryService } from './torrent-discovery.service';
@@ -37,7 +39,9 @@ import { TorrentDiscoveryService } from './torrent-discovery.service';
       useFactory: createProwlarrConfig,
     },
     ProwlarrClient,
-    { provide: TORRENT_DISCOVERY_PORT, useExisting: ProwlarrClient },
+    JacredClient,
+    TorrentDiscoveryClient,
+    { provide: TORRENT_DISCOVERY_PORT, useExisting: TorrentDiscoveryClient },
     TorrentDiscoveryService,
     TorrentSessionRepository,
     TorrentSessionReconciler,

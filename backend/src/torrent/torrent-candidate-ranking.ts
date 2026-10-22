@@ -10,7 +10,8 @@ export interface SearchIdentity {
 
 const normalize = (value: string) =>
   value
-    .normalize('NFKC')
+    .normalize('NFKD')
+    .replace(/\p{M}/gu, '')
     .toLowerCase()
     .replace(/[^\p{L}\p{N}]+/gu, ' ')
     .trim();
@@ -157,15 +158,38 @@ export function rankRelease(release: DiscoveryRelease, identity: SearchIdentity)
 }
 
 export function dedupeReleases(releases: DiscoveryRelease[]): DiscoveryRelease[] {
-  const seen = new Set<string>();
-  return releases.filter((release) => {
+  const positions = new Map<string, number>();
+  const unique: DiscoveryRelease[] = [];
+  for (const release of releases) {
     const key = release.infoHash
-      ? `hash:${release.infoHash.toLowerCase()}`
+      ? `hash:${release.tracker.toLowerCase()}:${release.infoHash.toLowerCase()}`
       : release.guid
         ? `guid:${release.tracker.toLowerCase()}:${release.guid}`
-        : `attrs:${normalize(release.title)}:${release.size}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+        : `attrs:${release.tracker.toLowerCase()}:${normalize(release.title)}:${release.size}`;
+    const index = positions.get(key);
+    if (index === undefined) {
+      positions.set(key, unique.length);
+      unique.push(release);
+    } else if (unique[index].stale && !release.stale) unique[index] = release;
+  }
+  return unique;
+}
+
+export function limitByTracker<T>(items: T[], limit: number, tracker: (item: T) => string): T[] {
+  const quota = Math.max(1, Math.floor(limit / (new Set(items.map(tracker)).size || 1)));
+  const counts = new Map<string, number>();
+  const selected = new Set<T>();
+  for (const item of items) {
+    if (selected.size >= limit) break;
+    const name = tracker(item);
+    const count = counts.get(name) ?? 0;
+    if (count >= quota) continue;
+    selected.add(item);
+    counts.set(name, count + 1);
+  }
+  for (const item of items) {
+    if (selected.size >= limit) break;
+    selected.add(item);
+  }
+  return items.filter((item) => selected.has(item));
 }

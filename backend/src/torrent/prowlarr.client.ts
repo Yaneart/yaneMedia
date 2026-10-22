@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { PROWLARR_CONFIG, type ProwlarrConfig } from './prowlarr.config';
+import { limitByTracker } from './torrent-candidate-ranking';
 import type {
   DiscoveryRelease,
   DiscoverySearch,
@@ -43,7 +44,12 @@ export class ProwlarrClient implements TorrentDiscoveryPort {
       input.query.length > 160 ||
       [...input.query].some(
         (character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127,
-      )
+      ) ||
+      (input.title !== undefined &&
+        (typeof input.title !== 'string' ||
+          input.title.trim().length < 2 ||
+          input.title.length > 160 ||
+          [...input.title].some((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127)))
     ) {
       throw new ProwlarrError('invalid');
     }
@@ -57,6 +63,7 @@ export class ProwlarrClient implements TorrentDiscoveryPort {
     }).toString();
     let response: unknown;
     let degraded = false;
+    const staleItems = new WeakSet<object>();
     if (this.config.indexerIds?.length) {
       const searches = await Promise.allSettled(
         this.config.indexerIds.map(async (id) => {
@@ -64,7 +71,18 @@ export class ProwlarrClient implements TorrentDiscoveryPort {
           sourceUrl.searchParams.set('indexerIds', String(id));
           const key = sourceUrl.toString();
           try {
-            const response = await this.request(sourceUrl, signal);
+            let response = await this.request(sourceUrl, signal);
+            // Some public sources use episode naming that does not match S01E01.
+            if (
+              Array.isArray(response) &&
+              !response.length &&
+              input.title &&
+              input.title.trim() !== input.query.trim()
+            ) {
+              const titleUrl = new URL(sourceUrl);
+              titleUrl.searchParams.set('query', input.title.trim());
+              response = await this.request(titleUrl, signal);
+            }
             if (!Array.isArray(response)) throw new ProwlarrError('protocol');
             const items: unknown[] = response;
             const cached = this.sourceCache.get(key);
@@ -91,14 +109,20 @@ export class ProwlarrClient implements TorrentDiscoveryPort {
       const succeeded = searches.filter((item) => item.status === 'fulfilled');
       if (!succeeded.length) throw new ProwlarrError('unavailable');
       degraded = succeeded.length < searches.length || succeeded.some((item) => item.value.stale);
-      response = succeeded.flatMap((item) => item.value.items);
+      response = succeeded.flatMap(({ value }) => {
+        if (value.stale)
+          for (const item of value.items)
+            if (typeof item === 'object' && item !== null) staleItems.add(item);
+        return value.items;
+      });
     } else response = await this.request(url, signal);
     if (!Array.isArray(response)) {
       throw new ProwlarrError('protocol');
     }
     const releases = response.flatMap((item): DiscoveryRelease[] => {
       if (!isRecord(item) || item.protocol !== 'torrent') return [];
-      const { guid, title, indexer, size, seeders, publishDate, downloadUrl, infoHash } = item;
+      const { guid, title, indexer, size, seeders, publishDate, infoHash } = item;
+      const downloadUrl = item.downloadUrl ?? item.magnetUrl;
       if (
         (guid != null && (typeof guid !== 'string' || guid.length < 1 || guid.length > 2048)) ||
         typeof title !== 'string' ||
@@ -131,25 +155,11 @@ export class ProwlarrClient implements TorrentDiscoveryPort {
           publishedAt: publishDate ?? null,
           downloadUrl,
           infoHash: infoHash || null,
+          ...(staleItems.has(item) ? { stale: true } : {}),
         },
       ];
     });
-    const trackers = new Set(releases.map((release) => release.tracker));
-    const reservedPerTracker = Math.max(1, Math.floor(input.limit / (trackers.size || 1)));
-    const counts = new Map<string, number>();
-    const selected = new Set<DiscoveryRelease>();
-    for (const release of releases) {
-      if (selected.size >= input.limit) break;
-      const count = counts.get(release.tracker) ?? 0;
-      if (count >= reservedPerTracker) continue;
-      selected.add(release);
-      counts.set(release.tracker, count + 1);
-    }
-    for (const release of releases) {
-      if (selected.size >= input.limit) break;
-      selected.add(release);
-    }
-    return { releases: [...selected], degraded };
+    return { releases: limitByTracker(releases, input.limit, (x) => x.tracker), degraded };
   }
 
   private async request(
