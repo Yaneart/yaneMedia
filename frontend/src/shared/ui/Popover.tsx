@@ -30,6 +30,9 @@ export type PopoverProps = Omit<ComponentPropsWithoutRef<'div'>, 'children'> & {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   keepMounted?: boolean;
+  stablePosition?: boolean;
+  gap?: number;
+  maxPanelHeight?: number;
 };
 
 export function Popover({
@@ -46,6 +49,9 @@ export function Popover({
   open,
   onOpenChange,
   keepMounted = false,
+  stablePosition = false,
+  gap = 8,
+  maxPanelHeight,
   ...props
 }: PopoverProps) {
   const [internalOpen, setInternalOpen] = useState(false);
@@ -62,7 +68,21 @@ export function Popover({
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const [portalHost, setPortalHost] = useState<HTMLElement | null>(null);
   const [panelStyle, setPanelStyle] = useState<CSSProperties>({ visibility: 'hidden' });
+
+  useLayoutEffect(() => {
+    let host = containerRef.current?.parentElement;
+    while (stablePosition && host && host !== document.body) {
+      const style = getComputedStyle(host);
+      if (/(auto|scroll)/.test(style.overflowY) && style.position !== 'static') {
+        setPortalHost(host);
+        return;
+      }
+      host = host.parentElement;
+    }
+    setPortalHost(document.body);
+  }, [stablePosition]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -108,7 +128,15 @@ export function Popover({
   }, [isOpen, setIsOpen]);
 
   useLayoutEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || !portalHost) return;
+
+    let anchor: {
+      top: number;
+      left: number;
+      availableHeight: number;
+      width: number;
+      height: number;
+    } | null = null;
 
     const updatePosition = () => {
       const trigger = triggerRef.current;
@@ -117,7 +145,6 @@ export function Popover({
       if (!trigger || !panel) return;
 
       const viewportPadding = 16;
-      const gap = 8;
       const triggerRect = trigger.getBoundingClientRect();
       const panelRect = panel.getBoundingClientRect();
       const viewportWidth = document.documentElement.clientWidth;
@@ -129,7 +156,7 @@ export function Popover({
           : align === 'center'
             ? triggerRect.left + (triggerRect.width - panelRect.width) / 2
             : triggerRect.right - panelRect.width;
-      const left = Math.min(
+      const preferredLeft = Math.min(
         Math.max(alignedLeft, viewportPadding),
         Math.max(viewportPadding, viewportWidth - panelRect.width - viewportPadding),
       );
@@ -142,15 +169,50 @@ export function Popover({
       const preferredTop = openAbove
         ? triggerRect.top - panelRect.height - gap
         : triggerRect.bottom + gap;
-      const top = Math.min(
+      const preferredClampedTop = Math.min(
         Math.max(preferredTop, viewportPadding),
         Math.max(viewportPadding, viewportHeight - panelRect.height - viewportPadding),
       );
+      const keepAnchor =
+        stablePosition &&
+        anchor &&
+        anchor.width === viewportWidth &&
+        anchor.height === viewportHeight;
+      const hostRect = portalHost.getBoundingClientRect();
+      const originTop =
+        portalHost === document.body
+          ? -window.scrollY
+          : hostRect.top + portalHost.clientTop - portalHost.scrollTop;
+      const originLeft =
+        portalHost === document.body
+          ? -window.scrollX
+          : hostRect.left + portalHost.clientLeft - portalHost.scrollLeft;
+      const top =
+        keepAnchor && anchor ? anchor.top : preferredClampedTop - (stablePosition ? originTop : 0);
+      const left =
+        keepAnchor && anchor ? anchor.left : preferredLeft - (stablePosition ? originLeft : 0);
+      const availableHeight =
+        keepAnchor && anchor
+          ? anchor.availableHeight
+          : viewportHeight - preferredClampedTop - viewportPadding;
+      anchor = {
+        top,
+        left,
+        availableHeight,
+        width: viewportWidth,
+        height: viewportHeight,
+      };
+      const maxHeight = stablePosition
+        ? Math.min(maxPanelHeight ?? Infinity, availableHeight)
+        : maxPanelHeight;
 
       setPanelStyle((current) =>
-        current.left === left && current.top === top && current.visibility === 'visible'
+        current.left === left &&
+        current.top === top &&
+        current.maxHeight === maxHeight &&
+        current.visibility === 'visible'
           ? current
-          : { left, top, visibility: 'visible' },
+          : { left, top, maxHeight, visibility: 'visible' },
       );
     };
 
@@ -159,14 +221,14 @@ export function Popover({
     if (triggerRef.current) resizeObserver.observe(triggerRef.current);
     if (panelRef.current) resizeObserver.observe(panelRef.current);
     window.addEventListener('resize', updatePosition);
-    window.addEventListener('scroll', updatePosition, true);
+    if (!stablePosition) window.addEventListener('scroll', updatePosition, true);
 
     return () => {
       resizeObserver.disconnect();
       window.removeEventListener('resize', updatePosition);
       window.removeEventListener('scroll', updatePosition, true);
     };
-  }, [align, isOpen, side]);
+  }, [align, gap, isOpen, maxPanelHeight, portalHost, side, stablePosition]);
 
   const closePopover = () => setIsOpen(false);
 
@@ -185,22 +247,23 @@ export function Popover({
         {trigger}
       </IconButton>
 
-      {(isOpen || keepMounted) &&
+      {portalHost &&
+        (isOpen || keepMounted) &&
         createPortal(
           <div
             ref={panelRef}
             hidden={!isOpen}
             id={panelId}
-            style={panelStyle}
+            style={{ ...panelStyle, maxHeight: panelStyle.maxHeight ?? maxPanelHeight }}
             className={[
-              'fixed z-50',
+              stablePosition ? 'absolute z-50' : 'fixed z-50',
               'border border-border text-text-primary shadow-overlay',
               panelClassName,
             ].join(' ')}
           >
             {typeof children === 'function' ? children(closePopover) : children}
           </div>,
-          document.body,
+          portalHost,
         )}
     </div>
   );

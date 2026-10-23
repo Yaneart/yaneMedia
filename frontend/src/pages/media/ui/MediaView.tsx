@@ -592,18 +592,15 @@ export function MediaView({
 
   const selectedSource =
     activeTorrentId || torrentSelected
-      ? (torrentSource ??
-        (!torrentStarting
-          ? {
-              sourceRef: 'torrent:selection',
-              provider: 'torrent',
-              kind: 'hls' as const,
-              label: 'Торрент',
-              url: '',
-              availability: 'available' as const,
-              browserSupported: true,
-            }
-          : undefined))
+      ? (torrentSource ?? {
+          sourceRef: 'torrent:selection',
+          provider: 'torrent',
+          kind: 'hls' as const,
+          label: 'Торрент',
+          url: '',
+          availability: 'available' as const,
+          browserSupported: true,
+        })
       : playbackMode === 'embed'
         ? selectedEmbedSource
         : selectedDirectSource;
@@ -1091,7 +1088,7 @@ export function MediaView({
             <MediaPlayer
               mediaTitle={media.title}
               backdrop={media.backdrop}
-              source={selectedSource}
+              source={selectedSource?.url ? selectedSource : undefined}
               isStarted={isPlayerStarted}
               shouldAutoPlay={mediaSession?.state === 'playing'}
               initialPositionSeconds={mediaSession?.positionSeconds ?? 0}

@@ -321,7 +321,7 @@ export function TorrentLaunch({
   useRestoreSocialAction('torrent', () => onOpenChange(true));
 
   useEffect(() => {
-    if (open) panelRef.current?.focus();
+    if (open) panelRef.current?.focus({ preventScroll: true });
   }, [open]);
 
   useEffect(() => {
