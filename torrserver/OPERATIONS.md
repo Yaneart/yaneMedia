@@ -64,6 +64,14 @@ Nyaa.si, Anime Tosho, YTS через Prowlarr и Kinozal/RuTracker/NoNaMe Club �
 JacRed. Доступность источника и peers меняется; успешный search не доказывает playback.
 FlareSolverr — необязательный профиль `protected-trackers`, текущему набору не нужен.
 
+В Prowlarr проверить API authentication, connection test каждого разрешённого
+indexer и его movie/TV/anime categories. В `backend/.env` задать
+`PROWLARR_INDEXER_IDS` фактическими локальными ID (до восьми через запятую),
+затем пересоздать только backend. После восстановления volume перепроверить ID:
+имена источников не являются переносимыми числовыми идентификаторами.
+Без этой настройки adapter использует общий поиск Prowlarr. Подробности текущего
+набора и диагностики — в [discovery](DISCOVERY.md).
+
 | Порт / сеть                     | Граница                                                                                  |
 | ------------------------------- | ---------------------------------------------------------------------------------------- |
 | backend `3000`, frontend `5173` | Опубликованы на хосте; базовый Compose предназначен для локального стенда                |
@@ -90,7 +98,6 @@ FlareSolverr — необязательный профиль `protected-trackers
 | Engine/Prowlarr secret-файлы, backend `.env` | Хост, ignored                                    | Отдельный защищённый backup, без вывода значений в логи                    |
 | HLS                                          | backend `/tmp/yanemedia-torrent-hls`             | Временный container layer, исключить из backup; пропадает при recreate     |
 | Media/profile assets                         | `storage/media-assets`, `storage/profile-assets` | Пользовательские данные; torrent cleanup их не затрагивает                 |
-| QA/spike fixtures                            | `storage/t023-tools`, `storage/torrent-spike`    | Не нужны штатному запуску; уборка отдельно в T-025                         |
 
 В `settings.json`: disk cache 24 GiB (`25769803776`), удаление cache при Drop,
 25 peer connections, UPnP/LPD отключены. `--maxsize` engine и app validation
@@ -176,7 +183,7 @@ docker compose exec -T backend npm run probe:torrent-discovery -- --query Oppenh
 
 ## Завершение сессий и очистка
 
-Обычный путь — Stop владельцем в UI или authenticated
+Обычный путь — закрытие плеера, смена источника или logout владельца; также доступен authenticated
 `DELETE /api/v1/torrent-sessions/:sessionId` с CSRF. Чужая сессия не останавливается
 через пользовательский API. Stop завершает FFmpeg/HLS, удаляет engine binding и
 делает Drop только после проверки других ссылок; при отказе engine оставляет

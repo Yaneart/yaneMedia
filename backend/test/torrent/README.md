@@ -50,9 +50,12 @@ docker compose exec -T -e TORRENT_POSTGRES_TEST=1 -e TORRENT_GATEWAY_TEST=1 back
 These cover PostgreSQL atomic metadata/file publication, CAS, ownership, idempotent playback,
 concurrency quotas and logout, plus actual FFprobe/FFmpeg HLS output and hostile input isolation.
 They are skipped by the default command. Host PostgreSQL tests need a reachable `DATABASE_URL`;
-the current Compose database has no host port. FFmpeg tests need both binaries on `PATH`.
+check the actual host port mapping before using the host database URL. FFmpeg tests need
+both binaries on `PATH`.
 
-Real TorrServer smoke remains a separate, explicitly selected isolated T-001 fixture exercise
-under `docs/torrent-spike/`. Those historical scripts target their own disposable spike stack;
-some reset that engine. They are never invoked by `test:torrent` or pointed at the application
-engine. Public releases and their peer availability are outside this deterministic suite.
+Real TorrServer/browser smoke remains a separate, explicitly selected exercise with permitted
+content and owned-session cleanup. The disposable spike stack and generated fixtures were
+removed in T-025; no maintained test depends on them. The [architecture decision](../../../torrserver/ARCHITECTURE.md)
+retains the spike findings, [acceptance](../../../torrserver/ACCEPTANCE.md) records browser evidence,
+and [operations](../../../torrserver/OPERATIONS.md) describes safe diagnostics and recovery.
+Public releases and their peer availability are outside this deterministic suite.

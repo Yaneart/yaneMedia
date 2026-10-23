@@ -7,6 +7,12 @@ headless Chromium 156.0.8078.4 and Firefox 157.0 were driven through Playwright.
 These are browser checks with actual media decoding, not the DOM/fake HLS tests.
 Safari/macOS/iOS and physical touch devices were unavailable.
 
+This records the UI and deployment tested on that date. The later source-picker
+UI starts playback on release selection and stops/replaces the previous session
+automatically; the historical Play/Stop controls and degraded notice below are
+not instructions for the current UI. See [operations](OPERATIONS.md) for current
+maintenance and [architecture](ARCHITECTURE.md) for the earlier spike decision.
+
 ## Browser and lifecycle evidence
 
 | Scenario                     | Result                                                                                                                                                                                                                                                                                          |
@@ -116,5 +122,8 @@ Chromium/Firefox desktop browsers. No release-blocking defect remains from this
 matrix; the multipart regression was fixed and verified live. Safari/iOS,
 physical touch devices, HDR fidelity, long-running performance and human
 listening are outside the evidence above. This is not authorization to expose
-the feature publicly: operational documentation and staged rollout remain T-024.
-Local evidence and temporary harnesses are under ignored `storage/t023-tools/`.
+the feature publicly. Operational procedures are in [OPERATIONS.md](OPERATIONS.md);
+rollout was excluded from T-024 by the owner. Temporary harnesses, screenshots
+and generated media were removed in T-025; this report retains their measured
+results and limitations. Maintained automated checks are described in the
+[torrent test guide](../backend/test/torrent/README.md).
