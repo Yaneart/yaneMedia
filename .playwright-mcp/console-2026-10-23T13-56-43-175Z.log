@@ -1,4 +1,0 @@
-[     447ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=f66125d6:14333
-[  570669ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_RESET @ https://chache08.werkecdn.me/s/FHrNmIclcq_449EcoOhv5pCEFBQUFBTXpRUEVFUnhWVkF3eUdGNGdDQg.APHIMECRyEW1q_VigAKEVlwc3lTJt1dxgVW-OA/uhd_018/Interstellar.2014.BDRip.2160p.SDR.dub.rus_480.mp4:0
-[  605706ms] [ERROR] Failed to load resource: net::ERR_INCOMPLETE_CHUNKED_ENCODING @ http://localhost:3000/api/v1/media/interstellar/availability/stream:0
-[  606382ms] [LOG] [vite] server connection lost. Polling for restart... @ http://localhost:5173/@vite/client:998
