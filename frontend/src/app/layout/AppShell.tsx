@@ -11,7 +11,7 @@ import { ScrollRestorationProvider, useAppScrollRestoration } from '@/features/s
 import { WatchDock } from '@/widgets/watch-dock';
 import { mediaCatalogQueryOptions } from '@/widgets/media-catalog';
 import { useQueryClient } from '@tanstack/react-query';
-import type { MediaType } from '@/entities/media';
+import { useMediaSummaryResolution, type MediaType } from '@/entities/media';
 import { mainContentId } from '@/shared';
 import { claimIntentPrefetch } from '@/shared/lib/intentPrefetch';
 import { useRef } from 'react';
@@ -48,6 +48,12 @@ export function AppShell() {
   );
   const activeMediaPath = session ? `/media/${encodeURIComponent(session.mediaRef)}` : null;
   const showWatchDock = session && activeMediaPath && !isActivePlaybackMediaPage;
+  const { resolution: dockMediaResolution } = useMediaSummaryResolution(
+    showWatchDock ? [session.mediaRef] : [],
+  );
+  const dockArtwork = dockMediaResolution?.matches.find(
+    (match) => match.requestedMediaRef === session?.mediaRef,
+  )?.media.poster;
   const prefetchCatalog = (path: string) => {
     const type = catalogTypeByPath[path];
     const preloadPage = catalogPageLoaderByPath[path];
@@ -80,7 +86,7 @@ export function AppShell() {
                 <WatchDock
                   variant="sidebar"
                   mediaTitle={session.mediaSnapshot.title}
-                  artwork={session.mediaSnapshot.artwork}
+                  artwork={dockArtwork}
                   session={session}
                   onExpand={() => navigate(activeMediaPath)}
                   onClose={endSession}
@@ -127,7 +133,7 @@ export function AppShell() {
           <div className="pointer-events-none absolute inset-x-4 bottom-[4.75rem] z-30 sm:inset-x-7 md:hidden">
             <WatchDock
               mediaTitle={session.mediaSnapshot.title}
-              artwork={session.mediaSnapshot.artwork}
+              artwork={dockArtwork}
               session={session}
               onExpand={() => navigate(activeMediaPath)}
               onClose={endSession}

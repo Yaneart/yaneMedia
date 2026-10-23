@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type SyntheticEvent } from 'react';
 
 import type { MediaArtwork } from '../model/media';
+import { Skeleton } from '@/shared';
 
 export type MediaBackdropArtworkProps = {
   artwork: MediaArtwork;
@@ -9,6 +10,7 @@ export type MediaBackdropArtworkProps = {
   loading?: 'eager' | 'lazy';
   fetchPriority?: 'high' | 'low' | 'auto';
   transparentBackground?: boolean;
+  showLoadingSkeleton?: boolean;
   onError?: () => void;
   onPanoramicChange?: (isPanoramic: boolean) => void;
 };
@@ -28,6 +30,7 @@ export function MediaBackdropArtwork({
   loading,
   fetchPriority,
   transparentBackground = false,
+  showLoadingSkeleton = false,
   onError,
   onPanoramicChange,
 }: MediaBackdropArtworkProps) {
@@ -86,6 +89,9 @@ export function MediaBackdropArtwork({
         .filter(Boolean)
         .join(' ')}
     >
+      {showLoadingSkeleton && measuredArtwork?.url !== artwork.url && (
+        <Skeleton className="absolute inset-0 size-full rounded-none" />
+      )}
       {isPanoramic && (
         <img
           src={artwork.url}
@@ -106,6 +112,7 @@ export function MediaBackdropArtwork({
         decoding="async"
         className={[
           'absolute inset-0 size-full',
+          showLoadingSkeleton && measuredArtwork?.url !== artwork.url ? 'opacity-0' : '',
           isPanoramic ? 'scale-[1.06] object-contain' : 'object-cover',
           imageClassName,
         ]

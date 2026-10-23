@@ -105,9 +105,7 @@ function AvailabilityToolbarStatus({ hasEpisodeControls }: { hasEpisodeControls:
     <div
       className={[
         'col-span-2 flex w-full items-center justify-center 2xl:flex-1',
-        hasEpisodeControls
-          ? 'min-h-32 sm:min-h-25 2xl:min-h-11'
-          : 'min-h-11',
+        hasEpisodeControls ? 'min-h-32 sm:min-h-25 2xl:min-h-11' : 'min-h-10',
       ].join(' ')}
       aria-live="polite"
     >
@@ -669,7 +667,7 @@ export function MediaView({
         mediaSnapshot: {
           title: media.title,
           slug: media.slug,
-          artwork: media.backdrop ?? media.poster,
+          artwork: media.poster,
         },
         sourceRef: torrentPlaybackSourceRef(ready.id),
         episode: null,
@@ -784,7 +782,7 @@ export function MediaView({
         mediaSnapshot: {
           title: media.title,
           slug: media.slug,
-          artwork: media.backdrop ?? media.poster,
+          artwork: media.poster,
         },
         sourceRef: source.sourceRef,
         episode: usesDirectEpisodes ? getPlaybackEpisode(episode) : null,
@@ -923,7 +921,7 @@ export function MediaView({
       mediaSnapshot: {
         title: media.title,
         slug: media.slug,
-        artwork: media.backdrop ?? media.poster,
+        artwork: media.poster,
       },
       sourceRef: selectedSource.sourceRef,
       episode: selectedPlaybackEpisode,

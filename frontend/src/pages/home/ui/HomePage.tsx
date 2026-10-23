@@ -118,6 +118,7 @@ export function HomePage() {
               key={featured.mediaRef}
               media={featured}
               variant="hero"
+              allowPosterFallback={false}
               backdropClassName="object-[61%_center] md:object-center"
             />
           </div>
@@ -208,7 +209,7 @@ export function HomePage() {
                       restoreSession(media.mediaRef, {
                         title: media.title,
                         slug: media.slug,
-                        artwork: media.backdrop ?? media.poster,
+                        artwork: media.poster,
                       })
                     }
                     onRemove={() => {
@@ -276,7 +277,9 @@ export function HomePage() {
                     <div className="relative flex size-full flex-col justify-end overflow-hidden rounded-control border border-context-border/80 bg-surface/35 p-3 sm:p-4">
                       <div className="pointer-events-none absolute inset-0 bg-linear-to-t from-surface-elevated/70 via-transparent to-transparent" />
                       <div className="relative">
-                        <span className="text-caption font-semibold tracking-wide text-accent-text uppercase">Редакционная коллекция</span>
+                        <span className="text-caption font-semibold tracking-wide text-accent-text uppercase">
+                          Редакционная коллекция
+                        </span>
                         <span className="mt-1 block text-lg font-semibold text-text-primary">
                           Все {collection.total} произведений
                         </span>

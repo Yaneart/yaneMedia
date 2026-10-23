@@ -5,6 +5,7 @@ import { MediaBackdropArtwork } from './MediaBackdropArtwork';
 import { MediaLandscapeFallback } from './MediaLandscapeFallback';
 
 export type MediaLandscapeArtworkProps = {
+  allowPosterFallback?: boolean;
   backdropClassName?: string;
   loading?: 'eager' | 'lazy';
   media: Pick<MediaSummary, 'backdrop' | 'mediaRef' | 'poster' | 'title' | 'type'>;
@@ -77,6 +78,7 @@ function PosterComposition({ loading, onError, poster, variant }: PosterComposit
 }
 
 export function MediaLandscapeArtwork({
+  allowPosterFallback = true,
   backdropClassName,
   loading,
   media,
@@ -90,7 +92,8 @@ export function MediaLandscapeArtwork({
   const poster = media.poster;
   const imageLoading = variant === 'hero' ? 'eager' : (loading ?? 'lazy');
   const canShowBackdrop = backdrop !== undefined && backdrop.url !== failedBackdropUrl;
-  const canShowPoster = poster !== undefined && poster.url !== failedPosterUrl;
+  const canShowPoster =
+    allowPosterFallback && poster !== undefined && poster.url !== failedPosterUrl;
   const shouldUsePosterComposition =
     variant === 'card' && panoramicBackdropUrl === backdrop?.url && canShowPoster;
 
@@ -141,6 +144,7 @@ export function MediaLandscapeArtwork({
           loading={imageLoading}
           fetchPriority={variant === 'hero' ? 'high' : 'auto'}
           transparentBackground={canShowPoster}
+          showLoadingSkeleton={!allowPosterFallback}
           onError={handleBackdropError}
           onPanoramicChange={(isPanoramic) =>
             setPanoramicBackdropUrl(isPanoramic ? backdrop.url : null)

@@ -206,7 +206,7 @@ export function MediaCatalog({ type, title, filters }: MediaCatalogProps) {
 
       <header
         className={[
-          'relative isolate overflow-hidden rounded-card border border-context-border',
+          'relative isolate z-20 rounded-card border border-context-border',
           'bg-linear-to-br from-watermark/38 via-watermark/26 to-watermark/32 p-2 shadow-surface sm:p-3',
         ].join(' ')}
       >

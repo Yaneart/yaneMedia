@@ -60,8 +60,6 @@ export function WatchDock({
   const positionLabel = formatPlaybackTime(positionSeconds);
   const durationLabel = hasKnownDuration ? formatPlaybackTime(durationSeconds) : null;
   const progressPercent = hasKnownDuration ? (positionSeconds / durationSeconds) * 100 : 0;
-  const isPortraitArtwork =
-    artwork?.width !== undefined && artwork.height !== undefined && artwork.height > artwork.width;
 
   if (variant === 'sidebar') {
     return (
@@ -70,36 +68,21 @@ export function WatchDock({
         className="watch-dock-sidebar pointer-events-auto relative isolate aspect-square w-full max-w-[calc(100dvh-38.5rem)] overflow-hidden rounded-card border border-[var(--theme-watch-dock-border)] bg-black shadow-surface ring-1 ring-inset ring-white/5 transition-[border-color,box-shadow] duration-300 ease-out motion-reduce:transition-none"
       >
         {artwork && (
-          <div className="absolute inset-x-0 top-0 h-[84%] overflow-hidden">
-            <img
-              src={artwork.url}
-              alt=""
-              width={artwork.width}
-              height={artwork.height}
-              decoding="async"
-              className={[
-                'absolute inset-0 size-full',
-                isPortraitArtwork ? 'scale-110 object-cover opacity-50 blur-lg' : 'object-cover',
-              ].join(' ')}
-            />
-            {isPortraitArtwork && (
-              <img
-                src={artwork.url}
-                alt=""
-                width={artwork.width}
-                height={artwork.height}
-                decoding="async"
-                className="absolute inset-0 size-full object-contain"
-              />
-            )}
-          </div>
+          <img
+            src={artwork.url}
+            alt=""
+            width={artwork.width}
+            height={artwork.height}
+            decoding="async"
+            className="absolute inset-0 size-full object-cover object-[center_30%]"
+          />
         )}
 
         <div
           className="pointer-events-none absolute inset-0"
           style={{
             background:
-              'linear-gradient(to bottom, transparent 26%, rgb(0 0 0 / 12%) 40%, rgb(0 0 0 / 58%) 60%, rgb(0 0 0 / 92%) 75%, #000 82%)',
+              'linear-gradient(to bottom, rgb(0 0 0 / 8%) 25%, rgb(0 0 0 / 25%) 45%, rgb(0 0 0 / 75%) 72%, rgb(0 0 0 / 95%) 100%)',
           }}
         />
 
