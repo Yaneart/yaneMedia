@@ -1,6 +1,6 @@
 import type { MediaSourceOption } from '@/entities/media-source';
 import { Button, DownIcon, Popover } from '@/shared';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 
 import { getDirectTrackKey, getPlaybackSourcePanel } from '../model/sourceSelection';
 
@@ -28,6 +28,9 @@ type PlaybackSourcePickerProps = {
   onEmbedSelect: (sourceRef: string) => void;
   onDirectSelect: (trackKey: string) => void;
   onQualitySelect: (sourceRef: string) => void;
+  torrentOpen?: boolean;
+  onTorrentOpenChange?: (open: boolean) => void;
+  torrentPanel?: (close: () => void) => ReactNode;
   align?: 'start' | 'end';
   isLoading?: boolean;
 };
@@ -66,6 +69,9 @@ export function PlaybackSourcePicker({
   onEmbedSelect,
   onDirectSelect,
   onQualitySelect,
+  torrentOpen = false,
+  onTorrentOpenChange,
+  torrentPanel,
   align = 'start',
   isLoading = false,
 }: PlaybackSourcePickerProps) {
@@ -73,18 +79,32 @@ export function PlaybackSourcePicker({
   const tracks = Array.from(
     new Map(directSources.map((source) => [getDirectTrackKey(source), source])).entries(),
   );
-  const showBothPanels = embedSources.length > 0 && tracks.length > 0;
-  const [activePanel, setActivePanel] = useState<'players' | 'direct'>(() =>
+  const [popoverOpen, setPopoverOpen] = useState(false);
+  const [activePanel, setActivePanel] = useState<'players' | 'direct' | 'torrent'>(() =>
     getPlaybackSourcePanel(selectedSource),
   );
-  const visiblePanel = showBothPanels ? activePanel : tracks.length > 0 ? 'direct' : 'players';
+  const visiblePanel = activePanel;
+  const selectedPanel =
+    selectedSource?.provider === 'torrent' ? 'torrent' : getPlaybackSourcePanel(selectedSource);
 
   useEffect(() => {
-    setActivePanel(getPlaybackSourcePanel(selectedSource));
-  }, [selectedSource]);
+    setActivePanel(selectedPanel);
+  }, [selectedSource?.sourceRef, selectedPanel]);
+
+  useEffect(() => {
+    if (!torrentOpen) return;
+    setActivePanel('torrent');
+    setPopoverOpen(true);
+  }, [torrentOpen]);
 
   return (
     <Popover
+      open={popoverOpen}
+      keepMounted={!!torrentPanel}
+      onOpenChange={(open) => {
+        setPopoverOpen(open);
+        onTorrentOpenChange?.(open && activePanel === 'torrent');
+      }}
       trigger={
         <span className="flex max-w-52 items-center gap-2 truncate">
           <span className="text-caption text-text-secondary">{labels.source}</span>
@@ -100,7 +120,7 @@ export function PlaybackSourcePicker({
       triggerClassName="min-h-10 w-full justify-between rounded-control border border-border bg-control px-3 2xl:w-auto 2xl:min-w-44"
       className="w-full min-w-0 2xl:w-auto"
       align={align}
-      panelClassName="max-h-[calc(100dvh-2rem)] w-[min(19rem,calc(100vw-2rem))] overflow-y-auto rounded-overlay bg-popover p-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      panelClassName={`max-h-[min(44rem,calc(100dvh-2rem))] ${torrentPanel ? 'w-[min(36rem,calc(100vw-2rem))]' : 'w-[min(19rem,calc(100vw-2rem))]'} overflow-y-auto rounded-overlay bg-popover p-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden`}
     >
       {(close) => (
         <div>
@@ -115,30 +135,69 @@ export function PlaybackSourcePicker({
             </div>
           )}
 
-          {showBothPanels && (
-            <div
-              role="tablist"
-              aria-label={labels.source}
-              className="mb-2 grid grid-cols-2 rounded-control bg-control p-1"
-            >
-              {(['players', 'direct'] as const).map((panel) => (
-                <Button
-                  key={panel}
-                  role="tab"
-                  aria-selected={activePanel === panel}
-                  size="small"
-                  variant={activePanel === panel ? 'secondary' : 'bare'}
-                  className="min-h-8 border-0 px-2 text-xs"
-                  onClick={() => setActivePanel(panel)}
-                >
-                  {panel === 'players' ? labels.players : labels.direct}
-                </Button>
-              ))}
+          {(torrentPanel || (embedSources.length > 0 && tracks.length > 0)) && (
+            <div className="sticky -top-3 z-20 -mx-3 mb-3 bg-popover px-3 pt-3 pb-3">
+              <div
+                role="tablist"
+                aria-label={labels.source}
+                className="flex gap-1 rounded-control bg-control p-1"
+              >
+                {(
+                  ['players', 'direct', ...(torrentPanel ? ['torrent' as const] : [])] as const
+                ).map((panel) => (
+                  <Button
+                    key={panel}
+                    role="tab"
+                    aria-selected={activePanel === panel}
+                    size="small"
+                    variant={activePanel === panel ? 'secondary' : 'bare'}
+                    className="min-h-9 flex-1 border-0 px-2 text-xs"
+                    onClick={() => {
+                      setActivePanel(panel);
+                      onTorrentOpenChange?.(panel === 'torrent');
+                    }}
+                    onKeyDown={(event) => {
+                      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+                      event.preventDefault();
+                      const tabs = Array.from(
+                        event.currentTarget.parentElement!.querySelectorAll<HTMLButtonElement>(
+                          '[role="tab"]',
+                        ),
+                      );
+                      const index = tabs.indexOf(event.currentTarget);
+                      const next =
+                        event.key === 'Home'
+                          ? 0
+                          : event.key === 'End'
+                            ? tabs.length - 1
+                            : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) %
+                              tabs.length;
+                      tabs[next]?.focus();
+                      tabs[next]?.click();
+                    }}
+                  >
+                    {panel === 'players'
+                      ? labels.players
+                      : panel === 'direct'
+                        ? labels.direct
+                        : 'Торренты'}
+                  </Button>
+                ))}
+              </div>
             </div>
           )}
 
+          <div hidden={visiblePanel !== 'torrent'}>
+            {torrentPanel?.(() => {
+              close();
+              onTorrentOpenChange?.(false);
+            })}
+          </div>
           {visiblePanel === 'players' ? (
             <section aria-label={labels.players} className="space-y-1">
+              {embedSources.length === 0 && (
+                <p className="p-3 text-sm text-text-secondary">Плееры пока не найдены.</p>
+              )}
               {embedSources.map((source) => (
                 <Button
                   key={source.sourceRef}
@@ -162,8 +221,11 @@ export function PlaybackSourcePicker({
                 </Button>
               ))}
             </section>
-          ) : (
+          ) : visiblePanel === 'direct' ? (
             <section aria-label={labels.directVideo} className="space-y-1">
+              {tracks.length === 0 && (
+                <p className="p-3 text-sm text-text-secondary">Прямые источники пока не найдены.</p>
+              )}
               {tracks.map(([trackKey, source]) => {
                 const qualities = directSources.filter(
                   (qualitySource) => getDirectTrackKey(qualitySource) === trackKey,
@@ -217,7 +279,7 @@ export function PlaybackSourcePicker({
                 );
               })}
             </section>
-          )}
+          ) : null}
         </div>
       )}
     </Popover>

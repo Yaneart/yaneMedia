@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 import type { TorrentCandidate } from '../src/entities/torrent-session';
 import {
   candidateOptions,
+  candidateTrackerLabel,
   emptyCandidateFilters,
   selectCandidates,
 } from '../src/features/torrent-launch/model/candidateView';
@@ -27,6 +28,31 @@ const item = (title: string, values: Partial<TorrentCandidate> = {}): TorrentCan
 });
 
 describe('candidate sorting and filtering', () => {
+  test('orders resolution options from largest to smallest and keeps unknown last', () => {
+    const resolutions = ['1080p', null, '720p', '4k', '2160p', '480p', '8k', '1440p'];
+    expect(
+      candidateOptions(
+        resolutions.map((resolution, i) => item(String(i), { resolution })),
+        'resolution',
+      ).map((x) => x.value),
+    ).toEqual(['8k', '4k', '2160p', '1440p', '1080p', '720p', '480p', 'Не указано']);
+  });
+
+  test('shortens display names without changing tracker filter values', () => {
+    const trackers = ['RuTracker.org', 'NoNaMe Club', 'BigFANGroup', 'Kinozal', 'YTS'];
+    expect(trackers.map(candidateTrackerLabel)).toEqual([
+      'RuTracker',
+      'NNM-Club',
+      'BigFAN',
+      'Kinozal',
+      'YTS',
+    ]);
+    const candidates = trackers.map((tracker, i) => item(String(i), { tracker }));
+    expect(
+      selectCandidates(candidates, 'best', { ...emptyCandidateFilters, tracker: 'NoNaMe Club' })[0]
+        ?.tracker,
+    ).toBe('NoNaMe Club');
+  });
   const items = [
     item('Unknown', { score: 50 }),
     item('Zero', { seeders: 0, publishedAt: '2020-01-01', score: 20 }),

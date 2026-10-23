@@ -21,6 +21,29 @@ export const unknownLabel = 'Не указано';
 const label = (value: string | null) => value || unknownLabel;
 export const candidateVoice = (item: TorrentCandidate) => label(item.voice ?? item.studio);
 
+export function candidateTrackerLabel(tracker: string) {
+  const names: Record<string, string> = {
+    'rutracker.org': 'RuTracker',
+    'noname club': 'NNM-Club',
+    bigfangroup: 'BigFAN',
+  };
+  return names[tracker.trim().toLowerCase()] ?? tracker;
+}
+
+function resolutionHeight(value: string) {
+  const aliases: Record<string, number> = {
+    '8k': 4320,
+    '4k': 2160,
+    '2k': 1440,
+    uhd: 2160,
+    fhd: 1080,
+    hd: 720,
+    sd: 480,
+  };
+  const normalized = value.trim().toLowerCase();
+  return aliases[normalized] ?? Number(normalized.match(/^(\d{3,4})[pi]?$/)?.[1] ?? 0);
+}
+
 export function candidateOptions(
   items: readonly TorrentCandidate[],
   field: 'tracker' | 'resolution' | 'quality' | 'voice',
@@ -31,7 +54,11 @@ export function candidateOptions(
     counts.set(value, (counts.get(value) ?? 0) + 1);
   }
   return [...counts]
-    .sort(([a], [b]) => a.localeCompare(b, 'ru'))
+    .sort(([a], [b]) =>
+      field === 'resolution'
+        ? resolutionHeight(b) - resolutionHeight(a) || b.localeCompare(a, 'ru')
+        : a.localeCompare(b, 'ru'),
+    )
     .map(([value, count]) => ({ value, count }));
 }
 

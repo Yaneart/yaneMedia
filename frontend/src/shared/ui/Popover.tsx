@@ -1,6 +1,7 @@
 import { IconButton, type IconButtonProps } from './IconButton';
 import {
   useEffect,
+  useCallback,
   useId,
   useLayoutEffect,
   useRef,
@@ -26,6 +27,9 @@ export type PopoverProps = Omit<ComponentPropsWithoutRef<'div'>, 'children'> & {
   triggerVariant?: IconButtonProps['variant'];
   triggerClassName?: string;
   panelClassName?: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  keepMounted?: boolean;
 };
 
 export function Popover({
@@ -39,9 +43,20 @@ export function Popover({
   triggerClassName = '',
   panelClassName = 'min-w-48 rounded-overlay bg-popover p-2',
   className = '',
+  open,
+  onOpenChange,
+  keepMounted = false,
   ...props
 }: PopoverProps) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isOpen = open ?? internalOpen;
+  const setIsOpen = useCallback(
+    (value: boolean) => {
+      setInternalOpen(value);
+      onOpenChange?.(value);
+    },
+    [onOpenChange],
+  );
   const panelId = useId();
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -90,7 +105,7 @@ export function Popover({
       document.removeEventListener('focusin', handleFocusIn);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen]);
+  }, [isOpen, setIsOpen]);
 
   useLayoutEffect(() => {
     if (!isOpen) return;
@@ -165,15 +180,16 @@ export function Popover({
         size={triggerSize}
         variant={triggerVariant}
         className={triggerClassName}
-        onClick={() => setIsOpen((current) => !current)}
+        onClick={() => setIsOpen(!isOpen)}
       >
         {trigger}
       </IconButton>
 
-      {isOpen &&
+      {(isOpen || keepMounted) &&
         createPortal(
           <div
             ref={panelRef}
+            hidden={!isOpen}
             id={panelId}
             style={panelStyle}
             className={[
