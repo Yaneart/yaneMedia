@@ -1,8 +1,13 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 
 import { logout, useAuth } from '@/entities/auth';
+import {
+  stopTorrentSession,
+  torrentSessionQueryKeys,
+  type TorrentSession,
+} from '@/entities/torrent-session';
 import { SocialLoginLink } from '@/features/social-access';
 import { privateProfileQueryOptions } from '@/features/social-data';
 import { Button, ExitIcon, Popover, ProfileIcon } from '@/shared';
@@ -24,6 +29,7 @@ const triggerClassName = [
 ].join(' ');
 
 export function AccountControl({ profilePath, placement = 'bottom' }: AccountControlProps) {
+  const queryClient = useQueryClient();
   const { state, setGuest, refresh } = useAuth();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
@@ -44,6 +50,15 @@ export function AccountControl({ profilePath, placement = 'bottom' }: AccountCon
     setLogoutError(null);
 
     try {
+      const knownSessions = queryClient.getQueriesData<TorrentSession | null>({
+        queryKey: torrentSessionQueryKeys.root(accountKey),
+      });
+      const sessionIds = new Set(
+        knownSessions.map(([, session]) => session?.id).filter((id): id is string => !!id),
+      );
+      await Promise.allSettled(
+        [...sessionIds].map((id) => stopTorrentSession(id, AbortSignal.timeout(5_000))),
+      );
       await logout();
       setGuest();
     } catch (error: unknown) {

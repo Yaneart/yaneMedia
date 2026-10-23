@@ -49,6 +49,21 @@ describe('AuthRepository', () => {
     await expect(repository.create(data)).rejects.toMatchObject({ cause: error });
   });
 
+  it('closes torrent admission in the same transaction as logout', async () => {
+    query.mockImplementation((statement) =>
+      Promise.resolve({
+        rows: statement.text.includes('delete from "sessions"') ? [[data.userId]] : [],
+      }),
+    );
+    await repository.deleteByTokenHash(data.tokenHash);
+    const statements = query.mock.calls.map(([statement]) => statement.text);
+    expect(statements).toHaveLength(4);
+    expect(statements[0]).toBe('begin');
+    expect(statements[1]).toContain('delete from "sessions"');
+    expect(statements[2]).toContain('update "torrent_sessions" set "state" =');
+    expect(statements[3]).toBe('commit');
+  });
+
   it('upserts one password-reset digest per user with a cooldown', async () => {
     const reset: NewPasswordResetToken = {
       tokenHash: 'b'.repeat(64),
@@ -81,12 +96,13 @@ describe('AuthRepository', () => {
     ).resolves.toBe(true);
 
     const statements = query.mock.calls.map(([statement]) => statement.text);
-    expect(statements).toHaveLength(5);
+    expect(statements).toHaveLength(6);
     expect(statements[0]).toBe('begin');
     expect(statements[1]).toContain('delete from "password_reset_tokens"');
     expect(statements[2]).toContain('update "users" set "password_hash" =');
     expect(statements[3]).toContain('delete from "sessions"');
-    expect(statements[4]).toBe('commit');
+    expect(statements[4]).toContain('update "torrent_sessions" set "state" =');
+    expect(statements[5]).toBe('commit');
   });
 
   it('leaves the password and sessions unchanged for an invalid reset token', async () => {

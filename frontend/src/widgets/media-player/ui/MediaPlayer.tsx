@@ -6,7 +6,11 @@ import {
 } from '@/entities/media-source';
 import { ErrorState, IconButton, PlayIcon, Spinner } from '@/shared';
 
-import { MediaVideoRenderer, type MediaVideoDirectControls } from './MediaVideoRenderer';
+import {
+  MediaVideoRenderer,
+  type MediaVideoDirectControls,
+  type TorrentVideoTimeline,
+} from './MediaVideoRenderer';
 
 export type MediaPlayerStatus = 'loading' | 'ready' | 'error';
 
@@ -36,9 +40,11 @@ export type MediaPlayerProps = {
     reason?: 'periodic' | 'metadata' | 'seek' | 'pause' | 'ended',
   ) => void;
   onRetry?: () => void;
+  errorDescription?: string;
   emptyState?: MediaPlayerEmptyState;
   embedded?: boolean;
   directControls?: MediaVideoDirectControls;
+  torrentTimeline?: TorrentVideoTimeline;
 };
 
 type PlaybackIssueContent = {
@@ -105,9 +111,11 @@ export function MediaPlayer({
   onPause,
   onProgress,
   onRetry,
+  errorDescription,
   emptyState,
   embedded = false,
   directControls,
+  torrentTimeline,
 }: MediaPlayerProps) {
   const sourceIssue = source ? getMediaSourcePlaybackIssue(source) : null;
   const sourceIssueContent = sourceIssue ? playbackIssueContent[sourceIssue] : null;
@@ -156,6 +164,7 @@ export function MediaPlayer({
             shouldAutoPlay={shouldAutoPlay}
             initialPositionSeconds={initialPositionSeconds}
             directControls={directControls}
+            torrentTimeline={torrentTimeline}
             onReady={onReady}
             onError={onError}
             onPlay={onPlay}
@@ -170,7 +179,7 @@ export function MediaPlayer({
             activeSource && status === 'ready' ? 'pointer-events-none' : '',
           ].join(' ')}
         >
-          {!source && emptyState && (
+          {!source && !isStarted && emptyState && (
             <ErrorState
               variant="player"
               title={emptyState.title}
@@ -215,10 +224,10 @@ export function MediaPlayer({
             </div>
           )}
 
-          {source && isStarted && !sourceIssue && status === 'loading' && (
+          {isStarted && status === 'loading' && (!source || !sourceIssue) && (
             <Spinner
               size="large"
-              label={`Загрузка плеера ${source.label}`}
+              label={`Загрузка плеера ${source?.label ?? 'торрента'}`}
               className="[&>span:first-child]:text-white [&>span:first-child>span:last-child]:text-white/60"
             />
           )}
@@ -232,11 +241,11 @@ export function MediaPlayer({
             </div>
           )}
 
-          {source && isStarted && !sourceIssue && status === 'error' && (
+          {isStarted && (!source || !sourceIssue) && status === 'error' && (
             <ErrorState
               variant="player"
               title="Не удалось загрузить плеер"
-              description="Проверьте подключение и попробуйте ещё раз."
+              description={errorDescription ?? 'Проверьте подключение и попробуйте ещё раз.'}
               onRetry={onRetry}
               retryLabel="Повторить"
               visualLabel="Плеер недоступен"

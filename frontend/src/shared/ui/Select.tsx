@@ -108,6 +108,11 @@ export function Select({
   };
 
   const handleTriggerKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+    if (event.key === 'Escape' && isOpen) {
+      event.stopPropagation();
+      setIsOpen(false);
+      return;
+    }
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault();
       setIsOpen(true);
@@ -115,6 +120,12 @@ export function Select({
   };
 
   const handleListboxKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Escape') {
+      event.stopPropagation();
+      setIsOpen(false);
+      triggerRef.current?.focus();
+      return;
+    }
     const optionElements = optionRefs.current.filter(
       (option): option is HTMLButtonElement => option !== null,
     );

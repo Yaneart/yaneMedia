@@ -7,6 +7,8 @@ RUN bun install --frozen-lockfile --network-concurrency 8
 
 FROM node:24.18.0-bookworm-slim
 
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /backend
 
 COPY --from=dependencies /backend/node_modules ./node_modules

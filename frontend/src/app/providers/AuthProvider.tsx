@@ -8,6 +8,7 @@ import {
   type AuthState,
   type AuthUser,
 } from '@/entities/auth';
+import { resetTorrentClientScope } from '@/entities/torrent-session';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
@@ -30,6 +31,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const previousAccountKey = authenticatedAccountKeyRef.current;
       if (previousAccountKey && previousAccountKey !== user.email) {
+        resetTorrentClientScope();
         clearAccountQueries(queryClient, previousAccountKey);
       }
 
@@ -41,6 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const setGuest = useCallback(() => {
     cancelRequest();
+    resetTorrentClientScope();
     clearAccountQueries(queryClient, authenticatedAccountKeyRef.current ?? undefined);
     authenticatedAccountKeyRef.current = null;
     setState({ status: 'guest', user: null });

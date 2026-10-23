@@ -1,7 +1,14 @@
 import { ApiClientError } from '../../../shared/api';
 import { parseInternalReturnTo } from '../../../shared/lib/internalReturnTo';
 
-export const socialActionIntents = ['rating', 'review', 'comment', 'report', 'profile'] as const;
+export const socialActionIntents = [
+  'rating',
+  'review',
+  'comment',
+  'report',
+  'profile',
+  'torrent',
+] as const;
 
 export type SocialActionIntent = (typeof socialActionIntents)[number];
 export type SocialAccessErrorKind =
@@ -34,6 +41,7 @@ const loginDescriptions: Record<SocialActionIntent, string> = {
   comment: 'Войдите, чтобы участвовать в обсуждении.',
   report: 'Войдите, чтобы отправить жалобу.',
   profile: 'Войдите, чтобы открыть личный профиль.',
+  torrent: 'Войдите, чтобы смотреть торрент.',
 };
 
 export function getSocialLoginDescription(intent: SocialActionIntent | null): string {

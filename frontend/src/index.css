@@ -272,6 +272,56 @@
   --theme-hero-overlay-soft: rgb(241 240 235 / 8%);
 }
 
+.playback-source-popover {
+  border-color: var(--theme-context-border);
+  background-color: var(--theme-popover);
+  background-image: radial-gradient(
+    ellipse at top right,
+    color-mix(in srgb, var(--theme-watermark) 16%, transparent),
+    transparent 70%
+  );
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--theme-watermark) 8%, transparent),
+    0 20px 60px rgb(0 0 0 / 25%);
+}
+
+.playback-source-header {
+  background-color: var(--theme-popover);
+  background-image: linear-gradient(
+    110deg,
+    color-mix(in srgb, var(--theme-watermark) 5%, transparent),
+    color-mix(in srgb, var(--theme-watermark) 16%, transparent)
+  );
+  border-bottom: 1px solid var(--theme-context-border);
+}
+
+.playback-source-tabs {
+  background-color: var(--theme-control);
+  border: 1px solid var(--theme-context-border);
+}
+
+.playback-source-tab {
+  border-color: transparent;
+  color: var(--theme-text-secondary);
+}
+
+.playback-source-tab:hover {
+  color: var(--theme-text-primary);
+  background-color: var(--theme-control-hover);
+}
+
+.playback-source-tab[aria-selected='true'] {
+  color: var(--theme-text-primary);
+  border-color: color-mix(in srgb, var(--theme-watermark) 50%, transparent);
+  background-color: color-mix(in srgb, var(--theme-watermark) 24%, var(--theme-control));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--theme-accent-text) 20%, transparent);
+}
+
+.playback-source-popover .playback-source-surface[aria-pressed='true'] {
+  border-color: var(--theme-accent-text);
+  box-shadow: inset 0 0 0 1px var(--theme-context-border);
+}
+
 .playback-source-blue {
   --playback-source-accent: #93c5fd;
 }

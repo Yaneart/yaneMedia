@@ -2,7 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { NewSession, Session, sessions } from './entities/session.entity';
 import { type User, users } from '../users/entities/user.entity';
-import { and, eq, gt, isNotNull, isNull, lte } from 'drizzle-orm';
+import { and, eq, gt, inArray, isNotNull, isNull, lte, sql } from 'drizzle-orm';
+import { torrentSessions } from '../torrent/torrent-session.entity';
+import { activeTorrentStates } from '../torrent/torrent-session.state';
 import {
   emailVerificationTokens,
   NewEmailVerificationToken,
@@ -26,7 +28,11 @@ export class AuthRepository {
   async findUserBySessionHash(
     tokenHash: string,
     now = new Date(),
-  ): Promise<Pick<User, 'id' | 'displayName' | 'email' | 'createdAt' | 'role'> | undefined> {
+    requireVerified = true,
+  ): Promise<
+    | Pick<User, 'id' | 'displayName' | 'email' | 'createdAt' | 'role' | 'emailVerifiedAt'>
+    | undefined
+  > {
     const [user] = await this.databaseService.db
       .select({
         id: users.id,
@@ -34,6 +40,7 @@ export class AuthRepository {
         email: users.email,
         createdAt: users.createdAt,
         role: users.role,
+        emailVerifiedAt: users.emailVerifiedAt,
       })
       .from(sessions)
       .innerJoin(users, eq(sessions.userId, users.id))
@@ -41,7 +48,7 @@ export class AuthRepository {
         and(
           eq(sessions.tokenHash, tokenHash),
           gt(sessions.expiresAt, now),
-          isNotNull(users.emailVerifiedAt),
+          ...(requireVerified ? [isNotNull(users.emailVerifiedAt)] : []),
         ),
       )
       .limit(1);
@@ -50,7 +57,28 @@ export class AuthRepository {
   }
 
   async deleteByTokenHash(tokenHash: string): Promise<void> {
-    await this.databaseService.db.delete(sessions).where(eq(sessions.tokenHash, tokenHash));
+    await this.databaseService.db.transaction(async (tx) => {
+      const [session] = await tx
+        .delete(sessions)
+        .where(eq(sessions.tokenHash, tokenHash))
+        .returning({ userId: sessions.userId });
+      if (!session) return;
+      const now = new Date();
+      await tx
+        .update(torrentSessions)
+        .set({
+          state: 'stopping',
+          version: sql`${torrentSessions.version} + 1`,
+          updatedAt: now,
+          cleanupAfter: now,
+        })
+        .where(
+          and(
+            eq(torrentSessions.ownerId, session.userId),
+            inArray(torrentSessions.state, [...activeTorrentStates, 'failed']),
+          ),
+        );
+    });
   }
 
   async deleteExpiredByTokenHash(tokenHash: string, now = new Date()): Promise<void> {
@@ -149,6 +177,20 @@ export class AuthRepository {
         .set({ passwordHash, updatedAt: now })
         .where(eq(users.id, token.userId));
       await tx.delete(sessions).where(eq(sessions.userId, token.userId));
+      await tx
+        .update(torrentSessions)
+        .set({
+          state: 'stopping',
+          version: sql`${torrentSessions.version} + 1`,
+          updatedAt: now,
+          cleanupAfter: now,
+        })
+        .where(
+          and(
+            eq(torrentSessions.ownerId, token.userId),
+            inArray(torrentSessions.state, [...activeTorrentStates, 'failed']),
+          ),
+        );
 
       return true;
     });

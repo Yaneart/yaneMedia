@@ -40,3 +40,11 @@ export {
   mediaType,
 } from '../media/catalog/editorial-catalog.schema';
 export { mediaWorkAliases, mediaWorks } from '../media/registry/media-registry.schema';
+export {
+  torrentSessionState,
+  torrentSessions,
+  torrentEngineBindings,
+  torrentSessionFiles,
+  torrentSessionProbes,
+  torrentIdempotency,
+} from '../torrent/torrent-session.entity';

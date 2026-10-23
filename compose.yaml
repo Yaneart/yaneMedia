@@ -15,6 +15,108 @@ services:
       timeout: 5s
       retries: 5
       start_period: 5s
+    networks:
+      - database
+
+  torrserver:
+    logging:
+      driver: none
+    build:
+      context: ./torrserver
+      args:
+        TORRSERVER_URL: https://github.com/YouROK/TorrServer/releases/download/MatriX.146.2/TorrServer-gst-linux-amd64
+        TORRSERVER_SHA256: ca71d268ed326e13594567010270a7e7fa8744337fec9378a4cefd8892da97ce
+    command:
+      - --httpauth
+      - --path
+      - /config
+      - --port
+      - "18090"
+      - --ip
+      - 127.0.0.1
+      - --torrentaddr
+      - :32000
+      - --maxsize
+      - "32212254720"
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,mode=1777,nosuid,nodev
+    cap_drop:
+      - ALL
+    cap_add:
+      # Startup only: firewall wrapper drops all capabilities before engine/proxy exec.
+      - NET_ADMIN
+      - SETUID
+      - SETGID
+      - SETPCAP
+    security_opt:
+      - no-new-privileges:true
+    user: "0:0"
+    cpus: 4
+    mem_limit: 4g
+    memswap_limit: 4g
+    pids_limit: 256
+    ulimits:
+      nofile:
+        soft: 1024
+        hard: 1024
+    volumes:
+      - torrserver-config:/config
+      - torrserver-cache:/cache
+    secrets:
+      - torrserver_username
+      - torrserver_password
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          curl --fail --silent --show-error --max-time 3
+          --user "$$(cat /run/secrets/torrserver_username):$$(cat /run/secrets/torrserver_password)"
+          --header 'Content-Type: application/json' --data '{"action":"get"}'
+          http://127.0.0.1:8090/settings >/dev/null
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    networks:
+      - torrent-control
+      - torrent-egress
+
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr@sha256:4e992f9b9229bc8c97c666b10b042a7360bce1d99b196e8aa29fd9805849cbf1
+    restart: unless-stopped
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: Europe/Moscow
+    volumes:
+      - prowlarr-config:/config
+    networks:
+      - discovery-control
+      - discovery-egress
+
+  flaresolverr:
+    profiles: ["protected-trackers"]
+    image: ghcr.io/flaresolverr/flaresolverr:v3.5.2@sha256:c80ae007ce2ccdcd217a12426e4f039ef763ff90738c808d38810c3e59323767
+    restart: unless-stopped
+    logging:
+      driver: none
+    environment:
+      LOG_LEVEL: warn
+      LOG_HTML: "false"
+      TZ: Europe/Moscow
+      LANG: en_US.UTF-8
+      TEST_URL: https://example.com
+    cpus: 2
+    mem_limit: 2g
+    memswap_limit: 2g
+    pids_limit: 512
+    shm_size: 512m
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - discovery-egress
 
   backend:
     build: ./backend
@@ -26,6 +128,17 @@ services:
       MEDIA_ASSETS_ROOT: /app/storage/media-assets
       PROFILE_ASSETS_ROOT: /app/storage/profile-assets
       SESSION_TTL_DAYS: "30"
+      TORRENT_STREAMING_ENABLED: "true"
+      TORRSERVER_BASE_URL: http://torrserver:8090
+      TORRSERVER_USERNAME_FILE: /run/secrets/torrserver_username
+      TORRSERVER_PASSWORD_FILE: /run/secrets/torrserver_password
+      TORRENT_IDEMPOTENCY_SECRET_FILE: /run/secrets/torrent_idempotency
+      TORRSERVER_CONNECT_TIMEOUT_MS: "3000"
+      TORRSERVER_HEADERS_TIMEOUT_MS: "30000"
+      TORRSERVER_BODY_TIMEOUT_MS: "30000"
+      TORRSERVER_METADATA_TIMEOUT_MS: "120000"
+      PROWLARR_BASE_URL: http://prowlarr:9696
+      PROWLARR_API_KEY_FILE: /run/secrets/prowlarr_api_key
     ports:
       - "3000:3000"
     volumes:
@@ -34,6 +147,18 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      torrserver:
+        condition: service_healthy
+    secrets:
+      - torrserver_username
+      - torrserver_password
+      - torrent_idempotency
+      - prowlarr_api_key
+    networks:
+      - app
+      - database
+      - torrent-control
+      - discovery-control
 
   frontend:
     build: ./frontend
@@ -41,6 +166,32 @@ services:
       - "5173:5173"
     depends_on:
       - backend
+    networks:
+      - app
 
 volumes:
   postgres-data:
+  torrserver-config:
+  torrserver-cache:
+  prowlarr-config:
+
+secrets:
+  torrserver_username:
+    file: ./storage/torrent-engine/secrets/username
+  torrserver_password:
+    file: ./storage/torrent-engine/secrets/password
+  torrent_idempotency:
+    file: ./storage/torrent-engine/secrets/idempotency
+  prowlarr_api_key:
+    file: ./storage/torrent-discovery/secrets/api-key
+
+networks:
+  app:
+  database:
+    internal: true
+  torrent-control:
+    internal: true
+  torrent-egress:
+  discovery-control:
+    internal: true
+  discovery-egress:
