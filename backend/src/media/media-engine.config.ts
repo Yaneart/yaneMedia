@@ -12,6 +12,7 @@ const PROVIDER_TIMEOUT_MS = 5_000;
 const PRIMARY_METADATA_TIMEOUT_MS = 2_000;
 const CINEMETA_TIMEOUT_MS = 15_000;
 const STREAMING_PROVIDER_TIMEOUT_MS = 10_000;
+const RUTUBE_STREAMING_PROVIDER_TIMEOUT_MS = 20_000;
 const VIDEOHUB_STREAMING_PROVIDER_TIMEOUT_MS = 20_000;
 const IDENTITY_TIMEOUT_MS = 10_000;
 const IDENTITY_SOURCE_TIMEOUT_MS = 5_000;
@@ -37,6 +38,7 @@ export async function createMediaEngine(
       kinobdProvider,
       kinobdStreamingProvider,
       kodikStreamingProvider,
+      rutubeStreamingProvider,
       shikimoriGraphqlProvider,
       shikimoriProvider,
       shikimoriCinemaIdentitySource,
@@ -61,6 +63,7 @@ export async function createMediaEngine(
   const kodikApiKey = readOptionalValue(env.KODIK_API_KEY);
   const streamingProviders: StreamingProvider[] = [
     ...(kodikApiKey ? [kodikStreamingProvider({ apiKey: kodikApiKey })] : []),
+    rutubeStreamingProvider(),
     aderomStreamingProvider(),
     initemStreamingProvider(),
     kinobdStreamingProvider({ playerValidationLimit: 0 }),
@@ -75,6 +78,7 @@ export async function createMediaEngine(
     timeoutMs: Math.max(
       CINEMETA_TIMEOUT_MS,
       STREAMING_PROVIDER_TIMEOUT_MS,
+      RUTUBE_STREAMING_PROVIDER_TIMEOUT_MS,
       VIDEOHUB_STREAMING_PROVIDER_TIMEOUT_MS,
     ),
     circuitBreaker: { recoveryTimeoutMs: CIRCUIT_RECOVERY_TIMEOUT_MS },
@@ -89,6 +93,7 @@ export async function createMediaEngine(
       tvmaze: PROVIDER_TIMEOUT_MS,
       wikidata: PROVIDER_TIMEOUT_MS,
       'kodik-streaming': STREAMING_PROVIDER_TIMEOUT_MS,
+      'rutube-streaming': RUTUBE_STREAMING_PROVIDER_TIMEOUT_MS,
       'kinobd-streaming': STREAMING_PROVIDER_TIMEOUT_MS,
       'ddbb-streaming': STREAMING_PROVIDER_TIMEOUT_MS,
       'aniliberty-streaming': STREAMING_PROVIDER_TIMEOUT_MS,

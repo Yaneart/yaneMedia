@@ -42,6 +42,7 @@ const providerStyles: Record<string, string> = {
   'veoveo-streaming': 'playback-source-violet',
   'videohub-streaming': 'playback-source-emerald',
   'aniliberty-streaming': 'playback-source-pink',
+  'rutube-streaming': 'playback-source-blue',
 };
 
 function getProviderAccent(provider: string) {

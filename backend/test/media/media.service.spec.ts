@@ -573,7 +573,7 @@ describe('MediaService', () => {
     ]);
   });
 
-  it('enriches the availability query and forwards the playback User-Agent', async () => {
+  it('uses the localized movie title for availability and forwards verified IDs and User-Agent', async () => {
     const availability = {
       query: { type: 'movie' },
       options: [],
@@ -620,12 +620,43 @@ describe('MediaService', () => {
           imdb: 'tt0816692',
           kinopoisk: '258687',
         },
-        title: 'Interstellar',
+        title: 'Интерстеллар',
         year: 2014,
       },
       {
         playbackUserAgent: 'browser-user-agent',
       },
+    );
+  });
+
+  it('uses the published localized movie title even when live metadata is unavailable', async () => {
+    const getAvailability = jest.fn().mockResolvedValue({
+      query: { type: 'movie' },
+      options: [],
+      sourceProviders: [],
+      checkedAt: '2026-08-25T00:00:00.000Z',
+    });
+    const service = withCatalog(
+      { getDetails: jest.fn().mockResolvedValue({ details: null }), getAvailability },
+      publishedItem({
+        mediaRef: 'imdb:tt0816692',
+        type: 'movie',
+        title: 'Интерстеллар',
+        originalTitle: 'Interstellar',
+        year: 2014,
+      }),
+    );
+
+    await service.getAvailabilityByRef('imdb:tt0816692');
+
+    expect(getAvailability).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'movie',
+        ids: { imdb: 'tt0816692' },
+        title: 'Интерстеллар',
+        year: 2014,
+      }),
+      { playbackUserAgent: undefined },
     );
   });
 
@@ -749,7 +780,7 @@ describe('MediaService', () => {
       {
         type: 'movie',
         ids: { imdb: 'tt1160419', kinopoisk: '409118' },
-        title: 'Dune',
+        title: 'Дюна',
         year: 2021,
       },
       { playbackUserAgent: 'browser-user-agent', signal: controller.signal },

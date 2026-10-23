@@ -348,6 +348,7 @@ export class MediaService {
       ? { ...(trustedDetails.ids ?? {}), ...engineIds }
       : engineIds;
     const mediaType = catalogItem?.type ?? details!.type;
+    const titleSource = catalogItem ?? details!;
     const currentMediaRef = resolved.identity
       ? this.toPublicRoute(resolved.identity).mediaRef
       : mediaRef;
@@ -368,9 +369,10 @@ export class MediaService {
           ? { animeKind: trustedDetails.animeKind }
           : {}),
         ids: availabilityIds,
-        title: catalogItem
-          ? catalogItem.originalTitle?.trim() || catalogItem.title
-          : details!.originalTitle?.trim() || details!.title,
+        title:
+          mediaType === 'movie'
+            ? titleSource.title
+            : titleSource.originalTitle?.trim() || titleSource.title,
         year: catalogItem?.year ?? details?.year ?? undefined,
         seasonNumber: episodeSelection.seasonNumber,
         episodeNumber: episodeSelection.episodeNumber,

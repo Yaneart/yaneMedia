@@ -84,7 +84,7 @@ services:
       - torrent-egress
 
   prowlarr:
-    image: lscr.io/linuxserver/prowlarr@sha256:4e992f9b9229bc8c97c666b10b042a7360bce1d99b196e8aa29fd9805849cbf1
+    image: lscr.io/linuxserver/prowlarr:2.6.5.5623-ls164@sha256:4e992f9b9229bc8c97c666b10b042a7360bce1d99b196e8aa29fd9805849cbf1
     restart: unless-stopped
     environment:
       PUID: "1000"
@@ -94,28 +94,6 @@ services:
       - prowlarr-config:/config
     networks:
       - discovery-control
-      - discovery-egress
-
-  flaresolverr:
-    profiles: ["protected-trackers"]
-    image: ghcr.io/flaresolverr/flaresolverr:v3.5.2@sha256:c80ae007ce2ccdcd217a12426e4f039ef763ff90738c808d38810c3e59323767
-    restart: unless-stopped
-    logging:
-      driver: none
-    environment:
-      LOG_LEVEL: warn
-      LOG_HTML: "false"
-      TZ: Europe/Moscow
-      LANG: en_US.UTF-8
-      TEST_URL: https://example.com
-    cpus: 2
-    mem_limit: 2g
-    memswap_limit: 2g
-    pids_limit: 512
-    shm_size: 512m
-    security_opt:
-      - no-new-privileges:true
-    networks:
       - discovery-egress
 
   backend:

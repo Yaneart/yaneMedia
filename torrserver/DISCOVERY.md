@@ -75,12 +75,9 @@ browser/solver prototypes не доказали устойчивые login/searc
 definitions и credentials сохранены в Prowlarr; старые сторонние Docker volumes
 не удаляются этой уборкой.
 
-После исправления оператором сети можно отдельно запустить
-`docker compose --profile protected-trackers up -d flaresolverr`, настроить
-native definitions/proxy в loopback admin UI, выбрать их локальные IDs и
-пересоздать backend. Для Prowlarr-only discovery убрать JacRed URL. Профиль
-не исправляет Cloudflare автоматически; нужны повторные search/download и
-authenticated playback/cleanup checks. По умолчанию FlareSolverr не запускается.
+Текущая схема использует JacRed и доступные индексаторы Prowlarr без browser/solver
+proxy. Возврат к прямому доступу к защищённым трекерам требует отдельной проверки
+search/download и authenticated playback/cleanup.
 
 Доказательства browser/codec playback и их границы — в
 [ACCEPTANCE.md](ACCEPTANCE.md). Readiness, метрики, отключение и восстановление

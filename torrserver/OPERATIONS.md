@@ -62,7 +62,6 @@ docker compose up -d --no-deps prowlarr
 credentials живут в volume, а не в Git. Рабочий набор этого стенда: BigFANGroup,
 Nyaa.si, Anime Tosho, YTS через Prowlarr и Kinozal/RuTracker/NoNaMe Club через
 JacRed. Доступность источника и peers меняется; успешный search не доказывает playback.
-FlareSolverr — необязательный профиль `protected-trackers`, текущему набору не нужен.
 
 В Prowlarr проверить API authentication, connection test каждого разрешённого
 indexer и его movie/TV/anime categories. В `backend/.env` задать
@@ -81,7 +80,7 @@ indexer и его movie/TV/anime categories. В `backend/.env` задать
 | BitTorrent `32000` TCP/UDP      | Внутри engine, host publication отсутствует; входящая доступность peers не гарантируется |
 | Prowlarr `9696`                 | Только приватная control-сеть, кроме временного loopback override                        |
 
-Не публиковать engine, его raw UI/MCP и FlareSolverr. Сохранить startup firewall,
+Не публиковать engine и его raw UI/MCP. Сохранить startup firewall,
 сброс capabilities и IPv6 deny: `internal` Docker network сама по себе не блокирует
 частные назначения при исходящем BitTorrent. Движок выделен **только yaneMedia**:
 `listOwned()` перечисляет весь engine, и orphan cleanup считает эти записи своими.
@@ -123,7 +122,6 @@ tmpfs 256 MiB. Cache дисковый, поэтому 24 GiB cache не озна
 
 Практический начальный бюджет для всего локального Docker-стенда — 6 CPU / 8 GiB RAM
 с дальнейшим измерением; это инженерная оценка, не результат нагрузочного теста.
-Необязательный FlareSolverr дополнительно допускает до 2 CPU / 2 GiB и 512 PIDs.
 [Приёмка](ACCEPTANCE.md) содержит только короткие измерения одного потока: backend
 около 145 MiB, engine до 98 MiB; они не определяют transcode capacity или пиковую RAM.
 При обслуживании наблюдать `docker stats --no-stream` и свободное место, а при
@@ -278,8 +276,6 @@ docker compose up -d --no-deps backend
 docker compose stop -t 30 torrserver prowlarr
 ```
 
-Если запускался профиль FlareSolverr, отдельно остановить его:
-`docker compose --profile protected-trackers stop -t 30 flaresolverr`.
 Проверить core health=200, strict feature status=`disabled`, работоспособность
 обычных online sources. Torrent UI может оставаться видимым; новые операции
 недоступны. При последующих `up` оставлять `--no-deps`, иначе зависимость backend

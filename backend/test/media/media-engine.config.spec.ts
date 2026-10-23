@@ -38,6 +38,7 @@ describe('Media Engine configuration', () => {
     ).toEqual([true, true]);
     expect(engine.getStreamingProviders().map(({ name }) => name)).toEqual([
       'kodik-streaming',
+      'rutube-streaming',
       'aderom-streaming',
       'initem-streaming',
       'kinobd-streaming',
@@ -59,5 +60,13 @@ describe('Media Engine configuration', () => {
     const engine = await createMediaEngine({ KODIK_API_KEY: '   ' });
 
     expect(engine.getStreamingProviders().map(({ name }) => name)).not.toContain('kodik-streaming');
+  });
+
+  it('enables token-free Rutube for movies', async () => {
+    const engine = await createMediaEngine();
+    const providers = engine.getStreamingProviders();
+    expect(
+      providers.find(({ name }) => name === 'rutube-streaming')?.capabilities.mediaTypes,
+    ).toEqual(['movie']);
   });
 });

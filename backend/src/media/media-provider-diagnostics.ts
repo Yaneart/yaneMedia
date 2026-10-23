@@ -53,6 +53,7 @@ const PROVIDERS = new Set([
   'videohub-streaming',
   'aderom-streaming',
   'initem-streaming',
+  'rutube-streaming',
 ]);
 const FAILURE_CODES = new Set([
   'PROVIDER_ERROR',
