@@ -11,11 +11,11 @@ import type { PlaybackEpisodeSelection } from '@/entities/playback';
 import {
   cacheTorrentSession,
   isTorrentPlaybackSourceRef,
-  newTorrentIdempotencyKey,
-  startTorrentPlayback,
+  replaceTorrentPlayback,
   stopTorrentSession,
   torrentPlaybackSourceRef,
   torrentSessionQueryOptions,
+  torrentSessionQueryKeys,
   type TorrentSession,
   TorrentRequestError,
 } from '@/entities/torrent-session';
@@ -298,7 +298,7 @@ export function MediaView({
     ...torrentSessionQueryOptions(accountKey, savedTorrentId ?? 'inactive'),
     enabled: authState.status === 'authenticated' && !!savedTorrentId,
     refetchInterval: savedTorrentId ? 60_000 : false,
-    refetchIntervalInBackground: false,
+    refetchIntervalInBackground: true,
   });
   const torrentSession = savedTorrentId
     ? torrentQuery.data?.id === savedTorrentId
@@ -325,7 +325,14 @@ export function MediaView({
     endSession();
   }, [endSession, savedTorrentId, torrentEnded]);
   const torrentPlayback =
-    !torrentEnded && torrentSession?.state === 'ready' ? torrentSession.playback : null;
+    !torrentEnded && torrentSession?.state === 'ready'
+      ? torrentSession.playback
+      : !torrentEnded &&
+          torrentSession?.state === 'preparing' &&
+          launchedTorrent?.accountKey === accountKey &&
+          launchedTorrent.session.id === activeTorrentId
+        ? launchedTorrent.session.playback
+        : null;
   const torrentUnavailable =
     torrentQuery.isError ||
     (torrentSession !== null &&
@@ -705,26 +712,21 @@ export function MediaView({
   };
 
   const seekTorrent = useCallback(
-    async (positionSeconds: number) => {
-      if (!torrentSession || !torrentPlayback || !activeTorrentId) return;
-      setPlayerStatus('loading');
-      try {
-        const updated = await startTorrentPlayback(
-          activeTorrentId,
-          positionSeconds,
-          torrentSession.version,
-          newTorrentIdempotencyKey(),
-          new AbortController().signal,
-          torrentPlayback.selectedAudioTrackRef,
-        );
-        cacheTorrentSession(queryClient, accountKey, updated);
-        setLaunchedTorrent({ accountKey, session: updated });
-      } catch {
-        setPlayerStatus('error');
-        void torrentQuery.refetch();
-      }
+    async (positionSeconds: number, signal: AbortSignal) => {
+      if (!torrentSession || !torrentPlayback || !activeTorrentId)
+        throw new Error('Torrent unavailable');
+      const updated = await replaceTorrentPlayback(torrentSession, positionSeconds, signal);
+      signal.throwIfAborted();
+      await queryClient.cancelQueries({
+        queryKey: torrentSessionQueryKeys.session(accountKey, updated.id),
+        exact: true,
+      });
+      signal.throwIfAborted();
+      cacheTorrentSession(queryClient, accountKey, updated);
+      setLaunchedTorrent({ accountKey, session: updated });
+      return updated;
     },
-    [accountKey, activeTorrentId, queryClient, torrentPlayback, torrentQuery, torrentSession],
+    [accountKey, activeTorrentId, queryClient, torrentPlayback, torrentSession],
   );
 
   const resetPlayer = useCallback(() => {
@@ -1122,7 +1124,9 @@ export function MediaView({
                   ? {
                       startPositionSeconds: torrentPlayback.startPositionSeconds,
                       durationSeconds: torrentPlayback.durationSeconds,
-                      onSeek: (position) => void seekTorrent(position),
+                      timeline: torrentPlayback.timeline,
+                      playbackRates: torrentPlayback.playbackRates,
+                      onSeek: seekTorrent,
                     }
                   : undefined
               }

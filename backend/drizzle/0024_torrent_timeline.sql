@@ -1,0 +1,1 @@
+ALTER TABLE "torrent_sessions" ADD COLUMN "playback_timeline" jsonb;

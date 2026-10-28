@@ -206,7 +206,13 @@ describePostgres('torrent session PostgreSQL persistence', () => {
     expect(started.session.state).toBe('preparing');
     expect(started.session.playbackPositionSeconds).toBe(1.5);
     expect((await repository.beginPlayback(...command)).replay).toBe(true);
-    const ready = await repository.transition(pending.sessionId, started.session.version, 'ready');
+    const timeline = { absoluteAnchorSeconds: 0, mediaAnchorSeconds: 0.08, windowEndSeconds: 42.5 };
+    const ready = await repository.transition(pending.sessionId, started.session.version, 'ready', {
+      playbackTimeline: timeline,
+    });
+    expect((await repository.findVisible(owners[0], pending.sessionId))?.playbackTimeline).toEqual(
+      timeline,
+    );
     await expect(
       repository.transition(pending.sessionId, started.session.version, 'ready'),
     ).rejects.toBeInstanceOf(TorrentSessionConflict);

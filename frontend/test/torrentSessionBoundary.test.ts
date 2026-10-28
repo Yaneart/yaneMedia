@@ -150,6 +150,8 @@ describe('torrent API boundary', () => {
       source: { type: 'hls', url: `/api/v1/torrent-sessions/${id}/hls/master.m3u8` },
       generation: 1,
       startPositionSeconds: 4,
+      timeline: { absoluteAnchorSeconds: 40, mediaAnchorSeconds: 0.083333, windowEndSeconds: 160 },
+      playbackRates: [0.2, 0.5, 0.7, 1, 1.2, 1.5, 1.7, 2],
       durationSeconds: 120,
       selectedAudioTrackRef: 'track-1',
       audioTracks: [
@@ -161,6 +163,10 @@ describe('torrent API boundary', () => {
     expect(session.id).toBe(id);
     expect(session.playback?.hlsUrl).toEndWith('/hls/master.m3u8');
     expect(session.playback?.audioTracks[0].ref).toBe('track-1');
+    expect(session.playback?.playbackRates).toEqual([0.2, 0.5, 0.7, 1, 1.2, 1.5, 1.7, 2]);
+    expect(() =>
+      mapTorrentSession({ ...wire, state: 'ready', playback: { ...playback, playbackRates: [0] } }),
+    ).toThrow();
     const awaitingFile = mapTorrentSession({
       ...wire,
       state: 'awaiting_file',

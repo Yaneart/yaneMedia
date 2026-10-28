@@ -32,6 +32,7 @@ class FakePlayer extends HTMLElement {
   });
   selectAudio = mock(async () => {});
   selectQuality = mock(async () => {});
+  seek = mock(async (_position: number) => {});
   connectedCallback() {
     players.push(this);
   }
@@ -196,6 +197,12 @@ beforeEach(() => {
           },
           generation: 1,
           startPositionSeconds: body.startPositionSeconds,
+          timeline: {
+            absoluteAnchorSeconds: 40,
+            mediaAnchorSeconds: 0.083333,
+            windowEndSeconds: 160,
+          },
+          playbackRates: [0.2, 0.5, 0.7, 1, 1.2, 1.5, 1.7, 2],
           durationSeconds: 1200,
           selectedAudioTrackRef: 'track-main',
           audioTracks: [],
@@ -385,6 +392,12 @@ describe('torrent user lifecycle', () => {
       {
         playback: {
           startPositionSeconds: 42,
+          timeline: {
+            absoluteAnchorSeconds: 40,
+            mediaAnchorSeconds: 0.083333,
+            windowEndSeconds: 160,
+          },
+          playbackRates: [0.2, 0.5, 0.7, 1, 1.2, 1.5, 1.7, 2],
           hlsUrl: expect.stringContaining(`/torrent-sessions/${id}/hls/master.m3u8`),
         },
       },
@@ -606,7 +619,17 @@ describe('torrent player adapter contract', () => {
       mediaTitle: 'Fixture',
       shouldAutoPlay: true,
       initialPositionSeconds: 42,
-      torrentTimeline: { startPositionSeconds: 42, durationSeconds: 1200, onSeek: () => {} },
+      torrentTimeline: {
+        startPositionSeconds: 42,
+        timeline: {
+          absoluteAnchorSeconds: 40,
+          mediaAnchorSeconds: 0.083333,
+          windowEndSeconds: 160,
+        },
+        playbackRates: [0.2, 0.5, 0.7, 1, 1.2, 1.5, 1.7, 2],
+        durationSeconds: 1200,
+        onSeek: () => {},
+      },
       onReady: ready,
       onError: error,
       onProgress: progress,
@@ -617,8 +640,10 @@ describe('torrent player adapter contract', () => {
     const player = players[0];
     expect(player.descriptor.src).toBe(url);
     expect(player.descriptor.crossOrigin).toBe('use-credentials');
-    expect(player.descriptor.timeline.absoluteAnchorSeconds).toBe(42);
-    expect(player.descriptor.capabilities.playbackRates).toEqual([1]);
+    expect(player.descriptor.timeline.absoluteAnchorSeconds).toBe(40);
+    expect(player.descriptor.capabilities.playbackRates).toEqual([
+      0.2, 0.5, 0.7, 1, 1.2, 1.5, 1.7, 2,
+    ]);
     const snapshot = {
       source: { id: 'media', revision: player.descriptor.revision },
       playback: 'ready',
@@ -650,6 +675,40 @@ describe('torrent player adapter contract', () => {
       player.emit('error', { ...snapshot, playback: 'ready', error: { code: 'autoplay-blocked' } }),
     );
     expect(error).not.toHaveBeenCalled();
+    // A finite window ending is a queued host seek, not a completed film.
+    await act(async () =>
+      player.emit('ended', {
+        ...snapshot,
+        playback: 'ended',
+        positionSeconds: 160,
+        seekable: [[40, 160]],
+      }),
+    );
+    expect(player.seek).toHaveBeenCalledWith(160.001);
+    const controller = new AbortController();
+    let settle!: (value: any) => void;
+    const onSeek = mock(
+      (_position: number, _signal: AbortSignal) =>
+        new Promise<any>((resolve) => {
+          settle = resolve;
+        }),
+    );
+    view.rerender(
+      <MediaVideoRenderer {...props} torrentTimeline={{ ...props.torrentTimeline, onSeek }} />,
+    );
+    const command = player.host.execute(
+      { type: 'seek', seconds: 900, target: { positionSeconds: 901 } },
+      { signal: controller.signal, positionSeconds: 49, intent: 'paused' },
+    );
+    expect(onSeek).toHaveBeenCalledWith(901, controller.signal);
+    await act(async () =>
+      player.emit('error', { ...snapshot, playback: 'error', pending: { type: 'seek' } }),
+    );
+    expect(error).not.toHaveBeenCalled();
+    controller.abort();
+    settle({ id, playback: {} });
+    await expect(command).rejects.toMatchObject({ name: 'AbortError' });
+    expect(player.setSource).toHaveBeenCalledTimes(1);
     await act(async () => player.emit('error', { ...snapshot, playback: 'error' }));
     expect(error).toHaveBeenCalledTimes(1);
     view.unmount();

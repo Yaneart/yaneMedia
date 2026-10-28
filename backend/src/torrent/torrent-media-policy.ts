@@ -13,6 +13,7 @@ export interface AudioTrack {
 export interface TorrentProbe {
   fileRef: string;
   durationSeconds: number | null;
+  sourceStartSeconds?: number;
   videoStreamIndex: number;
   copyVideo: boolean;
   audioTracks: AudioTrack[];
@@ -29,6 +30,7 @@ type Stream = {
   pix_fmt?: unknown;
   avg_frame_rate?: unknown;
   bit_rate?: unknown;
+  duration?: unknown;
   sample_rate?: unknown;
   channels?: unknown;
   tags?: { language?: unknown; title?: unknown };
@@ -44,7 +46,7 @@ const bitrate = (value: unknown) => {
 
 export function parseTorrentProbe(fileRef: string, raw: unknown): TorrentProbe {
   if (!raw || typeof raw !== 'object') throw new UnsupportedTorrentMedia();
-  const data = raw as { streams?: unknown; format?: { duration?: unknown } };
+  const data = raw as { streams?: unknown; format?: { duration?: unknown; start_time?: unknown } };
   if (!Array.isArray(data.streams) || data.streams.length > 64) throw new UnsupportedTorrentMedia();
   const streams = data.streams as Stream[];
   const video = streams.find((stream) => stream.codec_type === 'video');
@@ -111,10 +113,17 @@ export function parseTorrentProbe(fileRef: string, raw: unknown): TorrentProbe {
       };
     });
   if (audioTracks.length === 0 || audioTracks.length > 32) throw new UnsupportedTorrentMedia();
-  const duration = Number(data.format?.duration);
+  const streamDuration = Number(video.duration);
+  const duration =
+    Number.isFinite(streamDuration) && streamDuration > 0
+      ? streamDuration
+      : Number(data.format?.duration);
   return {
     fileRef,
     durationSeconds: Number.isFinite(duration) && duration > 0 ? duration : null,
+    sourceStartSeconds: Number.isFinite(Number(data.format?.start_time))
+      ? Number(data.format?.start_time)
+      : 0,
     videoStreamIndex: Number(video.index),
     copyVideo,
     audioTracks,

@@ -169,6 +169,13 @@
       "when": 1792352823892,
       "tag": "0023_torrent_playback",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1793200944340,
+      "tag": "0024_torrent_timeline",
+      "breakpoints": true
     }
   ]
 }

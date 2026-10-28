@@ -95,10 +95,11 @@ describeGateway('FFmpeg gateway with a local seekable fixture', () => {
     );
     expect(fixture.status).toBe(0);
     const size = (await stat(file)).size;
+    let mediaFile = file;
     const openFileStream = jest.fn(
       (_key: EngineTorrentKey, _index: EngineFileKey, range: { offset: number; length?: number }) =>
         Promise.resolve({
-          body: createReadStream(file, {
+          body: createReadStream(mediaFile, {
             start: range.offset,
             ...(range.length ? { end: range.offset + range.length - 1 } : {}),
           }),
@@ -117,14 +118,69 @@ describeGateway('FFmpeg gateway with a local seekable fixture', () => {
       expect(probe.audioTracks).toHaveLength(1);
       await gateway.start(sessionId, 1, source, probe, probe.audioTracks[0], 0);
       expect(gateway.activeTranscodes()).toEqual({ copy: 1, transcode: 0 });
-      await gateway.waitReady(sessionId, 1, AbortSignal.timeout(30_000));
-      expect(gateway.isCompleted(sessionId, 1)).toBe(false);
+      const timeline = await gateway.waitReady(sessionId, 1, AbortSignal.timeout(30_000));
+      expect(timeline.absoluteAnchorSeconds).toBe(0);
+      expect(timeline.mediaAnchorSeconds).toBeGreaterThanOrEqual(0);
+      expect(gateway.isCompleted(sessionId, 1)).toBe(true);
+      expect(gateway.activeTranscodes()).toEqual({ copy: 0, transcode: 0 });
       expect((await stat(join(directory, '1', 'init.mp4'))).size).toBeGreaterThan(0);
       expect(
         parseTorrentPlaylist(await readFile(join(directory, '1', 'media.m3u8'), 'utf8')).segments
           .length,
       ).toBeGreaterThan(0);
       expect(openFileStream).toHaveBeenCalled();
+      // Non-keyframe seek must keep its real keyframe anchor, not claim that
+      // the first emitted frame is the requested 5.3 seconds.
+      await gateway.start(sessionId, 2, source, probe, probe.audioTracks[0], 5.3);
+      const sought = await gateway.waitReady(sessionId, 2, AbortSignal.timeout(30_000));
+      expect(sought.absoluteAnchorSeconds).toBe(4);
+      expect(sought.mediaAnchorSeconds).toBeGreaterThanOrEqual(0);
+      expect(sought.mediaAnchorSeconds).toBeLessThan(0.2);
+      expect(sought.windowEndSeconds).toBeCloseTo(12, 0);
+      await expect(stat(join(directory, '1'))).rejects.toMatchObject({ code: 'ENOENT' });
+      await expect(gateway.waitReady(sessionId, 1, AbortSignal.timeout(1_000))).rejects.toThrow();
+      // Same timeline policy when video/audio need transcoding.
+      await gateway.start(
+        sessionId,
+        3,
+        source,
+        { ...probe, copyVideo: false },
+        { ...probe.audioTracks[0], copy: false },
+        5.3,
+      );
+      const transcoded = await gateway.waitReady(sessionId, 3, AbortSignal.timeout(30_000));
+      expect(transcoded.absoluteAnchorSeconds).toBe(4);
+      expect(transcoded.mediaAnchorSeconds).toBeGreaterThanOrEqual(0);
+      expect(transcoded.windowEndSeconds).toBeCloseTo(12, 0);
+      const shifted = join(root, 'shifted.mp4');
+      expect(
+        spawnSync('ffmpeg', [
+          '-v',
+          'error',
+          '-i',
+          file,
+          '-c',
+          'copy',
+          '-output_ts_offset',
+          '7',
+          shifted,
+        ]).status,
+      ).toBe(0);
+      mediaFile = shifted;
+      const shiftedSource = { ...source, size: (await stat(shifted)).size };
+      const shiftedProbe = await gateway.probe(shiftedSource, 'shifted');
+      expect(shiftedProbe.sourceStartSeconds).toBeCloseTo(7, 0);
+      expect(shiftedProbe.durationSeconds).toBeCloseTo(12, 0);
+      await gateway.start(
+        sessionId,
+        4,
+        shiftedSource,
+        shiftedProbe,
+        shiftedProbe.audioTracks[0],
+        5.3,
+      );
+      const shiftedTimeline = await gateway.waitReady(sessionId, 4, AbortSignal.timeout(30_000));
+      expect(shiftedTimeline.absoluteAnchorSeconds).toBeCloseTo(4, 0);
     } finally {
       await gateway.stop(sessionId);
       await rm(root, { recursive: true, force: true });

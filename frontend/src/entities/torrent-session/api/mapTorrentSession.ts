@@ -115,6 +115,16 @@ export function mapTorrentSession(value: unknown): TorrentSession {
       !validMasterUrl(playback.source.url, dto.sessionId!) ||
       !count(playback.generation) ||
       !nonNegative(playback.startPositionSeconds) ||
+      !record(playback.timeline) ||
+      !nonNegative(playback.timeline.absoluteAnchorSeconds) ||
+      !nonNegative(playback.timeline.mediaAnchorSeconds) ||
+      !nonNegative(playback.timeline.windowEndSeconds) ||
+      playback.timeline.windowEndSeconds <= playback.timeline.absoluteAnchorSeconds ||
+      !Array.isArray(playback.playbackRates) ||
+      !playback.playbackRates.length ||
+      !playback.playbackRates.every((rate) =>
+        [0.2, 0.5, 0.7, 1, 1.2, 1.5, 1.7, 2].includes(rate),
+      ) ||
       (playback.durationSeconds !== null && !nonNegative(playback.durationSeconds)) ||
       typeof playback.selectedAudioTrackRef !== 'string' ||
       !Array.isArray(playback.audioTracks) ||
@@ -159,6 +169,8 @@ export function mapTorrentSession(value: unknown): TorrentSession {
           hlsUrl: new URL(playback.source.url, API_BASE_URL).toString(),
           generation: playback.generation,
           startPositionSeconds: playback.startPositionSeconds,
+          timeline: playback.timeline,
+          playbackRates: playback.playbackRates,
           durationSeconds: playback.durationSeconds,
           selectedAudioTrackRef: playback.selectedAudioTrackRef,
           audioTracks: playback.audioTracks.map(mapAudioTrack),

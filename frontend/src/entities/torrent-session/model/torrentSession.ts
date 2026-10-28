@@ -57,6 +57,12 @@ export type TorrentSession = {
     hlsUrl: string;
     generation: number;
     startPositionSeconds: number;
+    timeline: {
+      absoluteAnchorSeconds: number;
+      mediaAnchorSeconds: number;
+      windowEndSeconds: number;
+    };
+    playbackRates: number[];
     durationSeconds: number | null;
     selectedAudioTrackRef: string;
     audioTracks: TorrentAudioTrack[];

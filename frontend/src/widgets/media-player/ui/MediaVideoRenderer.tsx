@@ -1,5 +1,6 @@
 ﻿import type { MediaSourceOption } from '@/entities/media-source';
 import type { SelectOption } from '@/shared';
+import type { TorrentSession } from '@/entities/torrent-session';
 import { useLayoutEffect, useRef } from 'react';
 import {
   type HostResult,
@@ -26,8 +27,31 @@ export type MediaVideoDirectControls = {
 export type TorrentVideoTimeline = {
   startPositionSeconds: number;
   durationSeconds: number | null;
-  onSeek: (positionSeconds: number) => void;
+  timeline: NonNullable<TorrentSession['playback']>['timeline'];
+  playbackRates: readonly number[];
+  onSeek: (positionSeconds: number, signal: AbortSignal) => Promise<TorrentSession>;
 };
+
+function torrentDescriptor(
+  source: MediaSourceOption,
+  title: string,
+  playback: Omit<TorrentVideoTimeline, 'onSeek'>,
+): PlayerSource {
+  return {
+    id: 'media',
+    revision: JSON.stringify([source.sourceRef, source.url, playback.timeline]),
+    kind: 'hls',
+    src: source.url,
+    title,
+    crossOrigin: 'use-credentials',
+    timeline: {
+      mode: 'windowed-vod',
+      ...playback.timeline,
+      durationSeconds: playback.durationSeconds,
+    },
+    capabilities: { seek: 'host', playbackRates: playback.playbackRates },
+  };
+}
 
 type MediaVideoRendererProps = {
   source: MediaSourceOption;
@@ -54,6 +78,7 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
   const propsRef = useRef(props);
   const pendingRef = useRef<((result?: HostResult) => void) | null>(null);
   const loadedRevisionRef = useRef<string | null>(null);
+  const torrentCommandRef = useRef(false);
 
   useLayoutEffect(() => {
     propsRef.current = props;
@@ -69,6 +94,29 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
     let readyRevision: string | null = null;
     let previousPlayback = 'idle';
     let seeking = false;
+    const replaceTorrent = async (position: number, signal: AbortSignal) => {
+      torrentCommandRef.current = true;
+      try {
+        const current = propsRef.current;
+        const ready = await current.torrentTimeline!.onSeek(position, signal);
+        signal.throwIfAborted();
+        if (disposed || !ready.playback)
+          throw new DOMException('Playback change cancelled', 'AbortError');
+        const descriptor = torrentDescriptor(
+          {
+            ...current.source,
+            sourceRef: `torrent:${ready.id}:${ready.playback.generation}`,
+            url: ready.playback.hlsUrl,
+          },
+          current.mediaTitle,
+          ready.playback,
+        );
+        loadedRevisionRef.current = descriptor.revision;
+        return { source: descriptor };
+      } finally {
+        torrentCommandRef.current = false;
+      }
+    };
     const report = (
       event: PlayerEvent,
       reason: Parameters<MediaVideoRendererProps['onProgress']>[2],
@@ -119,20 +167,62 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
     };
     const onPosition = ({ detail: event }: CustomEvent<PlayerEvent>) => {
       if (disposed || event.source?.revision !== loadedRevisionRef.current) return;
-      report(event, event.snapshot.playback === 'ended' ? 'ended' : seeking ? 'seek' : 'periodic');
+      const windowEnded =
+        event.snapshot.playback === 'ended' &&
+        propsRef.current.torrentTimeline &&
+        (event.snapshot.durationSeconds === null ||
+          (event.snapshot.positionSeconds ?? 0) < event.snapshot.durationSeconds - 0.5);
+      report(
+        event,
+        event.snapshot.playback === 'ended' && !windowEnded
+          ? 'ended'
+          : seeking
+            ? 'seek'
+            : 'periodic',
+      );
       if (!event.snapshot.pending) seeking = false;
     };
     const onError = ({ detail: event }: CustomEvent<PlayerEvent>) => {
       if (disposed || event.source?.revision !== loadedRevisionRef.current) return;
       // Autoplay denial and command/platform errors keep explicit controls usable.
-      if (event.snapshot.playback === 'error') propsRef.current.onError();
+      if (event.snapshot.playback === 'error' && !torrentCommandRef.current)
+        propsRef.current.onError();
+    };
+    const onEnded = ({ detail: event }: CustomEvent<PlayerEvent>) => {
+      const { snapshot } = event;
+      if (
+        disposed ||
+        torrentCommandRef.current ||
+        !propsRef.current.torrentTimeline ||
+        snapshot.pending ||
+        snapshot.source?.revision !== loadedRevisionRef.current ||
+        snapshot.positionSeconds === null ||
+        (snapshot.durationSeconds !== null &&
+          snapshot.positionSeconds >= snapshot.durationSeconds - 0.5)
+      )
+        return;
+      // Queue renewal with user seeks so there is only one server mutation.
+      // The next instant lies outside this finite window, triggering host seek.
+      const edge = Math.max(
+        snapshot.positionSeconds,
+        ...snapshot.seekable.map((range) => range[1]),
+      );
+      void player.seek(edge + 0.001).catch(() => {
+        /* yp-error reports command failures. */
+      });
     };
     player.addEventListener('yp-statechange', onState);
     player.addEventListener('yp-positionchange', onPosition);
     player.addEventListener('yp-error', onError);
+    player.addEventListener('yp-ended', onEnded);
     player.host = {
       execute(command, context) {
         const current = propsRef.current;
+        if (current.torrentTimeline) {
+          if (command.target.positionSeconds === undefined)
+            return Promise.reject(new Error('Unsupported torrent command'));
+          return replaceTorrent(command.target.positionSeconds, context.signal);
+        }
         const controls = current.directControls;
         const audioId = command.target.audioId ?? controls?.selectedTrackKey ?? null;
         const qualityId = command.target.qualityId ?? controls?.selectedQualityKey ?? null;
@@ -168,9 +258,7 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
           if (context.signal.aborted) return abort();
           pendingRef.current = finish;
           try {
-            if (command.type === 'seek' && current.torrentTimeline)
-              current.torrentTimeline.onSeek(command.seconds);
-            else if (controls && (command.type === 'audio' || command.type === 'quality'))
+            if (controls && (command.type === 'audio' || command.type === 'quality'))
               controls.onSelectionChange(
                 audioId,
                 qualityId,
@@ -190,6 +278,7 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
       player.removeEventListener('yp-statechange', onState);
       player.removeEventListener('yp-positionchange', onPosition);
       player.removeEventListener('yp-error', onError);
+      player.removeEventListener('yp-ended', onEnded);
       pendingRef.current?.();
       player.remove(); // disconnect disposes transport/workers
       elementRef.current = null;
@@ -200,41 +289,30 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
   useLayoutEffect(() => {
     const player = elementRef.current!;
     const { source, directControls: controls, torrentTimeline: timeline } = props;
-    const descriptor: PlayerSource = {
-      id: 'media',
-      revision: JSON.stringify([source.sourceRef, source.url, timeline?.startPositionSeconds]),
-      kind: source.kind as 'mp4' | 'hls',
-      src: source.url,
-      // VideoHUB serves native MP4 without CORS response headers.
-      ...(source.kind === 'mp4' && source.provider === 'videohub-streaming'
-        ? { crossOrigin: null }
-        : {}),
-      title: props.mediaTitle,
-      ...(timeline
-        ? {
-            timeline: {
-              mode: 'windowed-vod',
-              absoluteAnchorSeconds: timeline.startPositionSeconds,
-              mediaAnchorSeconds: 0,
-              durationSeconds: timeline.durationSeconds,
-            },
-            crossOrigin: 'use-credentials',
-            capabilities: { seek: 'host', playbackRates: [1] },
-          }
-        : {
-            audioTracks: controls?.tracks.map(({ value, label }) => ({ id: value, label })),
-            qualities: controls?.qualities.map(({ value, label }) => ({ id: value, label })),
-            capabilities: {
-              audio: controls && controls.tracks.length > 1 ? 'host' : 'transport',
-              quality: controls && controls.qualities.length > 1 ? 'host' : 'transport',
-            },
-          }),
-    };
+    const descriptor: PlayerSource = timeline
+      ? torrentDescriptor(source, props.mediaTitle, timeline)
+      : {
+          id: 'media',
+          revision: JSON.stringify([source.sourceRef, source.url]),
+          kind: source.kind as 'mp4' | 'hls',
+          src: source.url,
+          // VideoHUB serves native MP4 without CORS response headers.
+          ...(source.kind === 'mp4' && source.provider === 'videohub-streaming'
+            ? { crossOrigin: null }
+            : {}),
+          title: props.mediaTitle,
+          audioTracks: controls?.tracks.map(({ value, label }) => ({ id: value, label })),
+          qualities: controls?.qualities.map(({ value, label }) => ({ id: value, label })),
+          capabilities: {
+            audio: controls && controls.tracks.length > 1 ? 'host' : 'transport',
+            quality: controls && controls.qualities.length > 1 ? 'host' : 'transport',
+          },
+        };
     player.label = `Плеер ${source.label}: ${props.mediaTitle}`;
     player.navigation = controls?.onNextEpisode
       ? { next: () => propsRef.current.directControls?.onNextEpisode?.() }
       : {};
-    if (loadedRevisionRef.current === descriptor.revision) return;
+    if (torrentCommandRef.current || loadedRevisionRef.current === descriptor.revision) return;
     loadedRevisionRef.current = descriptor.revision;
     if (pendingRef.current) {
       pendingRef.current({

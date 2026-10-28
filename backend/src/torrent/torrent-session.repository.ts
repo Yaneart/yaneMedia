@@ -333,6 +333,7 @@ export class TorrentSessionRepository {
       generation?: number;
       selectedAudioTrackRef?: string | null;
       playbackPositionSeconds?: number | null;
+      playbackTimeline?: import('./torrent-playback-window').TorrentTimeline | null;
       cleanupAfter?: Date | null;
     } = {},
     now = new Date(),
@@ -636,6 +637,7 @@ export class TorrentSessionRepository {
           selectedFileRef: fileRef,
           selectedAudioTrackRef: null,
           playbackPositionSeconds: null,
+          playbackTimeline: null,
           state: 'probing',
           version: session.version + 1,
           generation: session.generation + 1,
@@ -734,6 +736,7 @@ export class TorrentSessionRepository {
             generation: session.generation + 1,
             selectedAudioTrackRef: audioTrackRef,
             playbackPositionSeconds: position,
+            playbackTimeline: null,
             idleExpiresAt: new Date(Date.now() + IDLE_MS),
             updatedAt: new Date(),
             failureCode: null,

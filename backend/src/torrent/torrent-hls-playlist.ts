@@ -1,3 +1,5 @@
+import { TORRENT_WINDOW_SEGMENTS } from './torrent-playback-window';
+
 export class InvalidTorrentPlaylist extends Error {}
 
 export type ParsedTorrentPlaylist = {
@@ -31,7 +33,11 @@ export function parseTorrentPlaylist(input: string): ParsedTorrentPlaylist {
       mediaSequence = Number(line.slice(22));
     else if (/^#EXTINF:(?:[1-9]\d?|0)\.\d{1,6},$/.test(line) && duration === undefined)
       duration = line;
-    else if (/^segment-\d{6}\.m4s$/.test(line) && duration && segments.length < 6) {
+    else if (
+      /^segment-\d{6}\.m4s$/.test(line) &&
+      duration &&
+      segments.length < TORRENT_WINDOW_SEGMENTS
+    ) {
       segments.push({ filename: line, duration });
       duration = undefined;
     } else if (line === '#EXT-X-ENDLIST' && duration === undefined) ended = true;

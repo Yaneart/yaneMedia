@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
-import { lstat, mkdir, readFile, readdir, rm, stat } from 'node:fs/promises';
+import { lstat, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
@@ -14,6 +14,12 @@ import {
   type TorrentProbe,
 } from './torrent-media-policy';
 import { TorrServerClient } from './torrserver.client';
+import {
+  TORRENT_WINDOW_BYTES,
+  TORRENT_WINDOW_SECONDS,
+  TORRENT_WINDOW_SEGMENTS,
+  type TorrentTimeline,
+} from './torrent-playback-window';
 
 type Source = { key: EngineTorrentKey; file: EngineFileKey; size: number };
 // Input is an untrusted file, never a playlist that can fetch secondary URLs or local files.
@@ -36,6 +42,7 @@ type Worker = {
   generation: number;
   videoTranscode: boolean;
   heartbeat: NodeJS.Timeout;
+  absoluteAnchorSeconds: number;
 };
 
 export class TorrentGatewayCapacity extends Error {}
@@ -44,7 +51,10 @@ export class TorrentGatewayTimeout extends Error {}
 @Injectable()
 export class TorrentStreamGateway implements BeforeApplicationShutdown {
   private readonly workers = new Map<string, Worker>();
-  private readonly completed = new Map<string, { generation: number; directory: string }>();
+  private readonly completed = new Map<
+    string,
+    { generation: number; directory: string; absoluteAnchorSeconds: number }
+  >();
   private readonly starting = new Map<
     string,
     { generation: number; video: boolean; cancelled: boolean }
@@ -150,6 +160,39 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
       if (reservation.cancelled) throw new Error('Worker start cancelled');
       input = await this.inputServer(source);
       if (reservation.cancelled) throw new Error('Worker start cancelled');
+      // Both branches begin on the probed keyframe. The player seeks from that
+      // real anchor to the requested position after attaching the replacement.
+      const packet = JSON.parse(
+        await this.run(
+          'ffprobe',
+          [
+            '-v',
+            'error',
+            ...INPUT_OPTIONS,
+            '-read_intervals',
+            `${position + (probe.sourceStartSeconds ?? 0)}%+#1`,
+            '-select_streams',
+            String(probe.videoStreamIndex),
+            '-show_packets',
+            '-show_entries',
+            'packet=pts_time',
+            '-of',
+            'json',
+            input.url,
+          ],
+          15_000,
+        ),
+      ) as { packets?: { pts_time?: string }[] };
+      const absoluteAnchorSeconds =
+        Number(packet.packets?.[0]?.pts_time) - (probe.sourceStartSeconds ?? 0);
+      if (
+        !Number.isFinite(absoluteAnchorSeconds) ||
+        absoluteAnchorSeconds < -0.1 ||
+        absoluteAnchorSeconds > position + 1
+      )
+        throw new Error('Invalid source timestamp');
+      const anchor = Math.max(0, absoluteAnchorSeconds);
+      if (position - anchor >= TORRENT_WINDOW_SECONDS - 2) throw new UnsupportedTorrentMedia();
       const directory = join(tmpdir(), 'yanemedia-torrent-hls', sessionId, String(generation));
       await mkdir(directory, { recursive: true, mode: 0o700 });
       this.completed.delete(sessionId);
@@ -162,13 +205,17 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
         '-max_alloc',
         '67108864',
         '-y',
-        ...(position > 0 ? ['-ss', String(position)] : []),
+        ...(anchor > 0 ? ['-ss', String(anchor)] : []),
+        '-noaccurate_seek',
         '-rw_timeout',
         '120000000',
-        '-re',
         ...INPUT_OPTIONS,
         '-i',
         input.url,
+        '-t',
+        String(TORRENT_WINDOW_SECONDS),
+        '-avoid_negative_ts',
+        'make_zero',
         '-map',
         `0:${probe.videoStreamIndex}`,
         '-map',
@@ -211,9 +258,9 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
         '-hls_time',
         '2',
         '-hls_list_size',
-        '6',
+        String(TORRENT_WINDOW_SEGMENTS),
         '-hls_flags',
-        'independent_segments+temp_file+delete_segments',
+        'independent_segments+temp_file',
         '-hls_fmp4_init_filename',
         'init.mp4',
         '-hls_segment_filename',
@@ -221,9 +268,21 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
         join(directory, 'media.m3u8'),
       ];
       const process = spawn('ffmpeg', args, { stdio: 'ignore' });
+      const deadline = setTimeout(() => process.kill('SIGKILL'), 90_000);
+      deadline.unref();
+      let ticks = 0;
       const heartbeat = setInterval(() => {
-        void this.engine.heartbeat(source.key, AbortSignal.timeout(5_000)).catch(() => undefined);
-      }, 60_000);
+        if (++ticks % 60 === 0)
+          void this.engine.heartbeat(source.key, AbortSignal.timeout(5_000)).catch(() => undefined);
+        // Independent byte bound, including unexpectedly long GOPs/high bitrate.
+        void readdir(directory)
+          .then(async (files) => {
+            const sizes = await Promise.all(files.map((file) => stat(join(directory, file))));
+            if (sizes.reduce((total, info) => total + info.size, 0) > TORRENT_WINDOW_BYTES)
+              process.kill('SIGKILL');
+          })
+          .catch(() => undefined);
+      }, 1_000);
       heartbeat.unref();
       this.workers.set(sessionId, {
         process,
@@ -232,16 +291,19 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
         generation,
         videoTranscode,
         heartbeat,
+        absoluteAnchorSeconds: anchor,
       });
       const server = input.server;
       const ended = (code: number | null) => {
+        clearTimeout(deadline);
         const current = this.workers.get(sessionId);
         if (current?.process === process) {
           clearInterval(heartbeat);
           server.closeAllConnections();
           server.close();
           this.workers.delete(sessionId);
-          if (code === 0) this.completed.set(sessionId, { generation, directory });
+          if (code === 0)
+            this.completed.set(sessionId, { generation, directory, absoluteAnchorSeconds: anchor });
         }
       };
       process.once('exit', ended);
@@ -259,7 +321,11 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
     }
   }
 
-  async waitReady(sessionId: string, generation: number, signal: AbortSignal): Promise<void> {
+  async waitReady(
+    sessionId: string,
+    generation: number,
+    signal: AbortSignal,
+  ): Promise<TorrentTimeline> {
     while (!signal.aborted) {
       const worker = this.workers.get(sessionId);
       const completed = this.completed.get(sessionId);
@@ -274,11 +340,56 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
         const playlist = await readFile(join(directory, 'media.m3u8'), 'utf8');
         const segment = /^segment-\d{6}\.m4s$/m.exec(playlist);
         if (
+          completed?.generation === generation &&
           segment &&
           (await stat(join(directory, 'init.mp4'))).size > 0 &&
           (await stat(join(directory, segment[0]))).size > 0
-        )
-          return;
+        ) {
+          const sizes = await Promise.all(
+            (await readdir(directory)).map((file) => stat(join(directory, file))),
+          );
+          if (sizes.reduce((total, info) => total + info.size, 0) > TORRENT_WINDOW_BYTES)
+            throw new Error('Playback window byte limit exceeded');
+          // Probe the emitted fMP4, not the requested -ss value. make_zero leaves
+          // encoder reorder/audio delay visible in the actual media timestamp.
+          const init = await readFile(join(directory, 'init.mp4'));
+          const fragment = await readFile(join(directory, segment[0]));
+          const sample = join(directory, 'anchor.mp4');
+          await writeFile(sample, Buffer.concat([init, fragment]));
+          const raw = JSON.parse(
+            await this.run(
+              'ffprobe',
+              [
+                '-v',
+                'error',
+                '-select_streams',
+                'v:0',
+                '-show_packets',
+                '-show_entries',
+                'packet=pts_time',
+                '-of',
+                'json',
+                sample,
+              ],
+              5_000,
+            ),
+          ) as { packets?: { pts_time?: string }[] };
+          await rm(sample, { force: true });
+          const mediaAnchorSeconds = Number(raw.packets?.[0]?.pts_time);
+          const absoluteAnchorSeconds = completed.absoluteAnchorSeconds;
+          if (!Number.isFinite(mediaAnchorSeconds) || mediaAnchorSeconds < 0)
+            throw new Error('Invalid media timestamp');
+          if (!this.hasGeneration(sessionId, generation)) throw new Error('Worker replaced');
+          const durations = [...playlist.matchAll(/^#EXTINF:([\d.]+),$/gm)].map((match) =>
+            Number(match[1]),
+          );
+          return {
+            absoluteAnchorSeconds,
+            mediaAnchorSeconds,
+            windowEndSeconds:
+              absoluteAnchorSeconds + durations.reduce((sum, duration) => sum + duration, 0),
+          };
+        }
       } catch {
         /* Artifact is still being published. */
       }

@@ -239,7 +239,10 @@ function toSessionView(
     selectedFileRef: session.selectedFileRef,
     audioTracks,
     playback:
-      session.state === 'ready' && probe && session.selectedAudioTrackRef !== null
+      session.state === 'ready' &&
+      session.playbackTimeline &&
+      probe &&
+      session.selectedAudioTrackRef !== null
         ? {
             source: {
               type: 'hls' as const,
@@ -247,6 +250,8 @@ function toSessionView(
             },
             generation: session.generation,
             startPositionSeconds: session.playbackPositionSeconds ?? 0,
+            timeline: session.playbackTimeline,
+            playbackRates: [0.2, 0.5, 0.7, 1, 1.2, 1.5, 1.7, 2],
             durationSeconds: probe.durationSeconds,
             selectedAudioTrackRef: session.selectedAudioTrackRef,
             audioTracks,

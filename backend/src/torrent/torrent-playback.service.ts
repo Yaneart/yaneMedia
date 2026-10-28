@@ -121,12 +121,14 @@ export class TorrentPlaybackService {
         audio,
         session.playbackPositionSeconds ?? 0,
       );
-      await this.gateway.waitReady(
+      const playbackTimeline = await this.gateway.waitReady(
         session.sessionId,
         session.generation,
         AbortSignal.timeout(90_000),
       );
-      await this.repository.transition(session.sessionId, session.version, 'ready');
+      await this.repository.transition(session.sessionId, session.version, 'ready', {
+        playbackTimeline,
+      });
     } catch (error) {
       await this.gateway.stop(session.sessionId, session.generation);
       await this.repository

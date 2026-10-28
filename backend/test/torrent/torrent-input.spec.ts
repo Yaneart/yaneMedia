@@ -237,13 +237,24 @@ describe('torrent input orchestration', () => {
   });
 
   it('extends the viewer lease only when the owner reads a ready session', async () => {
-    const ready = { ...session, state: 'ready' as const, generation: 3 };
+    const timeline = {
+      absoluteAnchorSeconds: 40,
+      mediaAnchorSeconds: 0.096,
+      windowEndSeconds: 160,
+    };
+    const ready = {
+      ...session,
+      state: 'ready' as const,
+      generation: 3,
+      selectedAudioTrackRef: 'main',
+      playbackTimeline: timeline,
+    };
     const recordViewerActivity = jest.fn().mockResolvedValue(undefined);
     const repository = {
       findVisible: jest.fn().mockResolvedValueOnce(undefined).mockResolvedValueOnce(ready),
       recordViewerActivity,
       listFiles: jest.fn().mockResolvedValue([]),
-      getProbe: jest.fn().mockResolvedValue(undefined),
+      getProbe: jest.fn().mockResolvedValue({ durationSeconds: 400, audioTracks: [] }),
       findEngineKey: jest.fn().mockResolvedValue(undefined),
     };
     const input = new TorrentInputService(
@@ -256,7 +267,9 @@ describe('torrent input orchestration', () => {
       status: 404,
     });
     expect(recordViewerActivity).not.toHaveBeenCalled();
-    await input.get('owner', session.sessionId);
+    const result = await input.get('owner', session.sessionId);
+    expect(result.playback?.timeline).toEqual(timeline);
+    expect(result.playback?.playbackRates).toEqual([0.2, 0.5, 0.7, 1, 1.2, 1.5, 1.7, 2]);
     expect(recordViewerActivity).toHaveBeenCalledWith(session.sessionId, 3);
   });
 

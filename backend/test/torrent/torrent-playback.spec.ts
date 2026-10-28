@@ -29,6 +29,7 @@ describe('torrent playback commands', () => {
   const audio = { trackRef, streamIndex: 1, copy: true };
   const probe = { copyVideo: true, audioTracks: [audio] };
   const request = { startPositionSeconds: 12, expectedVersion: 4 };
+  const timeline = { absoluteAnchorSeconds: 10, mediaAnchorSeconds: 0.08, windowEndSeconds: 130 };
   const repository = {
     findVisible: jest.fn(),
     getProbe: jest.fn(),
@@ -67,7 +68,11 @@ describe('torrent playback commands', () => {
     repository.transition.mockResolvedValue(undefined);
     gateway.hasCapacity.mockReturnValue(true);
     gateway.start.mockResolvedValue(undefined);
-    gateway.waitReady.mockResolvedValue(undefined);
+    gateway.waitReady.mockResolvedValue({
+      absoluteAnchorSeconds: 10,
+      mediaAnchorSeconds: 0.08,
+      windowEndSeconds: 130,
+    });
     gateway.stop.mockResolvedValue(undefined);
     input.digestPlayback.mockReturnValue('digest');
     input.view.mockImplementation((value: unknown) => value);
@@ -118,9 +123,9 @@ describe('torrent playback commands', () => {
   });
 
   it('publishes ready only after the selected file and generation have a first segment', async () => {
-    let ready!: () => void;
+    let ready!: (value: typeof timeline) => void;
     gateway.waitReady.mockReturnValue(
-      new Promise<void>((resolve) => {
+      new Promise<typeof timeline>((resolve) => {
         ready = resolve;
       }),
     );
@@ -137,9 +142,11 @@ describe('torrent playback commands', () => {
       12,
     );
     expect(repository.transition).not.toHaveBeenCalled();
-    ready();
+    ready(timeline);
     await settleWorker();
-    expect(repository.transition).toHaveBeenCalledWith(id, 5, 'ready');
+    expect(repository.transition).toHaveBeenCalledWith(id, 5, 'ready', {
+      playbackTimeline: timeline,
+    });
   });
 
   it.each([
@@ -155,7 +162,9 @@ describe('torrent playback commands', () => {
     await service.playback('owner', id, request, 'playback-command-2');
     await settleWorker();
     expect(gateway.start).toHaveBeenCalledTimes(2);
-    expect(repository.transition).toHaveBeenLastCalledWith(id, 5, 'ready');
+    expect(repository.transition).toHaveBeenLastCalledWith(id, 5, 'ready', {
+      playbackTimeline: expect.objectContaining({ absoluteAnchorSeconds: 10 }),
+    });
   });
 
   it('does not start a second worker when a concurrent reservation wins replay', async () => {

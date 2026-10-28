@@ -47,6 +47,8 @@ export const torrentSessions = pgTable(
     selectedFileRef: varchar('selected_file_ref', { length: 40 }),
     selectedAudioTrackRef: varchar('selected_audio_track_ref', { length: 40 }),
     playbackPositionSeconds: doublePrecision('playback_position_seconds'),
+    playbackTimeline:
+      jsonb('playback_timeline').$type<import('./torrent-playback-window').TorrentTimeline>(),
     failureCode: varchar('failure_code', { length: 64 }),
     generation: integer('generation').notNull().default(0),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

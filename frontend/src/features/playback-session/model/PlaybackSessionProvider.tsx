@@ -588,7 +588,9 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
       };
 
       storeSession(nextSession, resolvedOwnerId);
-      recordSession(nextSession, true);
+      // Torrent admission/ready is not decoded viewing progress. The renderer
+      // records the first confirmed metadata/position event after attachment.
+      if (!isTorrentPlaybackSourceRef(input.sourceRef)) recordSession(nextSession, true);
     },
     [recordSession, resolvedOwnerId, storeSession],
   );
