@@ -5,6 +5,7 @@ import {
   type MediaSourcePlaybackIssue,
 } from '@/entities/media-source';
 import { ErrorState, IconButton, PlayIcon, Spinner } from '@/shared';
+import { useEffect, useRef, useState } from 'react';
 
 import {
   MediaVideoRenderer,
@@ -117,6 +118,53 @@ export function MediaPlayer({
   directControls,
   torrentTimeline,
 }: MediaPlayerProps) {
+  const sectionRef = useRef<HTMLElement>(null);
+  const [theater, setTheater] = useState(false);
+
+  useEffect(() => {
+    const section = sectionRef.current!;
+    const change = (event: Event) => {
+      const expanded = (event as CustomEvent<{ theater: boolean }>).detail.theater;
+      setTheater(expanded);
+    };
+    section.addEventListener('yp-theaterchange', change);
+    return () => section.removeEventListener('yp-theaterchange', change);
+  }, []);
+
+  useEffect(() => {
+    if (!isStarted || source?.kind === 'embed' || status === 'error') setTheater(false);
+  }, [isStarted, source?.kind, status]);
+
+  useEffect(() => {
+    if (!theater || !isStarted || source?.kind === 'embed') return;
+    const section = sectionRef.current!;
+    const frame = section.closest<HTMLElement>('.media-player-frame')!;
+    const scroller = section.closest('main')!;
+    const previousScroll = scroller.scrollTop;
+    const align = () => {
+      const bounds = scroller.getBoundingClientRect();
+      const toolbarHeight = frame.firstElementChild!.getBoundingClientRect().height;
+      const height = Math.min(
+        (frame.clientWidth * 9) / 16,
+        scroller.clientHeight - 32 - toolbarHeight - 2,
+      );
+      section.style.setProperty('--media-theater-height', `${Math.max(0, height)}px`);
+      const top = window.matchMedia('(min-width: 768px)').matches ? 16 : 80;
+      scroller.scrollTo({
+        top: scroller.scrollTop + frame.getBoundingClientRect().top - bounds.top - top,
+        behavior: 'instant',
+      });
+    };
+    align();
+    const observer = new ResizeObserver(align);
+    observer.observe(scroller);
+    observer.observe(frame.firstElementChild!);
+    return () => {
+      observer.disconnect();
+      section.style.removeProperty('--media-theater-height');
+      scroller.scrollTo({ top: previousScroll, behavior: 'instant' });
+    };
+  }, [isStarted, source?.kind, theater]);
   const sourceIssue = source ? getMediaSourcePlaybackIssue(source) : null;
   const sourceIssueContent = sourceIssue ? playbackIssueContent[sourceIssue] : null;
 
@@ -132,7 +180,14 @@ export function MediaPlayer({
     activeSource?.kind === 'hls' || activeSource?.kind === 'mp4' ? activeSource : undefined;
 
   return (
-    <section aria-label={`Плеер: ${mediaTitle}`}>
+    <section
+      ref={sectionRef}
+      className={[
+        embedded ? 'media-player-embedded' : '',
+        theater && isStarted && activeVideoSource ? 'media-player-theater' : '',
+      ].join(' ')}
+      aria-label={`Плеер: ${mediaTitle}`}
+    >
       <div
         className={[
           'relative isolate aspect-video overflow-hidden bg-black',

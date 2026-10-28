@@ -18,7 +18,7 @@
     "@mingcute/react": "^3.0.2",
     "@tanstack/react-query": "^5.102.8",
     "@tanstack/react-query-persist-client": "5.102.8",
-    "hls.js": "^1.7.1",
+    "@yaneart/yaneplayer": "0.1.6",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router": "^8.3.0"

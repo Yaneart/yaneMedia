@@ -1,25 +1,25 @@
-import type { MediaSourceOption } from '@/entities/media-source';
+﻿import type { MediaSourceOption } from '@/entities/media-source';
+import type { SelectOption } from '@/shared';
+import { useLayoutEffect, useRef } from 'react';
 import {
-  FullscreenExitIcon,
-  FullscreenIcon,
-  IconButton,
-  PauseIcon,
-  PlayIcon,
-  Select,
-  SkipForwardIcon,
-  VolumeIcon,
-  VolumeMuteIcon,
-  type SelectOption,
-} from '@/shared';
-import { useEffect, useRef, useState, type CSSProperties, type SyntheticEvent } from 'react';
+  type HostResult,
+  type PlayerEvent,
+  type PlayerSource,
+  type YanePlayerElement,
+} from '@yaneart/yaneplayer';
+import '@yaneart/yaneplayer';
 
 export type MediaVideoDirectControls = {
   tracks: readonly SelectOption[];
   selectedTrackKey: string | null;
-  onTrackChange: (trackKey: string) => void;
   qualities: readonly SelectOption[];
   selectedQualityKey: string | null;
-  onQualityChange: (qualityKey: string) => void;
+  onSelectionChange: (
+    trackKey: string | null,
+    qualityKey: string | null,
+    positionSeconds: number,
+    intent: 'playing' | 'paused',
+  ) => void;
   onNextEpisode?: () => void;
 };
 
@@ -47,438 +47,220 @@ type MediaVideoRendererProps = {
   ) => void;
 };
 
-const HLS_MIME_TYPE = 'application/vnd.apple.mpegurl';
-const PROGRESS_REPORT_INTERVAL_SECONDS = 5;
-
-function formatPlaybackTime(value: number) {
-  if (!Number.isFinite(value) || value < 0) return '0:00';
-
-  const totalSeconds = Math.floor(value);
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-
-  return hours > 0
-    ? `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
-    : `${minutes}:${seconds.toString().padStart(2, '0')}`;
-}
-
-function getRangeProgress(value: number, max: number) {
-  if (!Number.isFinite(value) || !Number.isFinite(max) || max <= 0) return '0%';
-
-  return `${Math.min(100, Math.max(0, (value / max) * 100))}%`;
-}
-
-export function MediaVideoRenderer({
-  source,
-  mediaTitle,
-  shouldAutoPlay,
-  initialPositionSeconds,
-  directControls,
-  torrentTimeline,
-  onReady,
-  onError,
-  onPlay,
-  onPause,
-  onProgress,
-}: MediaVideoRendererProps) {
+// App callbacks select URLs/sessions; yanePlayer owns media, controls and command intent.
+export function MediaVideoRenderer(props: MediaVideoRendererProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const sourceUrlRef = useRef(source.url);
-  const isTorrentSource = torrentTimeline !== undefined;
-  const hasRestoredPositionRef = useRef(false);
-  const lastReportedProgressBucketRef = useRef<number | null>(null);
-  const suppressPauseRef = useRef(false);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [positionSeconds, setPositionSeconds] = useState(0);
-  const [durationSeconds, setDurationSeconds] = useState(0);
-  const [volume, setVolume] = useState(1);
-  const [isMuted, setIsMuted] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const elementRef = useRef<YanePlayerElement | null>(null);
+  const propsRef = useRef(props);
+  const pendingRef = useRef<((result?: HostResult) => void) | null>(null);
+  const loadedRevisionRef = useRef<string | null>(null);
 
-  sourceUrlRef.current = source.url;
+  useLayoutEffect(() => {
+    propsRef.current = props;
+  });
 
-  const reportProgress = (
-    video: HTMLVideoElement,
-    reason: 'periodic' | 'metadata' | 'seek' | 'pause' | 'ended' = 'periodic',
-    force = false,
-  ) => {
-    const positionSeconds =
-      (torrentTimeline?.startPositionSeconds ?? 0) +
-      (Number.isFinite(video.currentTime) ? Math.max(0, video.currentTime) : 0);
-    const durationSeconds =
-      torrentTimeline?.durationSeconds ??
-      (Number.isFinite(video.duration) && video.duration > 0 ? video.duration : undefined);
-    const progressBucket = Math.floor(positionSeconds / PROGRESS_REPORT_INTERVAL_SECONDS);
-
-    setPositionSeconds(positionSeconds);
-    setDurationSeconds(durationSeconds ?? 0);
-
-    if (!force && progressBucket === lastReportedProgressBucketRef.current) {
-      return;
-    }
-
-    lastReportedProgressBucketRef.current = progressBucket;
-    onProgress(positionSeconds, durationSeconds, reason);
-  };
-
-  const restoreInitialPosition = (video: HTMLVideoElement) => {
-    if (torrentTimeline) return;
-    if (hasRestoredPositionRef.current) {
-      return;
-    }
-
-    if (initialPositionSeconds <= 0) {
-      hasRestoredPositionRef.current = true;
-      return;
-    }
-
-    const durationSeconds =
-      Number.isFinite(video.duration) && video.duration > 0 ? video.duration : null;
-
-    try {
-      video.currentTime =
-        durationSeconds === null
-          ? initialPositionSeconds
-          : Math.min(initialPositionSeconds, durationSeconds);
-      hasRestoredPositionRef.current = true;
-    } catch {
-      // Некоторые потоки разрешают seek только после появления первого доступного диапазона.
-    }
-  };
-
-  const handleLoadedMetadata = (event: SyntheticEvent<HTMLVideoElement>) => {
-    const video = event.currentTarget;
-
-    restoreInitialPosition(video);
-    reportProgress(video, 'metadata', true);
-  };
-
-  const handleCanPlay = (event: SyntheticEvent<HTMLVideoElement>) => {
-    restoreInitialPosition(event.currentTarget);
-    onReady();
-  };
-
-  const togglePlayback = () => {
-    const video = videoRef.current;
-
-    if (!video) return;
-
-    if (video.paused) {
-      void video.play();
-    } else {
-      video.pause();
-    }
-  };
-
-  const toggleMute = () => {
-    const video = videoRef.current;
-
-    if (!video) return;
-
-    video.muted = !video.muted;
-    setIsMuted(video.muted);
-  };
-
-  const toggleFullscreen = async () => {
-    const container = containerRef.current;
-
-    if (!container) return;
-
-    if (document.fullscreenElement) {
-      await document.exitFullscreen();
-    } else {
-      await container.requestFullscreen();
-    }
-  };
-
-  useEffect(() => {
-    const handleFullscreenChange = () => {
-      setIsFullscreen(document.fullscreenElement === containerRef.current);
+  useLayoutEffect(() => {
+    const player = document.createElement('yane-player');
+    elementRef.current = player;
+    player.lang = 'ru';
+    player.className = 'media-video-player';
+    let disposed = false;
+    let ready = false;
+    let readyRevision: string | null = null;
+    let previousPlayback = 'idle';
+    let seeking = false;
+    const report = (
+      event: PlayerEvent,
+      reason: Parameters<MediaVideoRendererProps['onProgress']>[2],
+    ) => {
+      const { snapshot } = event;
+      if (
+        snapshot.source?.revision !== loadedRevisionRef.current ||
+        snapshot.pending ||
+        snapshot.positionSeconds === null
+      )
+        return;
+      propsRef.current.onProgress(
+        snapshot.positionSeconds,
+        snapshot.durationSeconds ?? undefined,
+        reason,
+      );
     };
-
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
-  }, []);
-
-  useEffect(() => {
-    const video = videoRef.current;
-
-    if (!video) {
-      return;
-    }
-
-    hasRestoredPositionRef.current = false;
-    lastReportedProgressBucketRef.current = null;
-    suppressPauseRef.current = false;
-    const sourceUrl = sourceUrlRef.current;
-
-    if (source.kind === 'mp4') {
-      video.src = sourceUrl;
-      video.load();
-
-      return () => {
-        suppressPauseRef.current = true;
-        video.removeAttribute('src');
-        video.load();
-      };
-    }
-
-    if (source.kind !== 'hls') {
-      return;
-    }
-
-    let isDisposed = false;
-    let destroyHls: (() => void) | undefined;
-
-    const loadHls = async () => {
-      try {
-        const { default: Hls } = await import('hls.js');
-
-        if (isDisposed) {
-          return;
+    const onState = ({ detail: event }: CustomEvent<PlayerEvent>) => {
+      if (disposed || event.source?.revision !== loadedRevisionRef.current) return;
+      const { snapshot } = event;
+      if (snapshot.source?.revision !== readyRevision) {
+        readyRevision = snapshot.source?.revision ?? null;
+        ready = false;
+      }
+      if (snapshot.pending?.type === 'source') ready = false;
+      if (snapshot.pending?.type === 'seek') seeking = true;
+      if (
+        !ready &&
+        !snapshot.pending &&
+        ['ready', 'playing', 'paused'].includes(snapshot.playback)
+      ) {
+        ready = true;
+        propsRef.current.onReady();
+        report(event, 'metadata');
+      }
+      if (seeking && !snapshot.pending) {
+        report(event, 'seek');
+        seeking = false;
+      }
+      if (snapshot.playback !== previousPlayback) {
+        if (snapshot.playback === 'playing') propsRef.current.onPlay();
+        if (snapshot.playback === 'paused' && ready && !snapshot.pending) {
+          report(event, 'pause');
+          propsRef.current.onPause();
         }
-
-        if (Hls.isSupported()) {
-          const hls = new Hls(
-            isTorrentSource
-              ? {
-                  xhrSetup: (xhr) => {
-                    xhr.withCredentials = true;
-                  },
-                }
-              : {},
-          );
-
-          destroyHls = () => hls.destroy();
-
-          hls.on(Hls.Events.ERROR, (_event, data) => {
-            if (data.fatal) {
-              onError();
-            }
-          });
-          hls.loadSource(sourceUrl);
-          hls.attachMedia(video);
-
-          return;
-        }
-
-        if (video.canPlayType(HLS_MIME_TYPE)) {
-          if (isTorrentSource) video.crossOrigin = 'use-credentials';
-          video.src = sourceUrl;
-          video.load();
-
-          return;
-        }
-
-        onError();
-      } catch {
-        if (!isDisposed) {
-          onError();
-        }
+        previousPlayback = snapshot.playback;
       }
     };
-
-    void loadHls();
-
-    return () => {
-      isDisposed = true;
-      destroyHls?.();
-      suppressPauseRef.current = true;
-      video.removeAttribute('src');
-      video.load();
+    const onPosition = ({ detail: event }: CustomEvent<PlayerEvent>) => {
+      if (disposed || event.source?.revision !== loadedRevisionRef.current) return;
+      report(event, event.snapshot.playback === 'ended' ? 'ended' : seeking ? 'seek' : 'periodic');
+      if (!event.snapshot.pending) seeking = false;
     };
-  }, [isTorrentSource, onError, source.kind, source.sourceRef]);
-
-  return (
-    <div ref={containerRef} className="absolute inset-0 z-0 size-full bg-black">
-      <video
-        ref={videoRef}
-        title={`Плеер ${source.label}: ${mediaTitle}`}
-        className="size-full bg-black object-contain"
-        autoPlay={shouldAutoPlay}
-        playsInline
-        preload="metadata"
-        onClick={togglePlayback}
-        onDoubleClick={() => void toggleFullscreen()}
-        onLoadedMetadata={handleLoadedMetadata}
-        onDurationChange={(event) => {
-          if (torrentTimeline) return;
-          const nextDuration = event.currentTarget.duration;
-          setDurationSeconds(Number.isFinite(nextDuration) && nextDuration > 0 ? nextDuration : 0);
-        }}
-        onTimeUpdate={(event) => reportProgress(event.currentTarget)}
-        onSeeked={(event) => reportProgress(event.currentTarget, 'seek', true)}
-        onPlay={() => {
-          setIsPlaying(true);
-          onPlay();
-        }}
-        onPause={(event) => {
-          setIsPlaying(false);
-          if (suppressPauseRef.current) return;
-          reportProgress(event.currentTarget, 'pause', true);
-          onPause();
-        }}
-        onEnded={(event) => {
-          setIsPlaying(false);
-          reportProgress(event.currentTarget, 'ended', true);
-        }}
-        onCanPlay={handleCanPlay}
-        onError={onError}
-      />
-
-      <div className="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black via-black/80 to-transparent px-3 pb-3 pt-16 text-white sm:px-4 sm:pb-4">
-        <input
-          type="range"
-          aria-label="Позиция воспроизведения"
-          min={0}
-          max={durationSeconds || 0}
-          step={0.1}
-          value={Math.min(positionSeconds, durationSeconds || 0)}
-          className="media-player-range w-full cursor-pointer"
-          style={
-            {
-              '--media-range-progress': getRangeProgress(positionSeconds, durationSeconds),
-            } as CSSProperties
+    const onError = ({ detail: event }: CustomEvent<PlayerEvent>) => {
+      if (disposed || event.source?.revision !== loadedRevisionRef.current) return;
+      // Autoplay denial and command/platform errors keep explicit controls usable.
+      if (event.snapshot.playback === 'error') propsRef.current.onError();
+    };
+    player.addEventListener('yp-statechange', onState);
+    player.addEventListener('yp-positionchange', onPosition);
+    player.addEventListener('yp-error', onError);
+    player.host = {
+      execute(command, context) {
+        const current = propsRef.current;
+        const controls = current.directControls;
+        const audioId = command.target.audioId ?? controls?.selectedTrackKey ?? null;
+        const qualityId = command.target.qualityId ?? controls?.selectedQualityKey ?? null;
+        if (
+          controls &&
+          audioId === controls.selectedTrackKey &&
+          qualityId === controls.selectedQualityKey
+        ) {
+          return Promise.resolve({ selection: { audioId, qualityId } });
+        }
+        // Save confirmed position before the app replaces its source/session.
+        if (context.positionSeconds !== null) {
+          current.onProgress(
+            context.positionSeconds,
+            player.runtime?.getSnapshot().durationSeconds ?? undefined,
+            'pause',
+          );
+        }
+        return new Promise<HostResult>((resolve, reject) => {
+          const finish = (result?: HostResult) => {
+            clearTimeout(timeout);
+            context.signal.removeEventListener('abort', abort);
+            pendingRef.current = null;
+            if (result) resolve(result);
+            else reject(new DOMException('Playback change cancelled', 'AbortError'));
+          };
+          const abort = () => finish();
+          const timeout = setTimeout(() => {
+            finish();
+            if (!disposed) propsRef.current.onError();
+          }, 30_000);
+          context.signal.addEventListener('abort', abort, { once: true });
+          if (context.signal.aborted) return abort();
+          pendingRef.current = finish;
+          try {
+            if (command.type === 'seek' && current.torrentTimeline)
+              current.torrentTimeline.onSeek(command.seconds);
+            else if (controls && (command.type === 'audio' || command.type === 'quality'))
+              controls.onSelectionChange(
+                audioId,
+                qualityId,
+                context.positionSeconds ?? 0,
+                context.intent,
+              );
+            else finish();
+          } catch {
+            finish();
           }
-          onChange={(event) => {
-            const video = videoRef.current;
-            const nextPosition = Number(event.currentTarget.value);
+        });
+      },
+    };
+    containerRef.current!.append(player);
+    return () => {
+      disposed = true;
+      player.removeEventListener('yp-statechange', onState);
+      player.removeEventListener('yp-positionchange', onPosition);
+      player.removeEventListener('yp-error', onError);
+      pendingRef.current?.();
+      player.remove(); // disconnect disposes transport/workers
+      elementRef.current = null;
+      loadedRevisionRef.current = null;
+    };
+  }, []);
 
-            if (!video || !Number.isFinite(nextPosition)) return;
-            if (torrentTimeline) {
-              const relative = nextPosition - torrentTimeline.startPositionSeconds;
-              const ranges = video.seekable;
-              if (
-                Array.from({ length: ranges.length }).some(
-                  (_, index) => relative >= ranges.start(index) && relative <= ranges.end(index),
-                )
-              )
-                video.currentTime = relative;
-              else torrentTimeline.onSeek(nextPosition);
-            } else video.currentTime = nextPosition;
-            setPositionSeconds(nextPosition);
-          }}
-        />
+  useLayoutEffect(() => {
+    const player = elementRef.current!;
+    const { source, directControls: controls, torrentTimeline: timeline } = props;
+    const descriptor: PlayerSource = {
+      id: 'media',
+      revision: JSON.stringify([source.sourceRef, source.url, timeline?.startPositionSeconds]),
+      kind: source.kind as 'mp4' | 'hls',
+      src: source.url,
+      // VideoHUB serves native MP4 without CORS response headers.
+      ...(source.kind === 'mp4' && source.provider === 'videohub-streaming'
+        ? { crossOrigin: null }
+        : {}),
+      title: props.mediaTitle,
+      ...(timeline
+        ? {
+            timeline: {
+              mode: 'windowed-vod',
+              absoluteAnchorSeconds: timeline.startPositionSeconds,
+              mediaAnchorSeconds: 0,
+              durationSeconds: timeline.durationSeconds,
+            },
+            crossOrigin: 'use-credentials',
+            capabilities: { seek: 'host', playbackRates: [1] },
+          }
+        : {
+            audioTracks: controls?.tracks.map(({ value, label }) => ({ id: value, label })),
+            qualities: controls?.qualities.map(({ value, label }) => ({ id: value, label })),
+            capabilities: {
+              audio: controls && controls.tracks.length > 1 ? 'host' : 'transport',
+              quality: controls && controls.qualities.length > 1 ? 'host' : 'transport',
+            },
+          }),
+    };
+    player.label = `Плеер ${source.label}: ${props.mediaTitle}`;
+    player.navigation = controls?.onNextEpisode
+      ? { next: () => propsRef.current.directControls?.onNextEpisode?.() }
+      : {};
+    if (loadedRevisionRef.current === descriptor.revision) return;
+    loadedRevisionRef.current = descriptor.revision;
+    if (pendingRef.current) {
+      pendingRef.current({
+        source: descriptor,
+        selection: {
+          audioId: controls?.selectedTrackKey ?? null,
+          qualityId: controls?.selectedQualityKey ?? null,
+        },
+      });
+    } else {
+      void player
+        .setSource(descriptor, {
+          positionSeconds: timeline ? timeline.startPositionSeconds : props.initialPositionSeconds,
+          intent: props.shouldAutoPlay ? 'playing' : 'paused',
+        })
+        .then(async () => {
+          if (controls?.selectedTrackKey && descriptor.capabilities?.audio === 'host')
+            await player.selectAudio(controls.selectedTrackKey);
+          if (controls?.selectedQualityKey && descriptor.capabilities?.quality === 'host')
+            await player.selectQuality(controls.selectedQualityKey);
+        })
+        .catch(() => {
+          /* yp-error carries normalized fatal errors. */
+        });
+    }
+  });
 
-        <div className="mt-2.5 flex min-w-0 items-center gap-2">
-          <IconButton
-            size="small"
-            variant="bare"
-            aria-label={isPlaying ? 'Пауза' : 'Воспроизвести'}
-            className="bg-white/10 text-white hover:bg-white/20"
-            onClick={togglePlayback}
-          >
-            {isPlaying ? <PauseIcon className="size-5" /> : <PlayIcon className="size-5" />}
-          </IconButton>
-
-          <span className="shrink-0 text-xs font-medium tabular-nums text-white/80">
-            {formatPlaybackTime(positionSeconds)} / {formatPlaybackTime(durationSeconds)}
-          </span>
-
-          <div className="hidden min-w-0 flex-1 items-center justify-end gap-2 sm:flex">
-            {directControls && directControls.tracks.length > 1 && (
-              <Select
-                aria-label="Озвучка"
-                value={directControls.selectedTrackKey}
-                options={directControls.tracks}
-                placeholder="Озвучка"
-                allowEmpty={false}
-                matchMenuWidth
-                menuPlacement="top"
-                className="media-player-select w-44 [&>button]:min-h-9 [&>button]:text-xs"
-                onChange={(value) => {
-                  if (value !== null) directControls.onTrackChange(value);
-                }}
-              />
-            )}
-
-            {directControls && directControls.qualities.length > 1 && (
-              <Select
-                aria-label="Качество"
-                value={directControls.selectedQualityKey}
-                options={directControls.qualities}
-                placeholder="Качество"
-                allowEmpty={false}
-                matchMenuWidth
-                menuPlacement="top"
-                className="media-player-select w-32 [&>button]:min-h-9 [&>button]:min-w-0 [&>button]:text-xs"
-                onChange={(value) => {
-                  if (value !== null) directControls.onQualityChange(value);
-                }}
-              />
-            )}
-          </div>
-
-          <div className="ml-auto flex shrink-0 items-center gap-1 sm:ml-0">
-            {directControls?.onNextEpisode && (
-              <IconButton
-                size="small"
-                variant="bare"
-                aria-label="Следующая серия"
-                title="Следующая серия"
-                className="text-white/90 hover:bg-white/15 hover:text-white"
-                onClick={directControls.onNextEpisode}
-              >
-                <SkipForwardIcon className="size-5" />
-              </IconButton>
-            )}
-
-            <IconButton
-              size="small"
-              variant="bare"
-              aria-label={isMuted ? 'Включить звук' : 'Выключить звук'}
-              className="text-white/90 hover:bg-white/15 hover:text-white"
-              onClick={toggleMute}
-            >
-              {isMuted || volume === 0 ? (
-                <VolumeMuteIcon className="size-5" />
-              ) : (
-                <VolumeIcon className="size-5" />
-              )}
-            </IconButton>
-
-            <input
-              type="range"
-              aria-label="Громкость"
-              min={0}
-              max={1}
-              step={0.05}
-              value={isMuted ? 0 : volume}
-              className="media-player-range hidden w-20 cursor-pointer md:block"
-              style={
-                {
-                  '--media-range-progress': getRangeProgress(isMuted ? 0 : volume, 1),
-                } as CSSProperties
-              }
-              onChange={(event) => {
-                const video = videoRef.current;
-                const nextVolume = Number(event.currentTarget.value);
-
-                if (!video || !Number.isFinite(nextVolume)) return;
-                video.volume = nextVolume;
-                video.muted = nextVolume === 0;
-                setVolume(nextVolume);
-                setIsMuted(video.muted);
-              }}
-            />
-
-            <IconButton
-              size="small"
-              variant="bare"
-              aria-label={isFullscreen ? 'Выйти из полноэкранного режима' : 'На весь экран'}
-              className="text-white/90 hover:bg-white/15 hover:text-white"
-              onClick={() => void toggleFullscreen()}
-            >
-              {isFullscreen ? (
-                <FullscreenExitIcon className="size-5" />
-              ) : (
-                <FullscreenIcon className="size-5" />
-              )}
-            </IconButton>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  return <div ref={containerRef} className="absolute inset-0 z-0 size-full bg-black" />;
 }

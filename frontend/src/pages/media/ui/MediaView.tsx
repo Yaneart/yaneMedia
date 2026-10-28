@@ -708,7 +708,6 @@ export function MediaView({
     async (positionSeconds: number) => {
       if (!torrentSession || !torrentPlayback || !activeTorrentId) return;
       setPlayerStatus('loading');
-      updateProgress(positionSeconds, torrentPlayback.durationSeconds, 'seek');
       try {
         const updated = await startTorrentPlayback(
           activeTorrentId,
@@ -725,15 +724,7 @@ export function MediaView({
         void torrentQuery.refetch();
       }
     },
-    [
-      accountKey,
-      activeTorrentId,
-      queryClient,
-      torrentPlayback,
-      torrentQuery,
-      torrentSession,
-      updateProgress,
-    ],
+    [accountKey, activeTorrentId, queryClient, torrentPlayback, torrentQuery, torrentSession],
   );
 
   const resetPlayer = useCallback(() => {
@@ -799,13 +790,19 @@ export function MediaView({
     [media, startSession, usesDirectEpisodes],
   );
 
-  const selectDirectSource = (source: MediaSourceOption | undefined, continuePlayback = false) => {
+  const selectDirectSource = (
+    source: MediaSourceOption | undefined,
+    continuePlayback = false,
+    positionSeconds = mediaSession?.positionSeconds ?? 0,
+    intent = mediaSession?.state,
+  ) => {
     if (!source || source.sourceRef === selectedDirectSource?.sourceRef) return;
 
     setPendingDirectEpisodeTransition(null);
     setSelectedDirectSourceRef(source.sourceRef);
     if (continuePlayback && isPlayerStarted) {
-      startDirectPlayback(source, selectedDirectEpisode, mediaSession?.positionSeconds ?? 0);
+      startDirectPlayback(source, selectedDirectEpisode, positionSeconds);
+      if (intent === 'paused') pauseSession();
     } else {
       resetPlayer();
     }
@@ -953,10 +950,10 @@ export function MediaView({
   }, []);
 
   return (
-    <div className="grid min-w-0 items-start gap-8 xl:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)] xl:gap-10">
-      <div className="order-2 min-w-0 space-y-8 xl:order-none xl:col-start-2 xl:row-start-1">
+    <div className="media-view grid min-w-0 items-start gap-8 xl:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)] xl:gap-10">
+      <div className="media-view-playback order-2 min-w-0 space-y-8 xl:order-none xl:col-start-2 xl:row-start-1">
         <div className="min-w-0">
-          <div className="min-w-0 overflow-visible rounded-card border border-context-border bg-surface shadow-surface">
+          <div className="media-player-frame min-w-0 overflow-visible rounded-card border border-context-border bg-surface shadow-surface">
             <div className="relative z-20 isolate">
               <div
                 aria-hidden="true"
@@ -966,7 +963,7 @@ export function MediaView({
                 <YaneMark className="absolute -top-10 -right-12 size-56 rotate-[138deg] text-watermark opacity-[0.26]" />
                 <div className="absolute inset-0 bg-linear-to-br from-transparent via-transparent to-watermark/8" />
               </div>
-              <div className="relative z-10 grid min-w-0 grid-cols-2 gap-3 rounded-t-card bg-surface/70 px-4 py-3 sm:px-5 2xl:flex 2xl:flex-nowrap 2xl:items-center 2xl:gap-x-3">
+              <div className="media-player-toolbar relative z-10 grid min-w-0 grid-cols-2 gap-3 rounded-t-card bg-surface/70 px-4 py-3 sm:px-5 2xl:flex 2xl:flex-nowrap 2xl:items-center 2xl:gap-x-3">
                 {isToolbarLoading ? (
                   <AvailabilityToolbarStatus hasEpisodeControls={showLocalEpisodeControls} />
                 ) : (
@@ -1007,7 +1004,7 @@ export function MediaView({
                       />
                     )}
 
-                    <div className="col-span-2 w-full 2xl:ml-auto 2xl:w-auto">
+                    <div className="media-player-source-picker col-span-2 w-full 2xl:ml-auto 2xl:w-auto">
                       <PlaybackSourcePicker
                         embedSources={currentEmbedSources}
                         directSources={currentDirectSources}
@@ -1137,17 +1134,24 @@ export function MediaView({
                         label: track.label,
                       })),
                       selectedTrackKey: selectedDirectTrackKey,
-                      onTrackChange: (trackKey) => selectTrack(trackKey, true),
                       qualities: directQualities.map((quality) => ({
                         value: quality.key,
                         label: quality.label,
                       })),
                       selectedQualityKey: selectedDirectQualityKey,
-                      onQualityChange: (qualityKey) =>
+                      onSelectionChange: (trackKey, qualityKey, position, intent) => {
+                        if (trackKey) setPreferredDirectTrackKey(trackKey);
                         selectDirectSource(
-                          directQualities.find((quality) => quality.key === qualityKey)?.source,
+                          getAvailableDirectSourceForPlaybackPreference(
+                            currentDirectSources,
+                            trackKey,
+                            qualityKey,
+                          ),
                           true,
-                        ),
+                          position,
+                          intent,
+                        );
+                      },
                       onNextEpisode: nextDirectEpisode ? selectNextEpisode : undefined,
                     }
                   : undefined
@@ -1164,7 +1168,7 @@ export function MediaView({
         <UserRating media={media} embedded className="hidden sm:block 2xl:hidden" />
       </div>
 
-      <div className="contents xl:col-start-1 xl:row-start-1 xl:block">
+      <div className="media-view-info contents xl:col-start-1 xl:row-start-1 xl:block">
         <MediaInfo
           media={media}
           variant="watch"
@@ -1213,12 +1217,14 @@ export function MediaView({
         <MediaFacts media={media} className="grid gap-2 text-caption" showGenres={false} />
       </section>
 
-      {media.description && (
-        <MediaDescriptionPanel className="order-4 hidden 2xl:col-span-2 2xl:block">
-          <p className="mt-3 max-w-5xl text-body text-text-secondary">{media.description}</p>
-        </MediaDescriptionPanel>
-      )}
-      <UserRating media={media} embedded className="order-5 hidden 2xl:col-span-2 2xl:block" />
+      <div className="media-view-details order-4 hidden gap-8 2xl:col-span-2 2xl:grid 2xl:gap-10">
+        {media.description && (
+          <MediaDescriptionPanel>
+            <p className="mt-3 max-w-5xl text-body text-text-secondary">{media.description}</p>
+          </MediaDescriptionPanel>
+        )}
+        <UserRating media={media} embedded />
+      </div>
 
       <MediaCommunity media={media} />
 

@@ -16,26 +16,36 @@ const { PlaybackSessionProvider } =
 const { usePlaybackSession } =
   await import('../src/features/playback-session/model/usePlaybackSession');
 const { resetTorrentClientScope } = await import('../src/entities/torrent-session');
-const hlsInstances: FakeHls[] = [];
-class FakeHls {
-  config: { xhrSetup: (xhr: { withCredentials: boolean }) => void };
-  static Events = { ERROR: 'error' };
-  static isSupported() {
-    return true;
+// Test the app's public-element boundary; transport playback is checked in Chromium.
+const players: FakePlayer[] = [];
+class FakePlayer extends HTMLElement {
+  host: any;
+  navigation: any;
+  label = '';
+  descriptor: any;
+  options: any;
+  disconnected = false;
+  runtime = { getSnapshot: () => ({ durationSeconds: 1200 }) };
+  setSource = mock(async (source: any, options: any) => {
+    this.descriptor = source;
+    this.options = options;
+  });
+  selectAudio = mock(async () => {});
+  selectQuality = mock(async () => {});
+  connectedCallback() {
+    players.push(this);
   }
-  loadSource = mock((_url: string) => {});
-  attachMedia = mock((_video: HTMLVideoElement) => {});
-  destroy = mock(() => {});
-  error?: (event: string, data: { fatal: boolean }) => void;
-  constructor(config: { xhrSetup: (xhr: { withCredentials: boolean }) => void }) {
-    this.config = config;
-    hlsInstances.push(this);
+  disconnectedCallback() {
+    this.disconnected = true;
   }
-  on(_event: string, callback: (event: string, data: { fatal: boolean }) => void) {
-    this.error = callback;
+  emit(type: string, snapshot: any) {
+    this.dispatchEvent(
+      new CustomEvent('yp-' + type, { detail: { type, source: snapshot.source, snapshot } }),
+    );
   }
 }
-mock.module('hls.js', () => ({ default: FakeHls }));
+customElements.define('yane-player', FakePlayer);
+mock.module('@yaneart/yaneplayer', () => ({}));
 const { MediaVideoRenderer } = await import('../src/widgets/media-player/ui/MediaVideoRenderer');
 import type { AuthState } from '../src/entities/auth/model/authContext';
 import type { TorrentSessionDto } from '../src/entities/torrent-session/api/torrentSessionDto';
@@ -62,7 +72,7 @@ let stopGate: Promise<void> | null;
 
 beforeEach(() => {
   resetTorrentClientScope();
-  hlsInstances.length = 0;
+  players.length = 0;
   localStorage.clear();
   calls = [];
   failPlayback = false;
@@ -481,54 +491,171 @@ describe('torrent playback progress and cleanup', () => {
   });
 });
 
-describe('torrent HLS renderer contract', () => {
-  test('uses authenticated HLS, reports absolute progress and releases HLS on unmount', async () => {
-    const progress = mock(() => {});
+describe('torrent player adapter contract', () => {
+  test('bridges combined source selection with confirmed position and paused intent without reloading twice', async () => {
     const ready = mock(() => {});
-    const error = mock(() => {});
-    const url = `/api/v1/torrent-sessions/${id}/hls/master.m3u8`;
-    const view = render(
+    const selection = mock((track: string | null, quality: string | null) => {
+      view.rerender(
+        <MediaVideoRenderer
+          {...props}
+          source={{ ...props.source, sourceRef: 'en1080', url: '/en1080.mp4' }}
+          directControls={{
+            ...props.directControls,
+            selectedTrackKey: track,
+            selectedQualityKey: quality,
+          }}
+        />,
+      );
+    });
+    const props = {
+      source: {
+        sourceRef: 'ru720',
+        kind: 'mp4' as const,
+        provider: 'videohub-streaming',
+        label: 'Fixture',
+        url: '/ru720.mp4',
+        availability: 'available' as const,
+        browserSupported: true,
+      },
+      mediaTitle: 'Fixture',
+      shouldAutoPlay: false,
+      initialPositionSeconds: 67,
+      directControls: {
+        tracks: [
+          { value: 'ru', label: 'Русский' },
+          { value: 'en', label: 'English' },
+        ],
+        selectedTrackKey: 'ru',
+        qualities: [
+          { value: '720', label: '720p' },
+          { value: '1080', label: '1080p' },
+        ],
+        selectedQualityKey: '720',
+        onSelectionChange: selection,
+      },
+      onReady: ready,
+      onError: mock(() => {}),
+      onProgress: mock(() => {}),
+      onPlay: () => {},
+      onPause: () => {},
+    };
+    const view = render(<MediaVideoRenderer {...props} />);
+    const player = players[0];
+    expect(player.descriptor.crossOrigin).toBeNull();
+    const snapshot = {
+      source: { id: 'media', revision: player.descriptor.revision },
+      playback: 'ready',
+      positionSeconds: 67,
+      durationSeconds: 1200,
+      pending: null,
+    };
+    await act(async () => player.emit('statechange', snapshot));
+    let result: any;
+    await act(async () => {
+      result = player.host.execute(
+        { type: 'quality', id: '1080', target: { audioId: 'en', qualityId: '1080' } },
+        { signal: new AbortController().signal, positionSeconds: 67, intent: 'paused' },
+      );
+    });
+    result = await result;
+    expect(selection).toHaveBeenCalledWith('en', '1080', 67, 'paused');
+    expect(result.source.src).toBe('/en1080.mp4');
+    expect(result.source.crossOrigin).toBeNull();
+    expect(result.selection).toEqual({ audioId: 'en', qualityId: '1080' });
+    expect(player.setSource).toHaveBeenCalledTimes(1);
+    const replacement = { ...snapshot, source: { id: 'media', revision: result.source.revision } };
+    await act(async () => {
+      player.emit('statechange', {
+        ...replacement,
+        playback: 'loading',
+        pending: { type: 'quality' },
+      });
+      player.emit('statechange', replacement);
+    });
+    expect(ready).toHaveBeenCalledTimes(2);
+    view.rerender(
       <MediaVideoRenderer
+        {...props}
         source={{
-          sourceRef: `torrent:${id}`,
-          kind: 'hls',
-          provider: 'torrent',
-          label: 'Torrent',
-          url,
-          availability: 'available',
-          browserSupported: true,
+          ...props.source,
+          provider: 'veoveo-streaming',
+          sourceRef: 'veoveo',
+          url: '/veoveo.mp4',
         }}
-        mediaTitle="Fixture"
-        shouldAutoPlay
-        initialPositionSeconds={42}
-        torrentTimeline={{ startPositionSeconds: 42, durationSeconds: 1200, onSeek: () => {} }}
-        onReady={ready}
-        onError={error}
-        onProgress={progress}
-        onPlay={() => {}}
-        onPause={() => {}}
       />,
     );
-    await waitFor(() => expect(hlsInstances).toHaveLength(1));
-    const hls = hlsInstances[0];
-    const video = screen.getByTitle('Плеер Torrent: Fixture') as HTMLVideoElement;
-    expect(hls.loadSource).toHaveBeenCalledWith(url);
-    expect(hls.attachMedia).toHaveBeenCalledWith(video);
-    const xhr = { withCredentials: false };
-    hls.config.xhrSetup(xhr);
-    expect(xhr.withCredentials).toBe(true);
-    video.currentTime = 5;
-    fireEvent.loadedMetadata(video);
-    expect(progress).toHaveBeenCalledWith(47, 1200, 'metadata');
-    expect(video.currentTime).toBe(5);
-    fireEvent.canPlay(video);
+    expect(player.descriptor.crossOrigin).toBeUndefined();
+    view.unmount();
+  });
+
+  test('maps authenticated HLS and absolute progress, ignores pending/stale events and disconnects', async () => {
+    const progress = mock(() => {}),
+      ready = mock(() => {}),
+      error = mock(() => {});
+    const url = `/api/v1/torrent-sessions/${id}/hls/master.m3u8`;
+    const props = {
+      source: {
+        sourceRef: `torrent:${id}`,
+        kind: 'hls' as const,
+        provider: 'torrent',
+        label: 'Torrent',
+        url,
+        availability: 'available' as const,
+        browserSupported: true,
+      },
+      mediaTitle: 'Fixture',
+      shouldAutoPlay: true,
+      initialPositionSeconds: 42,
+      torrentTimeline: { startPositionSeconds: 42, durationSeconds: 1200, onSeek: () => {} },
+      onReady: ready,
+      onError: error,
+      onProgress: progress,
+      onPlay: () => {},
+      onPause: () => {},
+    };
+    const view = render(<MediaVideoRenderer {...props} />);
+    const player = players[0];
+    expect(player.descriptor.src).toBe(url);
+    expect(player.descriptor.crossOrigin).toBe('use-credentials');
+    expect(player.descriptor.timeline.absoluteAnchorSeconds).toBe(42);
+    expect(player.descriptor.capabilities.playbackRates).toEqual([1]);
+    const snapshot = {
+      source: { id: 'media', revision: player.descriptor.revision },
+      playback: 'ready',
+      positionSeconds: 47,
+      durationSeconds: 1200,
+      pending: null,
+    };
+    await act(async () => player.emit('statechange', snapshot));
     expect(ready).toHaveBeenCalledTimes(1);
-    await act(async () => hls.error?.('error', { fatal: false }));
+    expect(progress).toHaveBeenCalledWith(47, 1200, 'metadata');
+    progress.mockClear();
+    await act(async () =>
+      player.emit('positionchange', {
+        ...snapshot,
+        positionSeconds: 900,
+        pending: { type: 'seek' },
+      }),
+    );
+    expect(progress).not.toHaveBeenCalled();
+    await act(async () =>
+      player.emit('positionchange', { ...snapshot, source: { id: 'media', revision: 'old' } }),
+    );
+    expect(progress).not.toHaveBeenCalled();
+    await act(async () => player.emit('positionchange', { ...snapshot, positionSeconds: 49 }));
+    expect(progress).toHaveBeenCalledWith(49, 1200, 'periodic');
+    view.rerender(<MediaVideoRenderer {...props} initialPositionSeconds={49} />);
+    expect(player.setSource).toHaveBeenCalledTimes(1);
+    await act(async () =>
+      player.emit('error', { ...snapshot, playback: 'ready', error: { code: 'autoplay-blocked' } }),
+    );
     expect(error).not.toHaveBeenCalled();
-    await act(async () => hls.error?.('error', { fatal: true }));
+    await act(async () => player.emit('error', { ...snapshot, playback: 'error' }));
     expect(error).toHaveBeenCalledTimes(1);
     view.unmount();
-    expect(hls.destroy).toHaveBeenCalledTimes(1);
-    expect(video.getAttribute('src')).toBeNull();
+    expect(player.disconnected).toBe(true);
+    progress.mockClear();
+    player.emit('positionchange', snapshot);
+    expect(progress).not.toHaveBeenCalled();
   });
 });

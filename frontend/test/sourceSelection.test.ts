@@ -4,12 +4,42 @@ import {
   createPlaybackSourceCatalog,
   getAvailableDirectSourceForPlaybackPreference,
   getDirectQualityKey,
+  getDirectQualityOptions,
   getDirectTrackKey,
   getPlaybackSourcePanel,
   mergeEpisodeEmbedSources,
 } from '../src/features/source-selection/model/sourceSelection';
 
 describe('source-less episode catalogs', () => {
+  it('orders provider quality tiers from 4K through 2K to lower resolutions', () => {
+    const sources = [720, 144, 1440, 480, 2160, 1080, 360, 240].map((height) => ({
+      sourceRef: `videohub:${height}`,
+      provider: 'videohub-streaming',
+      kind: 'mp4' as const,
+      label: 'VideoHUB',
+      url: `https://video.example/${height}.mp4`,
+      quality: { height, label: height === 2160 ? '4K' : height === 1440 ? '2K' : `${height}p` },
+      availability: 'available' as const,
+      browserSupported: true,
+    }));
+    expect(getDirectQualityOptions(sources).map(({ label }) => label)).toEqual([
+      '4K',
+      '2K',
+      '1080p',
+      '720p',
+      '480p',
+      '360p',
+      '240p',
+      '144p',
+    ]);
+    const best = getAvailableDirectSourceForPlaybackPreference(
+      sources,
+      getDirectTrackKey(sources[0]),
+      null,
+    );
+    expect(best?.url).toBe('https://video.example/2160.mp4');
+  });
+
   it('opens the panel that owns the selected source', () => {
     expect(getPlaybackSourcePanel(undefined)).toBe('direct');
     expect(
