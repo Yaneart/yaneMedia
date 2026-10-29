@@ -20,11 +20,13 @@ export function parseTorrentPlaylist(input: string): ParsedTorrentPlaylist {
   let map = false;
   let independent = false;
   let ended = false;
+  let event = false;
   let duration: string | undefined;
   const segments: ParsedTorrentPlaylist['segments'] = [];
   for (const line of lines) {
     if (ended || !line || line.trim() !== line) throw new InvalidTorrentPlaylist();
     if (line === '#EXT-X-VERSION:7' && !version) version = true;
+    else if (line === '#EXT-X-PLAYLIST-TYPE:EVENT' && !event) event = true;
     else if (line === '#EXT-X-INDEPENDENT-SEGMENTS' && !independent) independent = true;
     else if (line === '#EXT-X-MAP:URI="init.mp4"' && !map) map = true;
     else if (/^#EXT-X-TARGETDURATION:[1-9]\d?$/.test(line) && targetDuration === undefined)

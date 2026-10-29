@@ -109,6 +109,8 @@ export class TorrentHlsService implements BeforeApplicationShutdown {
         const lines = [
           '#EXTM3U',
           '#EXT-X-VERSION:7',
+          '#EXT-X-PLAYLIST-TYPE:EVENT',
+          '#EXT-X-START:TIME-OFFSET=0,PRECISE=YES',
           `#EXT-X-TARGETDURATION:${playlist.targetDuration}`,
           `#EXT-X-MEDIA-SEQUENCE:${playlist.mediaSequence}`,
           '#EXT-X-INDEPENDENT-SEGMENTS',

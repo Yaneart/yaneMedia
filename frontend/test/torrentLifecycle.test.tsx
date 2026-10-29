@@ -204,8 +204,8 @@ beforeEach(() => {
           },
           playbackRates: [0.2, 0.5, 0.7, 1, 1.2, 1.5, 1.7, 2],
           durationSeconds: 1200,
-          selectedAudioTrackRef: 'track-main',
-          audioTracks: [],
+          selectedAudioTrackRef: body.audioTrackRef ?? 'track-main',
+          audioTracks: session.audioTracks,
           supportsSubtitleSelection: false,
         },
       };
@@ -307,6 +307,36 @@ function openTorrent() {
 }
 
 describe('torrent user lifecycle', () => {
+  test('chooses a probed audio track before starting playback', async () => {
+    session = {
+      ...session,
+      state: 'awaiting_playback',
+      selectedFileRef: fileRef,
+      audioTracks: [
+        {
+          trackRef: 'track-main',
+          label: 'Original',
+          language: 'eng',
+          channels: 2,
+          isDefault: true,
+        },
+        { trackRef: 'track-dub', label: 'Dub', language: 'rus', channels: 2, isDefault: false },
+      ],
+    };
+    const view = mount();
+    openTorrent();
+    const select = await screen.findByRole('combobox', { name: 'Аудиодорожка торрента' });
+    expect(calls.some(({ path }) => path.endsWith('/playback'))).toBe(false);
+    fireEvent.change(select, { target: { value: 'track-dub' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(view.ready).toHaveBeenCalledTimes(1));
+    expect(calls.find(({ path }) => path.endsWith('/playback'))?.body).toMatchObject({
+      audioTrackRef: 'track-dub',
+      startPositionSeconds: 42,
+    });
+    expect(view.ready.mock.calls[0]?.[0].playback.selectedAudioTrackRef).toBe('track-dub');
+  });
+
   test('autoplays selections, retains the list and waits for Stop before replacing playback', async () => {
     discoveryMode = true;
     const view = mount();
@@ -505,6 +535,94 @@ describe('torrent playback progress and cleanup', () => {
 });
 
 describe('torrent player adapter contract', () => {
+  test('confirms audio only with ready replacement refs and retains the public player', async () => {
+    const audioTracks = [
+      { ref: 'main', label: 'Original', language: 'eng', channels: 2, isDefault: true },
+      { ref: 'dub', label: 'Dub', language: 'rus', channels: 6, isDefault: false },
+    ];
+    const nextPlayback = {
+      hlsUrl: '/new.m3u8',
+      generation: 2,
+      startPositionSeconds: 47,
+      timeline: { absoluteAnchorSeconds: 46, mediaAnchorSeconds: 0.08, windowEndSeconds: 166 },
+      durationSeconds: 1200,
+      playbackRates: [0.5, 1, 2],
+      selectedAudioTrackRef: 'new-dub',
+      audioTracks: audioTracks.map((track) => ({ ...track, ref: 'new-' + track.ref })),
+    };
+    let settle!: (value: any) => void;
+    const onReplace = mock(
+      () =>
+        new Promise<any>((resolve) => {
+          settle = resolve;
+        }),
+    );
+    const props = {
+      source: {
+        sourceRef: `torrent:${id}:1`,
+        kind: 'hls' as const,
+        provider: 'torrent',
+        label: 'Torrent',
+        url: '/old.m3u8',
+        availability: 'available' as const,
+        browserSupported: true,
+      },
+      mediaTitle: 'Fixture',
+      shouldAutoPlay: false,
+      initialPositionSeconds: 42,
+      torrentTimeline: {
+        ...nextPlayback,
+        startPositionSeconds: 42,
+        audioTracks,
+        selectedAudioTrackRef: 'main',
+        onReplace,
+      },
+      onReady: mock(() => {}),
+      onError: mock(() => {}),
+      onProgress: mock(() => {}),
+      onPlay: () => {},
+      onPause: () => {},
+    };
+    const view = render(<MediaVideoRenderer {...props} />);
+    const player = players[0];
+    expect(player.descriptor.capabilities.audio).toBe('host');
+    expect(player.descriptor.audioTracks[1]).toMatchObject({
+      id: 'dub',
+      language: 'rus',
+      channels: '6',
+    });
+    const signal = new AbortController().signal;
+    await expect(
+      player.host.execute(
+        { type: 'audio', id: 'main', target: { audioId: 'main' } },
+        { signal, positionSeconds: 47 },
+      ),
+    ).resolves.toEqual({ selection: { audioId: 'main' } });
+    expect(onReplace).not.toHaveBeenCalled();
+    const pending = player.host.execute(
+      { type: 'audio', id: 'ignored', target: { audioId: 'dub', positionSeconds: 47 } },
+      { signal, positionSeconds: 45, intent: 'paused' },
+    );
+    expect(onReplace).toHaveBeenCalledWith(47, signal, 'dub');
+    expect(props.onProgress).not.toHaveBeenCalled();
+    settle({ id, playback: nextPlayback });
+    const result = await pending;
+    expect(result.selection).toEqual({ audioId: 'new-dub' });
+    expect(result.source.audioTracks[1].id).toBe('new-dub');
+    expect(result.source.audioTracks[0].default).toBe(true);
+    expect(result.source.audioTracks[1].default).toBe(false);
+    view.rerender(
+      <MediaVideoRenderer
+        {...props}
+        source={{ ...props.source, sourceRef: `torrent:${id}:2`, url: '/new.m3u8' }}
+        torrentTimeline={{ ...nextPlayback, onReplace }}
+      />,
+    );
+    expect(players).toHaveLength(1);
+    expect(player.setSource).toHaveBeenCalledTimes(1);
+    view.unmount();
+  });
+
   test('bridges combined source selection with confirmed position and paused intent without reloading twice', async () => {
     const ready = mock(() => {});
     const selection = mock((track: string | null, quality: string | null) => {
@@ -628,7 +746,11 @@ describe('torrent player adapter contract', () => {
         },
         playbackRates: [0.2, 0.5, 0.7, 1, 1.2, 1.5, 1.7, 2],
         durationSeconds: 1200,
-        onSeek: () => {},
+        audioTracks: [
+          { ref: 'audio', label: 'Русская', language: 'rus', channels: 2, isDefault: true },
+        ],
+        selectedAudioTrackRef: 'audio',
+        onReplace: () => {},
       },
       onReady: ready,
       onError: error,
@@ -687,20 +809,20 @@ describe('torrent player adapter contract', () => {
     expect(player.seek).toHaveBeenCalledWith(160.001);
     const controller = new AbortController();
     let settle!: (value: any) => void;
-    const onSeek = mock(
+    const onReplace = mock(
       (_position: number, _signal: AbortSignal) =>
         new Promise<any>((resolve) => {
           settle = resolve;
         }),
     );
     view.rerender(
-      <MediaVideoRenderer {...props} torrentTimeline={{ ...props.torrentTimeline, onSeek }} />,
+      <MediaVideoRenderer {...props} torrentTimeline={{ ...props.torrentTimeline, onReplace }} />,
     );
     const command = player.host.execute(
       { type: 'seek', seconds: 900, target: { positionSeconds: 901 } },
       { signal: controller.signal, positionSeconds: 49, intent: 'paused' },
     );
-    expect(onSeek).toHaveBeenCalledWith(901, controller.signal);
+    expect(onReplace).toHaveBeenCalledWith(901, controller.signal, undefined);
     await act(async () =>
       player.emit('error', { ...snapshot, playback: 'error', pending: { type: 'seek' } }),
     );
@@ -708,8 +830,37 @@ describe('torrent player adapter contract', () => {
     controller.abort();
     settle({ id, playback: {} });
     await expect(command).rejects.toMatchObject({ name: 'AbortError' });
+    // Aborted POST may have switched the server. The old selection must be
+    // restored through a real command, never confirmed from stale React props.
+    const restoreSignal = new AbortController().signal;
+    const restore = player.host.execute(
+      { type: 'audio', id: 'audio', target: { audioId: 'audio' } },
+      { signal: restoreSignal, positionSeconds: 49, intent: 'paused' },
+    );
+    expect(onReplace).toHaveBeenLastCalledWith(49, restoreSignal, 'audio');
+    settle({
+      id,
+      playback: {
+        ...props.torrentTimeline,
+        generation: 2,
+        hlsUrl: '/restored.m3u8',
+        selectedAudioTrackRef: 'audio',
+      },
+    });
+    await restore;
     expect(player.setSource).toHaveBeenCalledTimes(1);
-    await act(async () => player.emit('error', { ...snapshot, playback: 'error' }));
+    const restoredSnapshot = {
+      ...snapshot,
+      source: {
+        id: 'media',
+        revision: JSON.stringify([
+          `torrent:${id}:2`,
+          '/restored.m3u8',
+          props.torrentTimeline.timeline,
+        ]),
+      },
+    };
+    await act(async () => player.emit('error', { ...restoredSnapshot, playback: 'error' }));
     expect(error).toHaveBeenCalledTimes(1);
     view.unmount();
     expect(player.disconnected).toBe(true);

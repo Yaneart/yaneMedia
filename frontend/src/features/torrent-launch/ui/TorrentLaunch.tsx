@@ -10,6 +10,8 @@ import {
   createCandidateSession,
   getTorrentCandidates,
   newTorrentIdempotencyKey,
+  preferredTorrentAudio,
+  rememberTorrentAudio,
   selectTorrentFile,
   startTorrentPlayback,
   stopTorrentSession,
@@ -224,6 +226,7 @@ export function TorrentLaunch({
   const [session, setSession] = useState<TorrentSession | null>(null);
   const [selectedCandidateRef, setSelectedCandidateRef] = useState<string | null>(null);
   const [fileRef, setFileRef] = useState<string | null>(null);
+  const [audioRef, setAudioRef] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestRef = useRef<AbortController | null>(null);
@@ -246,6 +249,12 @@ export function TorrentLaunch({
     enabled: authState.status === 'authenticated' && !!session,
   });
   const currentSession = session ? (sessionQuery.data ?? session) : null;
+  const selectedAudio =
+    currentSession?.audioTracks.find((track) => track.ref === audioRef) ??
+    currentSession?.audioTracks.find(
+      (track) => track.ref === currentSession.playback?.selectedAudioTrackRef,
+    ) ??
+    preferredTorrentAudio(currentSession?.audioTracks ?? []);
   const discoveryQuery = useQuery({
     queryKey: ['account', accountKey, 'torrent-discovery', mediaRef, season, episode],
     queryFn: ({ signal }) => getTorrentCandidates(mediaRef, season, episode, signal),
@@ -542,6 +551,7 @@ export function TorrentLaunch({
         currentSession.version,
         key,
         controller.signal,
+        selectedAudio?.ref,
       );
       if (controller.signal.aborted) return;
       playbackRequestedRef.current = selectedRef.current;
@@ -549,6 +559,7 @@ export function TorrentLaunch({
       cacheTorrentSession(queryClient, accountKey, updated);
       setSession(updated);
       onSessionChange(updated);
+      if (selectedAudio) rememberTorrentAudio(selectedAudio);
     } catch (cause) {
       if (!controller.signal.aborted) {
         const message = describeCommandError(cause, 'подготовить воспроизведение');
@@ -638,6 +649,34 @@ export function TorrentLaunch({
             </div>
           ) : authState.status === 'authenticated' && profileQuery.data?.emailVerified ? (
             <div className="space-y-4">
+              {currentSession?.state === 'awaiting_playback' &&
+                currentSession.audioTracks.length > 1 && (
+                  <label className="block space-y-2 text-sm font-semibold text-text-primary">
+                    <span>Аудиодорожка</span>
+                    <select
+                      aria-label="Аудиодорожка торрента"
+                      value={selectedAudio?.ref ?? ''}
+                      disabled={pending}
+                      onChange={(event) => {
+                        setAudioRef(event.target.value);
+                        playbackKeyRef.current = null;
+                      }}
+                      className="block w-full rounded-control border border-border bg-surface px-3 py-2"
+                    >
+                      {currentSession.audioTracks.map((track) => (
+                        <option key={track.ref} value={track.ref}>
+                          {[
+                            track.label,
+                            track.language,
+                            track.channels ? `${track.channels} кан.` : null,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
               {currentSession?.state === 'awaiting_file' && (
                 <fieldset className="space-y-3">
                   <legend className="text-sm font-semibold text-text-primary">

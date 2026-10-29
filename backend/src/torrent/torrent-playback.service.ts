@@ -103,6 +103,7 @@ export class TorrentPlaybackService {
   }
 
   private async start(session: TorrentSessionRow): Promise<void> {
+    let version = session.version;
     try {
       const probe = await this.repository.getProbe(session.sessionId);
       const file =
@@ -126,13 +127,19 @@ export class TorrentPlaybackService {
         session.generation,
         AbortSignal.timeout(90_000),
       );
-      await this.repository.transition(session.sessionId, session.version, 'ready', {
+      const ready = await this.repository.transition(session.sessionId, version, 'ready', {
         playbackTimeline,
       });
+      version = ready.version;
+      await this.gateway.waitComplete(
+        session.sessionId,
+        session.generation,
+        AbortSignal.timeout(90_000),
+      );
     } catch (error) {
       await this.gateway.stop(session.sessionId, session.generation);
       await this.repository
-        .transition(session.sessionId, session.version, 'awaiting_playback', {
+        .transition(session.sessionId, version, 'awaiting_playback', {
           failureCode:
             error instanceof TorrentGatewayCapacity
               ? 'TORRENT_CAPACITY_EXCEEDED'

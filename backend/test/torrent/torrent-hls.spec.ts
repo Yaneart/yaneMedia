@@ -113,6 +113,7 @@ describe('torrent HLS gateway', () => {
     let generation = 1;
     const transition = jest.fn().mockResolvedValue(undefined);
     const stop = jest.fn().mockResolvedValue(undefined);
+    const isCompleted = jest.fn().mockReturnValue(false);
     const recordViewerActivity = jest.fn().mockResolvedValue(undefined);
     const repository = {
       findVisible: jest.fn((owner: string) =>
@@ -126,7 +127,7 @@ describe('torrent HLS gateway', () => {
         requested === generation ? directory : undefined,
       ),
       hasGeneration: jest.fn((_id: string, requested: number) => requested === generation),
-      isCompleted: jest.fn().mockReturnValue(false),
+      isCompleted,
       stop,
     } as unknown as TorrentStreamGateway;
     const metrics = new TorrentMetrics();
@@ -186,6 +187,19 @@ describe('torrent HLS gateway', () => {
         416,
       );
       expect(recordViewerActivity).toHaveBeenCalledTimes(4);
+      const growing =
+        playlist.replace('#EXT-X-ENDLIST\n', '') + '#EXTINF:2.000000,\nsegment-000001.m4s\n';
+      await writeFile(join(directory, 'media.m3u8'), growing);
+      await writeFile(join(directory, 'segment-000001.m4s'), Buffer.from('new segment'));
+      const appended = await (await get(`/media/${mediaRef}`)).text();
+      expect(appended).toContain('#EXT-X-PLAYLIST-TYPE:EVENT');
+      expect(appended).toContain('#EXT-X-START:TIME-OFFSET=0,PRECISE=YES');
+      expect(appended).toContain(`/segments/${segmentRef}.m4s`);
+      expect(appended).not.toContain('#EXT-X-ENDLIST');
+      expect((await get(`/segments/${segmentRef}`)).status).toBe(200);
+      await writeFile(join(directory, 'media.m3u8'), growing + '#EXT-X-ENDLIST\n');
+      isCompleted.mockReturnValue(true);
+      expect(await (await get(`/media/${mediaRef}`)).text()).toContain('#EXT-X-ENDLIST');
       await writeFile(
         join(directory, 'media.m3u8'),
         playlist.replaceAll('000000', '000001').replace('SEQUENCE:0', 'SEQUENCE:1'),

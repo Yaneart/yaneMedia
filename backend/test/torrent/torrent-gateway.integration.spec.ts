@@ -15,6 +15,149 @@ import { UnsupportedTorrentMedia } from '../../src/torrent/torrent-media-policy'
 const describeGateway = process.env.TORRENT_GATEWAY_TEST === '1' ? describe : describe.skip;
 
 describeGateway('FFmpeg gateway with a local seekable fixture', () => {
+  it('outputs exactly the selected audible track across replacements and releases each worker', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'torrent-audio-test-'));
+    const file = join(root, 'two-tracks.mkv');
+    const sessionId = `torrent_session_${randomBytes(16).toString('base64url')}`;
+    const directory = join(tmpdir(), 'yanemedia-torrent-hls', sessionId);
+    expect(
+      spawnSync(
+        'ffmpeg',
+        [
+          '-v',
+          'error',
+          '-f',
+          'lavfi',
+          '-i',
+          'testsrc=size=320x180:rate=24',
+          '-f',
+          'lavfi',
+          '-i',
+          'sine=frequency=440:sample_rate=48000',
+          '-f',
+          'lavfi',
+          '-i',
+          'sine=frequency=880:sample_rate=48000',
+          '-t',
+          '8',
+          '-map',
+          '0:v',
+          '-map',
+          '1:a',
+          '-map',
+          '2:a',
+          '-metadata:s:a:0',
+          'language=eng',
+          '-metadata:s:a:0',
+          'title=Original',
+          '-metadata:s:a:1',
+          'language=rus',
+          '-metadata:s:a:1',
+          'title=Dub',
+          '-c:v',
+          'libx264',
+          '-threads',
+          '2',
+          '-g',
+          '48',
+          '-pix_fmt',
+          'yuv420p',
+          '-b:v',
+          '600k',
+          '-c:a',
+          'aac',
+          '-b:a',
+          '96k',
+          file,
+        ],
+        { timeout: 20_000 },
+      ).status,
+    ).toBe(0);
+    const engine = {
+      enabled: true,
+      openFileStream: jest.fn((_key, _file, range: { offset: number; length?: number }) =>
+        Promise.resolve({
+          body: createReadStream(file, {
+            start: range.offset,
+            ...(range.length ? { end: range.offset + range.length - 1 } : {}),
+          }),
+        }),
+      ),
+      heartbeat: jest.fn().mockResolvedValue(undefined),
+    } as unknown as TorrServerClient;
+    const gateway = new TorrentStreamGateway(engine);
+    try {
+      const source = {
+        key: 'a'.repeat(40) as EngineTorrentKey,
+        file: 1 as EngineFileKey,
+        size: (await stat(file)).size,
+      };
+      const probe = await gateway.probe(source, 'audio-file');
+      expect(probe.audioTracks.map((track) => track.language)).toEqual(['eng', 'rus']);
+      for (const [index, trackIndex] of [1, 0, 1].entries()) {
+        const generation = index + 1;
+        const audio = probe.audioTracks[trackIndex];
+        await gateway.start(sessionId, generation, source, probe, audio, index ? 3.3 : 0);
+        const timeline = await gateway.waitReady(
+          sessionId,
+          generation,
+          AbortSignal.timeout(30_000),
+        );
+        expect(timeline.absoluteAnchorSeconds).toBeCloseTo(index ? 2 : 0, 1);
+        const playlist = join(directory, String(generation), 'media.m3u8');
+        const metadata = spawnSync('ffprobe', [
+          '-v',
+          'error',
+          '-show_streams',
+          '-of',
+          'json',
+          playlist,
+        ]);
+        const streams = (
+          JSON.parse(metadata.stdout.toString()) as { streams: { codec_type: string }[] }
+        ).streams;
+        expect(streams.filter((stream) => stream.codec_type === 'audio')).toHaveLength(1);
+        const pcm = spawnSync('ffmpeg', [
+          '-v',
+          'error',
+          '-i',
+          playlist,
+          '-ss',
+          '1',
+          '-t',
+          '1',
+          '-vn',
+          '-ac',
+          '1',
+          '-ar',
+          '48000',
+          '-f',
+          'f32le',
+          'pipe:1',
+        ]);
+        expect(pcm.status).toBe(0);
+        const samples = pcm.stdout;
+        let crossings = 0;
+        for (let offset = 4; offset < samples.length; offset += 4) {
+          if (samples.readFloatLE(offset - 4) <= 0 && samples.readFloatLE(offset) > 0) crossings++;
+        }
+        const frequency = crossings / (samples.length / 4 / 48000);
+        expect(frequency).toBeGreaterThan(trackIndex ? 870 : 430);
+        expect(frequency).toBeLessThan(trackIndex ? 890 : 450);
+        await gateway.waitComplete(sessionId, generation, AbortSignal.timeout(30_000));
+        expect(gateway.activeTranscodes()).toEqual({ copy: 0, transcode: 0 });
+        if (index)
+          await expect(stat(join(directory, String(index)))).rejects.toMatchObject({
+            code: 'ENOENT',
+          });
+      }
+    } finally {
+      await gateway.beforeApplicationShutdown();
+      await rm(root, { recursive: true, force: true });
+    }
+    await expect(stat(directory)).rejects.toMatchObject({ code: 'ENOENT' });
+  }, 60_000);
+
   it('rejects a playlist disguised as video without fetching its internal HTTP target', async () => {
     let requests = 0;
     const canary = createServer((_req, res) => {
@@ -121,6 +264,7 @@ describeGateway('FFmpeg gateway with a local seekable fixture', () => {
       const timeline = await gateway.waitReady(sessionId, 1, AbortSignal.timeout(30_000));
       expect(timeline.absoluteAnchorSeconds).toBe(0);
       expect(timeline.mediaAnchorSeconds).toBeGreaterThanOrEqual(0);
+      await gateway.waitComplete(sessionId, 1, AbortSignal.timeout(30_000));
       expect(gateway.isCompleted(sessionId, 1)).toBe(true);
       expect(gateway.activeTranscodes()).toEqual({ copy: 0, transcode: 0 });
       expect((await stat(join(directory, '1', 'init.mp4'))).size).toBeGreaterThan(0);

@@ -13,6 +13,7 @@ export async function replaceTorrentPlayback(
   initial: TorrentSession,
   position: number,
   signal: AbortSignal,
+  audioTrackRef = initial.playback?.selectedAudioTrackRef,
 ): Promise<TorrentSession> {
   signal.throwIfAborted();
   const deadline = AbortSignal.any([AbortSignal.timeout(110_000), torrentAccountSignal()]);
@@ -20,7 +21,8 @@ export async function replaceTorrentPlayback(
   let current = initial;
   let admittedVersion: number | null = null;
   let attempts = 0;
-  const audio = initial.playback?.selectedAudioTrackRef;
+  let polls = 0;
+  const audio = audioTrackRef;
   while (!deadline.aborted) {
     if (current.selectedFileRef !== initial.selectedFileRef)
       throw new Error('Playback file replaced');
@@ -65,7 +67,8 @@ export async function replaceTorrentPlayback(
       (admittedVersion !== null && current.state === 'awaiting_playback')
     )
       throw new Error('Playback preparation failed');
-    await new Promise<void>((resolve) => setTimeout(resolve, 1_000));
+    // A short fast phase avoids extra startup delay without exhausting polling budgets.
+    await new Promise<void>((resolve) => setTimeout(resolve, ++polls <= 12 ? 250 : 1_000));
     try {
       current = await getTorrentSession(initial.id, deadline);
     } catch (error) {

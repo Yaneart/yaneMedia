@@ -44,6 +44,7 @@ describe('torrent playback commands', () => {
     hasCapacity: jest.fn(),
     start: jest.fn(),
     waitReady: jest.fn(),
+    waitComplete: jest.fn(),
     stop: jest.fn(),
   };
   const input = { view: jest.fn(), digestPlayback: jest.fn() };
@@ -65,7 +66,9 @@ describe('torrent playback commands', () => {
     });
     repository.findFile.mockResolvedValue({ engineFileIndex: 2, sizeBytes: 100 });
     repository.findEngineKey.mockResolvedValue('c'.repeat(40));
-    repository.transition.mockResolvedValue(undefined);
+    repository.transition.mockImplementation((_id: string, version: number, state: string) =>
+      Promise.resolve({ ...session, version: version + 1, state }),
+    );
     gateway.hasCapacity.mockReturnValue(true);
     gateway.start.mockResolvedValue(undefined);
     gateway.waitReady.mockResolvedValue({
@@ -74,6 +77,7 @@ describe('torrent playback commands', () => {
       windowEndSeconds: 130,
     });
     gateway.stop.mockResolvedValue(undefined);
+    gateway.waitComplete.mockResolvedValue(undefined);
     input.digestPlayback.mockReturnValue('digest');
     input.view.mockImplementation((value: unknown) => value);
   });
@@ -163,7 +167,7 @@ describe('torrent playback commands', () => {
     await settleWorker();
     expect(gateway.start).toHaveBeenCalledTimes(2);
     expect(repository.transition).toHaveBeenLastCalledWith(id, 5, 'ready', {
-      playbackTimeline: expect.objectContaining({ absoluteAnchorSeconds: 10 }),
+      playbackTimeline: timeline,
     });
   });
 
@@ -175,6 +179,27 @@ describe('torrent playback commands', () => {
     await service.playback('owner', id, request, key);
     await settleWorker();
     expect(gateway.start).not.toHaveBeenCalled();
+  });
+
+  it('publishes the measured prefix before completion and revokes ready on a later worker failure', async () => {
+    let fail!: (error: Error) => void;
+    gateway.waitComplete.mockReturnValue(
+      new Promise<void>((_resolve, reject) => {
+        fail = reject;
+      }),
+    );
+    await service.playback('owner', id, request, key);
+    await settleWorker();
+    expect(repository.transition).toHaveBeenCalledWith(id, 5, 'ready', {
+      playbackTimeline: timeline,
+    });
+    expect(gateway.stop).not.toHaveBeenCalled();
+    fail(new Error('Input ended before the bounded window completed'));
+    await settleWorker();
+    expect(gateway.stop).toHaveBeenCalledWith(id, 2);
+    expect(repository.transition).toHaveBeenLastCalledWith(id, 6, 'awaiting_playback', {
+      failureCode: 'TORRENT_TRANSCODE_FAILED',
+    });
   });
 
   it('denies capacity before changing the session and allows replacing its own ready worker', async () => {

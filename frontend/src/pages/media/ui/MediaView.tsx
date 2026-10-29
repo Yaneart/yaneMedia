@@ -307,6 +307,14 @@ export function MediaView({
         ? launchedTorrent.session
         : null
     : null;
+  const [readyTorrent, setReadyTorrent] = useState<{
+    accountKey: string;
+    session: TorrentSession;
+  } | null>(null);
+  useEffect(() => {
+    if (torrentSession?.state === 'ready' && torrentSession.playback)
+      setReadyTorrent({ accountKey, session: torrentSession });
+  }, [accountKey, torrentSession]);
   const torrentEnded =
     (torrentQuery.isError &&
       torrentQuery.error instanceof TorrentRequestError &&
@@ -329,9 +337,10 @@ export function MediaView({
       ? torrentSession.playback
       : !torrentEnded &&
           torrentSession?.state === 'preparing' &&
-          launchedTorrent?.accountKey === accountKey &&
-          launchedTorrent.session.id === activeTorrentId
-        ? launchedTorrent.session.playback
+          readyTorrent?.accountKey === accountKey &&
+          readyTorrent.session.id === activeTorrentId &&
+          readyTorrent.session.selectedFileRef === torrentSession.selectedFileRef
+        ? readyTorrent.session.playback
         : null;
   const torrentUnavailable =
     torrentQuery.isError ||
@@ -711,11 +720,16 @@ export function MediaView({
     setTorrentPlayRequest((request) => request + 1);
   };
 
-  const seekTorrent = useCallback(
-    async (positionSeconds: number, signal: AbortSignal) => {
+  const replaceTorrent = useCallback(
+    async (positionSeconds: number, signal: AbortSignal, audioTrackRef?: string) => {
       if (!torrentSession || !torrentPlayback || !activeTorrentId)
         throw new Error('Torrent unavailable');
-      const updated = await replaceTorrentPlayback(torrentSession, positionSeconds, signal);
+      const updated = await replaceTorrentPlayback(
+        torrentSession,
+        positionSeconds,
+        signal,
+        audioTrackRef,
+      );
       signal.throwIfAborted();
       await queryClient.cancelQueries({
         queryKey: torrentSessionQueryKeys.session(accountKey, updated.id),
@@ -1126,7 +1140,9 @@ export function MediaView({
                       durationSeconds: torrentPlayback.durationSeconds,
                       timeline: torrentPlayback.timeline,
                       playbackRates: torrentPlayback.playbackRates,
-                      onSeek: seekTorrent,
+                      audioTracks: torrentPlayback.audioTracks,
+                      selectedAudioTrackRef: torrentPlayback.selectedAudioTrackRef,
+                      onReplace: replaceTorrent,
                     }
                   : undefined
               }

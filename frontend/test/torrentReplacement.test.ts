@@ -124,3 +124,27 @@ test('rejects a newer foreign generation instead of confirming the target as vie
     replaceTorrentPlayback(mapTorrentSession(wire), 350, new AbortController().signal),
   ).rejects.toThrow('generation replaced');
 });
+
+test('sends the requested audio with the confirmed position and rejects a wrong ready selection', async () => {
+  const bodies: any[] = [];
+  let wrong = false;
+  globalThis.fetch = mock(async (_url: string, init: RequestInit) => {
+    bodies.push(JSON.parse(String(init.body)));
+    return response({
+      ...ready,
+      playback: { ...ready.playback, selectedAudioTrackRef: wrong ? 'audio' : 'other' },
+    });
+  });
+  const initial = mapTorrentSession(wire);
+  const result = await replaceTorrentPlayback(initial, 350, new AbortController().signal, 'other');
+  expect(result.playback?.selectedAudioTrackRef).toBe('other');
+  expect(bodies[0]).toMatchObject({
+    audioTrackRef: 'other',
+    startPositionSeconds: 350,
+    expectedVersion: 5,
+  });
+  wrong = true;
+  await expect(
+    replaceTorrentPlayback(initial, 350, new AbortController().signal, 'other'),
+  ).rejects.toThrow('generation replaced');
+});

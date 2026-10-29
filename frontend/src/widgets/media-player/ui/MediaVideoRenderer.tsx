@@ -1,6 +1,6 @@
 ﻿import type { MediaSourceOption } from '@/entities/media-source';
 import type { SelectOption } from '@/shared';
-import type { TorrentSession } from '@/entities/torrent-session';
+import { rememberTorrentAudio, type TorrentSession } from '@/entities/torrent-session';
 import { useLayoutEffect, useRef } from 'react';
 import {
   type HostResult,
@@ -29,13 +29,19 @@ export type TorrentVideoTimeline = {
   durationSeconds: number | null;
   timeline: NonNullable<TorrentSession['playback']>['timeline'];
   playbackRates: readonly number[];
-  onSeek: (positionSeconds: number, signal: AbortSignal) => Promise<TorrentSession>;
+  audioTracks: NonNullable<TorrentSession['playback']>['audioTracks'];
+  selectedAudioTrackRef: string;
+  onReplace: (
+    positionSeconds: number,
+    signal: AbortSignal,
+    audioTrackRef?: string,
+  ) => Promise<TorrentSession>;
 };
 
 function torrentDescriptor(
   source: MediaSourceOption,
   title: string,
-  playback: Omit<TorrentVideoTimeline, 'onSeek'>,
+  playback: Omit<TorrentVideoTimeline, 'onReplace'>,
 ): PlayerSource {
   return {
     id: 'media',
@@ -44,12 +50,19 @@ function torrentDescriptor(
     src: source.url,
     title,
     crossOrigin: 'use-credentials',
+    audioTracks: playback.audioTracks.map((track) => ({
+      id: track.ref,
+      label: track.label,
+      language: track.language ?? undefined,
+      channels: track.channels === null ? undefined : String(track.channels),
+      default: track.isDefault,
+    })),
     timeline: {
       mode: 'windowed-vod',
       ...playback.timeline,
       durationSeconds: playback.durationSeconds,
     },
-    capabilities: { seek: 'host', playbackRates: playback.playbackRates },
+    capabilities: { seek: 'host', audio: 'host', playbackRates: playback.playbackRates },
   };
 }
 
@@ -79,6 +92,7 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
   const pendingRef = useRef<((result?: HostResult) => void) | null>(null);
   const loadedRevisionRef = useRef<string | null>(null);
   const torrentCommandRef = useRef(false);
+  const torrentAudioRef = useRef<string | null>(null);
 
   useLayoutEffect(() => {
     propsRef.current = props;
@@ -94,11 +108,12 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
     let readyRevision: string | null = null;
     let previousPlayback = 'idle';
     let seeking = false;
-    const replaceTorrent = async (position: number, signal: AbortSignal) => {
+    const replaceTorrent = async (position: number, signal: AbortSignal, audioId?: string) => {
       torrentCommandRef.current = true;
+      torrentAudioRef.current = null;
       try {
         const current = propsRef.current;
-        const ready = await current.torrentTimeline!.onSeek(position, signal);
+        const ready = await current.torrentTimeline!.onReplace(position, signal, audioId);
         signal.throwIfAborted();
         if (disposed || !ready.playback)
           throw new DOMException('Playback change cancelled', 'AbortError');
@@ -112,7 +127,12 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
           ready.playback,
         );
         loadedRevisionRef.current = descriptor.revision;
-        return { source: descriptor };
+        const selected = ready.playback.audioTracks.find(
+          (track) => track.ref === ready.playback!.selectedAudioTrackRef,
+        );
+        if (audioId && selected) rememberTorrentAudio(selected);
+        torrentAudioRef.current = ready.playback.selectedAudioTrackRef;
+        return { source: descriptor, selection: { audioId: ready.playback.selectedAudioTrackRef } };
       } finally {
         torrentCommandRef.current = false;
       }
@@ -219,9 +239,17 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
       execute(command, context) {
         const current = propsRef.current;
         if (current.torrentTimeline) {
-          if (command.target.positionSeconds === undefined)
+          if (command.type !== 'seek' && command.type !== 'audio')
             return Promise.reject(new Error('Unsupported torrent command'));
-          return replaceTorrent(command.target.positionSeconds, context.signal);
+          if (
+            command.target.positionSeconds === undefined &&
+            command.target.audioId === torrentAudioRef.current
+          )
+            return Promise.resolve({ selection: { audioId: command.target.audioId } });
+          const position = command.target.positionSeconds ?? context.positionSeconds;
+          if (position === null || position === undefined)
+            return Promise.reject(new Error('Torrent position unavailable'));
+          return replaceTorrent(position, context.signal, command.target.audioId);
         }
         const controls = current.directControls;
         const audioId = command.target.audioId ?? controls?.selectedTrackKey ?? null;
@@ -323,12 +351,14 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
         },
       });
     } else {
+      torrentAudioRef.current = timeline?.selectedAudioTrackRef ?? null;
       void player
         .setSource(descriptor, {
           positionSeconds: timeline ? timeline.startPositionSeconds : props.initialPositionSeconds,
           intent: props.shouldAutoPlay ? 'playing' : 'paused',
         })
         .then(async () => {
+          if (timeline) await player.selectAudio(timeline.selectedAudioTrackRef);
           if (controls?.selectedTrackKey && descriptor.capabilities?.audio === 'host')
             await player.selectAudio(controls.selectedTrackKey);
           if (controls?.selectedQualityKey && descriptor.capabilities?.quality === 'host')

@@ -163,6 +163,15 @@ describePostgres('torrent session PostgreSQL persistence', () => {
           isDefault: true,
           copy: true,
         },
+        {
+          trackRef: `torrent_track_${randomBytes(16).toString('base64url')}`,
+          streamIndex: 2,
+          label: 'Dub',
+          language: 'rus',
+          channels: 2,
+          isDefault: false,
+          copy: true,
+        },
       ],
     };
     await repository.saveProbe(pending.sessionId, published.version, probe);
@@ -207,7 +216,7 @@ describePostgres('torrent session PostgreSQL persistence', () => {
     expect(started.session.playbackPositionSeconds).toBe(1.5);
     expect((await repository.beginPlayback(...command)).replay).toBe(true);
     const timeline = { absoluteAnchorSeconds: 0, mediaAnchorSeconds: 0.08, windowEndSeconds: 42.5 };
-    const ready = await repository.transition(pending.sessionId, started.session.version, 'ready', {
+    let ready = await repository.transition(pending.sessionId, started.session.version, 'ready', {
       playbackTimeline: timeline,
     });
     expect((await repository.findVisible(owners[0], pending.sessionId))?.playbackTimeline).toEqual(
@@ -219,6 +228,38 @@ describePostgres('torrent session PostgreSQL persistence', () => {
     expect(await metrics.registry.metrics()).toContain(
       'torrent_time_to_first_frame_ready_seconds_count 1',
     );
+    const switchCommand = [
+      owners[0],
+      pending.sessionId,
+      ready.version,
+      probe.audioTracks[1].trackRef,
+      1.5,
+      'playback-audio-1',
+      'a'.repeat(64),
+    ] as const;
+    const [switched, replayed] = await Promise.all([
+      repository.beginPlayback(...switchCommand),
+      repository.beginPlayback(...switchCommand),
+    ]);
+    expect(switched.session.generation).toBe(ready.generation + 1);
+    expect(replayed.replay).toBe(true);
+    expect(replayed.session.generation).toBe(switched.session.generation);
+    expect(switched.session.selectedAudioTrackRef).toBe(probe.audioTracks[1].trackRef);
+    expect(switched.session.playbackPositionSeconds).toBe(1.5);
+    await expect(
+      repository.beginPlayback(
+        owners[0],
+        pending.sessionId,
+        ready.version,
+        probe.audioTracks[0].trackRef,
+        1.5,
+        'playback-audio-2',
+        'b'.repeat(64),
+      ),
+    ).rejects.toMatchObject({ code: 'TORRENT_SESSION_CHANGED' });
+    ready = await repository.transition(pending.sessionId, switched.session.version, 'ready', {
+      playbackTimeline: timeline,
+    });
     await repository.transition(pending.sessionId, ready.version, 'awaiting_playback', {
       failureCode: 'TORRENT_TRANSCODE_FAILED',
     });

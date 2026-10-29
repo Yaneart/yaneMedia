@@ -9,7 +9,7 @@
         "@mingcute/react": "^3.0.2",
         "@tanstack/react-query": "^5.102.8",
         "@tanstack/react-query-persist-client": "5.102.8",
-        "@yaneart/yaneplayer": "0.1.7",
+        "@yaneart/yaneplayer": "0.1.8",
         "react": "^19.2.8",
         "react-dom": "^19.2.8",
         "react-router": "^8.3.0",
@@ -235,7 +235,7 @@
 
     "@vitejs/plugin-react": ["@vitejs/plugin-react@6.0.5", "", { "dependencies": { "@rolldown/pluginutils": "^1.0.1" }, "peerDependencies": { "@rolldown/plugin-babel": "^0.1.7 || ^0.2.0", "babel-plugin-react-compiler": "^1.0.0", "vite": "^8.0.0" }, "optionalPeers": ["@rolldown/plugin-babel", "babel-plugin-react-compiler"] }, "sha512-BOVzne/NL162sMdResB25mUv+vWMF5NoAjNf09TeGlE7ZpszZWSD3winycicLJw72yeVsoCn/2kOhEuCvEShMA=="],
 
-    "@yaneart/yaneplayer": ["@yaneart/yaneplayer@0.1.7", "", {}, "sha512-HRD0S5IHfBCOKVcdNqW7Vk7sYsnnUZI2ug0Vfp6PHRLeuAi3oLC2I+0EyxEk4fYH7iIGzaOysI6zCxqua3sPdA=="],
+    "@yaneart/yaneplayer": ["@yaneart/yaneplayer@0.1.8", "", {}, "sha512-l76n+PCXIkJX8EPpRHXFqTT86Q1wGpNfHgW5vQVEgltetNkuGEX/4PHKl1Epgz5sASU+UqQHucuBWuIjODwcNw=="],
 
     "ansi-regex": ["ansi-regex@5.0.1", "", {}, "sha512-quJQXlTSUGL2LH9SUXo8VwsY4soanhgo6LNSm84E1LBcE8s3O0wpdiRzyR9z/ZZJMlMWv37qOOb9pdJlMUEKFQ=="],
 

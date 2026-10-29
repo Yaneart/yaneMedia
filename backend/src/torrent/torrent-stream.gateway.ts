@@ -14,10 +14,12 @@ import {
   type TorrentProbe,
 } from './torrent-media-policy';
 import { TorrServerClient } from './torrserver.client';
+import { parseTorrentPlaylist } from './torrent-hls-playlist';
 import {
   TORRENT_WINDOW_BYTES,
   TORRENT_WINDOW_SECONDS,
   TORRENT_WINDOW_SEGMENTS,
+  TORRENT_STARTUP_SECONDS,
   type TorrentTimeline,
 } from './torrent-playback-window';
 
@@ -43,6 +45,7 @@ type Worker = {
   videoTranscode: boolean;
   heartbeat: NodeJS.Timeout;
   absoluteAnchorSeconds: number;
+  positionSeconds: number;
 };
 
 export class TorrentGatewayCapacity extends Error {}
@@ -259,6 +262,8 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
         '2',
         '-hls_list_size',
         String(TORRENT_WINDOW_SEGMENTS),
+        '-hls_playlist_type',
+        'event',
         '-hls_flags',
         'independent_segments+temp_file',
         '-hls_fmp4_init_filename',
@@ -278,7 +283,11 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
         void readdir(directory)
           .then(async (files) => {
             const sizes = await Promise.all(files.map((file) => stat(join(directory, file))));
-            if (sizes.reduce((total, info) => total + info.size, 0) > TORRENT_WINDOW_BYTES)
+            if (
+              sizes.reduce((total, info) => total + info.size, 0) > TORRENT_WINDOW_BYTES ||
+              files.filter((file) => /^segment-\d{6}\.m4s$/.test(file)).length >
+                TORRENT_WINDOW_SEGMENTS
+            )
               process.kill('SIGKILL');
           })
           .catch(() => undefined);
@@ -292,6 +301,7 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
         videoTranscode,
         heartbeat,
         absoluteAnchorSeconds: anchor,
+        positionSeconds: position,
       });
       const server = input.server;
       const ended = (code: number | null) => {
@@ -338,12 +348,24 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
       if (!directory) throw new Error('FFmpeg worker stopped');
       try {
         const playlist = await readFile(join(directory, 'media.m3u8'), 'utf8');
-        const segment = /^segment-\d{6}\.m4s$/m.exec(playlist);
+        const parsed = parseTorrentPlaylist(playlist);
+        const segment = parsed.segments[0].filename;
+        const duration = parsed.segments.reduce(
+          (sum, item) => sum + Number(item.duration.slice(8, -1)),
+          0,
+        );
+        const anchor =
+          worker?.generation === generation
+            ? worker.absoluteAnchorSeconds
+            : completed!.absoluteAnchorSeconds;
+        const bufferedTarget =
+          worker?.generation === generation
+            ? worker.positionSeconds - anchor + TORRENT_STARTUP_SECONDS
+            : 0;
         if (
-          completed?.generation === generation &&
-          segment &&
+          (completed?.generation === generation || duration >= bufferedTarget) &&
           (await stat(join(directory, 'init.mp4'))).size > 0 &&
-          (await stat(join(directory, segment[0]))).size > 0
+          (await stat(join(directory, segment))).size > 0
         ) {
           const sizes = await Promise.all(
             (await readdir(directory)).map((file) => stat(join(directory, file))),
@@ -353,7 +375,7 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
           // Probe the emitted fMP4, not the requested -ss value. make_zero leaves
           // encoder reorder/audio delay visible in the actual media timestamp.
           const init = await readFile(join(directory, 'init.mp4'));
-          const fragment = await readFile(join(directory, segment[0]));
+          const fragment = await readFile(join(directory, segment));
           const sample = join(directory, 'anchor.mp4');
           await writeFile(sample, Buffer.concat([init, fragment]));
           const raw = JSON.parse(
@@ -376,24 +398,30 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
           ) as { packets?: { pts_time?: string }[] };
           await rm(sample, { force: true });
           const mediaAnchorSeconds = Number(raw.packets?.[0]?.pts_time);
-          const absoluteAnchorSeconds = completed.absoluteAnchorSeconds;
+          const absoluteAnchorSeconds = anchor;
           if (!Number.isFinite(mediaAnchorSeconds) || mediaAnchorSeconds < 0)
             throw new Error('Invalid media timestamp');
           if (!this.hasGeneration(sessionId, generation)) throw new Error('Worker replaced');
-          const durations = [...playlist.matchAll(/^#EXTINF:([\d.]+),$/gm)].map((match) =>
-            Number(match[1]),
-          );
           return {
             absoluteAnchorSeconds,
             mediaAnchorSeconds,
-            windowEndSeconds:
-              absoluteAnchorSeconds + durations.reduce((sum, duration) => sum + duration, 0),
+            windowEndSeconds: absoluteAnchorSeconds + duration,
           };
         }
       } catch {
         /* Artifact is still being published. */
       }
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    throw new TorrentGatewayTimeout();
+  }
+
+  async waitComplete(sessionId: string, generation: number, signal: AbortSignal): Promise<void> {
+    while (!signal.aborted) {
+      if (this.isCompleted(sessionId, generation)) return;
+      if (this.workers.get(sessionId)?.generation !== generation)
+        throw new Error('FFmpeg worker stopped before completion');
+      await new Promise((resolve) => setTimeout(resolve, 100));
     }
     throw new TorrentGatewayTimeout();
   }
