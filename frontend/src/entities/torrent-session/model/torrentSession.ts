@@ -36,6 +36,20 @@ export type TorrentAudioTrack = {
   isDefault: boolean;
 };
 
+export type TorrentSubtitleTrack = {
+  ref: string;
+  label: string;
+  language: string | null;
+  format: 'vtt' | 'ass' | 'pgs' | 'vobsub';
+  isDefault: boolean;
+  isForced: boolean;
+  isSdh: boolean;
+  available: boolean;
+  unavailableReason: string | null;
+  url: string;
+  fonts: { ref: string; url: string }[];
+};
+
 export type TorrentSession = {
   id: string;
   mediaRef: string | null;
@@ -66,6 +80,7 @@ export type TorrentSession = {
     durationSeconds: number | null;
     selectedAudioTrackRef: string;
     audioTracks: TorrentAudioTrack[];
+    subtitleTracks?: TorrentSubtitleTrack[];
   } | null;
   failure: {
     code: TorrentFailureCode;

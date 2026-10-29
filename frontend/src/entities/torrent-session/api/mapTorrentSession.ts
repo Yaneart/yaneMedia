@@ -1,7 +1,11 @@
 import { ApiClientError } from '@/shared/api';
 import { API_BASE_URL } from '../../../shared/api/apiConfig';
 import type { TorrentAudioTrack, TorrentSession } from '../model/torrentSession';
-import type { TorrentAudioTrackDto, TorrentSessionDto } from './torrentSessionDto';
+import type {
+  TorrentAudioTrackDto,
+  TorrentSessionDto,
+  TorrentSubtitleTrackDto,
+} from './torrentSessionDto';
 
 const states = new Set([
   'created',
@@ -70,6 +74,39 @@ function validMasterUrl(url: unknown, sessionId: string): url is string {
   return url === `/api/v1/torrent-sessions/${encodeURIComponent(sessionId)}/hls/master.m3u8`;
 }
 
+function subtitleTrack(
+  value: unknown,
+  id: string,
+  generation: number,
+): value is TorrentSubtitleTrackDto {
+  if (!record(value)) return false;
+  const base = `/api/v1/torrent-sessions/${id}`;
+  return (
+    typeof value.trackRef === 'string' &&
+    /^torrent_subtitle_[A-Za-z0-9_-]{22}$/.test(value.trackRef) &&
+    typeof value.label === 'string' &&
+    value.label.length <= 80 &&
+    (value.language === null || typeof value.language === 'string') &&
+    ['vtt', 'ass', 'pgs', 'vobsub'].includes(value.format as string) &&
+    [value.isDefault, value.isForced, value.isSdh, value.available].every(
+      (item) => typeof item === 'boolean',
+    ) &&
+    value.available === ['vtt', 'ass'].includes(value.format as string) &&
+    (value.unavailableReason === null ||
+      (typeof value.unavailableReason === 'string' && value.unavailableReason.length <= 255)) &&
+    value.url === `${base}/subtitles/${generation}/${value.trackRef}` &&
+    Array.isArray(value.fonts) &&
+    value.fonts.length <= 4 &&
+    value.fonts.every(
+      (font) =>
+        record(font) &&
+        typeof font.fontRef === 'string' &&
+        /^torrent_font_[A-Za-z0-9_-]{22}$/.test(font.fontRef) &&
+        font.url === `${base}/subtitle-fonts/${generation}/${font.fontRef}`,
+    )
+  );
+}
+
 export function mapTorrentSession(value: unknown): TorrentSession {
   if (!record(value)) invalid();
   const dto = value as Partial<TorrentSessionDto>;
@@ -129,7 +166,15 @@ export function mapTorrentSession(value: unknown): TorrentSession {
       typeof playback.selectedAudioTrackRef !== 'string' ||
       !Array.isArray(playback.audioTracks) ||
       !playback.audioTracks.every(audioTrack) ||
-      playback.supportsSubtitleSelection !== false)
+      typeof playback.supportsSubtitleSelection !== 'boolean' ||
+      (playback.subtitleTracks !== undefined &&
+        (!Array.isArray(playback.subtitleTracks) ||
+          playback.subtitleTracks.length > 16 ||
+          !playback.subtitleTracks.every((track) =>
+            subtitleTrack(track, dto.sessionId!, playback.generation),
+          ))) ||
+      playback.supportsSubtitleSelection !==
+        (playback.subtitleTracks ?? []).some((track) => track.available))
   )
     invalid();
 
@@ -174,6 +219,17 @@ export function mapTorrentSession(value: unknown): TorrentSession {
           durationSeconds: playback.durationSeconds,
           selectedAudioTrackRef: playback.selectedAudioTrackRef,
           audioTracks: playback.audioTracks.map(mapAudioTrack),
+          subtitleTracks: (playback.subtitleTracks ?? []).map(
+            ({ trackRef, url, fonts, ...track }) => ({
+              ...track,
+              ref: trackRef,
+              url: new URL(url, API_BASE_URL).toString(),
+              fonts: fonts.map((font) => ({
+                ref: font.fontRef,
+                url: new URL(font.url, API_BASE_URL).toString(),
+              })),
+            }),
+          ),
         }
       : null,
     failure: failure ?? null,

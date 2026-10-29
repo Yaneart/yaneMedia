@@ -29,10 +29,17 @@ import { TORRENT_DISCOVERY_PORT } from './torrent-discovery.port';
 import { TorrentDiscoveryController } from './torrent-discovery.controller';
 import { TorrentDiscoveryService } from './torrent-discovery.service';
 import { TorrentMetrics } from './torrent-metrics';
+import { TorrentSubtitleService } from './torrent-subtitle.service';
+import { TorrentSubtitleController } from './torrent-subtitle.controller';
 
 @Module({
   imports: [AppConfigModule, DatabaseModule, AuthModule, MediaModule],
-  controllers: [TorrentInputController, TorrentHlsController, TorrentDiscoveryController],
+  controllers: [
+    TorrentInputController,
+    TorrentHlsController,
+    TorrentDiscoveryController,
+    TorrentSubtitleController,
+  ],
   providers: [
     TorrentMetrics,
     {
@@ -62,6 +69,7 @@ import { TorrentMetrics } from './torrent-metrics';
     TorrentPlaybackService,
     TorrentStreamGateway,
     TorrentHlsService,
+    TorrentSubtitleService,
   ],
   exports: [
     TorrentMetrics,

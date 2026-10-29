@@ -31,6 +31,7 @@ export type TorrentVideoTimeline = {
   playbackRates: readonly number[];
   audioTracks: NonNullable<TorrentSession['playback']>['audioTracks'];
   selectedAudioTrackRef: string;
+  subtitleTracks?: NonNullable<TorrentSession['playback']>['subtitleTracks'];
   onReplace: (
     positionSeconds: number,
     signal: AbortSignal,
@@ -56,6 +57,23 @@ function torrentDescriptor(
       language: track.language ?? undefined,
       channels: track.channels === null ? undefined : String(track.channels),
       default: track.isDefault,
+    })),
+    subtitles: playback.subtitleTracks?.map((track) => ({
+      id: track.ref,
+      label: track.label,
+      language: track.language ?? undefined,
+      format: track.format,
+      src: track.url,
+      default: track.isDefault,
+      forced: track.isForced,
+      sdh: track.isSdh,
+      available: track.available,
+      unavailableReason: track.unavailableReason ?? undefined,
+      request: { allowedOrigins: [new URL(track.url).origin], credentials: 'include' as const },
+      fonts: track.fonts.map((font) => ({
+        src: font.url,
+        request: { allowedOrigins: [new URL(font.url).origin], credentials: 'include' as const },
+      })),
     })),
     timeline: {
       mode: 'windowed-vod',

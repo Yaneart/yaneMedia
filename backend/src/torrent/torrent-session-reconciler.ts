@@ -14,6 +14,7 @@ import { TorrentStreamGateway } from './torrent-stream.gateway';
 import { UnsupportedTorrentMedia } from './torrent-media-policy';
 import type { EngineFileKey } from './torrent-engine.port';
 import { TorrentMetrics } from './torrent-metrics';
+import { sidecarSubtitles, uniqueSubtitleLabels } from './torrent-subtitle-policy';
 
 const SWEEP_MS = 60_000;
 const METADATA_POLL_MS = 2_000;
@@ -75,9 +76,18 @@ export class TorrentSessionReconciler implements OnModuleInit, BeforeApplication
         const file = await this.repository.findFile(session.sessionId, session.selectedFileRef);
         if (!file) continue;
         try {
-          const probe = await this.gateway.probe(
-            { key: engineKey, file: file.engineFileIndex as EngineFileKey, size: file.sizeBytes },
-            session.selectedFileRef,
+          const [probe, files] = await Promise.all([
+            this.gateway.probe(
+              { key: engineKey, file: file.engineFileIndex as EngineFileKey, size: file.sizeBytes },
+              session.selectedFileRef,
+            ),
+            this.engine.listFiles(engineKey, AbortSignal.timeout(5_000)).catch(() => []),
+          ]);
+          probe.subtitleTracks = uniqueSubtitleLabels(
+            [
+              ...(probe.subtitleTracks ?? []),
+              ...sidecarSubtitles(files, file.engineFileIndex),
+            ].slice(0, 16),
           );
           if (this.closing) break;
           await this.repository.saveProbe(session.sessionId, session.version, probe);

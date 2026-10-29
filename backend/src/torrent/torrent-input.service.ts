@@ -218,6 +218,30 @@ function toSessionView(
       channels,
       isDefault,
     })) ?? [];
+  const subtitleTracks = (probe?.subtitleTracks ?? []).map(
+    ({ trackRef, label, language, format, isDefault, isForced, isSdh }) => ({
+      trackRef,
+      label,
+      language,
+      format,
+      isDefault,
+      isForced,
+      isSdh,
+      available: format === 'vtt' || format === 'ass',
+      unavailableReason:
+        format === 'pgs' || format === 'vobsub'
+          ? 'Графические субтитры не поддерживаются. Выберите текстовую дорожку или локальный SRT/ASS.'
+          : null,
+      url: `/api/v1/torrent-sessions/${session.sessionId}/subtitles/${session.generation}/${trackRef}`,
+      fonts:
+        format === 'ass'
+          ? (probe?.subtitleFonts ?? []).map(({ fontRef }) => ({
+              fontRef,
+              url: `/api/v1/torrent-sessions/${session.sessionId}/subtitle-fonts/${session.generation}/${fontRef}`,
+            }))
+          : [],
+    }),
+  );
   return {
     sessionId: session.sessionId,
     mediaRef: session.mediaRef,
@@ -255,7 +279,8 @@ function toSessionView(
             durationSeconds: probe.durationSeconds,
             selectedAudioTrackRef: session.selectedAudioTrackRef,
             audioTracks,
-            supportsSubtitleSelection: false as const,
+            subtitleTracks,
+            supportsSubtitleSelection: subtitleTracks.some((track) => track.available),
           }
         : null,
     failure: session.failureCode

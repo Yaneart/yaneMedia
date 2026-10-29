@@ -549,6 +549,26 @@ describe('torrent player adapter contract', () => {
       playbackRates: [0.5, 1, 2],
       selectedAudioTrackRef: 'new-dub',
       audioTracks: audioTracks.map((track) => ({ ...track, ref: 'new-' + track.ref })),
+      subtitleTracks: [
+        {
+          ref: 'captions',
+          label: 'Русский',
+          language: 'rus',
+          format: 'ass' as const,
+          isDefault: false,
+          isForced: true,
+          isSdh: true,
+          available: true,
+          unavailableReason: null,
+          url: 'http://localhost:3000/api/v1/torrent-sessions/fixture/subtitles/2/captions',
+          fonts: [
+            {
+              ref: 'font',
+              url: 'http://localhost:3000/api/v1/torrent-sessions/fixture/subtitle-fonts/2/font',
+            },
+          ],
+        },
+      ],
     };
     let settle!: (value: any) => void;
     const onReplace = mock(
@@ -586,6 +606,13 @@ describe('torrent player adapter contract', () => {
     const view = render(<MediaVideoRenderer {...props} />);
     const player = players[0];
     expect(player.descriptor.capabilities.audio).toBe('host');
+    expect(player.descriptor.subtitles[0]).toMatchObject({
+      id: 'captions',
+      format: 'ass',
+      forced: true,
+      sdh: true,
+      request: { allowedOrigins: ['http://localhost:3000'], credentials: 'include' },
+    });
     expect(player.descriptor.audioTracks[1]).toMatchObject({
       id: 'dub',
       language: 'rus',
@@ -609,6 +636,8 @@ describe('torrent player adapter contract', () => {
     const result = await pending;
     expect(result.selection).toEqual({ audioId: 'new-dub' });
     expect(result.source.audioTracks[1].id).toBe('new-dub');
+    expect(result.source.subtitles[0].src).toContain('/subtitles/2/captions');
+    expect(result.source.subtitles[0].fonts[0].request.credentials).toBe('include');
     expect(result.source.audioTracks[0].default).toBe(true);
     expect(result.source.audioTracks[1].default).toBe(false);
     view.rerender(

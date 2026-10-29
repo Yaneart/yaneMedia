@@ -159,7 +159,43 @@ describe('torrent API boundary', () => {
       ],
       supportsSubtitleSelection: false,
     };
-    const session = mapTorrentSession({ ...wire, state: 'ready', playback });
+    const subtitle = {
+      trackRef: 'torrent_subtitle_abcdefghijklmnopqrstuv',
+      label: 'Русский',
+      language: 'rus',
+      format: 'ass',
+      isDefault: false,
+      isForced: true,
+      isSdh: false,
+      available: true,
+      unavailableReason: null,
+      url: `/api/v1/torrent-sessions/${id}/subtitles/1/torrent_subtitle_abcdefghijklmnopqrstuv`,
+      fonts: [
+        {
+          fontRef: 'torrent_font_abcdefghijklmnopqrstuv',
+          url: `/api/v1/torrent-sessions/${id}/subtitle-fonts/1/torrent_font_abcdefghijklmnopqrstuv`,
+        },
+      ],
+    };
+    const withSubtitles = {
+      ...playback,
+      supportsSubtitleSelection: true,
+      subtitleTracks: [subtitle],
+    };
+    const session = mapTorrentSession({ ...wire, state: 'ready', playback: withSubtitles });
+    expect(session.playback?.subtitleTracks?.[0]).toMatchObject({
+      ref: subtitle.trackRef,
+      isForced: true,
+    });
+    for (const invalid of [
+      { ...subtitle, url: 'https://other.example/subtitles' },
+      { ...subtitle, url: subtitle.url.replace('/1/', '/2/') },
+      { ...subtitle, fonts: [{ ...subtitle.fonts[0], url: 'http://other.example/font' }] },
+      { ...subtitle, format: 'pgs', available: true },
+    ])
+      expect(() =>
+        mapTorrentSession({ ...wire, playback: { ...withSubtitles, subtitleTracks: [invalid] } }),
+      ).toThrow();
     expect(session.id).toBe(id);
     expect(session.playback?.hlsUrl).toEndWith('/hls/master.m3u8');
     expect(session.playback?.audioTracks[0].ref).toBe('track-1');

@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { probeSubtitles, type TorrentFont, type TorrentSubtitle } from './torrent-subtitle-policy';
 
 export interface AudioTrack {
   trackRef: string;
@@ -17,6 +18,8 @@ export interface TorrentProbe {
   videoStreamIndex: number;
   copyVideo: boolean;
   audioTracks: AudioTrack[];
+  subtitleTracks?: TorrentSubtitle[];
+  subtitleFonts?: TorrentFont[];
 }
 
 type Stream = {
@@ -127,5 +130,6 @@ export function parseTorrentProbe(fileRef: string, raw: unknown): TorrentProbe {
     videoStreamIndex: Number(video.index),
     copyVideo,
     audioTracks,
+    ...probeSubtitles(data.streams as Array<Record<string, unknown>>),
   };
 }

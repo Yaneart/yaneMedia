@@ -39,7 +39,7 @@ describeGateway('FFmpeg gateway with a local seekable fixture', () => {
           '-i',
           'sine=frequency=880:sample_rate=48000',
           '-t',
-          '8',
+          '18',
           '-map',
           '0:v',
           '-map',
@@ -59,7 +59,7 @@ describeGateway('FFmpeg gateway with a local seekable fixture', () => {
           '-threads',
           '2',
           '-g',
-          '48',
+          '240',
           '-pix_fmt',
           'yuv420p',
           '-b:v',
@@ -93,17 +93,21 @@ describeGateway('FFmpeg gateway with a local seekable fixture', () => {
         size: (await stat(file)).size,
       };
       const probe = await gateway.probe(source, 'audio-file');
+      expect(probe.copyVideo).toBe(false);
       expect(probe.audioTracks.map((track) => track.language)).toEqual(['eng', 'rus']);
       for (const [index, trackIndex] of [1, 0, 1].entries()) {
         const generation = index + 1;
         const audio = probe.audioTracks[trackIndex];
-        await gateway.start(sessionId, generation, source, probe, audio, index ? 3.3 : 0);
+        await gateway.start(sessionId, generation, source, probe, audio, index ? 13.3 : 0);
         const timeline = await gateway.waitReady(
           sessionId,
           generation,
           AbortSignal.timeout(30_000),
         );
-        expect(timeline.absoluteAnchorSeconds).toBeCloseTo(index ? 2 : 0, 1);
+        expect(timeline.absoluteAnchorSeconds).toBeCloseTo(index ? 10 : 0, 1);
+        // Transcoding must drop pre-keyframe audio; retaining it shifts the
+        // first video PTS by a whole GOP and breaks replacement positioning.
+        expect(timeline.mediaAnchorSeconds).toBeLessThan(0.5);
         const playlist = join(directory, String(generation), 'media.m3u8');
         const metadata = spawnSync('ffprobe', [
           '-v',
