@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
-import { lstat, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readFile, readdir, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
@@ -20,8 +20,10 @@ import { TORRENT_OUTPUT_PROFILES, torrentOutputInfo } from './torrent-output-pol
 import {
   SUBTITLE_BYTES,
   SUBTITLE_LOOKBEHIND,
+  SUBTITLE_CACHE_BYTES,
   FONT_BYTES,
   subtitleWindow,
+  mergeSubtitleWindows,
   validateSubtitleFont,
   type TorrentSubtitle,
   type TorrentFont,
@@ -31,6 +33,9 @@ import {
   TORRENT_WINDOW_SECONDS,
   TORRENT_WINDOW_SEGMENTS,
   TORRENT_STARTUP_SECONDS,
+  TORRENT_WINDOW_TARGET_BYTES,
+  TORRENT_SEGMENT_BYTES,
+  torrentWindowSeconds,
   type TorrentTimeline,
 } from './torrent-playback-window';
 
@@ -80,6 +85,25 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
     string,
     { generation: number; controller: AbortController; finished: Promise<void> }
   >();
+  private readonly subtitleCache = new Map<string, { start: number; end: number; text: string }>();
+
+  private trimSubtitleCache(sessionId?: string): void {
+    let bytes = 0,
+      count = 0;
+    for (const [key, cached] of [...this.subtitleCache].reverse()) {
+      const size = Buffer.byteLength(cached.text);
+      if (
+        (sessionId && key.startsWith(`${sessionId}/`)) ||
+        count >= 32 ||
+        bytes + size > SUBTITLE_CACHE_BYTES
+      )
+        this.subtitleCache.delete(key);
+      else {
+        bytes += size;
+        count++;
+      }
+    }
+  }
 
   constructor(private readonly engine: TorrServerClient) {}
 
@@ -137,6 +161,31 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
     signal: AbortSignal,
   ): Promise<Buffer> {
     signal.throwIfAborted();
+    if (this.closing) throw new TorrentGatewayCapacity();
+    const track = 'trackRef' in resource ? resource : undefined;
+    if (track && !['vtt', 'ass'].includes(track.format)) throw new Error('Unsupported subtitles');
+    const format = track?.format as 'vtt' | 'ass';
+    const profile = TORRENT_OUTPUT_PROFILES[probe.outputProfile ?? 'h264-720p'];
+    // Cover timestamp reordering and the audio/muxer tail beyond the nominal cut.
+    const end =
+      position +
+      Math.min(
+        TORRENT_WINDOW_SECONDS,
+        2 +
+          torrentWindowSeconds(
+            probe.copyVideo ? (probe.video?.bitrate ?? null) : Number.parseInt(profile.peak) * 1000,
+          ),
+      );
+    const cacheKey = track
+      ? `${sessionId}/${probe.fileRef}/${track.trackRef}/${track.sidecar?.fileIndex ?? track.streamIndex}`
+      : '';
+    const cached = this.subtitleCache.get(cacheKey);
+    if (cached && cached.start <= position && cached.end >= end)
+      return Buffer.from(
+        cached.start === position && cached.end === end
+          ? cached.text
+          : subtitleWindow(cached.text, format, position, end),
+      );
     const previous = this.subtitleJobs.get(sessionId);
     if (previous) {
       // A cancelled browser fetch can race the worker's exit/close notification.
@@ -172,12 +221,10 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
       }),
     };
     this.subtitleJobs.set(sessionId, job);
-    const bounded = AbortSignal.any([signal, job.controller.signal, AbortSignal.timeout(15_000)]);
+    const bounded = AbortSignal.any([signal, job.controller.signal, AbortSignal.timeout(45_000)]);
     let input: Awaited<ReturnType<TorrentStreamGateway['inputServer']>> | undefined;
     try {
       bounded.throwIfAborted();
-      const track = 'trackRef' in resource ? resource : undefined;
-      if (track && !['vtt', 'ass'].includes(track.format)) throw new Error('Unsupported subtitles');
       const sidecar = track?.sidecar;
       input = await this.inputServer(
         sidecar
@@ -227,7 +274,9 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
         validateSubtitleFont(bytes);
         return bytes;
       }
-      const start = Math.max(0, position - SUBTITLE_LOOKBEHIND);
+      const continuing =
+        cached && cached.start <= position && cached.end >= position - SUBTITLE_LOOKBEHIND;
+      const start = continuing ? cached.end : Math.max(0, position - SUBTITLE_LOOKBEHIND);
       const args = [
         '-v',
         'error',
@@ -244,88 +293,56 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
         '-map',
         `0:${sidecar ? 0 : track.streamIndex}`,
         '-to',
-        String(position + TORRENT_WINDOW_SECONDS),
+        String(end),
         '-vn',
         '-dn',
         '-c:s',
         track.format === 'ass' ? 'ass' : 'webvtt',
       ];
-      // A subtitle-only -to waits for the next cue, possibly minutes later on a
-      // forced track. A tiny audio clock ends demuxing at the actual window edge.
-      // Decode/format subtitles with FFmpeg; do not implement codec packet parsers.
-      const window = sidecar
-        ? undefined
-        : await this.runBytes(
-            'ffmpeg',
-            [
-              ...args,
-              '-map',
-              '0:a:0',
-              '-c:a',
-              'pcm_s16le',
-              '-ac',
-              '1',
-              '-ar',
-              '1000',
-              '-shortest',
-              '-max_interleave_delta',
-              '1000000',
-              '-progress',
-              'pipe:2',
-              '-stats_period',
-              '0.1',
-              '-f',
-              'matroska',
-              'pipe:1',
-            ],
-            15_000,
-            bounded,
-            SUBTITLE_BYTES + 1024 * 1024,
-            undefined,
-            position + TORRENT_WINDOW_SECONDS,
-          );
-      const output = await this.run(
-        'ffmpeg',
-        [
-          ...(sidecar
-            ? args
-            : [
-                '-v',
-                'error',
-                '-nostdin',
-                '-max_alloc',
-                '67108864',
-                '-copyts',
-                '-protocol_whitelist',
-                'pipe',
-                '-format_whitelist',
-                'matroska,webm',
-                '-i',
-                'pipe:0',
-                '-map',
-                '0:s:0',
-                '-c:s',
-                'copy',
-              ]),
-          '-an',
-          '-f',
-          track.format === 'ass' ? 'ass' : 'webvtt',
-          'pipe:1',
-        ],
-        15_000,
-        bounded,
-        SUBTITLE_BYTES,
-        window,
-      );
+      // FFmpeg progress rebases copyts timestamps to the first reported packet.
+      // Use copied video packet DTS instead: no resampler delay or sparse-text buffering.
+      const output = (
+        await this.runBytes(
+          'ffmpeg',
+          [
+            ...args,
+            '-an',
+            '-f',
+            track.format === 'ass' ? 'ass' : 'webvtt',
+            'pipe:1',
+            ...(sidecar
+              ? []
+              : [
+                  '-map',
+                  `0:${probe.videoStreamIndex}`,
+                  '-an',
+                  '-sn',
+                  '-dn',
+                  '-c:v',
+                  'copy',
+                  '-f',
+                  'framehash',
+                  'pipe:3',
+                ]),
+          ],
+          45_000,
+          bounded,
+          SUBTITLE_BYTES,
+          undefined,
+          sidecar ? undefined : end,
+        )
+      ).toString('utf8');
       bounded.throwIfAborted();
-      return Buffer.from(
-        subtitleWindow(
-          output,
-          track.format as 'vtt' | 'ass',
-          position,
-          position + TORRENT_WINDOW_SECONDS,
-        ),
+      const text = subtitleWindow(
+        continuing ? mergeSubtitleWindows(cached.text, output, format) : output,
+        format,
+        position,
+        end,
       );
+      this.subtitleCache.delete(cacheKey);
+      this.subtitleCache.set(cacheKey, { start: position, end, text });
+      this.trimSubtitleCache();
+      return Buffer.from(text);
     } finally {
       if (input) {
         input.server.closeAllConnections();
@@ -389,31 +406,42 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
       if (reservation.cancelled) throw new Error('Worker start cancelled');
       input = await this.inputServer(source);
       if (reservation.cancelled) throw new Error('Worker start cancelled');
-      // Both branches begin on the probed keyframe. The player seeks from that
-      // real anchor to the requested position after attaching the replacement.
-      const packet = JSON.parse(
-        await this.run(
-          'ffprobe',
-          [
-            '-v',
-            'error',
-            ...INPUT_OPTIONS,
-            '-read_intervals',
-            `${position + (probe.sourceStartSeconds ?? 0)}%+#1`,
-            '-select_streams',
-            String(probe.videoStreamIndex),
-            '-show_packets',
-            '-show_entries',
-            'packet=pts_time',
-            '-of',
-            'json',
-            input.url,
-          ],
-          15_000,
-        ),
-      ) as { packets?: { pts_time?: string }[] };
+      // Measure FFmpeg's actual seek result. ffprobe read_intervals can choose a
+      // different GOP (notably with B-frames), shifting every renewed window.
+      const packet = await this.run(
+        'ffmpeg',
+        [
+          '-v',
+          'error',
+          '-nostdin',
+          '-copyts',
+          '-start_at_zero',
+          ...(position > 0 ? ['-ss', String(position)] : []),
+          '-noaccurate_seek',
+          ...INPUT_OPTIONS,
+          '-i',
+          input.url,
+          '-map',
+          `0:${probe.videoStreamIndex}`,
+          '-frames:v',
+          '1',
+          '-c:v',
+          'copy',
+          '-an',
+          '-sn',
+          '-dn',
+          '-f',
+          'framehash',
+          'pipe:1',
+        ],
+        15_000,
+      );
+      const timebase = /^#tb 0: (\d+)\/(\d+)$/m.exec(packet);
+      const pts = /^0,\s*-?\d+,\s*(-?\d+),/m.exec(packet);
       const absoluteAnchorSeconds =
-        Number(packet.packets?.[0]?.pts_time) - (probe.sourceStartSeconds ?? 0);
+        timebase && pts && Number(timebase[2]) > 0
+          ? (Number(pts[1]) * Number(timebase[1])) / Number(timebase[2])
+          : NaN;
       if (
         !Number.isFinite(absoluteAnchorSeconds) ||
         absoluteAnchorSeconds < -0.1 ||
@@ -421,7 +449,12 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
       )
         throw new Error('Invalid source timestamp');
       const anchor = Math.max(0, absoluteAnchorSeconds);
+      const seekPosition = probe.copyVideo ? position : anchor;
       if (position - anchor >= TORRENT_WINDOW_SECONDS - 2) throw new UnsupportedTorrentMedia();
+      const windowSeconds = torrentWindowSeconds(
+        probe.copyVideo ? (probe.video?.bitrate ?? null) : Number.parseInt(profile.peak) * 1000,
+        position - anchor + TORRENT_STARTUP_SECONDS + 2,
+      );
       const directory = join(tmpdir(), 'yanemedia-torrent-hls', sessionId, String(generation));
       await mkdir(directory, { recursive: true, mode: 0o700 });
       this.completed.delete(sessionId);
@@ -436,15 +469,17 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
         '-filter_threads',
         '2',
         '-y',
-        ...(anchor > 0 ? ['-ss', String(anchor)] : []),
+        ...(seekPosition > 0 ? ['-ss', String(seekPosition)] : []),
         ...(probe.copyVideo ? ['-noaccurate_seek'] : []),
         '-rw_timeout',
         '120000000',
         ...INPUT_OPTIONS,
+        // Bound remux production speed so the byte monitor can close unknown/VBR windows.
+        ...(probe.copyVideo ? ['-readrate', '4'] : []),
         '-i',
         input.url,
         '-t',
-        String(TORRENT_WINDOW_SECONDS),
+        String(windowSeconds),
         '-avoid_negative_ts',
         'make_zero',
         '-map',
@@ -521,22 +556,42 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
       const deadline = setTimeout(() => process.kill('SIGKILL'), 90_000);
       deadline.unref();
       let ticks = 0;
+      let checking = false;
+      let byteStopped = false;
+      let invalidOutput = false;
+      let flushDeadline: NodeJS.Timeout | undefined;
       const heartbeat = setInterval(() => {
-        if (++ticks % 60 === 0)
+        if (++ticks % 600 === 0)
           void this.engine.heartbeat(source.key, AbortSignal.timeout(5_000)).catch(() => undefined);
-        // Independent byte bound, including unexpectedly long GOPs/high bitrate.
+        if (checking) return;
+        checking = true;
+        // Include the unfinished fragment. Published segments are never removed on pause.
         void readdir(directory)
           .then(async (files) => {
             const sizes = await Promise.all(files.map((file) => stat(join(directory, file))));
+            const bytes = sizes.reduce((total, info) => total + info.size, 0);
             if (
-              sizes.reduce((total, info) => total + info.size, 0) > TORRENT_WINDOW_BYTES ||
+              bytes > TORRENT_WINDOW_BYTES ||
+              sizes.some(
+                (info, index) =>
+                  /^segment-/.test(files[index]) && info.size > TORRENT_SEGMENT_BYTES,
+              ) ||
               files.filter((file) => /^segment-\d{6}\.m4s$/.test(file)).length >
                 TORRENT_WINDOW_SEGMENTS
-            )
+            ) {
+              invalidOutput = true;
               process.kill('SIGKILL');
+            } else if (bytes >= TORRENT_WINDOW_TARGET_BYTES && !byteStopped) {
+              byteStopped = true;
+              process.kill('SIGINT');
+              flushDeadline = setTimeout(() => process.kill('SIGKILL'), 2_000);
+            }
           })
-          .catch(() => undefined);
-      }, 1_000);
+          .catch(() => undefined)
+          .finally(() => {
+            checking = false;
+          });
+      }, 100);
       heartbeat.unref();
       this.workers.set(sessionId, {
         process,
@@ -549,20 +604,47 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
         positionSeconds: position,
       });
       const server = input.server;
-      const ended = (code: number | null) => {
+      const ended = async (code: number | null) => {
         clearTimeout(deadline);
+        clearTimeout(flushDeadline);
         const current = this.workers.get(sessionId);
         if (current?.process === process) {
           clearInterval(heartbeat);
           server.closeAllConnections();
           server.close();
+          // Validate graceful byte closure as strictly as normal completion.
+          let valid = false;
+          try {
+            const parsed = parseTorrentPlaylist(
+              await readFile(join(directory, 'media.m3u8'), 'utf8'),
+            );
+            const files = await readdir(directory);
+            const sizes = await Promise.all(files.map((file) => stat(join(directory, file))));
+            valid =
+              parsed.ended &&
+              parsed.segments.reduce((sum, item) => sum + Number(item.duration.slice(8, -1)), 0) >
+                position - anchor &&
+              sizes.reduce((sum, info) => sum + info.size, 0) <= TORRENT_WINDOW_BYTES &&
+              sizes.every(
+                (info, index) =>
+                  !/^segment-/.test(files[index]) || info.size <= TORRENT_SEGMENT_BYTES,
+              );
+          } catch {
+            /* Missing or invalid artifacts cannot become a completed generation. */
+          }
+          if (this.workers.get(sessionId)?.process !== process) return;
           this.workers.delete(sessionId);
-          if (code === 0)
+          if (valid && !invalidOutput && (code === 0 || (code === 255 && byteStopped)))
             this.completed.set(sessionId, { generation, directory, absoluteAnchorSeconds: anchor });
+          else await rm(directory, { recursive: true, force: true }).catch(() => undefined);
         }
       };
-      process.once('exit', ended);
-      process.once('error', () => ended(null));
+      process.once('exit', (code) => {
+        void ended(code);
+      });
+      process.once('error', () => {
+        void ended(null);
+      });
     } catch (error) {
       input?.server.closeAllConnections();
       input?.server.close();
@@ -621,8 +703,6 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
           // encoder reorder/audio delay visible in the actual media timestamp.
           const init = await readFile(join(directory, 'init.mp4'));
           const fragment = await readFile(join(directory, segment));
-          const sample = join(directory, 'anchor.mp4');
-          await writeFile(sample, Buffer.concat([init, fragment]));
           const raw = JSON.parse(
             await this.run(
               'ffprobe',
@@ -636,12 +716,15 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
                 'packet=pts_time',
                 '-of',
                 'json',
-                sample,
+                '-i',
+                'pipe:0',
               ],
               5_000,
+              signal,
+              1_000_000,
+              Buffer.concat([init, fragment]),
             ),
           ) as { packets?: { pts_time?: string }[] };
-          await rm(sample, { force: true });
           const mediaAnchorSeconds = Number(raw.packets?.[0]?.pts_time);
           const absoluteAnchorSeconds = anchor;
           if (!Number.isFinite(mediaAnchorSeconds) || mediaAnchorSeconds < 0)
@@ -677,6 +760,7 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
       subtitles.controller.abort();
       await subtitles.finished;
     }
+    if (!preserveStarting) this.trimSubtitleCache(sessionId);
     const starting = this.starting.get(sessionId);
     if (
       !preserveStarting &&
@@ -739,6 +823,7 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
 
   async beforeApplicationShutdown(): Promise<void> {
     this.closing = true;
+    this.subtitleCache.clear();
     for (const job of this.subtitleJobs.values()) job.controller.abort();
     for (const reservation of this.starting.values()) reservation.cancelled = true;
     for (const command of this.commands) command.kill('SIGKILL');
@@ -878,7 +963,12 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
     signal?.throwIfAborted();
     return new Promise((resolve, reject) => {
       const child = spawn(binary, args, {
-        stdio: [input ? 'pipe' : 'ignore', 'pipe', stopAtSeconds === undefined ? 'ignore' : 'pipe'],
+        stdio: [
+          input ? 'pipe' : 'ignore',
+          'pipe',
+          'ignore',
+          ...(stopAtSeconds === undefined ? [] : ['pipe' as const]),
+        ],
       });
       child.stdin?.on('error', () => {
         /* Early decoder exit is handled below. */
@@ -891,17 +981,21 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
       let timedOut = false;
       let reachedEnd = false;
       let progress = '';
+      let timebase = 0;
       let stopTimer: NodeJS.Timeout | undefined;
-      child.stderr?.on('data', (chunk: Buffer) => {
+      child.stdio[3]?.on('data', (chunk: Buffer) => {
         progress += chunk.toString('utf8');
         const lines = progress.split('\n');
         progress = lines.pop()!.slice(-256);
         for (const line of lines) {
-          if (!line.startsWith('out_time_us=') || reachedEnd) continue;
-          const time = Number(line.slice(12));
-          if (!Number.isFinite(time) || time < (stopAtSeconds! - 0.01) * 1_000_000) continue;
+          const base = /^#tb 0: (\d+)\/(\d+)$/.exec(line);
+          if (base) timebase = Number(base[1]) / Number(base[2]);
+          const packet = /^0,\s*(-?\d+),\s*-?\d+,\s*(\d+),/.exec(line);
+          if (!packet || !Number.isFinite(timebase) || timebase <= 0 || reachedEnd) continue;
+          const time = (Number(packet[1]) + Number(packet[2])) * timebase;
+          if (!Number.isFinite(time) || time < stopAtSeconds!) continue;
           reachedEnd = true;
-          // Sparse subtitles do not define EOF. Flush at the audio clock edge.
+          // Decode order has passed the window, including reordered video frames.
           child.kill('SIGINT');
           stopTimer = setTimeout(() => child.kill('SIGKILL'), 500);
         }

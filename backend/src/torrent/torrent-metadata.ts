@@ -4,8 +4,8 @@ import type { EngineFile, EngineTorrentStatus } from './torrent-engine.port';
 export type TorrentMetadataFailure =
   'TORRENT_METADATA_TIMEOUT' | 'TORRENT_NO_VIDEO_FILES' | 'TORRENT_SIZE_LIMIT_EXCEEDED';
 
-const MAX_TORRENT_BYTES = 200 * 1024 ** 3;
-const MAX_FILE_BYTES = 30 * 1024 ** 3;
+export const MAX_TORRENT_BYTES = 200 * 1024 ** 3;
+export const MAX_FILE_BYTES = MAX_TORRENT_BYTES;
 const VIDEO_EXTENSIONS = new Set([
   'avi',
   'flv',

@@ -37,12 +37,25 @@ describe('torrent metadata mapping', () => {
     expect(() => mapTorrentFiles(status([[1, 'readme.txt', 10]]))).toThrow(
       new TorrentMetadataError('TORRENT_NO_VIDEO_FILES'),
     );
-    expect(() => mapTorrentFiles(status([[1, 'movie.mkv', 30 * 1024 ** 3 + 1]]))).toThrow(
+    expect(() => mapTorrentFiles(status([[1, 'movie.mkv', 200 * 1024 ** 3 + 1]]))).toThrow(
       new TorrentMetadataError('TORRENT_SIZE_LIMIT_EXCEEDED'),
     );
     const huge = status([[1, 'movie.mkv', 10]]);
     huge.totalBytes = 200 * 1024 ** 3 + 1;
     expect(() => mapTorrentFiles(huge)).toThrow(
+      new TorrentMetadataError('TORRENT_SIZE_LIMIT_EXCEEDED'),
+    );
+  });
+
+  it('accepts exactly 200 Гб and rejects a larger sum even when the engine total is understated', () => {
+    const limit = 214748364800;
+    expect(mapTorrentFiles(status([[1, 'movie.mkv', limit]]))[0].sizeBytes).toBe(limit);
+    const inconsistent = status([
+      [1, 'movie.mkv', limit],
+      [2, 'extra.txt', 1],
+    ]);
+    inconsistent.totalBytes = limit;
+    expect(() => mapTorrentFiles(inconsistent)).toThrow(
       new TorrentMetadataError('TORRENT_SIZE_LIMIT_EXCEEDED'),
     );
   });

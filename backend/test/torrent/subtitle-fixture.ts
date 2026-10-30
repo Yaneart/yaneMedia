@@ -3,7 +3,7 @@ import { mkdtemp, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-export async function createSubtitleFixture(sourceOffset = 0, sparse = false) {
+export async function createSubtitleFixture(sourceOffset = 0, sparse = false, audioCodec = 'aac') {
   const root = await mkdtemp(join(tmpdir(), 'torrent-subtitle-test-'));
   const srt = join(root, 'film.rus.forced.srt');
   const ass = join(root, 'film.eng.ass');
@@ -11,7 +11,7 @@ export async function createSubtitleFixture(sourceOffset = 0, sparse = false) {
   await writeFile(
     srt,
     sparse
-      ? '1\n00:00:01,000 --> 00:00:06,000\nEarly cue\n\n2\n00:05:00,000 --> 00:05:05,000\nLate cue\n'
+      ? '1\n00:00:01,000 --> 00:00:06,000\nEarly cue\n\n2\n00:00:35,000 --> 00:00:40,000\nOutside short window\n\n3\n00:01:58,000 --> 00:02:08,000\nBoundary overlap\n\n4\n00:05:00,000 --> 00:05:05,000\nLate cue\n'
       : '1\n00:00:01,000 --> 00:00:06,000\nРусские субтитры\n\n2\n00:02:05,000 --> 00:02:15,000\nПерекрытие перемотки\n\n3\n00:02:20,000 --> 00:02:25,000\nПосле перемотки\n',
   );
   await writeFile(
@@ -62,9 +62,9 @@ export async function createSubtitleFixture(sourceOffset = 0, sparse = false) {
       '-pix_fmt',
       'yuv420p',
       '-c:a',
-      'aac',
+      audioCodec,
       '-b:a',
-      '32k',
+      audioCodec === 'ac3' ? '192k' : '32k',
       '-c:s',
       'copy',
       '-metadata:s:s:0',

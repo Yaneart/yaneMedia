@@ -20,6 +20,7 @@ import {
 import type { TorrentProbe } from './torrent-media-policy';
 import { selectTorrentOutput, type TorrentOutputProfile } from './torrent-output-policy';
 import { TorrentMetrics } from './torrent-metrics';
+import { MAX_FILE_BYTES, MAX_TORRENT_BYTES } from './torrent-metadata';
 
 const HOUR_MS = 60 * 60 * 1000;
 const IDLE_MS = 20 * 60 * 1000;
@@ -440,6 +441,7 @@ export class TorrentSessionRepository {
   ): Promise<TorrentSessionRow> {
     if (
       files.length > 500 ||
+      files.reduce((sum, file) => sum + file.sizeBytes, 0) > MAX_TORRENT_BYTES ||
       files.some(
         (file) =>
           !/^torrent_file_[A-Za-z0-9_-]{22}$/.test(file.fileRef) ||
@@ -447,7 +449,7 @@ export class TorrentSessionRepository {
           file.engineFileIndex < 0 ||
           !Number.isSafeInteger(file.sizeBytes) ||
           file.sizeBytes <= 0 ||
-          file.sizeBytes > 30 * 1024 ** 3 ||
+          file.sizeBytes > MAX_FILE_BYTES ||
           file.displayName.length === 0 ||
           [...file.displayName].length > 255 ||
           /[\\/]/.test(file.displayName) ||

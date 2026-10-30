@@ -6,7 +6,6 @@ import {
 } from '@/entities/media-source';
 import { ErrorState, IconButton, PlayIcon, Spinner } from '@/shared';
 import { useEffect, useRef, useState } from 'react';
-import { TorrentOutputInfo } from './TorrentOutputInfo';
 
 import {
   MediaVideoRenderer,
@@ -309,9 +308,6 @@ export function MediaPlayer({
           )}
         </div>
       </div>
-      {isStarted && status === 'ready' && torrentTimeline?.output && (
-        <TorrentOutputInfo output={torrentTimeline.output} />
-      )}
     </section>
   );
 }

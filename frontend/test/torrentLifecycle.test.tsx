@@ -308,7 +308,7 @@ function openTorrent() {
   expect(screen.queryByRole('button', { name: 'Смотреть торрент' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Источник' }));
   fireEvent.click(screen.getByRole('tab', { name: 'Торренты' }));
-  expect(screen.queryByText('Размер видео — до 30 ГиБ.')).toBeNull();
+  expect(screen.queryByText('Размер видео — до 30 Гб.')).toBeNull();
 }
 
 describe('torrent user lifecycle', () => {
@@ -757,7 +757,8 @@ describe('torrent player adapter contract', () => {
   test('maps authenticated HLS and absolute progress, ignores pending/stale events and disconnects', async () => {
     const progress = mock(() => {}),
       ready = mock(() => {}),
-      error = mock(() => {});
+      error = mock(() => {}),
+      pause = mock(() => {});
     const url = `/api/v1/torrent-sessions/${id}/hls/master.m3u8`;
     const props = {
       source: {
@@ -786,17 +787,33 @@ describe('torrent player adapter contract', () => {
         ],
         selectedAudioTrackRef: 'audio',
         onReplace: () => {},
+        subtitleTracks: [
+          {
+            ref: 'text',
+            label: 'Русские',
+            language: 'rus',
+            format: 'vtt' as const,
+            isDefault: true,
+            isForced: false,
+            isSdh: false,
+            available: true,
+            unavailableReason: null,
+            url: 'http://localhost:3000/subtitles/text',
+            fonts: [],
+          },
+        ],
       },
       onReady: ready,
       onError: error,
       onProgress: progress,
       onPlay: () => {},
-      onPause: () => {},
+      onPause: pause,
     };
     const view = render(<MediaVideoRenderer {...props} />);
     const player = players[0];
     expect(player.descriptor.src).toBe(url);
     expect(player.descriptor.crossOrigin).toBe('use-credentials');
+    expect(player.descriptor.subtitles[0].loadTimeoutMs).toBe(60_000);
     expect(player.descriptor.timeline.absoluteAnchorSeconds).toBe(40);
     expect(player.descriptor.capabilities.playbackRates).toEqual([
       0.2, 0.5, 0.7, 1, 1.2, 1.5, 1.7, 2,
@@ -805,12 +822,35 @@ describe('torrent player adapter contract', () => {
       source: { id: 'media', revision: player.descriptor.revision },
       playback: 'ready',
       positionSeconds: 47,
+      intent: 'playing',
       durationSeconds: 1200,
       pending: null,
     };
     await act(async () => player.emit('statechange', snapshot));
     expect(ready).toHaveBeenCalledTimes(1);
     expect(progress).toHaveBeenCalledWith(47, 1200, 'metadata');
+    await act(async () => player.emit('statechange', { ...snapshot, playback: 'playing' }));
+    await act(async () =>
+      player.emit('statechange', {
+        ...snapshot,
+        playback: 'paused',
+        pending: { type: 'seek' },
+      }),
+    );
+    expect(pause).not.toHaveBeenCalled();
+    await act(async () =>
+      player.emit('statechange', {
+        ...snapshot,
+        playback: 'paused',
+        intent: 'paused',
+        pending: { type: 'seek' },
+      }),
+    );
+    expect(pause).toHaveBeenCalledTimes(1);
+    await act(async () =>
+      player.emit('statechange', { ...snapshot, playback: 'paused', intent: 'paused' }),
+    );
+    expect(pause).toHaveBeenCalledTimes(1);
     progress.mockClear();
     await act(async () =>
       player.emit('positionchange', {
@@ -833,15 +873,20 @@ describe('torrent player adapter contract', () => {
     );
     expect(error).not.toHaveBeenCalled();
     // A finite window ending is a queued host seek, not a completed film.
-    await act(async () =>
-      player.emit('ended', {
-        ...snapshot,
-        playback: 'ended',
-        positionSeconds: 160,
-        seekable: [[40, 160]],
-      }),
-    );
+    const endedWindow = {
+      ...snapshot,
+      playback: 'ended',
+      positionSeconds: 160,
+      seekable: [[40, 160]],
+    };
+    await act(async () => player.emit('ended', { ...endedWindow, pending: { type: 'text' } }));
+    expect(player.seek).not.toHaveBeenCalled();
+    await act(async () => player.emit('statechange', { ...endedWindow, intent: 'paused' }));
+    expect(player.seek).not.toHaveBeenCalled();
+    await act(async () => player.emit('statechange', endedWindow));
+    await act(async () => player.emit('ended', endedWindow));
     expect(player.seek).toHaveBeenCalledWith(160.001);
+    expect(player.seek).toHaveBeenCalledTimes(1);
     const controller = new AbortController();
     let settle!: (value: any) => void;
     const onReplace = mock(

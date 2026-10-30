@@ -64,6 +64,7 @@ function torrentDescriptor(
       label: track.label,
       language: track.language ?? undefined,
       format: track.format,
+      loadTimeoutMs: 60_000,
       src: track.url,
       default: track.isDefault,
       forced: track.isForced,
@@ -131,7 +132,35 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
     let ready = false;
     let readyRevision: string | null = null;
     let previousPlayback = 'idle';
+    let previousIntent: PlayerEvent['snapshot']['intent'] = 'paused';
     let seeking = false;
+    let renewedRevision: string | null = null;
+    const continueTorrent = (snapshot: PlayerEvent['snapshot']) => {
+      if (
+        disposed ||
+        torrentCommandRef.current ||
+        !propsRef.current.torrentTimeline ||
+        snapshot.pending ||
+        snapshot.playback !== 'ended' ||
+        snapshot.intent !== 'playing' ||
+        snapshot.source?.revision !== loadedRevisionRef.current ||
+        renewedRevision === snapshot.source?.revision ||
+        snapshot.positionSeconds === null ||
+        (snapshot.durationSeconds !== null &&
+          snapshot.positionSeconds >= snapshot.durationSeconds - 0.5)
+      )
+        return;
+      renewedRevision = snapshot.source.revision;
+      const edge = Math.max(
+        snapshot.positionSeconds,
+        ...snapshot.seekable.map((range) => range[1]),
+      );
+      // A text command may have held the queue when EOF fired. State changes
+      // also retry admission once it settles, once per completed revision.
+      void player.seek(edge + 0.001).catch(() => {
+        /* yp-error reports command failures. */
+      });
+    };
     const replaceTorrent = async (position: number, signal: AbortSignal, audioId?: string) => {
       torrentCommandRef.current = true;
       torrentAudioRef.current = null;
@@ -200,14 +229,23 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
         report(event, 'seek');
         seeking = false;
       }
-      if (snapshot.playback !== previousPlayback) {
+      if (
+        snapshot.playback !== previousPlayback ||
+        (snapshot.playback === 'paused' && snapshot.intent !== previousIntent)
+      ) {
         if (snapshot.playback === 'playing') propsRef.current.onPlay();
-        if (snapshot.playback === 'paused' && ready && !snapshot.pending) {
+        if (
+          snapshot.playback === 'paused' &&
+          ready &&
+          (!snapshot.pending || snapshot.intent === 'paused')
+        ) {
           report(event, 'pause');
           propsRef.current.onPause();
         }
         previousPlayback = snapshot.playback;
       }
+      previousIntent = snapshot.intent;
+      continueTorrent(snapshot);
     };
     const onPosition = ({ detail: event }: CustomEvent<PlayerEvent>) => {
       if (disposed || event.source?.revision !== loadedRevisionRef.current) return;
@@ -233,27 +271,7 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
         propsRef.current.onError();
     };
     const onEnded = ({ detail: event }: CustomEvent<PlayerEvent>) => {
-      const { snapshot } = event;
-      if (
-        disposed ||
-        torrentCommandRef.current ||
-        !propsRef.current.torrentTimeline ||
-        snapshot.pending ||
-        snapshot.source?.revision !== loadedRevisionRef.current ||
-        snapshot.positionSeconds === null ||
-        (snapshot.durationSeconds !== null &&
-          snapshot.positionSeconds >= snapshot.durationSeconds - 0.5)
-      )
-        return;
-      // Queue renewal with user seeks so there is only one server mutation.
-      // The next instant lies outside this finite window, triggering host seek.
-      const edge = Math.max(
-        snapshot.positionSeconds,
-        ...snapshot.seekable.map((range) => range[1]),
-      );
-      void player.seek(edge + 0.001).catch(() => {
-        /* yp-error reports command failures. */
-      });
+      continueTorrent(event.snapshot);
     };
     player.addEventListener('yp-statechange', onState);
     player.addEventListener('yp-positionchange', onPosition);

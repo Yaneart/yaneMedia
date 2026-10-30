@@ -4,6 +4,7 @@ import {
   probeSubtitles,
   sidecarSubtitles,
   subtitleWindow,
+  mergeSubtitleWindows,
   validateSubtitleFont,
   FONT_BYTES,
 } from '../../src/torrent/torrent-subtitle-policy';
@@ -13,6 +14,23 @@ import type { TorrentSessionRepository } from '../../src/torrent/torrent-session
 import type { TorrentStreamGateway } from '../../src/torrent/torrent-stream.gateway';
 
 describe('torrent subtitle boundaries', () => {
+  it('merges renewed VTT/ASS without duplicate cues or styles and retains overlapping cues', () => {
+    const first = 'WEBVTT\n\n00:00:01.000 --> 00:00:06.000\nOverlap\n';
+    const next = first + '\n00:00:07.000 --> 00:00:10.000\nNext\n';
+    const text = subtitleWindow(mergeSubtitleWindows(first, next, 'vtt'), 'vtt', 4, 10);
+    expect(text.match(/Overlap/g)).toHaveLength(1);
+    expect(text).toContain('Next');
+    const header = '[Script Info]\nTitle: Fixture\n[V4+ Styles]\nStyle: Default\n[Events]\n';
+    const event = 'Dialogue: 0,0:00:01.00,0:00:06.00,Default,,0,0,0,,Overlap\n';
+    const ass = subtitleWindow(
+      mergeSubtitleWindows(header + event, header + event, 'ass'),
+      'ass',
+      4,
+      10,
+    );
+    expect(ass.match(/Style: Default/g)).toHaveLength(1);
+    expect(ass.match(/Dialogue:/g)).toHaveLength(1);
+  });
   it('maps only supported codecs and bounded fonts, preserving forced/SDH metadata', () => {
     const result = probeSubtitles([
       {

@@ -48,7 +48,7 @@ function describeCreateError(error: unknown): string {
     return 'Проверьте magnet-ссылку или файл .torrent.';
   if (error.code === 'TORRENT_FILE_TYPE_UNSUPPORTED') return 'Выберите корректный файл .torrent.';
   if (error.status === 413 || error.code === 'PAYLOAD_TOO_LARGE')
-    return 'Файл .torrent не должен превышать 2 МиБ.';
+    return 'Файл .torrent не должен превышать 2 Мб.';
   if (error.status === 429) return 'Слишком много попыток. Подождите и попробуйте снова.';
   if (error.status === 503 || error.kind === 'network')
     return 'Торрент-сервис временно недоступен. Попробуйте позже.';
@@ -59,8 +59,8 @@ function describeCreateError(error: unknown): string {
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} Б`;
-  const unit = bytes < 1024 ** 2 ? 'КиБ' : bytes < 1024 ** 3 ? 'МиБ' : 'ГиБ';
-  const divisor = unit === 'КиБ' ? 1024 : unit === 'МиБ' ? 1024 ** 2 : 1024 ** 3;
+  const unit = bytes < 1024 ** 2 ? 'Кб' : bytes < 1024 ** 3 ? 'Мб' : 'Гб';
+  const divisor = unit === 'Кб' ? 1024 : unit === 'Мб' ? 1024 ** 2 : 1024 ** 3;
   return `${(bytes / divisor).toLocaleString('ru-RU', { maximumFractionDigits: 1 })} ${unit}`;
 }
 
@@ -125,7 +125,7 @@ function describeFailure(session: TorrentSession): string {
     case 'TORRENT_NO_VIDEO_FILES':
       return 'В раздаче нет подходящих видеофайлов. Выберите другой торрент.';
     case 'TORRENT_SIZE_LIMIT_EXCEEDED':
-      return 'Размер раздачи или видео превышает допустимый предел. Выберите другой торрент.';
+      return 'Размер раздачи или видео превышает 200 Гб. Выберите другой торрент.';
     case 'TORRENT_UNSUPPORTED_MEDIA':
       return 'Это видео не поддерживается: доступны SDR-файлы до 1080p и 60 кадр/с. HDR и 4K пока недоступны. Выберите другой файл или торрент.';
     case 'TORRENT_PROBE_TIMEOUT':
@@ -395,7 +395,7 @@ export function TorrentLaunch({
       return;
     }
     if (inputKind === 'file' && (!file || file.size > maxTorrentFileBytes)) {
-      setError('Выберите файл .torrent размером до 2 МиБ.');
+      setError('Выберите файл .torrent размером до 2 Мб.');
       return;
     }
 
@@ -923,7 +923,7 @@ export function TorrentLaunch({
                     </label>
                   ) : (
                     <label className="block space-y-2 text-sm font-semibold text-text-primary">
-                      <span>Файл .torrent (до 2 МиБ)</span>
+                      <span>Файл .torrent (до 2 Мб)</span>
                       <input
                         ref={fileInputRef}
                         type="file"

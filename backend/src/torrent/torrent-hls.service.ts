@@ -14,6 +14,7 @@ import {
 import { TorrentSessionRepository } from './torrent-session.repository';
 import { TorrentStreamGateway } from './torrent-stream.gateway';
 import { TorrentMetrics } from './torrent-metrics';
+import { TORRENT_SEGMENT_BYTES } from './torrent-playback-window';
 
 type Manifest = {
   generation: number;
@@ -86,12 +87,29 @@ export class TorrentHlsService implements BeforeApplicationShutdown {
       )
         throw missing();
       if (kind === 'master') {
-        await this.refresh(sessionId, session.generation, directory, manifest, session.version);
+        const playlist = await this.refresh(
+          sessionId,
+          session.generation,
+          directory,
+          manifest,
+          session.version,
+        );
+        const bandwidth = Math.max(
+          1,
+          ...(await Promise.all(
+            playlist.segments.map(async (segment) =>
+              Math.ceil(
+                ((await stat(join(directory, segment.filename))).size * 8) /
+                  Number(segment.duration.slice(8, -1)),
+              ),
+            ),
+          )),
+        );
         await this.repository.recordViewerActivity(sessionId, session.generation);
         const base = `/api/v1/torrent-sessions/${sessionId}/hls`;
         sendPlaylist(
           response,
-          `#EXTM3U\n#EXT-X-VERSION:7\n#EXT-X-STREAM-INF:BANDWIDTH=10000000\n${base}/media/${manifest.playlistRef}.m3u8\n`,
+          `#EXTM3U\n#EXT-X-VERSION:7\n#EXT-X-STREAM-INF:BANDWIDTH=${bandwidth}\n${base}/media/${manifest.playlistRef}.m3u8\n`,
           this.metrics,
         );
         return;
@@ -138,7 +156,7 @@ export class TorrentHlsService implements BeforeApplicationShutdown {
       });
       try {
         const info = await fd.stat();
-        if (!info.isFile() || info.size <= 0 || info.size > 32 * 1024 * 1024) throw missing();
+        if (!info.isFile() || info.size <= 0 || info.size > TORRENT_SEGMENT_BYTES) throw missing();
         await this.repository.recordViewerActivity(sessionId, session.generation);
         response.setHeader('Content-Type', 'video/mp4');
         response.setHeader('Content-Length', String(info.size));

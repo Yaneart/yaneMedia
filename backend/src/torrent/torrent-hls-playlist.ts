@@ -38,6 +38,7 @@ export function parseTorrentPlaylist(input: string): ParsedTorrentPlaylist {
     else if (
       /^segment-\d{6}\.m4s$/.test(line) &&
       duration &&
+      Number(duration.slice(8, -1)) > 0 &&
       segments.length < TORRENT_WINDOW_SEGMENTS
     ) {
       segments.push({ filename: line, duration });

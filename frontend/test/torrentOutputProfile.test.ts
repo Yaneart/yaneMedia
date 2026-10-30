@@ -75,7 +75,7 @@ test('negotiates supported smooth 1080p with MSE and AAC stereo', async () => {
   expect(await torrentOutputProfile()).toBe('h264-1080p');
   expect(decode.mock.calls[0][0]).toMatchObject({
     type: 'media-source',
-    video: { width: 1920, height: 1080, framerate: 30 },
+    video: { width: 1920, height: 1080, bitrate: 62_500_000, framerate: 30 },
     audio: { channels: '2' },
   });
 });

@@ -4,6 +4,7 @@ import type { EngineFile } from './torrent-engine.port';
 export const SUBTITLE_BYTES = 2 * 1024 * 1024;
 export const FONT_BYTES = 1024 * 1024;
 export const SUBTITLE_LOOKBEHIND = 120;
+export const SUBTITLE_CACHE_BYTES = 8 * 1024 * 1024;
 export type SubtitleFormat = 'vtt' | 'ass' | 'pgs' | 'vobsub';
 export interface TorrentSubtitle {
   trackRef: string;
@@ -148,6 +149,24 @@ function seconds(value: string): number {
     Number(match[3]) +
     Number(`0.${match[4]}`)
   );
+}
+
+// Only formatted text is merged; FFmpeg remains the subtitle decoder.
+export function mergeSubtitleWindows(previous: string, next: string, format: 'vtt' | 'ass') {
+  if (format === 'vtt') {
+    const cues = [previous, next].flatMap((text) =>
+      text
+        .trim()
+        .split(/\n{2,}/)
+        .filter((block) => block.includes('-->')),
+    );
+    return `WEBVTT\n\n${[...new Set(cues)].join('\n\n')}\n`;
+  }
+  const header = previous.split('\n').filter((line) => !/^Dialogue:/i.test(line));
+  const events = [previous, next].flatMap((text) =>
+    text.split('\n').filter((line) => /^Dialogue:/i.test(line)),
+  );
+  return [...header, ...new Set(events)].join('\n');
 }
 
 // FFmpeg output only. Keep authored ASS styles but reject resource sections and malformed events.

@@ -14,7 +14,7 @@ import type { EngineFileKey, EngineTorrentKey } from '../../src/torrent/torrent-
 const integration = process.env.TORRENT_GATEWAY_TEST === '1' ? describe : describe.skip;
 integration('bounded subtitle delivery from a real MKV', () => {
   it('ends sparse subtitle demuxing at the window instead of reading through the next distant cue', async () => {
-    const fixture = await createSubtitleFixture(0, true);
+    const fixture = await createSubtitleFixture(0, true, 'ac3');
     let bytes = 0;
     const engine = {
       openFileStream: (
@@ -61,7 +61,32 @@ integration('bounded subtitle delivery from a real MKV', () => {
       );
       expect(text.toString()).toContain('Early cue');
       expect(text.toString()).not.toContain('Late cue');
-      expect(bytes).toBeLessThan(fixture.size);
+      expect(bytes).toBeLessThan(fixture.size * 0.65);
+      const longWindowBytes = bytes;
+      const boundary = await gateway.subtitleResource(
+        'sparse',
+        2,
+        source,
+        probe,
+        probe.subtitleTracks![0],
+        121,
+        AbortSignal.timeout(20_000),
+      );
+      expect(boundary.toString().match(/Boundary overlap/g)).toHaveLength(1);
+      expect(boundary.toString()).toMatch(/(?:00:)?01:58\.\d+ --> (?:00:)?02:08\.\d+/);
+      bytes = 0;
+      const short = await gateway.subtitleResource(
+        'sparse',
+        1,
+        source,
+        { ...probe, copyVideo: true, video: { ...probe.video!, bitrate: 40_000_000 } },
+        probe.subtitleTracks![0],
+        0,
+        AbortSignal.timeout(20_000),
+      );
+      expect(short.toString()).toContain('Early cue');
+      expect(short.toString()).not.toContain('Outside short window');
+      expect(bytes).toBeLessThan(longWindowBytes);
       bytes = 0;
       const empty = await gateway.subtitleResource(
         'sparse',
@@ -86,10 +111,12 @@ integration('bounded subtitle delivery from a real MKV', () => {
     const id = `torrent_session_${randomBytes(16).toString('base64url')}`;
     const paths = [fixture.file, fixture.srt, fixture.ass];
     let stalled: (() => void) | undefined;
+    let inputRequests = 0;
     const engine = {
       enabled: true,
       openFileStream: jest.fn(
         (_key, index: number, range: { offset: number; length?: number }, signal: AbortSignal) => {
+          inputRequests++;
           if (stalled) {
             stalled();
             return new Promise((_resolve, reject) =>
@@ -141,6 +168,22 @@ integration('bounded subtitle delivery from a real MKV', () => {
       expect(text.toString()).toMatch(/(?:00:)?02:05\.0\d{2} --> (?:00:)?02:15\.0\d{2}/);
       expect(text.toString()).toContain('Перекрытие перемотки');
       expect(text.toString()).not.toContain('Русские субтитры');
+      const readsBeforeReplay = inputRequests;
+      expect(
+        await gateway.subtitleResource(id, 2, source, probe, probe.subtitleTracks![0], 130, signal),
+      ).toEqual(text);
+      expect(inputRequests).toBe(readsBeforeReplay);
+      const continued = await gateway.subtitleResource(
+        id,
+        2,
+        source,
+        probe,
+        probe.subtitleTracks![0],
+        132,
+        signal,
+      );
+      expect(continued.toString()).toContain('Перекрытие перемотки');
+      expect(continued.toString().match(/Перекрытие перемотки/g)).toHaveLength(1);
       const ass = await gateway.subtitleResource(
         id,
         1,
@@ -178,7 +221,7 @@ integration('bounded subtitle delivery from a real MKV', () => {
         source,
         probe,
         probe.subtitleTracks![0],
-        130,
+        260,
         controller.signal,
       );
       const second = gateway.subtitleResource(
@@ -213,7 +256,7 @@ integration('bounded subtitle delivery from a real MKV', () => {
         source,
         probe,
         probe.subtitleTracks![0],
-        130,
+        260,
         abandonedController.signal,
       );
       const latest = gateway.subtitleResource(
@@ -232,7 +275,7 @@ integration('bounded subtitle delivery from a real MKV', () => {
         stalled = resolve;
       });
       const stopped = gateway
-        .subtitleResource(id, 1, source, probe, probe.subtitleTracks![0], 130, signal)
+        .subtitleResource(id, 1, source, probe, probe.subtitleTracks![0], 260, signal)
         .then(
           () => false,
           () => true,

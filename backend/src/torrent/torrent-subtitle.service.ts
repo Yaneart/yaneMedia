@@ -1,11 +1,16 @@
-import { HttpException, Injectable } from '@nestjs/common';
+import { HttpException, Injectable, Logger } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import type { EngineFileKey } from './torrent-engine.port';
 import { TorrentSessionRepository } from './torrent-session.repository';
-import { TorrentGatewayCapacity, TorrentStreamGateway } from './torrent-stream.gateway';
+import {
+  TorrentGatewayCapacity,
+  TorrentGatewayTimeout,
+  TorrentStreamGateway,
+} from './torrent-stream.gateway';
 
 @Injectable()
 export class TorrentSubtitleService {
+  private readonly logger = new Logger(TorrentSubtitleService.name);
   constructor(
     private readonly repository: TorrentSessionRepository,
     private readonly gateway: TorrentStreamGateway,
@@ -59,6 +64,7 @@ export class TorrentSubtitleService {
     const close = () => abort.abort();
     res.once('close', close);
     if (res.destroyed) abort.abort();
+    const started = Date.now();
     try {
       const bytes = await this.gateway.subtitleResource(
         id,
@@ -98,6 +104,16 @@ export class TorrentSubtitleService {
       const current = await this.repository.findVisible(owner, id);
       if (!current || current.state !== 'ready' || current.generation !== session.generation)
         throw missing();
+      this.logger.warn({
+        event: 'torrent.subtitle_failed',
+        reason:
+          error instanceof TorrentGatewayCapacity
+            ? 'capacity'
+            : error instanceof TorrentGatewayTimeout
+              ? 'timeout'
+              : 'extraction',
+        durationMs: Date.now() - started,
+      });
       if (error instanceof TorrentGatewayCapacity) {
         res.setHeader('Retry-After', '1');
         throw new HttpException(

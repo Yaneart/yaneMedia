@@ -101,6 +101,7 @@ describe('torrent HLS gateway', () => {
       playlist.replace('segment-000000.m4s', '../segment-000000.m4s'),
       playlist.replace('#EXT-X-VERSION:7', '#EXT-X-KEY:METHOD=AES-128,URI="https://evil.example"'),
       playlist.replace('segment-000000.m4s', '//evil.example/segment-000000.m4s'),
+      playlist.replace('#EXTINF:2.000000,', '#EXTINF:0.000000,'),
     ])
       expect(() => parseTorrentPlaylist(hostile)).toThrow(InvalidTorrentPlaylist);
   });

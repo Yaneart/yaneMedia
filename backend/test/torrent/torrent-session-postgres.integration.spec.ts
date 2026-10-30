@@ -132,15 +132,31 @@ describePostgres('torrent session PostgreSQL persistence', () => {
       fileRef: `torrent_file_${randomBytes(16).toString('base64url')}`,
       engineFileIndex: 1,
       displayName: 'film.mkv',
-      sizeBytes: 100,
+      sizeBytes: 214748364800,
     };
+    await expect(
+      repository.replaceFiles(pending.sessionId, pending.version, [
+        { ...file, sizeBytes: file.sizeBytes + 1 },
+      ]),
+    ).rejects.toThrow('Invalid torrent file mapping');
+    await expect(
+      repository.replaceFiles(pending.sessionId, pending.version, [
+        file,
+        { ...file, engineFileIndex: 2, sizeBytes: 1 },
+      ]),
+    ).rejects.toThrow('Invalid torrent file mapping');
     const published = await repository.replaceFiles(pending.sessionId, pending.version, [file]);
     expect(await metrics.registry.metrics()).toContain('torrent_time_to_metadata_seconds_count 1');
     expect(await repository.countByState()).toContainEqual({ state: 'probing', count: 1 });
     expect(published.state).toBe('probing');
     expect(published.selectedFileRef).toBe(file.fileRef);
     expect(await repository.listFiles(pending.sessionId)).toEqual([
-      { fileRef: file.fileRef, displayName: 'film.mkv', sizeBytes: 100, mediaKind: 'video' },
+      {
+        fileRef: file.fileRef,
+        displayName: 'film.mkv',
+        sizeBytes: 214748364800,
+        mediaKind: 'video',
+      },
     ]);
     await expect(
       repository.replaceFiles(pending.sessionId, pending.version, [file]),
@@ -353,11 +369,12 @@ describePostgres('torrent session PostgreSQL persistence', () => {
     });
     const multi = await repository.transition(second.session.sessionId, 1, 'fetching_metadata');
     const awaiting = await repository.replaceFiles(multi.sessionId, multi.version, [
-      { ...file, fileRef: `torrent_file_${randomBytes(16).toString('base64url')}` },
+      { ...file, sizeBytes: 100, fileRef: `torrent_file_${randomBytes(16).toString('base64url')}` },
       {
         ...file,
         fileRef: `torrent_file_${randomBytes(16).toString('base64url')}`,
         engineFileIndex: 2,
+        sizeBytes: 100,
       },
     ]);
     expect(awaiting.state).toBe('awaiting_file');

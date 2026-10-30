@@ -35,7 +35,8 @@ export async function torrentOutputProfile(): Promise<TorrentOutputProfile> {
       ] as const) {
         const info = await capabilities.decodingInfo({
           type: native ? 'file' : 'media-source',
-          video: { contentType: videoType, width, height, bitrate: 8_000_000, framerate: 30 },
+          // H.264 High 4.1 envelope, including compatible high-bitrate originals.
+          video: { contentType: videoType, width, height, bitrate: 62_500_000, framerate: 30 },
           audio: { contentType: audioType, channels: '2', bitrate: 320_000, samplerate: 48_000 },
         });
         if (info.supported && info.smooth) return profile;

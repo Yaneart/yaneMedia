@@ -30,7 +30,6 @@ function videoReason(video: TorrentVideoProbe, profile: TorrentOutputProfile) {
   if (video.width > limit.width || video.height > limit.height) return 'resolution';
   if (video.fps > 30) return 'frame_rate';
   if (video.level === null || video.level > limit.level) return 'level';
-  if (video.bitrate === null || video.bitrate > 8_000_000) return 'bitrate';
   return 'compatible';
 }
 

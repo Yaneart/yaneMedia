@@ -37,7 +37,7 @@ services:
       - --torrentaddr
       - :32000
       - --maxsize
-      - "32212254720"
+      - "214748364800"
     restart: unless-stopped
     read_only: true
     tmpfs:

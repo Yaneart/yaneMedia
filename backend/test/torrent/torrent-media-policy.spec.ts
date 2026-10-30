@@ -55,10 +55,10 @@ describe('torrent FFmpeg probe policy', () => {
     expect(result.audioTracks[0].trackRef).not.toBe(result.audioTracks[1].trackRef);
   });
 
-  it('transcodes unknown bitrate video and rejects media without supported tracks', () => {
+  it('copies compatible unknown bitrate video and rejects media without supported tracks', () => {
     const unknownBitrate = structuredClone(media);
     delete (unknownBitrate.streams[0] as { bit_rate?: string }).bit_rate;
-    expect(parseTorrentProbe('file', unknownBitrate).copyVideo).toBe(false);
+    expect(parseTorrentProbe('file', unknownBitrate).copyVideo).toBe(true);
     expect(() => parseTorrentProbe('file', { streams: [media.streams[1]] })).toThrow(
       UnsupportedTorrentMedia,
     );
@@ -121,8 +121,6 @@ describe('torrent FFmpeg probe policy', () => {
     [{ profile: 'High 4:4:4 Predictive' }, 'profile'],
     [{ level: 51 }, 'level'],
     [{ level: undefined }, 'level'],
-    [{ bit_rate: '9000000' }, 'bitrate'],
-    [{ bit_rate: undefined }, 'bitrate'],
     [{ avg_frame_rate: '60/1' }, 'frame_rate'],
   ])('transcodes SDR for an explicit reason without upscaling: %j', (video, reason) => {
     const probe = selectTorrentOutput(probeVideo(video), 'h264-1080p');
@@ -137,6 +135,23 @@ describe('torrent FFmpeg probe policy', () => {
       },
     });
   });
+
+  it.each(['9000000', '50000000', undefined])(
+    'preserves compatible 1080p at bitrate %s',
+    (bit_rate) => {
+      const probe = selectTorrentOutput(
+        probeVideo({ width: 1920, height: 804, level: 41, bit_rate }),
+        'h264-1080p',
+      );
+      expect(probe.copyVideo).toBe(true);
+      expect(torrentOutputInfo(probe, probe.audioTracks[0])?.video).toMatchObject({
+        width: 1920,
+        height: 804,
+        mode: 'copy',
+        reason: 'compatible',
+      });
+    },
+  );
 
   it.each([
     { color_transfer: 'smpte2084' },
