@@ -153,6 +153,17 @@ describePostgres('torrent session PostgreSQL persistence', () => {
       durationSeconds: 42.5,
       videoStreamIndex: 0,
       copyVideo: true,
+      video: {
+        codec: 'h264',
+        profile: 'High',
+        pixelFormat: 'yuv420p',
+        bitDepth: 8,
+        width: 1920,
+        height: 1080,
+        fps: 24,
+        level: 41,
+        bitrate: 6_000_000,
+      },
       audioTracks: [
         {
           trackRef: `torrent_track_${randomBytes(16).toString('base64url')}`,
@@ -214,6 +225,10 @@ describePostgres('torrent session PostgreSQL persistence', () => {
     const started = await repository.beginPlayback(...command);
     expect(started.session.state).toBe('preparing');
     expect(started.session.playbackPositionSeconds).toBe(1.5);
+    expect(await repository.getProbe(pending.sessionId)).toMatchObject({
+      outputProfile: 'h264-720p',
+      copyVideo: false,
+    });
     expect((await repository.beginPlayback(...command)).replay).toBe(true);
     const timeline = { absoluteAnchorSeconds: 0, mediaAnchorSeconds: 0.08, windowEndSeconds: 42.5 };
     let ready = await repository.transition(pending.sessionId, started.session.version, 'ready', {
@@ -260,6 +275,57 @@ describePostgres('torrent session PostgreSQL persistence', () => {
     ready = await repository.transition(pending.sessionId, switched.session.version, 'ready', {
       playbackTimeline: timeline,
     });
+    const profileCommand = [
+      owners[0],
+      pending.sessionId,
+      ready.version,
+      probe.audioTracks[1].trackRef,
+      1.5,
+      'playback-profile-1',
+      '9'.repeat(64),
+      'h264-1080p',
+    ] as const;
+    const profileChanged = await repository.beginPlayback(...profileCommand);
+    expect(profileChanged.session.generation).toBe(ready.generation + 1);
+    expect(await repository.getProbe(pending.sessionId)).toMatchObject({
+      outputProfile: 'h264-1080p',
+      copyVideo: true,
+    });
+    expect((await repository.beginPlayback(...profileCommand)).replay).toBe(true);
+    await expect(
+      repository.beginPlayback(
+        owners[0],
+        pending.sessionId,
+        ready.version,
+        probe.audioTracks[1].trackRef,
+        1.5,
+        'playback-profile-1',
+        '8'.repeat(64),
+        'h264-720p',
+      ),
+    ).rejects.toMatchObject({ code: 'IDEMPOTENCY_KEY_REUSED' });
+    await expect(
+      repository.beginPlayback(
+        owners[0],
+        pending.sessionId,
+        ready.version,
+        probe.audioTracks[1].trackRef,
+        1.5,
+        'playback-profile-2',
+        '7'.repeat(64),
+        'h264-720p',
+      ),
+    ).rejects.toMatchObject({ code: 'TORRENT_SESSION_CHANGED' });
+    expect(await repository.getProbe(pending.sessionId)).toMatchObject({
+      outputProfile: 'h264-1080p',
+      copyVideo: true,
+    });
+    ready = await repository.transition(
+      pending.sessionId,
+      profileChanged.session.version,
+      'ready',
+      { playbackTimeline: timeline },
+    );
     await repository.transition(pending.sessionId, ready.version, 'awaiting_playback', {
       failureCode: 'TORRENT_TRANSCODE_FAILED',
     });

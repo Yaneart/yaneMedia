@@ -183,6 +183,51 @@ describe('torrent API boundary', () => {
       subtitleTracks: [subtitle],
     };
     const session = mapTorrentSession({ ...wire, state: 'ready', playback: withSubtitles });
+    const output = {
+      profile: 'h264-1080p',
+      source: {
+        codec: 'h264',
+        width: 1920,
+        height: 1080,
+        bitDepth: 8,
+        fps: 24,
+        dynamicRange: 'sdr',
+      },
+      video: {
+        codec: 'h264',
+        bitDepth: 8,
+        dynamicRange: 'sdr',
+        width: 1920,
+        height: 1080,
+        fps: 24,
+        mode: 'copy',
+        reason: 'compatible',
+      },
+      audio: {
+        codec: 'aac',
+        sourceCodec: 'ac3',
+        sourceChannels: 6,
+        channels: 2,
+        mode: 'transcode',
+        reason: 'surround',
+      },
+    };
+    expect(
+      mapTorrentSession({ ...wire, state: 'ready', playback: { ...playback, output } }).playback
+        ?.output,
+    ).toEqual(output);
+    for (const invalidOutput of [
+      { ...output, profile: 'hevc-4k' },
+      { ...output, source: { ...output.source, dynamicRange: 'hdr' } },
+      { ...output, video: { ...output.video, width: 3840 } },
+      { ...output, video: { ...output.video, reason: 'private path' } },
+      { ...output, audio: { ...output.audio, channels: 6 } },
+      { ...output, audio: { ...output.audio, sourceCodec: '<script>' } },
+      { ...output, source: { ...output.source, engineUrl: 'http://internal' } },
+    ])
+      expect(() =>
+        mapTorrentSession({ ...wire, playback: { ...playback, output: invalidOutput } }),
+      ).toThrow();
     expect(session.playback?.subtitleTracks?.[0]).toMatchObject({
       ref: subtitle.trackRef,
       isForced: true,

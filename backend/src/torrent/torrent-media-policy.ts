@@ -1,5 +1,10 @@
 import { randomBytes } from 'node:crypto';
 import { probeSubtitles, type TorrentFont, type TorrentSubtitle } from './torrent-subtitle-policy';
+import {
+  selectTorrentOutput,
+  type TorrentOutputProfile,
+  type TorrentVideoProbe,
+} from './torrent-output-policy';
 
 export interface AudioTrack {
   trackRef: string;
@@ -9,6 +14,7 @@ export interface AudioTrack {
   channels: number | null;
   isDefault: boolean;
   copy: boolean;
+  codec?: string;
 }
 
 export interface TorrentProbe {
@@ -17,6 +23,8 @@ export interface TorrentProbe {
   sourceStartSeconds?: number;
   videoStreamIndex: number;
   copyVideo: boolean;
+  video?: TorrentVideoProbe;
+  outputProfile?: TorrentOutputProfile;
   audioTracks: AudioTrack[];
   subtitleTracks?: TorrentSubtitle[];
   subtitleFonts?: TorrentFont[];
@@ -32,7 +40,13 @@ type Stream = {
   height?: unknown;
   pix_fmt?: unknown;
   avg_frame_rate?: unknown;
+  r_frame_rate?: unknown;
   bit_rate?: unknown;
+  bits_per_raw_sample?: unknown;
+  color_transfer?: unknown;
+  color_primaries?: unknown;
+  color_space?: unknown;
+  side_data_list?: Array<{ side_data_type?: unknown }>;
   duration?: unknown;
   sample_rate?: unknown;
   channels?: unknown;
@@ -49,10 +63,17 @@ const bitrate = (value: unknown) => {
 
 export function parseTorrentProbe(fileRef: string, raw: unknown): TorrentProbe {
   if (!raw || typeof raw !== 'object') throw new UnsupportedTorrentMedia();
-  const data = raw as { streams?: unknown; format?: { duration?: unknown; start_time?: unknown } };
+  const data = raw as {
+    streams?: unknown;
+    format?: { duration?: unknown; start_time?: unknown; bit_rate?: unknown };
+  };
   if (!Array.isArray(data.streams) || data.streams.length > 64) throw new UnsupportedTorrentMedia();
   const streams = data.streams as Stream[];
-  const video = streams.find((stream) => stream.codec_type === 'video');
+  const video = streams.find(
+    (stream) =>
+      stream.codec_type === 'video' &&
+      !(stream.disposition as { attached_pic?: unknown })?.attached_pic,
+  );
   if (!video || !Number.isSafeInteger(video.index) || Number(video.index) < 0)
     throw new UnsupportedTorrentMedia();
   const width = Number(video.width);
@@ -62,25 +83,44 @@ export function parseTorrentProbe(fileRef: string, raw: unknown): TorrentProbe {
     !Number.isSafeInteger(height) ||
     width < 16 ||
     height < 16 ||
-    width > 4096 ||
-    height > 2160
+    width > 1920 ||
+    height > 1080 ||
+    ['smpte2084', 'arib-std-b67'].includes(String(video.color_transfer)) ||
+    video.color_primaries === 'bt2020' ||
+    ['bt2020nc', 'bt2020c'].includes(String(video.color_space)) ||
+    (Array.isArray(video.side_data_list) ? video.side_data_list : []).some((item) =>
+      /dovi|dolby|mastering display|content light|hdr/i.test(String(item.side_data_type)),
+    )
   )
     throw new UnsupportedTorrentMedia();
-  const rate = (typeof video.avg_frame_rate === 'string' ? video.avg_frame_rate : '')
-    .split('/')
-    .map(Number);
-  const fps = rate.length === 2 && rate[1] > 0 ? rate[0] / rate[1] : Infinity;
-  const copyVideo =
-    video.codec_name === 'h264' &&
-    ['Constrained Baseline', 'Baseline', 'Main', 'High'].includes(String(video.profile)) &&
-    video.pix_fmt === 'yuv420p' &&
-    Number(video.level) <= 41 &&
-    width <= 1280 &&
-    height <= 720 &&
-    fps > 0 &&
-    fps <= 60 &&
-    bitrate(video.bit_rate) !== null &&
-    bitrate(video.bit_rate)! <= 8_000_000;
+  const rates = [video.avg_frame_rate, video.r_frame_rate].map((value) => {
+    const rate = (typeof value === 'string' ? value : '').split('/').map(Number);
+    return rate.length === 2 && rate[1] > 0 ? rate[0] / rate[1] : 0;
+  });
+  const fps = Math.max(...rates);
+  if (
+    !Number.isFinite(fps) ||
+    fps <= 0 ||
+    fps > 60 ||
+    typeof video.codec_name !== 'string' ||
+    !/^[a-z0-9_]{1,24}$/.test(video.codec_name)
+  )
+    throw new UnsupportedTorrentMedia();
+  const pixelDepth = /p0?(9|10|12|14|16)/.exec(String(video.pix_fmt));
+  const bitDepth = Number(video.bits_per_raw_sample) || Number(pixelDepth?.[1] ?? 8);
+  if (!Number.isInteger(bitDepth) || bitDepth < 8 || bitDepth > 16)
+    throw new UnsupportedTorrentMedia();
+  const videoInfo: TorrentVideoProbe = {
+    codec: video.codec_name,
+    profile: typeof video.profile === 'string' ? video.profile : '',
+    pixelFormat: typeof video.pix_fmt === 'string' ? video.pix_fmt : '',
+    bitDepth,
+    width,
+    height,
+    fps,
+    level: bitrate(video.level),
+    bitrate: bitrate(video.bit_rate) ?? bitrate(data.format?.bit_rate),
+  };
   const audioTracks = streams
     .filter((stream) => stream.codec_type === 'audio')
     .map((stream) => {
@@ -97,12 +137,17 @@ export function parseTorrentProbe(fileRef: string, raw: unknown): TorrentProbe {
           .trim()
           .slice(0, 80) || `Audio ${Number(stream.index)}`;
       const channels = Number.isInteger(stream.channels) ? Number(stream.channels) : null;
+      if (channels !== null && (channels < 1 || channels > 32)) throw new UnsupportedTorrentMedia();
       return {
         trackRef: `torrent_track_${randomBytes(16).toString('base64url')}`,
         streamIndex: Number(stream.index),
         label,
         language,
         channels,
+        codec:
+          typeof stream.codec_name === 'string' && /^[a-z0-9_]{1,24}$/.test(stream.codec_name)
+            ? stream.codec_name
+            : 'unknown',
         isDefault: stream.disposition?.default === 1,
         copy:
           stream.codec_name === 'aac' &&
@@ -110,6 +155,7 @@ export function parseTorrentProbe(fileRef: string, raw: unknown): TorrentProbe {
           channels !== null &&
           channels >= 1 &&
           channels <= 2 &&
+          Number(stream.sample_rate) > 0 &&
           Number(stream.sample_rate) <= 48_000 &&
           bitrate(stream.bit_rate) !== null &&
           bitrate(stream.bit_rate)! <= 320_000,
@@ -121,15 +167,19 @@ export function parseTorrentProbe(fileRef: string, raw: unknown): TorrentProbe {
     Number.isFinite(streamDuration) && streamDuration > 0
       ? streamDuration
       : Number(data.format?.duration);
-  return {
-    fileRef,
-    durationSeconds: Number.isFinite(duration) && duration > 0 ? duration : null,
-    sourceStartSeconds: Number.isFinite(Number(data.format?.start_time))
-      ? Number(data.format?.start_time)
-      : 0,
-    videoStreamIndex: Number(video.index),
-    copyVideo,
-    audioTracks,
-    ...probeSubtitles(data.streams as Array<Record<string, unknown>>),
-  };
+  return selectTorrentOutput(
+    {
+      fileRef,
+      durationSeconds: Number.isFinite(duration) && duration > 0 ? duration : null,
+      sourceStartSeconds: Number.isFinite(Number(data.format?.start_time))
+        ? Number(data.format?.start_time)
+        : 0,
+      videoStreamIndex: Number(video.index),
+      copyVideo: false,
+      video: videoInfo,
+      audioTracks,
+      ...probeSubtitles(data.streams as Array<Record<string, unknown>>),
+    },
+    'h264-720p',
+  );
 }

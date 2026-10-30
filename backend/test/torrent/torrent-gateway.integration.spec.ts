@@ -92,7 +92,9 @@ describeGateway('FFmpeg gateway with a local seekable fixture', () => {
         file: 1 as EngineFileKey,
         size: (await stat(file)).size,
       };
-      const probe = await gateway.probe(source, 'audio-file');
+      // Exercise the transcode timestamp path explicitly; MKV aggregate
+      // bitrate can now correctly admit this compatible video for remux.
+      const probe = { ...(await gateway.probe(source, 'audio-file')), copyVideo: false };
       expect(probe.copyVideo).toBe(false);
       expect(probe.audioTracks.map((track) => track.language)).toEqual(['eng', 'rus']);
       for (const [index, trackIndex] of [1, 0, 1].entries()) {

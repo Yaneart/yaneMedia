@@ -2,6 +2,11 @@ import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from 'b
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 
 GlobalRegistrator.register({ url: 'http://localhost:5173' });
+// Happy DOM has no media decoder; actual capabilities/transport are checked in Chromium.
+Object.defineProperty(globalThis, 'MediaSource', {
+  configurable: true,
+  value: { isTypeSupported: () => true },
+});
 const { act, useState } = await import('react');
 const { render, fireEvent, screen, waitFor, cleanup } = await import('@testing-library/react');
 const { QueryClient, QueryClientProvider } = await import('@tanstack/react-query');
@@ -606,6 +611,7 @@ describe('torrent player adapter contract', () => {
     const view = render(<MediaVideoRenderer {...props} />);
     const player = players[0];
     expect(player.descriptor.capabilities.audio).toBe('host');
+    expect(player.descriptor.capabilities.quality).toBe('none');
     expect(player.descriptor.subtitles[0]).toMatchObject({
       id: 'captions',
       format: 'ass',

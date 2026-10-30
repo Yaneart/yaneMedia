@@ -32,6 +32,7 @@ export type TorrentVideoTimeline = {
   audioTracks: NonNullable<TorrentSession['playback']>['audioTracks'];
   selectedAudioTrackRef: string;
   subtitleTracks?: NonNullable<TorrentSession['playback']>['subtitleTracks'];
+  output?: NonNullable<TorrentSession['playback']>['output'];
   onReplace: (
     positionSeconds: number,
     signal: AbortSignal,
@@ -80,7 +81,12 @@ function torrentDescriptor(
       ...playback.timeline,
       durationSeconds: playback.durationSeconds,
     },
-    capabilities: { seek: 'host', audio: 'host', playbackRates: playback.playbackRates },
+    capabilities: {
+      seek: 'host',
+      audio: 'host',
+      quality: 'none',
+      playbackRates: playback.playbackRates,
+    },
   };
 }
 

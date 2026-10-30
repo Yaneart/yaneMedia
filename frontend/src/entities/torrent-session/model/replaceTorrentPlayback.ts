@@ -6,6 +6,7 @@ import {
 } from '../api/torrentSessionApi';
 import type { TorrentSession } from './torrentSession';
 import { torrentAccountSignal } from './torrentClientScope';
+import { torrentOutputProfile } from './torrentOutputProfile';
 
 // Keep one logical key through uncertain admission. Abort cannot undo a POST:
 // reconcile its outcome before letting the player's queue start another mutation.
@@ -23,6 +24,7 @@ export async function replaceTorrentPlayback(
   let attempts = 0;
   let polls = 0;
   const audio = audioTrackRef;
+  const outputProfile = initial.playback?.output?.profile ?? (await torrentOutputProfile());
   while (!deadline.aborted) {
     if (current.selectedFileRef !== initial.selectedFileRef)
       throw new Error('Playback file replaced');
@@ -36,6 +38,7 @@ export async function replaceTorrentPlayback(
           key,
           deadline,
           audio,
+          outputProfile,
         );
         admittedVersion = current.version;
       } catch (error) {
@@ -55,6 +58,8 @@ export async function replaceTorrentPlayback(
         current.version < admittedVersion ||
         current.playback?.startPositionSeconds !== position ||
         current.playback.selectedAudioTrackRef !== audio ||
+        (current.playback.output !== undefined &&
+          current.playback.output.profile !== outputProfile) ||
         current.selectedFileRef !== initial.selectedFileRef
       )
         throw new Error('Playback generation replaced');

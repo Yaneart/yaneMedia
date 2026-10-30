@@ -1,4 +1,5 @@
 import type { TorrentFailureCode, TorrentSessionState } from '../model/torrentSession';
+import type { TorrentOutput } from '../model/torrentOutput';
 
 export type TorrentAudioTrackDto = {
   trackRef: string;
@@ -53,6 +54,7 @@ export type TorrentSessionDto = {
     selectedAudioTrackRef: string;
     audioTracks: TorrentAudioTrackDto[];
     subtitleTracks?: TorrentSubtitleTrackDto[];
+    output?: TorrentOutput;
     supportsSubtitleSelection: boolean;
   } | null;
   failure: {

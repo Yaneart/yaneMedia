@@ -27,7 +27,21 @@ describe('torrent playback commands', () => {
     playbackPositionSeconds: 12,
   } as TorrentSessionRow;
   const audio = { trackRef, streamIndex: 1, copy: true };
-  const probe = { copyVideo: true, audioTracks: [audio] };
+  const probe = {
+    copyVideo: true,
+    audioTracks: [audio],
+    video: {
+      codec: 'h264',
+      profile: 'High',
+      pixelFormat: 'yuv420p',
+      bitDepth: 8,
+      width: 1280,
+      height: 720,
+      fps: 24,
+      level: 40,
+      bitrate: 4_000_000,
+    },
+  };
   const request = { startPositionSeconds: 12, expectedVersion: 4 };
   const timeline = { absoluteAnchorSeconds: 10, mediaAnchorSeconds: 0.08, windowEndSeconds: 130 };
   const repository = {
@@ -89,6 +103,9 @@ describe('torrent playback commands', () => {
     { ...request, expectedVersion: 0 },
     { ...request, expectedVersion: 1.5 },
     { ...request, audioTrackRef: 1 },
+    { ...request, outputProfile: 'hevc-4k' },
+    { ...request, outputProfile: null },
+    { ...request, outputProfile: { width: 3840 } },
     { ...request, engineUrl: 'http://internal' },
   ])('rejects invalid playback input before repository or worker admission: %j', async (body) => {
     await expect(service.playback('owner', id, body, key)).rejects.toMatchObject({ status: 400 });
@@ -99,6 +116,15 @@ describe('torrent playback commands', () => {
   it('rejects a missing idempotency key before repository access', async () => {
     await expect(service.playback('owner', id, request, '')).rejects.toMatchObject({ status: 400 });
     expect(repository.findVisible).not.toHaveBeenCalled();
+  });
+
+  it('requires reopening old probes before applying the new colour/output contract', async () => {
+    repository.getProbe.mockResolvedValue({ ...probe, video: undefined });
+    await expect(service.playback('owner', id, request, key)).rejects.toMatchObject({
+      status: 415,
+    });
+    expect(gateway.hasCapacity).not.toHaveBeenCalled();
+    expect(repository.beginPlayback).not.toHaveBeenCalled();
   });
 
   it('hides foreign sessions and unknown audio tracks before replay or capacity admission', async () => {
@@ -124,6 +150,40 @@ describe('torrent playback commands', () => {
     expect(gateway.hasCapacity).not.toHaveBeenCalled();
     expect(repository.beginPlayback).not.toHaveBeenCalled();
     expect(gateway.start).not.toHaveBeenCalled();
+  });
+
+  it('includes the negotiated profile in idempotency and reserves 1080p as a copy worker', async () => {
+    repository.getProbe.mockResolvedValue({
+      ...probe,
+      copyVideo: false,
+      video: {
+        codec: 'h264',
+        profile: 'High',
+        pixelFormat: 'yuv420p',
+        bitDepth: 8,
+        width: 1920,
+        height: 1080,
+        fps: 24,
+        level: 41,
+        bitrate: 6_000_000,
+      },
+    });
+    repository.beginPlayback.mockResolvedValue({ session, replay: true });
+    await service.playback('owner', id, { ...request, outputProfile: 'h264-1080p' }, key);
+    expect(input.digestPlayback).toHaveBeenCalledWith(id, 12, trackRef, 'h264-1080p');
+    expect(gateway.hasCapacity).toHaveBeenCalledWith(false, undefined);
+    expect(repository.beginPlayback).toHaveBeenCalledWith(
+      'owner',
+      id,
+      4,
+      trackRef,
+      12,
+      key,
+      'digest',
+      'h264-1080p',
+    );
+    await service.playback('owner', id, request, 'playback-command-2');
+    expect(gateway.hasCapacity).toHaveBeenLastCalledWith(true, undefined);
   });
 
   it('publishes ready only after the selected file and generation have a first segment', async () => {

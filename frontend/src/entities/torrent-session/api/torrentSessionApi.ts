@@ -2,6 +2,12 @@ import { ApiClientError, apiRequest } from '@/shared/api';
 import type { TorrentSession } from '../model/torrentSession';
 import { torrentAccountSignal } from '../model/torrentClientScope';
 import { mapTorrentSession } from './mapTorrentSession';
+import { torrentOutputProfile } from '../model/torrentOutputProfile';
+import type { TorrentOutputProfile } from '../model/torrentOutput';
+
+// Keep the hint stable when a lost POST is retried with the same logical key.
+// Entries contain only bounded profile promises, never account/session data.
+const outputProfiles = new Map<string, Promise<TorrentOutputProfile>>();
 
 export class TorrentRequestError extends Error {
   readonly kind: 'http' | 'network' | 'aborted' | 'invalid_response';
@@ -140,14 +146,32 @@ export function selectTorrentFile(
   );
 }
 
-export function startTorrentPlayback(
+export async function startTorrentPlayback(
   sessionId: string,
   startPositionSeconds: number,
   expectedVersion: number,
   idempotencyKey: string,
   signal: AbortSignal,
   audioTrackRef?: string,
+  negotiatedProfile?: TorrentOutputProfile,
 ): Promise<TorrentSession> {
+  let outputProfile;
+  signal = AbortSignal.any([signal, torrentAccountSignal()]);
+  try {
+    signal.throwIfAborted();
+    if (!outputProfiles.has(idempotencyKey)) {
+      if (outputProfiles.size >= 32) outputProfiles.delete(outputProfiles.keys().next().value!);
+      const profile = negotiatedProfile
+        ? Promise.resolve(negotiatedProfile)
+        : torrentOutputProfile();
+      outputProfiles.set(idempotencyKey, profile);
+      void profile.catch(() => outputProfiles.delete(idempotencyKey));
+    }
+    outputProfile = await outputProfiles.get(idempotencyKey)!;
+    signal.throwIfAborted();
+  } catch (error) {
+    throw toTorrentRequestError(error);
+  }
   return request(
     `${sessionPath(sessionId)}/playback`,
     {
@@ -157,6 +181,7 @@ export function startTorrentPlayback(
       body: JSON.stringify({
         startPositionSeconds,
         expectedVersion,
+        outputProfile,
         ...(audioTrackRef ? { audioTrackRef } : {}),
       }),
     },

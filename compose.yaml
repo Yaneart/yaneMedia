@@ -98,6 +98,12 @@ services:
 
   backend:
     build: ./backend
+    cpus: 2
+    mem_limit: 1g
+    memswap_limit: 1g
+    pids_limit: 256
+    tmpfs:
+      - /tmp:size=384m,mode=1777,nosuid,nodev
     env_file:
       - ./backend/.env
     environment:

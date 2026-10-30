@@ -19,6 +19,7 @@ export {
 } from './model/torrentSessionQuery';
 export { registerTorrentPlayerStop, resetTorrentClientScope } from './model/torrentClientScope';
 export { replaceTorrentPlayback } from './model/replaceTorrentPlayback';
+export type { TorrentOutput } from './model/torrentOutput';
 export { preferredTorrentAudio, rememberTorrentAudio } from './model/torrentAudioPreference';
 export { isTorrentPlaybackSourceRef, torrentPlaybackSourceRef } from './model/torrentSession';
 export { createCandidateSession, getTorrentCandidates } from './api/torrentDiscovery';

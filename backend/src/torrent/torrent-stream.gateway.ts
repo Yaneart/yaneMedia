@@ -16,6 +16,7 @@ import {
 } from './torrent-media-policy';
 import { TorrServerClient } from './torrserver.client';
 import { parseTorrentPlaylist } from './torrent-hls-playlist';
+import { TORRENT_OUTPUT_PROFILES, torrentOutputInfo } from './torrent-output-policy';
 import {
   SUBTITLE_BYTES,
   SUBTITLE_LOOKBEHIND,
@@ -43,7 +44,7 @@ const INPUT_OPTIONS = [
   '-max_streams',
   '64',
   '-max_pixels',
-  '8847360',
+  '2073600',
   '-threads',
   '2',
 ];
@@ -376,6 +377,8 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
   ): Promise<void> {
     if (this.closing) throw new TorrentGatewayCapacity();
     const videoTranscode = !probe.copyVideo;
+    const profile = TORRENT_OUTPUT_PROFILES[probe.outputProfile ?? 'h264-720p'];
+    const output = torrentOutputInfo(probe, audio);
     if (this.starting.has(sessionId)) throw new TorrentGatewayCapacity();
     if (!this.hasCapacity(videoTranscode, sessionId)) throw new TorrentGatewayCapacity();
     const reservation = { generation, video: videoTranscode, cancelled: false };
@@ -430,6 +433,8 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
         'error',
         '-max_alloc',
         '67108864',
+        '-filter_threads',
+        '2',
         '-y',
         ...(anchor > 0 ? ['-ss', String(anchor)] : []),
         ...(probe.copyVideo ? ['-noaccurate_seek'] : []),
@@ -455,12 +460,18 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
               'ultrafast',
               '-pix_fmt',
               'yuv420p',
+              '-profile:v',
+              'high',
+              '-level:v',
+              '4.1',
               '-vf',
-              "scale=w='min(1280,iw)':h='min(720,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2",
+              output
+                ? `scale=${output.video.width}:${output.video.height},fps=${output.video.fps}`
+                : "scale=w='min(1280,iw)':h='min(720,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2,fps=30",
               '-b:v',
-              '3000k',
+              profile.bitrate,
               '-maxrate',
-              '3300k',
+              profile.peak,
               '-bufsize',
               '6000k',
               '-g',
@@ -472,7 +483,18 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
             ]),
         ...(audio.copy
           ? ['-c:a', 'copy']
-          : ['-c:a', 'aac', '-b:a', '192k', '-ac', '2', '-ar', '48000']),
+          : [
+              '-c:a',
+              'aac',
+              '-profile:a',
+              'aac_low',
+              '-b:a',
+              '192k',
+              '-ac',
+              String(output?.audio.channels ?? 2),
+              '-ar',
+              '48000',
+            ]),
         '-sn',
         '-dn',
         '-threads',

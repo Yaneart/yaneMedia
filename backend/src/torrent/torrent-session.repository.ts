@@ -18,6 +18,7 @@ import {
   isVisibleTorrentSession,
 } from './torrent-session.state';
 import type { TorrentProbe } from './torrent-media-policy';
+import { selectTorrentOutput, type TorrentOutputProfile } from './torrent-output-policy';
 import { TorrentMetrics } from './torrent-metrics';
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -658,6 +659,7 @@ export class TorrentSessionRepository {
     position: number,
     idempotencyKey: string,
     digest: string,
+    outputProfile: TorrentOutputProfile = 'h264-720p',
   ): Promise<{ session: TorrentSessionRow; replay: boolean }> {
     return this.database.db.transaction(async (tx) => {
       await tx.execute(sql`select pg_advisory_xact_lock(725134, 6)`);
@@ -726,8 +728,13 @@ export class TorrentSessionRepository {
       if (!(
         session.state === 'ready' &&
         session.selectedAudioTrackRef === audioTrackRef &&
+        (row.probe.outputProfile ?? 'h264-720p') === outputProfile &&
         session.playbackPositionSeconds === position
       )) {
+        await tx
+          .update(torrentSessionProbes)
+          .set({ probe: selectTorrentOutput(row.probe, outputProfile) })
+          .where(eq(torrentSessionProbes.sessionId, sessionId));
         [updated] = await tx
           .update(torrentSessions)
           .set({

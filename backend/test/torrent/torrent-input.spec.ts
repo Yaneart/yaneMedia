@@ -175,6 +175,12 @@ describe('torrent input orchestration', () => {
     );
     // Supply a stable key without touching filesystem in the unit test.
     Reflect.set(input, 'secret', Buffer.alloc(32, 1));
+    expect(input.digestPlayback(session.sessionId, 0, 'track')).toBe(
+      input.digestPlayback(session.sessionId, 0, 'track', 'h264-720p'),
+    );
+    expect(input.digestPlayback(session.sessionId, 0, 'track', 'h264-1080p')).not.toBe(
+      input.digestPlayback(session.sessionId, 0, 'track', 'h264-720p'),
+    );
     engine.enabled = true;
     const args = [
       'owner',

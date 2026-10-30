@@ -353,7 +353,7 @@ export function MediaView({
       : torrentSession?.failure?.code === 'TORRENT_PLAYBACK_TIMEOUT'
         ? 'Видео слишком медленно загружается от участников. Попробуйте позже.'
         : torrentSession?.failure?.code === 'TORRENT_UNSUPPORTED_MEDIA'
-          ? 'Формат видео не поддерживается. Выберите другой файл.'
+          ? 'Видео не поддерживается. Выберите SDR-файл до 1080p; HDR и 4K пока недоступны.'
           : torrentSession?.failure?.code === 'TORRENT_CAPACITY_EXCEEDED'
             ? 'Сервис сейчас занят. Попробуйте позже.'
             : 'Проверьте состояние торрента в выборе источника и повторите запуск.';
@@ -1143,6 +1143,7 @@ export function MediaView({
                       audioTracks: torrentPlayback.audioTracks,
                       selectedAudioTrackRef: torrentPlayback.selectedAudioTrackRef,
                       subtitleTracks: torrentPlayback.subtitleTracks,
+                      output: torrentPlayback.output,
                       onReplace: replaceTorrent,
                     }
                   : undefined

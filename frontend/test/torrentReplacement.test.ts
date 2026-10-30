@@ -125,6 +125,41 @@ test('rejects a newer foreign generation instead of confirming the target as vie
   ).rejects.toThrow('generation replaced');
 });
 
+test('rejects another browser output profile even when position and audio match', async () => {
+  const output = {
+    profile: 'h264-1080p',
+    source: { codec: 'h264', width: 1920, height: 1080, bitDepth: 8, fps: 24, dynamicRange: 'sdr' },
+    video: {
+      codec: 'h264',
+      width: 1920,
+      height: 1080,
+      bitDepth: 8,
+      fps: 24,
+      dynamicRange: 'sdr',
+      mode: 'copy',
+      reason: 'compatible',
+    },
+    audio: {
+      codec: 'aac',
+      sourceCodec: 'aac',
+      sourceChannels: 2,
+      channels: 2,
+      mode: 'copy',
+      reason: 'compatible',
+    },
+  };
+  globalThis.fetch = mock(async (_url: string, init: RequestInit) =>
+    response(
+      init.method === 'POST'
+        ? { ...wire, state: 'preparing', version: 6, playback: null }
+        : { ...ready, playback: { ...ready.playback, output } },
+    ),
+  );
+  await expect(
+    replaceTorrentPlayback(mapTorrentSession(wire), 350, new AbortController().signal),
+  ).rejects.toThrow('generation replaced');
+});
+
 test('sends the requested audio with the confirmed position and rejects a wrong ready selection', async () => {
   const bodies: any[] = [];
   let wrong = false;

@@ -1,5 +1,6 @@
 import { ApiClientError } from '@/shared/api';
 import { API_BASE_URL } from '../../../shared/api/apiConfig';
+import { validTorrentOutput } from './validTorrentOutput';
 import type { TorrentAudioTrack, TorrentSession } from '../model/torrentSession';
 import type {
   TorrentAudioTrackDto,
@@ -167,6 +168,7 @@ export function mapTorrentSession(value: unknown): TorrentSession {
       !Array.isArray(playback.audioTracks) ||
       !playback.audioTracks.every(audioTrack) ||
       typeof playback.supportsSubtitleSelection !== 'boolean' ||
+      (playback.output !== undefined && !validTorrentOutput(playback.output)) ||
       (playback.subtitleTracks !== undefined &&
         (!Array.isArray(playback.subtitleTracks) ||
           playback.subtitleTracks.length > 16 ||
@@ -219,6 +221,7 @@ export function mapTorrentSession(value: unknown): TorrentSession {
           durationSeconds: playback.durationSeconds,
           selectedAudioTrackRef: playback.selectedAudioTrackRef,
           audioTracks: playback.audioTracks.map(mapAudioTrack),
+          output: playback.output,
           subtitleTracks: (playback.subtitleTracks ?? []).map(
             ({ trackRef, url, fonts, ...track }) => ({
               ...track,

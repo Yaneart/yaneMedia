@@ -1,3 +1,5 @@
+import type { TorrentOutput } from './torrentOutput';
+
 export type TorrentSessionState =
   | 'created'
   | 'fetching_metadata'
@@ -81,6 +83,7 @@ export type TorrentSession = {
     selectedAudioTrackRef: string;
     audioTracks: TorrentAudioTrack[];
     subtitleTracks?: TorrentSubtitleTrack[];
+    output?: TorrentOutput;
   } | null;
   failure: {
     code: TorrentFailureCode;
