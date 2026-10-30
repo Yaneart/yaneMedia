@@ -17,7 +17,11 @@ export {
   torrentSessionQueryKeys,
   torrentSessionQueryOptions,
 } from './model/torrentSessionQuery';
-export { registerTorrentPlayerStop, resetTorrentClientScope } from './model/torrentClientScope';
+export {
+  registerTorrentPlayerStop,
+  resetTorrentClientScope,
+  torrentAccountSignal,
+} from './model/torrentClientScope';
 export { replaceTorrentPlayback } from './model/replaceTorrentPlayback';
 export type { TorrentOutput } from './model/torrentOutput';
 export { preferredTorrentAudio, rememberTorrentAudio } from './model/torrentAudioPreference';

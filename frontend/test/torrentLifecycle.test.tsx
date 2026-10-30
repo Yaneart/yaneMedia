@@ -839,6 +839,10 @@ describe('torrent player adapter contract', () => {
     );
     expect(pause).not.toHaveBeenCalled();
     await act(async () =>
+      player.emit('statechange', { ...snapshot, playback: 'paused', intent: 'playing' }),
+    );
+    expect(pause).not.toHaveBeenCalled();
+    await act(async () =>
       player.emit('statechange', {
         ...snapshot,
         playback: 'paused',

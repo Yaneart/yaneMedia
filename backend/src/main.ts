@@ -45,7 +45,7 @@ async function bootstrap() {
   app.enableCors({
     origin: configService.getOrThrow<string>('FRONTEND_ORIGIN'),
     credentials: true,
-    exposedHeaders: ['Retry-After', 'ETag', 'Content-Location'],
+    exposedHeaders: ['Retry-After', 'ETag', 'Content-Location', 'X-YaneMedia-Subtitle-End'],
   });
 
   app.useGlobalFilters(app.get(ApiExceptionFilter));

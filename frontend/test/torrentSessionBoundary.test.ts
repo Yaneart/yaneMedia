@@ -183,6 +183,20 @@ describe('torrent API boundary', () => {
       subtitleTracks: [subtitle],
     };
     const session = mapTorrentSession({ ...wire, state: 'ready', playback: withSubtitles });
+    expect(
+      mapTorrentSession({
+        ...wire,
+        state: 'ready',
+        playback: { ...playback, timeline: { ...playback.timeline, continuous: true } },
+      }).playback?.timeline.continuous,
+    ).toBe(true);
+    expect(() =>
+      mapTorrentSession({
+        ...wire,
+        state: 'ready',
+        playback: { ...playback, timeline: { ...playback.timeline, continuous: 'yes' } },
+      }),
+    ).toThrow();
     const output = {
       profile: 'h264-1080p',
       source: {

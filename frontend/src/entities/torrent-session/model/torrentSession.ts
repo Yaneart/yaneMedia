@@ -74,6 +74,7 @@ export type TorrentSession = {
     generation: number;
     startPositionSeconds: number;
     timeline: {
+      continuous?: boolean;
       absoluteAnchorSeconds: number;
       mediaAnchorSeconds: number;
       windowEndSeconds: number;

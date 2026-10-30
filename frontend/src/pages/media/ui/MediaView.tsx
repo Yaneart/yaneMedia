@@ -1142,6 +1142,7 @@ export function MediaView({
                       playbackRates: torrentPlayback.playbackRates,
                       audioTracks: torrentPlayback.audioTracks,
                       selectedAudioTrackRef: torrentPlayback.selectedAudioTrackRef,
+                      generation: torrentPlayback.generation,
                       subtitleTracks: torrentPlayback.subtitleTracks,
                       output: torrentPlayback.output,
                       onReplace: replaceTorrent,

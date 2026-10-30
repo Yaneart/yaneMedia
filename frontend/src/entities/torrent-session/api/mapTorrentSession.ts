@@ -154,6 +154,8 @@ export function mapTorrentSession(value: unknown): TorrentSession {
       !count(playback.generation) ||
       !nonNegative(playback.startPositionSeconds) ||
       !record(playback.timeline) ||
+      (playback.timeline.continuous !== undefined &&
+        typeof playback.timeline.continuous !== 'boolean') ||
       !nonNegative(playback.timeline.absoluteAnchorSeconds) ||
       !nonNegative(playback.timeline.mediaAnchorSeconds) ||
       !nonNegative(playback.timeline.windowEndSeconds) ||

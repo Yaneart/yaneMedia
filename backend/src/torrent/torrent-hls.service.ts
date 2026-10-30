@@ -1,16 +1,12 @@
 import { randomBytes } from 'node:crypto';
 import { constants, createReadStream } from 'node:fs';
-import { open, readFile, stat } from 'node:fs/promises';
+import { open, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { Transform } from 'node:stream';
 import { HttpException, Injectable, type BeforeApplicationShutdown } from '@nestjs/common';
 import type { Request, Response } from 'express';
-import {
-  InvalidTorrentPlaylist,
-  parseTorrentPlaylist,
-  type ParsedTorrentPlaylist,
-} from './torrent-hls-playlist';
+import { InvalidTorrentPlaylist, type ParsedTorrentPlaylist } from './torrent-hls-playlist';
 import { TorrentSessionRepository } from './torrent-session.repository';
 import { TorrentStreamGateway } from './torrent-stream.gateway';
 import { TorrentMetrics } from './torrent-metrics';
@@ -127,7 +123,7 @@ export class TorrentHlsService implements BeforeApplicationShutdown {
         const lines = [
           '#EXTM3U',
           '#EXT-X-VERSION:7',
-          '#EXT-X-PLAYLIST-TYPE:EVENT',
+          ...(session.playbackTimeline?.continuous ? [] : ['#EXT-X-PLAYLIST-TYPE:EVENT']),
           '#EXT-X-START:TIME-OFFSET=0,PRECISE=YES',
           `#EXT-X-TARGETDURATION:${playlist.targetDuration}`,
           `#EXT-X-MEDIA-SEQUENCE:${playlist.mediaSequence}`,
@@ -191,6 +187,41 @@ export class TorrentHlsService implements BeforeApplicationShutdown {
     }
   }
 
+  async progress(
+    ownerId: string,
+    sessionId: string,
+    body: unknown,
+    request: Request,
+  ): Promise<void> {
+    if (
+      this.closing ||
+      request.originalUrl.includes('?') ||
+      request.headers['x-yanemedia-csrf'] !== '1' ||
+      !/^torrent_session_[A-Za-z0-9_-]{22}$/.test(sessionId)
+    )
+      throw missing();
+    const value = body as { generation?: unknown; positionSeconds?: unknown };
+    if (
+      !value ||
+      typeof value !== 'object' ||
+      Object.keys(value).some((key) => !['generation', 'positionSeconds'].includes(key)) ||
+      !Number.isSafeInteger(value.generation) ||
+      !Number.isFinite(value.positionSeconds) ||
+      (value.positionSeconds as number) < 0
+    )
+      throw new HttpException({ code: 'VALIDATION_FAILED', message: 'VALIDATION_FAILED' }, 400);
+    const session = await this.repository.findVisible(ownerId, sessionId);
+    if (
+      !session ||
+      session.state !== 'ready' ||
+      session.generation !== value.generation ||
+      !session.playbackTimeline?.continuous ||
+      !this.gateway.confirmPosition(sessionId, session.generation, value.positionSeconds as number)
+    )
+      throw missing();
+    await this.repository.recordViewerActivity(sessionId, session.generation);
+  }
+
   beforeApplicationShutdown(): void {
     this.closing = true;
     for (const stream of this.streams) stream.abort();
@@ -224,9 +255,7 @@ export class TorrentHlsService implements BeforeApplicationShutdown {
     let playlist: ParsedTorrentPlaylist;
     try {
       if ((await stat(file)).size > 16_384) throw new InvalidTorrentPlaylist();
-      playlist = parseTorrentPlaylist(
-        await readFile(file, { encoding: 'utf8', signal: AbortSignal.timeout(5_000) }),
-      );
+      playlist = await this.gateway.playlist(sessionId, generation);
     } catch (error) {
       if (error instanceof InvalidTorrentPlaylist) {
         await this.gateway.stop(sessionId, generation);

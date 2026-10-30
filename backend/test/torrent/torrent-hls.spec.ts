@@ -1,6 +1,6 @@
 import { TorrentMetrics } from '../../src/torrent/torrent-metrics';
 import { createServer } from 'node:http';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import express from 'express';
@@ -30,6 +30,50 @@ segment-000000.m4s
 `;
 
 describe('torrent HLS gateway', () => {
+  it('accepts only owned current-generation playback feedback with CSRF and bounded positions', async () => {
+    const confirmPosition = jest.fn().mockReturnValue(true);
+    const recordViewerActivity = jest.fn().mockResolvedValue(undefined);
+    const row = { state: 'ready', generation: 3, playbackTimeline: { continuous: true } };
+    const findVisible = jest.fn().mockResolvedValue(row);
+    const service = new TorrentHlsService(
+      { findVisible, recordViewerActivity } as unknown as TorrentSessionRepository,
+      { confirmPosition } as unknown as TorrentStreamGateway,
+      new TorrentMetrics(),
+    );
+    const request = {
+      originalUrl: '/hls/progress',
+      headers: { 'x-yanemedia-csrf': '1' },
+    } as unknown as express.Request;
+    await service.progress('owner', sessionId, { generation: 3, positionSeconds: 42 }, request);
+    expect(confirmPosition).toHaveBeenCalledWith(sessionId, 3, 42);
+    expect(recordViewerActivity).toHaveBeenCalledTimes(1);
+    for (const body of [
+      { generation: 3, positionSeconds: -1 },
+      { generation: 3, positionSeconds: Infinity },
+      { generation: 3, positionSeconds: 42, url: 'foreign' },
+    ])
+      await expect(service.progress('owner', sessionId, body, request)).rejects.toMatchObject({
+        status: 400,
+      });
+    for (const visible of [undefined, { ...row, generation: 4 }, { ...row, state: 'stopping' }]) {
+      findVisible.mockResolvedValue(visible);
+      await expect(
+        service.progress('other', sessionId, { generation: 3, positionSeconds: 42 }, request),
+      ).rejects.toMatchObject({ status: 404 });
+    }
+    findVisible.mockResolvedValue(row);
+    confirmPosition.mockReturnValue(false);
+    await expect(
+      service.progress('owner', sessionId, { generation: 3, positionSeconds: 9999 }, request),
+    ).rejects.toMatchObject({ status: 404 });
+    await expect(
+      service.progress('owner', sessionId, { generation: 3, positionSeconds: 42 }, {
+        ...request,
+        headers: {},
+      } as express.Request),
+    ).rejects.toMatchObject({ status: 404 });
+    expect(recordViewerActivity).toHaveBeenCalledTimes(1);
+  });
   it('registers the four session-scoped Nest routes', async () => {
     const serve = jest.fn(
       (
@@ -129,6 +173,7 @@ describe('torrent HLS gateway', () => {
       ),
       hasGeneration: jest.fn((_id: string, requested: number) => requested === generation),
       isCompleted,
+      playlist: () => readFile(join(directory, 'media.m3u8'), 'utf8').then(parseTorrentPlaylist),
       stop,
     } as unknown as TorrentStreamGateway;
     const metrics = new TorrentMetrics();

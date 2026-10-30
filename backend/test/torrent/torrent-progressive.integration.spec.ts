@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { createReadStream } from 'node:fs';
-import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
@@ -12,7 +12,7 @@ import { parseTorrentPlaylist } from '../../src/torrent/torrent-hls-playlist';
 
 const describeGateway = process.env.TORRENT_GATEWAY_TEST === '1' ? describe : describe.skip;
 
-describeGateway('progressive finite torrent window', () => {
+describeGateway('progressive continuous torrent stream', () => {
   it('publishes measured playable data before completion on a slow input and retains it on pause', async () => {
     const root = await mkdtemp(join(tmpdir(), 'torrent-progressive-'));
     const file = join(root, 'fixture.mp4');
@@ -129,20 +129,47 @@ describeGateway('progressive finite torrent window', () => {
       const before = parseTorrentPlaylist(await readFile(join(directory, 'media.m3u8'), 'utf8'));
       expect(before.ended).toBe(false);
       const first = await readFile(join(directory, before.segments[0].filename));
+      const filling = Date.now() + 30_000;
+      while (true) {
+        const current = await gateway.playlist(id, 2);
+        const edge =
+          changed.absoluteAnchorSeconds +
+          current.segments.reduce((sum, item) => sum + Number(item.duration.slice(8, -1)), 0);
+        if (edge >= 110) break;
+        if (Date.now() > filling) throw new Error('Progressive buffer did not fill');
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      expect(await readFile(join(directory, before.segments[0].filename))).toEqual(first);
+      expect(gateway.confirmPosition(id, 2, 80)).toBe(true);
       await gateway.waitComplete(id, 2, AbortSignal.timeout(30_000));
       const completeMs = performance.now() - switching;
-      const after = parseTorrentPlaylist(await readFile(join(directory, 'media.m3u8'), 'utf8'));
+      const after = await gateway.playlist(id, 2);
       expect(after.ended).toBe(true);
-      expect(after.mediaSequence).toBe(0);
-      expect(after.segments.length).toBeGreaterThan(before.segments.length);
+      expect(after.mediaSequence).toBeGreaterThan(0);
       expect(after.segments.length).toBeLessThanOrEqual(64);
-      expect(await readFile(join(directory, before.segments[0].filename))).toEqual(first);
+      await expect(readFile(join(directory, before.segments[0].filename))).rejects.toMatchObject({
+        code: 'ENOENT',
+      });
       expect(gateway.activeTranscodes()).toEqual({ copy: 0, transcode: 0 });
+      await writeFile(
+        join(directory, 'retained.m3u8'),
+        [
+          '#EXTM3U',
+          '#EXT-X-VERSION:7',
+          `#EXT-X-TARGETDURATION:${after.targetDuration}`,
+          `#EXT-X-MEDIA-SEQUENCE:${after.mediaSequence}`,
+          '#EXT-X-INDEPENDENT-SEGMENTS',
+          '#EXT-X-MAP:URI="init.mp4"',
+          ...after.segments.flatMap((segment) => [segment.duration, segment.filename]),
+          '#EXT-X-ENDLIST',
+          '',
+        ].join('\n'),
+      );
       const pcm = spawnSync('ffmpeg', [
         '-v',
         'error',
         '-i',
-        join(directory, 'media.m3u8'),
+        join(directory, 'retained.m3u8'),
         '-ss',
         '1',
         '-t',

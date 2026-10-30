@@ -76,8 +76,13 @@ export class TorrentSubtitleService {
         },
         probe,
         resource,
-        session.playbackTimeline.absoluteAnchorSeconds,
+        session.playbackTimeline.continuous
+          ? (this.gateway.playbackPosition(id, session.generation) ??
+              session.playbackTimeline.absoluteAnchorSeconds)
+          : session.playbackTimeline.absoluteAnchorSeconds,
         abort.signal,
+        session.playbackTimeline.continuous,
+        req.headers['x-yanemedia-subtitle-prefetch'] === '1',
       );
       const current = await this.repository.findVisible(owner, id);
       if (
@@ -88,6 +93,10 @@ export class TorrentSubtitleService {
       )
         throw missing();
       if (abort.signal.aborted) return;
+      if (session.playbackTimeline.continuous && !font && 'trackRef' in resource) {
+        const coverage = this.gateway.subtitleCoverage(id, probe, resource);
+        if (coverage !== undefined) res.setHeader('X-YaneMedia-Subtitle-End', coverage);
+      }
       res.setHeader(
         'Content-Type',
         font

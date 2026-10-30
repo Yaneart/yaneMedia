@@ -1,10 +1,10 @@
-// Append-only finite windows retain every published segment, including on pause.
-// Playback starts from a measured prefix while the bounded worker fills the rest.
+// Continuous playback starts from a measured prefix. The retained segment cache
+// is bounded by bytes and distance ahead of the confirmed viewer.
 export const TORRENT_WINDOW_SECONDS = 120;
 export const TORRENT_STARTUP_SECONDS = 6;
 export const TORRENT_WINDOW_SEGMENTS = 64;
 export const TORRENT_WINDOW_BYTES = 128 * 1024 * 1024;
-// Leave room for the current GOP, muxer buffers and graceful finalization.
+// Leave room for the current GOP, muxer buffers and the monitor's polling interval.
 export const TORRENT_WINDOW_TARGET_BYTES = 80 * 1024 * 1024;
 export const TORRENT_SEGMENT_BYTES = 32 * 1024 * 1024;
 
@@ -20,6 +20,8 @@ export function torrentWindowSeconds(
 }
 
 export type TorrentTimeline = {
+  // Continuous HLS ends only at film EOF; old persisted finite windows omit this.
+  continuous?: boolean;
   absoluteAnchorSeconds: number;
   mediaAnchorSeconds: number;
   // Published edge at readiness; browser ranges may grow until window completion.

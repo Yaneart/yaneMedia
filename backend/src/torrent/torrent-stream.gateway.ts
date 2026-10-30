@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import { once } from 'node:events';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
 import { lstat, mkdir, readFile, readdir, rm, stat } from 'node:fs/promises';
@@ -15,7 +16,8 @@ import {
   type TorrentProbe,
 } from './torrent-media-policy';
 import { TorrServerClient } from './torrserver.client';
-import { parseTorrentPlaylist } from './torrent-hls-playlist';
+import { InvalidTorrentPlaylist, parseTorrentPlaylist } from './torrent-hls-playlist';
+import { TorrentSegmentBuffer } from './torrent-segment-buffer';
 import { TORRENT_OUTPUT_PROFILES, torrentOutputInfo } from './torrent-output-policy';
 import {
   SUBTITLE_BYTES,
@@ -34,7 +36,6 @@ import {
   TORRENT_WINDOW_SEGMENTS,
   TORRENT_STARTUP_SECONDS,
   TORRENT_WINDOW_TARGET_BYTES,
-  TORRENT_SEGMENT_BYTES,
   torrentWindowSeconds,
   type TorrentTimeline,
 } from './torrent-playback-window';
@@ -62,6 +63,8 @@ type Worker = {
   heartbeat: NodeJS.Timeout;
   absoluteAnchorSeconds: number;
   positionSeconds: number;
+  buffer: TorrentSegmentBuffer;
+  suspended: boolean;
 };
 
 export class TorrentGatewayCapacity extends Error {}
@@ -72,7 +75,12 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
   private readonly workers = new Map<string, Worker>();
   private readonly completed = new Map<
     string,
-    { generation: number; directory: string; absoluteAnchorSeconds: number }
+    {
+      generation: number;
+      directory: string;
+      absoluteAnchorSeconds: number;
+      buffer: TorrentSegmentBuffer;
+    }
   >();
   private readonly starting = new Map<
     string,
@@ -159,6 +167,8 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
     resource: TorrentSubtitle | TorrentFont,
     position: number,
     signal: AbortSignal,
+    continuous = false,
+    prefetch = false,
   ): Promise<Buffer> {
     signal.throwIfAborted();
     if (this.closing) throw new TorrentGatewayCapacity();
@@ -169,22 +179,30 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
     // Cover timestamp reordering and the audio/muxer tail beyond the nominal cut.
     const end =
       position +
-      Math.min(
-        TORRENT_WINDOW_SECONDS,
-        2 +
-          torrentWindowSeconds(
-            probe.copyVideo ? (probe.video?.bitrate ?? null) : Number.parseInt(profile.peak) * 1000,
-          ),
-      );
+      (continuous
+        ? TORRENT_WINDOW_SECONDS
+        : Math.min(
+            TORRENT_WINDOW_SECONDS,
+            2 +
+              torrentWindowSeconds(
+                probe.copyVideo
+                  ? (probe.video?.bitrate ?? null)
+                  : Number.parseInt(profile.peak) * 1000,
+              ),
+          ));
     const cacheKey = track
       ? `${sessionId}/${probe.fileRef}/${track.trackRef}/${track.sidecar?.fileIndex ?? track.streamIndex}`
       : '';
     const cached = this.subtitleCache.get(cacheKey);
-    if (cached && cached.start <= position && cached.end >= end)
+    if (
+      cached &&
+      cached.start <= position &&
+      cached.end >= (continuous ? position + (prefetch ? 90 : 15) : end)
+    )
       return Buffer.from(
         cached.start === position && cached.end === end
           ? cached.text
-          : subtitleWindow(cached.text, format, position, end),
+          : subtitleWindow(cached.text, format, position, Math.min(end, cached.end)),
       );
     const previous = this.subtitleJobs.get(sessionId);
     if (previous) {
@@ -384,6 +402,32 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
     return this.completed.get(sessionId)?.generation === generation;
   }
 
+  async playlist(sessionId: string, generation: number) {
+    const stream = this.workers.get(sessionId) ?? this.completed.get(sessionId);
+    if (stream?.generation !== generation) throw new Error('Playback generation replaced');
+    return stream.buffer.refresh();
+  }
+
+  confirmPosition(sessionId: string, generation: number, position: number): boolean {
+    const stream = this.workers.get(sessionId) ?? this.completed.get(sessionId);
+    return stream?.generation === generation && stream.buffer.confirm(position);
+  }
+
+  playbackPosition(sessionId: string, generation: number): number | undefined {
+    const stream = this.workers.get(sessionId) ?? this.completed.get(sessionId);
+    return stream?.generation === generation ? stream.buffer.position : undefined;
+  }
+
+  subtitleCoverage(
+    sessionId: string,
+    probe: TorrentProbe,
+    track: TorrentSubtitle,
+  ): number | undefined {
+    return this.subtitleCache.get(
+      `${sessionId}/${probe.fileRef}/${track.trackRef}/${track.sidecar?.fileIndex ?? track.streamIndex}`,
+    )?.end;
+  }
+
   async start(
     sessionId: string,
     generation: number,
@@ -404,7 +448,7 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
     try {
       await this.stop(sessionId, undefined, true);
       if (reservation.cancelled) throw new Error('Worker start cancelled');
-      input = await this.inputServer(source);
+      input = await this.inputServer(source, undefined, true);
       if (reservation.cancelled) throw new Error('Worker start cancelled');
       // Measure FFmpeg's actual seek result. ffprobe read_intervals can choose a
       // different GOP (notably with B-frames), shifting every renewed window.
@@ -451,10 +495,6 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
       const anchor = Math.max(0, absoluteAnchorSeconds);
       const seekPosition = probe.copyVideo ? position : anchor;
       if (position - anchor >= TORRENT_WINDOW_SECONDS - 2) throw new UnsupportedTorrentMedia();
-      const windowSeconds = torrentWindowSeconds(
-        probe.copyVideo ? (probe.video?.bitrate ?? null) : Number.parseInt(profile.peak) * 1000,
-        position - anchor + TORRENT_STARTUP_SECONDS + 2,
-      );
       const directory = join(tmpdir(), 'yanemedia-torrent-hls', sessionId, String(generation));
       await mkdir(directory, { recursive: true, mode: 0o700 });
       this.completed.delete(sessionId);
@@ -474,12 +514,10 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
         '-rw_timeout',
         '120000000',
         ...INPUT_OPTIONS,
-        // Bound remux production speed so the byte monitor can close unknown/VBR windows.
+        // Bound production speed so backpressure can stop unknown/VBR output within budget.
         ...(probe.copyVideo ? ['-readrate', '4'] : []),
         '-i',
         input.url,
-        '-t',
-        String(windowSeconds),
         '-avoid_negative_ts',
         'make_zero',
         '-map',
@@ -542,8 +580,6 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
         '2',
         '-hls_list_size',
         String(TORRENT_WINDOW_SEGMENTS),
-        '-hls_playlist_type',
-        'event',
         '-hls_flags',
         'independent_segments+temp_file',
         '-hls_fmp4_init_filename',
@@ -553,43 +589,53 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
         join(directory, 'media.m3u8'),
       ];
       const process = spawn('ffmpeg', args, { stdio: 'ignore' });
-      const deadline = setTimeout(() => process.kill('SIGKILL'), 90_000);
-      deadline.unref();
+      const buffer = new TorrentSegmentBuffer(directory, anchor, position);
+      let lastOutput = Date.now();
+      let previousBytes = 0;
       let ticks = 0;
       let checking = false;
-      let byteStopped = false;
       let invalidOutput = false;
-      let flushDeadline: NodeJS.Timeout | undefined;
       const heartbeat = setInterval(() => {
         if (++ticks % 600 === 0)
           void this.engine.heartbeat(source.key, AbortSignal.timeout(5_000)).catch(() => undefined);
         if (checking) return;
         checking = true;
-        // Include the unfinished fragment. Published segments are never removed on pause.
-        void readdir(directory)
-          .then(async (files) => {
-            const sizes = await Promise.all(files.map((file) => stat(join(directory, file))));
-            const bytes = sizes.reduce((total, info) => total + info.size, 0);
+        // Suspend production at the byte/time budget; retain the same muxer,
+        // audio encoder and timestamp clock until the actual end of the film.
+        void buffer
+          .refresh()
+          .then(() => {
+            const current = this.workers.get(sessionId);
+            if (current?.process !== process) return;
+            if (buffer.bytes !== previousBytes || current.suspended) lastOutput = Date.now();
+            previousBytes = buffer.bytes;
+            const ahead = buffer.edge - buffer.position;
             if (
-              bytes > TORRENT_WINDOW_BYTES ||
-              sizes.some(
-                (info, index) =>
-                  /^segment-/.test(files[index]) && info.size > TORRENT_SEGMENT_BYTES,
-              ) ||
-              files.filter((file) => /^segment-\d{6}\.m4s$/.test(file)).length >
-                TORRENT_WINDOW_SEGMENTS
+              !current.suspended &&
+              (buffer.bytes >= TORRENT_WINDOW_TARGET_BYTES ||
+                ahead >= TORRENT_WINDOW_SECONDS ||
+                buffer.count >= TORRENT_WINDOW_SEGMENTS - 4)
             ) {
-              invalidOutput = true;
-              process.kill('SIGKILL');
-            } else if (bytes >= TORRENT_WINDOW_TARGET_BYTES && !byteStopped) {
-              byteStopped = true;
-              process.kill('SIGINT');
-              flushDeadline = setTimeout(() => process.kill('SIGKILL'), 2_000);
+              current.suspended = process.kill('SIGSTOP');
+            } else if (
+              current.suspended &&
+              buffer.bytes < TORRENT_WINDOW_TARGET_BYTES * 0.75 &&
+              ahead < TORRENT_WINDOW_SECONDS * 0.75 &&
+              buffer.count < TORRENT_WINDOW_SEGMENTS - 8
+            ) {
+              process.kill('SIGCONT');
+              current.suspended = false;
             }
           })
-          .catch(() => undefined)
+          .catch((error: unknown) => {
+            if (error instanceof InvalidTorrentPlaylist) {
+              invalidOutput = true;
+              process.kill('SIGKILL');
+            }
+          })
           .finally(() => {
             checking = false;
+            if (Date.now() - lastOutput > 90_000) process.kill('SIGKILL');
           });
       }, 100);
       heartbeat.unref();
@@ -602,40 +648,33 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
         heartbeat,
         absoluteAnchorSeconds: anchor,
         positionSeconds: position,
+        buffer,
+        suspended: false,
       });
       const server = input.server;
       const ended = async (code: number | null) => {
-        clearTimeout(deadline);
-        clearTimeout(flushDeadline);
         const current = this.workers.get(sessionId);
         if (current?.process === process) {
           clearInterval(heartbeat);
           server.closeAllConnections();
           server.close();
-          // Validate graceful byte closure as strictly as normal completion.
+          // Only successful film EOF may publish ENDLIST.
           let valid = false;
           try {
-            const parsed = parseTorrentPlaylist(
-              await readFile(join(directory, 'media.m3u8'), 'utf8'),
-            );
-            const files = await readdir(directory);
-            const sizes = await Promise.all(files.map((file) => stat(join(directory, file))));
-            valid =
-              parsed.ended &&
-              parsed.segments.reduce((sum, item) => sum + Number(item.duration.slice(8, -1)), 0) >
-                position - anchor &&
-              sizes.reduce((sum, info) => sum + info.size, 0) <= TORRENT_WINDOW_BYTES &&
-              sizes.every(
-                (info, index) =>
-                  !/^segment-/.test(files[index]) || info.size <= TORRENT_SEGMENT_BYTES,
-              );
+            const parsed = await buffer.refresh();
+            valid = parsed.ended && buffer.edge > position && buffer.bytes <= TORRENT_WINDOW_BYTES;
           } catch {
             /* Missing or invalid artifacts cannot become a completed generation. */
           }
           if (this.workers.get(sessionId)?.process !== process) return;
           this.workers.delete(sessionId);
-          if (valid && !invalidOutput && (code === 0 || (code === 255 && byteStopped)))
-            this.completed.set(sessionId, { generation, directory, absoluteAnchorSeconds: anchor });
+          if (valid && !invalidOutput && code === 0)
+            this.completed.set(sessionId, {
+              generation,
+              directory,
+              absoluteAnchorSeconds: anchor,
+              buffer,
+            });
           else await rm(directory, { recursive: true, force: true }).catch(() => undefined);
         }
       };
@@ -731,6 +770,7 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
             throw new Error('Invalid media timestamp');
           if (!this.hasGeneration(sessionId, generation)) throw new Error('Worker replaced');
           return {
+            continuous: true,
             absoluteAnchorSeconds,
             mediaAnchorSeconds,
             windowEndSeconds: absoluteAnchorSeconds + duration,
@@ -802,6 +842,7 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
     this.workers.delete(sessionId);
     this.completed.delete(sessionId);
     clearInterval(worker.heartbeat);
+    if (worker.suspended) worker.process.kill('SIGCONT');
     worker.process.kill('SIGTERM');
     let timer: NodeJS.Timeout | undefined;
     try {
@@ -862,6 +903,7 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
   private async inputServer(
     source: Source,
     limits?: { signal: AbortSignal; maxBytes: number; onLimit: () => void },
+    continuous = false,
   ): Promise<{ server: Server; url: string }> {
     const token = randomBytes(24).toString('base64url');
     let bytes = 0;
@@ -886,6 +928,45 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
       }
       const abort = new AbortController();
       response.once('close', () => abort.abort());
+      if (continuous) {
+        // Complete each bounded upstream read before waiting for the encoder.
+        // A long viewer pause must not expire a stalled TorrServer body socket.
+        void (async () => {
+          response.writeHead(206, {
+            'Content-Range': `bytes ${offset}-${end}/${source.size}`,
+            'Content-Length': end - offset + 1,
+            'Accept-Ranges': 'bytes',
+            'Content-Type': 'application/octet-stream',
+          });
+          for (let cursor = offset; cursor <= end;) {
+            abort.signal.throwIfAborted();
+            const length = Math.min(
+              cursor - offset < 2 * 1024 * 1024 ? 256 * 1024 : 4 * 1024 * 1024,
+              end - cursor + 1,
+            );
+            const { body } = await this.engine.openFileStream(
+              source.key,
+              source.file,
+              { offset: cursor, length },
+              abort.signal,
+            );
+            const chunks: Buffer[] = [];
+            let size = 0;
+            for await (const chunk of body) {
+              const data = Buffer.from(chunk as Uint8Array);
+              size += data.length;
+              if (size > length) throw new Error('Invalid input range');
+              chunks.push(data);
+            }
+            if (size !== length) throw new Error('Truncated input range');
+            const ready = response.write(Buffer.concat(chunks));
+            cursor += size;
+            if (!ready) await once(response, 'drain', { signal: abort.signal });
+          }
+          response.end();
+        })().catch(() => response.destroy());
+        return;
+      }
       void this.engine
         .openFileStream(
           source.key,

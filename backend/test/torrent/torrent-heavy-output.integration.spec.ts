@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { createReadStream } from 'node:fs';
-import { mkdtemp, readFile, readdir, rm, stat } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { TorrentStreamGateway } from '../../src/torrent/torrent-stream.gateway';
@@ -20,8 +20,8 @@ const ffmpeg = (args: string[]) => {
   return result.stdout.toString();
 };
 
-describeHeavy('heavy original 1080p finite windows', () => {
-  it('keeps pixels at known/unknown bitrate, closes on bytes and preserves audio/seek/renewal/cleanup', async () => {
+describeHeavy('heavy original 1080p continuous streams', () => {
+  it('keeps pixels at known/unknown bitrate, applies backpressure and preserves audio/seek/cleanup', async () => {
     const root = await mkdtemp(join(process.env.TORRENT_FIXTURE_DIR ?? tmpdir(), 'torrent-heavy-'));
     const file = join(root, 'original.mkv');
     const id = `torrent_session_${randomBytes(16).toString('base64url')}`;
@@ -106,6 +106,7 @@ describeHeavy('heavy original 1080p finite windows', () => {
       const hash = (path: string, seek = 0) =>
         ffmpeg([
           ...(seek ? ['-ss', String(seek)] : []),
+          ...(path.endsWith('.m3u8') ? ['-live_start_index', '0'] : []),
           '-i',
           path,
           '-map',
@@ -121,11 +122,10 @@ describeHeavy('heavy original 1080p finite windows', () => {
           'pipe:1',
         ]).trim();
       const originalHash = hash(file);
-      let previousEdge = 0;
       for (const generation of [1, 2, 3]) {
         const unknown = generation !== 1;
         const probe = unknown ? { ...known, video: { ...known.video!, bitrate: null } } : known;
-        const position = generation === 3 ? previousEdge + 0.001 : 0;
+        const position = generation === 3 ? 3.3 : 0;
         const started = Date.now();
         await gateway.start(
           id,
@@ -143,20 +143,75 @@ describeHeavy('heavy original 1080p finite windows', () => {
         const playlist = join(directory, 'media.m3u8');
         const before = parseTorrentPlaylist(await readFile(playlist, 'utf8'));
         const first = await readFile(join(directory, before.segments[0].filename));
-        await gateway.waitComplete(id, generation, AbortSignal.timeout(30_000));
+        // Filling the bounded cache must suspend the SAME encoder, not publish EOF.
+        const deadline = Date.now() + 30000;
+        while (true) {
+          const files = await readdir(directory);
+          const bytes = (
+            await Promise.all(files.map(async (name) => (await stat(join(directory, name))).size))
+          ).reduce((a, b) => a + b, 0);
+          if (bytes >= 80 * 1024 * 1024) break;
+          if (Date.now() > deadline) throw new Error('Buffer did not fill');
+          await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+        await new Promise((resolve) => setTimeout(resolve, 350));
+        const held = await gateway.playlist(id, generation);
+        expect(held.ended).toBe(false);
+        expect(gateway.isCompleted(id, generation)).toBe(false);
+        expect(hash(playlist)).toBe(
+          position === 0 ? originalHash : hash(file, timeline.absoluteAnchorSeconds),
+        );
+        const heldSizes = await Promise.all(
+          (await readdir(directory)).map(async (name) => (await stat(join(directory, name))).size),
+        );
+        const heldBytes = heldSizes.reduce((a, b) => a + b, 0);
+        await new Promise((resolve) => setTimeout(resolve, 350));
+        expect((await gateway.playlist(id, generation)).segments).toEqual(held.segments);
+        expect(
+          gateway.confirmPosition(
+            id,
+            generation,
+            timeline.absoluteAnchorSeconds +
+              held.segments.reduce((sum, item) => sum + Number(item.duration.slice(8, -1)), 0) -
+              2,
+          ),
+        ).toBe(true);
+        const viewer = setInterval(() => {
+          const confirmed = gateway.playbackPosition(id, generation) ?? position;
+          gateway.confirmPosition(id, generation, confirmed + 2);
+        }, 100);
+        try {
+          await gateway.waitComplete(id, generation, AbortSignal.timeout(30_000));
+        } finally {
+          clearInterval(viewer);
+        }
+        expect(heldBytes).toBeLessThanOrEqual(128 * 1024 * 1024);
         const completeMs = Date.now() - started;
-        const after = parseTorrentPlaylist(await readFile(playlist, 'utf8'));
+        const after = await gateway.playlist(id, generation);
+        await writeFile(
+          join(directory, 'retained.m3u8'),
+          [
+            '#EXTM3U',
+            '#EXT-X-VERSION:7',
+            `#EXT-X-TARGETDURATION:${after.targetDuration}`,
+            `#EXT-X-MEDIA-SEQUENCE:${after.mediaSequence}`,
+            '#EXT-X-INDEPENDENT-SEGMENTS',
+            '#EXT-X-MAP:URI="init.mp4"',
+            ...after.segments.flatMap((item) => [item.duration, item.filename]),
+            '#EXT-X-ENDLIST',
+            '',
+          ].join('\n'),
+        );
         const duration = after.segments.reduce(
           (sum, item) => sum + Number(item.duration.slice(8, -1)),
           0,
         );
-        previousEdge = timeline.absoluteAnchorSeconds + duration;
         expect(after.ended).toBe(true);
-        expect(duration).toBeLessThan(32);
-        expect(previousEdge).toBeGreaterThan(position);
-        expect((await readFile(join(directory, before.segments[0].filename))).equals(first)).toBe(
-          true,
-        );
+        expect(timeline.continuous).toBe(true);
+        expect(after.mediaSequence).toBeGreaterThan(0);
+        expect(duration).toBeGreaterThan(0);
+        expect(first.length).toBeGreaterThan(0);
+        expect(gateway.isCompleted(id, generation)).toBe(true);
         const bytes = (
           await Promise.all(
             (await readdir(directory)).map(
@@ -165,23 +220,13 @@ describeHeavy('heavy original 1080p finite windows', () => {
           )
         ).reduce((a, b) => a + b, 0);
         expect(bytes).toBeLessThanOrEqual(128 * 1024 * 1024);
-        if (generation === 2) expect(bytes).toBeGreaterThanOrEqual(80 * 1024 * 1024);
-        if (position === 0) expect(hash(playlist)).toBe(originalHash);
-        if (generation === 3) {
-          console.info('Heavy renewal timestamp check', {
-            anchor: timeline.absoluteAnchorSeconds,
-            mediaAnchor: timeline.mediaAnchorSeconds,
-            sourceDuration: parsed.durationSeconds,
-            matchesAnchor: hash(playlist) === hash(file, timeline.absoluteAnchorSeconds),
-          });
-          expect(hash(playlist)).toBe(hash(file, timeline.absoluteAnchorSeconds));
-        }
+
         if (generation === 2) {
           const pcm = spawnSync('ffmpeg', [
             '-v',
             'error',
             '-i',
-            playlist,
+            join(directory, 'retained.m3u8'),
             '-ss',
             '1',
             '-t',
@@ -206,6 +251,7 @@ describeHeavy('heavy original 1080p finite windows', () => {
         evidence.push({
           generation,
           unknown,
+          heldBytes,
           position,
           anchor: timeline.absoluteAnchorSeconds,
           duration,
@@ -223,7 +269,7 @@ describeHeavy('heavy original 1080p finite windows', () => {
       await expect(gateway.waitComplete(id, 4, AbortSignal.timeout(1_000))).rejects.toThrow();
       await gateway.stop(id, 5);
       expect(gateway.artifactDirectory(id, 5)).toBeUndefined();
-      console.info('PL015A heavy output evidence', JSON.stringify(evidence));
+      console.info('Continuous heavy output evidence', JSON.stringify(evidence));
     } finally {
       await gateway.beforeApplicationShutdown();
       await rm(root, { recursive: true, force: true });

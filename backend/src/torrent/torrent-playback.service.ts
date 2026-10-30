@@ -144,7 +144,7 @@ export class TorrentPlaybackService {
       await this.gateway.waitComplete(
         session.sessionId,
         session.generation,
-        AbortSignal.timeout(90_000),
+        AbortSignal.timeout(8 * 60 * 60 * 1000),
       );
     } catch (error) {
       await this.gateway.stop(session.sessionId, session.generation);

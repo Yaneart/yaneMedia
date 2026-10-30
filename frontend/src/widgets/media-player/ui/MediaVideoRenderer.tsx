@@ -9,6 +9,7 @@ import {
   type YanePlayerElement,
 } from '@yaneart/yaneplayer';
 import '@yaneart/yaneplayer';
+import { createTorrentStream } from '../model/torrentStream';
 
 export type MediaVideoDirectControls = {
   tracks: readonly SelectOption[];
@@ -25,6 +26,7 @@ export type MediaVideoDirectControls = {
 };
 
 export type TorrentVideoTimeline = {
+  generation?: number;
   startPositionSeconds: number;
   durationSeconds: number | null;
   timeline: NonNullable<TorrentSession['playback']>['timeline'];
@@ -118,6 +120,7 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
   const loadedRevisionRef = useRef<string | null>(null);
   const torrentCommandRef = useRef(false);
   const torrentAudioRef = useRef<string | null>(null);
+  const streamRef = useRef<ReturnType<typeof createTorrentStream> | null>(null);
 
   useLayoutEffect(() => {
     propsRef.current = props;
@@ -126,6 +129,8 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
   useLayoutEffect(() => {
     const player = document.createElement('yane-player');
     elementRef.current = player;
+    const stream = createTorrentStream(player);
+    streamRef.current = stream;
     player.lang = 'ru';
     player.className = 'media-video-player';
     let disposed = false;
@@ -140,6 +145,7 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
         disposed ||
         torrentCommandRef.current ||
         !propsRef.current.torrentTimeline ||
+        propsRef.current.torrentTimeline.timeline.continuous ||
         snapshot.pending ||
         snapshot.playback !== 'ended' ||
         snapshot.intent !== 'playing' ||
@@ -180,6 +186,7 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
           ready.playback,
         );
         loadedRevisionRef.current = descriptor.revision;
+        stream.configure(ready.playback.hlsUrl, ready.playback, descriptor.revision);
         const selected = ready.playback.audioTracks.find(
           (track) => track.ref === ready.playback!.selectedAudioTrackRef,
         );
@@ -210,6 +217,7 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
     const onState = ({ detail: event }: CustomEvent<PlayerEvent>) => {
       if (disposed || event.source?.revision !== loadedRevisionRef.current) return;
       const { snapshot } = event;
+      stream.update(snapshot);
       if (snapshot.source?.revision !== readyRevision) {
         readyRevision = snapshot.source?.revision ?? null;
         ready = false;
@@ -234,11 +242,7 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
         (snapshot.playback === 'paused' && snapshot.intent !== previousIntent)
       ) {
         if (snapshot.playback === 'playing') propsRef.current.onPlay();
-        if (
-          snapshot.playback === 'paused' &&
-          ready &&
-          (!snapshot.pending || snapshot.intent === 'paused')
-        ) {
+        if (snapshot.playback === 'paused' && ready && snapshot.intent === 'paused') {
           report(event, 'pause');
           propsRef.current.onPause();
         }
@@ -249,9 +253,11 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
     };
     const onPosition = ({ detail: event }: CustomEvent<PlayerEvent>) => {
       if (disposed || event.source?.revision !== loadedRevisionRef.current) return;
+      stream.update(event.snapshot);
       const windowEnded =
         event.snapshot.playback === 'ended' &&
         propsRef.current.torrentTimeline &&
+        !propsRef.current.torrentTimeline.timeline.continuous &&
         (event.snapshot.durationSeconds === null ||
           (event.snapshot.positionSeconds ?? 0) < event.snapshot.durationSeconds - 0.5);
       report(
@@ -345,6 +351,8 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
     containerRef.current!.append(player);
     return () => {
       disposed = true;
+      stream.dispose();
+      streamRef.current = null;
       player.removeEventListener('yp-statechange', onState);
       player.removeEventListener('yp-positionchange', onPosition);
       player.removeEventListener('yp-error', onError);
@@ -384,6 +392,7 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
       : {};
     if (torrentCommandRef.current || loadedRevisionRef.current === descriptor.revision) return;
     loadedRevisionRef.current = descriptor.revision;
+    if (timeline) streamRef.current?.configure(source.url, timeline, descriptor.revision);
     if (pendingRef.current) {
       pendingRef.current({
         source: descriptor,
@@ -396,7 +405,11 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
       torrentAudioRef.current = timeline?.selectedAudioTrackRef ?? null;
       void player
         .setSource(descriptor, {
-          positionSeconds: timeline ? timeline.startPositionSeconds : props.initialPositionSeconds,
+          positionSeconds: timeline
+            ? timeline.timeline.continuous
+              ? Math.max(timeline.startPositionSeconds, props.initialPositionSeconds)
+              : timeline.startPositionSeconds
+            : props.initialPositionSeconds,
           intent: props.shouldAutoPlay ? 'playing' : 'paused',
         })
         .then(async () => {

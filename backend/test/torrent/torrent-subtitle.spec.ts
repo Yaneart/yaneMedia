@@ -215,7 +215,7 @@ describe('owner and generation checks for subtitle delivery', () => {
   it('cancels the worker on disconnect and suppresses its late output', async () => {
     const res = response();
     extract.mockImplementation(async (...args: unknown[]) => {
-      const signal = args.at(-1) as AbortSignal;
+      const signal = args[6] as AbortSignal;
       res.emit('close');
       expect(signal.aborted).toBe(true);
       throw new Error('aborted');

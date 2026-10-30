@@ -1,9 +1,12 @@
 import {
   applyDecorators,
   Controller,
+  Body,
   Get,
   Header,
   Param,
+  Post,
+  HttpCode,
   Req,
   Res,
   UseGuards,
@@ -26,6 +29,19 @@ import { TorrentHlsService } from './torrent-hls.service';
 @UseInterceptors(TorrentAdmissionInterceptor)
 export class TorrentHlsController {
   constructor(private readonly hls: TorrentHlsService) {}
+
+  @TorrentLimit('hls')
+  @Post('progress')
+  @HttpCode(204)
+  @HlsHeaders()
+  progress(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('sessionId') id: string,
+    @Body() body: unknown,
+    @Req() req: Request,
+  ) {
+    return this.hls.progress(user.id, id, body, req);
+  }
 
   @TorrentLimit('hls')
   @Get('master.m3u8')
