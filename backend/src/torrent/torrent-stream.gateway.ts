@@ -18,7 +18,12 @@ import {
 import { TorrServerClient } from './torrserver.client';
 import { InvalidTorrentPlaylist, parseTorrentPlaylist } from './torrent-hls-playlist';
 import { TorrentSegmentBuffer } from './torrent-segment-buffer';
-import { TORRENT_OUTPUT_PROFILES, torrentOutputInfo } from './torrent-output-policy';
+import {
+  TORRENT_OUTPUT_PROFILES,
+  torrentOutputInfo,
+  torrentNeedsUnsupportedTranscode,
+} from './torrent-output-policy';
+import { torrentVideoContentType } from './torrent-client-capabilities';
 import {
   SUBTITLE_BYTES,
   SUBTITLE_LOOKBEHIND,
@@ -50,7 +55,7 @@ const INPUT_OPTIONS = [
   '-max_streams',
   '64',
   '-max_pixels',
-  '2073600',
+  '8847360',
   '-threads',
   '2',
 ];
@@ -148,9 +153,38 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
           ],
           30_000,
         );
-        return parseTorrentProbe(fileRef, JSON.parse(output) as unknown);
+        const probe = parseTorrentProbe(fileRef, JSON.parse(output) as unknown);
+        if (probe.video && ['h264', 'hevc'].includes(probe.video.codec)) {
+          const configuration = await this.run(
+            'ffprobe',
+            [
+              '-v',
+              'error',
+              '-max_alloc',
+              '67108864',
+              ...INPUT_OPTIONS,
+              '-select_streams',
+              String(probe.videoStreamIndex),
+              '-show_entries',
+              'stream=extradata',
+              '-show_data',
+              '-of',
+              'json',
+              input.url,
+            ],
+            15_000,
+          ).catch(() => '{}');
+          const stream = (JSON.parse(configuration) as { streams?: { extradata?: string }[] })
+            .streams?.[0];
+          probe.video.contentType = torrentVideoContentType(
+            probe.video.codec,
+            stream?.extradata ?? '',
+          );
+        }
+        return probe;
       } catch (error) {
-        if (error instanceof TorrentGatewayTimeout) throw error;
+        if (error instanceof TorrentGatewayTimeout || error instanceof UnsupportedTorrentMedia)
+          throw error;
         throw new UnsupportedTorrentMedia();
       }
     } finally {
@@ -437,6 +471,7 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
     position: number,
   ): Promise<void> {
     if (this.closing) throw new TorrentGatewayCapacity();
+    if (torrentNeedsUnsupportedTranscode(probe)) throw new UnsupportedTorrentMedia();
     const videoTranscode = !probe.copyVideo;
     const profile = TORRENT_OUTPUT_PROFILES[probe.outputProfile ?? 'h264-720p'];
     const output = torrentOutputInfo(probe, audio);
@@ -525,7 +560,7 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
         '-map',
         `0:${audio.streamIndex}`,
         ...(probe.copyVideo
-          ? ['-c:v', 'copy']
+          ? ['-c:v', 'copy', ...(probe.video?.codec === 'hevc' ? ['-tag:v', 'hvc1'] : [])]
           : [
               '-c:v',
               'libx264',
@@ -562,7 +597,7 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
               '-profile:a',
               'aac_low',
               '-b:a',
-              '192k',
+              (output?.audio.channels ?? 2) > 2 ? '512k' : '192k',
               '-ac',
               String(output?.audio.channels ?? 2),
               '-ar',
@@ -574,6 +609,8 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
         '2',
         '-f',
         'hls',
+        '-strict',
+        'experimental',
         '-hls_segment_type',
         'fmp4',
         '-hls_time',

@@ -5,6 +5,7 @@ import {
   type TorrentOutputProfile,
   type TorrentVideoProbe,
 } from './torrent-output-policy';
+import type { TorrentClientCapabilities } from './torrent-client-capabilities';
 
 export interface AudioTrack {
   trackRef: string;
@@ -15,6 +16,9 @@ export interface AudioTrack {
   isDefault: boolean;
   copy: boolean;
   codec?: string;
+  profile?: string;
+  sampleRate?: number;
+  bitrate?: number | null;
 }
 
 export interface TorrentProbe {
@@ -25,6 +29,7 @@ export interface TorrentProbe {
   copyVideo: boolean;
   video?: TorrentVideoProbe;
   outputProfile?: TorrentOutputProfile;
+  capabilities?: TorrentClientCapabilities;
   audioTracks: AudioTrack[];
   subtitleTracks?: TorrentSubtitle[];
   subtitleFonts?: TorrentFont[];
@@ -54,7 +59,14 @@ type Stream = {
   disposition?: { default?: unknown };
 };
 
-export class UnsupportedTorrentMedia extends Error {}
+export class UnsupportedTorrentMedia extends Error {
+  constructor(
+    readonly code:
+      'TORRENT_UNSUPPORTED_MEDIA' | 'TORRENT_HDR_UNSUPPORTED' = 'TORRENT_UNSUPPORTED_MEDIA',
+  ) {
+    super(code);
+  }
+}
 
 const bitrate = (value: unknown) => {
   const number = Number(value);
@@ -83,16 +95,18 @@ export function parseTorrentProbe(fileRef: string, raw: unknown): TorrentProbe {
     !Number.isSafeInteger(height) ||
     width < 16 ||
     height < 16 ||
-    width > 1920 ||
-    height > 1080 ||
+    width > 4096 ||
+    height > 2160 ||
+    width * height > 4096 * 2160
+  )
+    throw new UnsupportedTorrentMedia();
+  const hdr =
     ['smpte2084', 'arib-std-b67'].includes(String(video.color_transfer)) ||
     video.color_primaries === 'bt2020' ||
     ['bt2020nc', 'bt2020c'].includes(String(video.color_space)) ||
     (Array.isArray(video.side_data_list) ? video.side_data_list : []).some((item) =>
       /dovi|dolby|mastering display|content light|hdr/i.test(String(item.side_data_type)),
-    )
-  )
-    throw new UnsupportedTorrentMedia();
+    );
   const rates = [video.avg_frame_rate, video.r_frame_rate].map((value) => {
     const rate = (typeof value === 'string' ? value : '').split('/').map(Number);
     return rate.length === 2 && rate[1] > 0 ? rate[0] / rate[1] : 0;
@@ -120,6 +134,7 @@ export function parseTorrentProbe(fileRef: string, raw: unknown): TorrentProbe {
     fps,
     level: bitrate(video.level),
     bitrate: bitrate(video.bit_rate) ?? bitrate(data.format?.bit_rate),
+    dynamicRange: hdr ? 'hdr' : 'sdr',
   };
   const audioTracks = streams
     .filter((stream) => stream.codec_type === 'audio')
@@ -144,6 +159,9 @@ export function parseTorrentProbe(fileRef: string, raw: unknown): TorrentProbe {
         label,
         language,
         channels,
+        profile: typeof stream.profile === 'string' ? stream.profile : '',
+        sampleRate: Number(stream.sample_rate) || 0,
+        bitrate: bitrate(stream.bit_rate),
         codec:
           typeof stream.codec_name === 'string' && /^[a-z0-9_]{1,24}$/.test(stream.codec_name)
             ? stream.codec_name

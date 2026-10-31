@@ -179,3 +179,41 @@ test('aborts before POST when the account changes during capability negotiation'
   await expect(request).rejects.toMatchObject({ kind: 'aborted' });
   expect(fetch).not.toHaveBeenCalled();
 });
+
+test('pins source-specific video/audio negotiation across a lost POST retry', async () => {
+  const decode = mock(async () => ({ supported: true, smooth: true }));
+  browser(decode);
+  const bodies: Record<string, unknown>[] = [];
+  globalThis.fetch = mock(async (_url: unknown, init: RequestInit) => {
+    bodies.push(JSON.parse(String(init.body)));
+    return Response.json({ data: wire });
+  }) as typeof fetch;
+  const media = {
+    video: {
+      contentType: 'video/mp4; codecs="avc1.640033"',
+      width: 3840,
+      height: 2160,
+      framerate: 24,
+      bitrate: 40_000_000,
+    },
+    audio: [
+      { trackRef: 'audio', contentType: null, channels: 6, samplerate: 48_000, bitrate: 640_000 },
+    ],
+  };
+  const args = [
+    sessionId,
+    0,
+    1,
+    'source-profile-retry-20261031',
+    new AbortController().signal,
+    'audio',
+    'h264-1080p',
+    media,
+  ] as const;
+  await startTorrentPlayback(...args);
+  browser(async () => ({ supported: false, smooth: false }));
+  await startTorrentPlayback(...args);
+  expect(bodies[0]).toEqual(bodies[1]);
+  expect(bodies[0].capabilities).toEqual({ originalVideo: true, audio: 'aac-6' });
+  expect(decode).toHaveBeenCalledTimes(2);
+});

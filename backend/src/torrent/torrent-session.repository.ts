@@ -19,6 +19,7 @@ import {
 } from './torrent-session.state';
 import type { TorrentProbe } from './torrent-media-policy';
 import { selectTorrentOutput, type TorrentOutputProfile } from './torrent-output-policy';
+import type { TorrentClientCapabilities } from './torrent-client-capabilities';
 import { TorrentMetrics } from './torrent-metrics';
 import { MAX_FILE_BYTES, MAX_TORRENT_BYTES } from './torrent-metadata';
 
@@ -53,6 +54,7 @@ export type TorrentFailureCode =
   | 'TORRENT_UNAVAILABLE'
   | 'TORRENT_PROBE_TIMEOUT'
   | 'TORRENT_UNSUPPORTED_MEDIA'
+  | 'TORRENT_HDR_UNSUPPORTED'
   | 'TORRENT_TRANSCODE_FAILED'
   | 'TORRENT_PLAYBACK_TIMEOUT'
   | 'TORRENT_CAPACITY_EXCEEDED'
@@ -662,6 +664,7 @@ export class TorrentSessionRepository {
     idempotencyKey: string,
     digest: string,
     outputProfile: TorrentOutputProfile = 'h264-720p',
+    capabilities?: TorrentClientCapabilities,
   ): Promise<{ session: TorrentSessionRow; replay: boolean }> {
     return this.database.db.transaction(async (tx) => {
       await tx.execute(sql`select pg_advisory_xact_lock(725134, 6)`);
@@ -731,11 +734,13 @@ export class TorrentSessionRepository {
         session.state === 'ready' &&
         session.selectedAudioTrackRef === audioTrackRef &&
         (row.probe.outputProfile ?? 'h264-720p') === outputProfile &&
+        row.probe.capabilities?.originalVideo === capabilities?.originalVideo &&
+        row.probe.capabilities?.audio === capabilities?.audio &&
         session.playbackPositionSeconds === position
       )) {
         await tx
           .update(torrentSessionProbes)
-          .set({ probe: selectTorrentOutput(row.probe, outputProfile) })
+          .set({ probe: selectTorrentOutput(row.probe, outputProfile, capabilities) })
           .where(eq(torrentSessionProbes.sessionId, sessionId));
         [updated] = await tx
           .update(torrentSessions)

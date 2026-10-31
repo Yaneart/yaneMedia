@@ -127,7 +127,9 @@ function describeFailure(session: TorrentSession): string {
     case 'TORRENT_SIZE_LIMIT_EXCEEDED':
       return 'Размер раздачи или видео превышает 200 Гб. Выберите другой торрент.';
     case 'TORRENT_UNSUPPORTED_MEDIA':
-      return 'Это видео не поддерживается: доступны SDR-файлы до 1080p и 60 кадр/с. HDR и 4K пока недоступны. Выберите другой файл или торрент.';
+      return 'Формат видео не поддерживается. Для 1440p и 4K нужен совместимый браузер. Выберите другой файл или торрент.';
+    case 'TORRENT_HDR_UNSUPPORTED':
+      return 'Ограничение HDR снято. Переоткройте торрент, чтобы повторить проверку формата.';
     case 'TORRENT_PROBE_TIMEOUT':
       return 'Не удалось проверить видео вовремя. Проверьте скорость раздачи и попробуйте снова.';
     case 'TORRENT_PLAYBACK_TIMEOUT':
@@ -150,7 +152,9 @@ function describeCommandError(error: unknown, action: string): string {
     if (error.status === 404)
       return 'Сессия завершилась или срок её действия истёк. Начните заново.';
     if (error.code === 'TORRENT_UNSUPPORTED_MEDIA')
-      return 'Видео или браузер не поддерживают выбранный формат. Для старой сессии переоткройте торрент; HDR и 4K пока недоступны.';
+      return 'Видео или браузер не поддерживают выбранный формат. Для старой сессии переоткройте торрент.';
+    if (error.code === 'TORRENT_CLIENT_UNSUPPORTED')
+      return 'Браузер не подтвердил воспроизведение исходного формата видео. Попробуйте совместимый браузер или другой файл.';
     if (error.code === 'TORRENT_SESSION_CHANGED')
       return 'Состояние торрента изменилось. Обновите данные и повторите действие.';
     if (error.code === 'TORRENT_CAPACITY_EXCEEDED' || error.code === 'TORRENT_RESOURCE_LIMIT')
@@ -554,6 +558,8 @@ export function TorrentLaunch({
         key,
         controller.signal,
         selectedAudio?.ref,
+        undefined,
+        currentSession.media,
       );
       if (controller.signal.aborted) return;
       playbackRequestedRef.current = selectedRef.current;

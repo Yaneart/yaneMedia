@@ -1,6 +1,7 @@
 import { ApiClientError } from '@/shared/api';
 import { API_BASE_URL } from '../../../shared/api/apiConfig';
 import { validTorrentOutput } from './validTorrentOutput';
+import { validTorrentClientMedia } from './validTorrentClientMedia';
 import type { TorrentAudioTrack, TorrentSession } from '../model/torrentSession';
 import type {
   TorrentAudioTrackDto,
@@ -26,6 +27,7 @@ const failureCodes = new Set([
   'TORRENT_UNAVAILABLE',
   'TORRENT_PROBE_TIMEOUT',
   'TORRENT_UNSUPPORTED_MEDIA',
+  'TORRENT_HDR_UNSUPPORTED',
   'TORRENT_TRANSCODE_FAILED',
   'TORRENT_PLAYBACK_TIMEOUT',
   'TORRENT_CAPACITY_EXCEEDED',
@@ -140,7 +142,8 @@ export function mapTorrentSession(value: unknown): TorrentSession {
     ) ||
     (dto.selectedFileRef !== null && typeof dto.selectedFileRef !== 'string') ||
     !Array.isArray(dto.audioTracks) ||
-    !dto.audioTracks.every(audioTrack)
+    !dto.audioTracks.every(audioTrack) ||
+    (dto.media !== undefined && !validTorrentClientMedia(dto.media))
   )
     invalid();
 
@@ -213,6 +216,7 @@ export function mapTorrentSession(value: unknown): TorrentSession {
     })),
     selectedFileRef: dto.selectedFileRef!,
     audioTracks: dto.audioTracks!.map(mapAudioTrack),
+    media: dto.media,
     playback: playback
       ? {
           hlsUrl: new URL(playback.source.url, API_BASE_URL).toString(),

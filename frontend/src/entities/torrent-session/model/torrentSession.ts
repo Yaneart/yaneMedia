@@ -1,4 +1,5 @@
 import type { TorrentOutput } from './torrentOutput';
+import type { TorrentClientMedia } from './torrentClientCapabilities';
 
 export type TorrentSessionState =
   | 'created'
@@ -18,6 +19,7 @@ export type TorrentFailureCode =
   | 'TORRENT_UNAVAILABLE'
   | 'TORRENT_PROBE_TIMEOUT'
   | 'TORRENT_UNSUPPORTED_MEDIA'
+  | 'TORRENT_HDR_UNSUPPORTED'
   | 'TORRENT_TRANSCODE_FAILED'
   | 'TORRENT_PLAYBACK_TIMEOUT'
   | 'TORRENT_CAPACITY_EXCEEDED'
@@ -69,6 +71,7 @@ export type TorrentSession = {
   files: TorrentFile[];
   selectedFileRef: string | null;
   audioTracks: TorrentAudioTrack[];
+  media?: TorrentClientMedia;
   playback: {
     hlsUrl: string;
     generation: number;

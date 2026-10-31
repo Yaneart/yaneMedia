@@ -33,17 +33,33 @@ export function validTorrentOutput(value: unknown): value is TorrentOutput {
   const full = value.profile === 'h264-1080p';
   return (
     codec(source.codec) &&
-    integer(source.width, 1920, 16) &&
-    integer(source.height, 1080, 16) &&
+    integer(source.width, 4096, 16) &&
+    integer(source.height, 2160, 16) &&
     integer(source.bitDepth, 16, 8) &&
     number(source.fps, 60, 0.001) &&
-    source.dynamicRange === 'sdr' &&
-    video.codec === 'h264' &&
-    video.bitDepth === 8 &&
-    video.dynamicRange === 'sdr' &&
-    integer(video.width, Math.min(Number(source.width), full ? 1920 : 1280), 2) &&
-    integer(video.height, Math.min(Number(source.height), full ? 1080 : 720), 2) &&
-    number(video.fps, Math.min(30, Number(source.fps)), 0.001) &&
+    ['sdr', 'hdr'].includes(String(source.dynamicRange)) &&
+    (video.mode === 'copy'
+      ? ['h264', 'hevc'].includes(String(video.codec)) &&
+        video.codec === source.codec &&
+        video.bitDepth === source.bitDepth &&
+        (video.codec === 'h264' ? video.bitDepth === 8 : [8, 10].includes(Number(video.bitDepth)))
+      : source.dynamicRange === 'sdr' &&
+        video.codec === 'h264' &&
+        video.bitDepth === 8 &&
+        Number(source.width) <= 1920 &&
+        Number(source.height) <= 1080) &&
+    video.dynamicRange === source.dynamicRange &&
+    integer(
+      video.width,
+      Math.min(Number(source.width), video.mode === 'copy' ? 4096 : full ? 1920 : 1280),
+      2,
+    ) &&
+    integer(
+      video.height,
+      Math.min(Number(source.height), video.mode === 'copy' ? 2160 : full ? 1080 : 720),
+      2,
+    ) &&
+    number(video.fps, Math.min(video.mode === 'copy' ? 60 : 30, Number(source.fps)), 0.001) &&
     ['copy', 'transcode'].includes(String(video.mode)) &&
     [
       'compatible',
@@ -54,16 +70,19 @@ export function validTorrentOutput(value: unknown): value is TorrentOutput {
       'frame_rate',
       'level',
       'bitrate',
+      'dynamic_range',
     ].includes(String(video.reason)) &&
     (video.mode !== 'copy' ||
       (video.reason === 'compatible' &&
         video.width === source.width &&
         video.height === source.height &&
         video.fps === source.fps)) &&
-    audio.codec === 'aac' &&
+    ['aac', 'ac3', 'eac3'].includes(String(audio.codec)) &&
+    (audio.mode === 'copy' ? audio.codec === audio.sourceCodec : audio.codec === 'aac') &&
     codec(audio.sourceCodec) &&
     (audio.sourceChannels === null || integer(audio.sourceChannels, 32)) &&
-    integer(audio.channels, 2) &&
+    integer(audio.channels, 8) &&
+    (audio.sourceChannels === null || Number(audio.channels) <= Number(audio.sourceChannels)) &&
     ['copy', 'transcode'].includes(String(audio.mode)) &&
     ['compatible', 'surround', 'compatibility'].includes(String(audio.reason)) &&
     (audio.mode !== 'copy' ||

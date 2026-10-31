@@ -106,6 +106,8 @@ describe('torrent playback commands', () => {
     { ...request, outputProfile: 'hevc-4k' },
     { ...request, outputProfile: null },
     { ...request, outputProfile: { width: 3840 } },
+    { ...request, capabilities: { originalVideo: true, audio: 'truehd' } },
+    { ...request, capabilities: { originalVideo: true, audio: 'aac-8', cpu: 10 } },
     { ...request, engineUrl: 'http://internal' },
   ])('rejects invalid playback input before repository or worker admission: %j', async (body) => {
     await expect(service.playback('owner', id, body, key)).rejects.toMatchObject({ status: 400 });
@@ -170,7 +172,7 @@ describe('torrent playback commands', () => {
     });
     repository.beginPlayback.mockResolvedValue({ session, replay: true });
     await service.playback('owner', id, { ...request, outputProfile: 'h264-1080p' }, key);
-    expect(input.digestPlayback).toHaveBeenCalledWith(id, 12, trackRef, 'h264-1080p');
+    expect(input.digestPlayback).toHaveBeenCalledWith(id, 12, trackRef, 'h264-1080p', undefined);
     expect(gateway.hasCapacity).toHaveBeenCalledWith(false, undefined);
     expect(repository.beginPlayback).toHaveBeenCalledWith(
       'owner',
@@ -181,9 +183,45 @@ describe('torrent playback commands', () => {
       key,
       'digest',
       'h264-1080p',
+      undefined,
     );
     await service.playback('owner', id, request, 'playback-command-2');
     expect(gateway.hasCapacity).toHaveBeenLastCalledWith(true, undefined);
+  });
+
+  it('requires confirmed original 4K before capacity admission and includes audio negotiation in the command', async () => {
+    repository.getProbe.mockResolvedValue({
+      ...probe,
+      video: {
+        ...probe.video,
+        width: 3840,
+        height: 2160,
+        level: 51,
+        contentType: 'video/mp4; codecs="avc1.640033"',
+      },
+    });
+    await expect(service.playback('owner', id, request, key)).rejects.toMatchObject({
+      status: 415,
+      response: { code: 'TORRENT_CLIENT_UNSUPPORTED' },
+    });
+    expect(gateway.hasCapacity).not.toHaveBeenCalled();
+    expect(repository.beginPlayback).not.toHaveBeenCalled();
+    const capabilities = { originalVideo: true, audio: 'aac-6' };
+    repository.beginPlayback.mockResolvedValue({ session, replay: true });
+    await service.playback('owner', id, { ...request, capabilities }, key);
+    expect(gateway.hasCapacity).toHaveBeenCalledWith(false, undefined);
+    expect(input.digestPlayback).toHaveBeenCalledWith(id, 12, trackRef, 'h264-720p', capabilities);
+    expect(repository.beginPlayback).toHaveBeenCalledWith(
+      'owner',
+      id,
+      4,
+      trackRef,
+      12,
+      key,
+      'digest',
+      'h264-720p',
+      capabilities,
+    );
   });
 
   it('publishes ready only after the selected file and generation have a first segment', async () => {

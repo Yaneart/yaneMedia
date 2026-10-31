@@ -39,6 +39,7 @@ export async function replaceTorrentPlayback(
           deadline,
           audio,
           outputProfile,
+          initial.media,
         );
         admittedVersion = current.version;
       } catch (error) {

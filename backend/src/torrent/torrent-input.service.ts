@@ -1,5 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { torrentOutputInfo, type TorrentOutputProfile } from './torrent-output-policy';
+import { torrentClientMedia, type TorrentClientCapabilities } from './torrent-client-capabilities';
 import { readFileSync } from 'node:fs';
 import { HttpException, Injectable, type BeforeApplicationShutdown } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -135,8 +136,9 @@ export class TorrentInputService implements BeforeApplicationShutdown {
     position: number,
     trackRef: string,
     outputProfile: TorrentOutputProfile = 'h264-720p',
+    capabilities?: TorrentClientCapabilities,
   ): string {
-    return createHmac('sha256', this.secret)
+    const digest = createHmac('sha256', this.secret)
       .update('playback\0')
       .update(sessionId)
       .update('\0')
@@ -144,8 +146,10 @@ export class TorrentInputService implements BeforeApplicationShutdown {
       .update('\0')
       .update(trackRef)
       .update('\0')
-      .update(outputProfile)
-      .digest('hex');
+      .update(outputProfile);
+    if (capabilities)
+      digest.update('\0').update(JSON.stringify([capabilities.originalVideo, capabilities.audio]));
+    return digest.digest('hex');
   }
 
   async view(session: TorrentSessionRow, withProgress = false) {
@@ -270,6 +274,7 @@ function toSessionView(
     files,
     selectedFileRef: session.selectedFileRef,
     audioTracks,
+    media: probe ? torrentClientMedia(probe) : undefined,
     playback:
       session.state === 'ready' &&
       session.playbackTimeline &&

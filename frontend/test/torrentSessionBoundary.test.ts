@@ -235,7 +235,7 @@ describe('torrent API boundary', () => {
       { ...output, source: { ...output.source, dynamicRange: 'hdr' } },
       { ...output, video: { ...output.video, width: 3840 } },
       { ...output, video: { ...output.video, reason: 'private path' } },
-      { ...output, audio: { ...output.audio, channels: 6 } },
+      { ...output, audio: { ...output.audio, channels: 9 } },
       { ...output, audio: { ...output.audio, sourceCodec: '<script>' } },
       { ...output, source: { ...output.source, engineUrl: 'http://internal' } },
     ])

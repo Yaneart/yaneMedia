@@ -2,7 +2,12 @@ import { HttpException, Injectable } from '@nestjs/common';
 import type { EngineFileKey } from './torrent-engine.port';
 import { TorrentInputService } from './torrent-input.service';
 import type { TorrentSessionRow } from './torrent-session.entity';
-import { isTorrentOutputProfile, selectTorrentOutput } from './torrent-output-policy';
+import {
+  isTorrentOutputProfile,
+  selectTorrentOutput,
+  torrentNeedsUnsupportedTranscode,
+} from './torrent-output-policy';
+import { isTorrentClientCapabilities } from './torrent-client-capabilities';
 import {
   TorrentSessionConflict,
   TorrentSessionNotFound,
@@ -53,6 +58,7 @@ export class TorrentPlaybackService {
       audioTrackRef?: unknown;
       expectedVersion?: unknown;
       outputProfile?: unknown;
+      capabilities?: unknown;
     };
     if (
       !/^[\x21-\x7e]{16,128}$/.test(key) ||
@@ -60,15 +66,20 @@ export class TorrentPlaybackService {
       typeof request !== 'object' ||
       Object.keys(request).some(
         (field) =>
-          !['startPositionSeconds', 'audioTrackRef', 'expectedVersion', 'outputProfile'].includes(
-            field,
-          ),
+          ![
+            'startPositionSeconds',
+            'audioTrackRef',
+            'expectedVersion',
+            'outputProfile',
+            'capabilities',
+          ].includes(field),
       ) ||
       !Number.isFinite(request.startPositionSeconds) ||
       (request.startPositionSeconds as number) < 0 ||
       !Number.isSafeInteger(request.expectedVersion) ||
       (request.expectedVersion as number) < 1 ||
       (request.audioTrackRef !== undefined && typeof request.audioTrackRef !== 'string') ||
+      (request.capabilities !== undefined && !isTorrentClientCapabilities(request.capabilities)) ||
       (request.outputProfile !== undefined && !isTorrentOutputProfile(request.outputProfile))
     )
       throw this.error(400, 'VALIDATION_FAILED');
@@ -84,8 +95,16 @@ export class TorrentPlaybackService {
       if (!audio) throw new TorrentSessionNotFound();
       if (!probe.video) throw this.error(415, 'TORRENT_UNSUPPORTED_MEDIA');
       const outputProfile = request.outputProfile ?? 'h264-720p';
-      const selected = selectTorrentOutput(probe, outputProfile);
-      const digest = this.input.digestPlayback(sessionId, position, trackRef, outputProfile);
+      const selected = selectTorrentOutput(probe, outputProfile, request.capabilities);
+      if (torrentNeedsUnsupportedTranscode(selected))
+        throw this.error(415, 'TORRENT_CLIENT_UNSUPPORTED');
+      const digest = this.input.digestPlayback(
+        sessionId,
+        position,
+        trackRef,
+        outputProfile,
+        request.capabilities,
+      );
       const replaySession = await this.repository.findReplay(ownerId, 'playback', key, digest);
       if (replaySession) return this.input.view(replaySession);
       if (
@@ -104,6 +123,7 @@ export class TorrentPlaybackService {
         key,
         digest,
         outputProfile,
+        request.capabilities,
       );
       if (updated.state === 'preparing' && !replay) void this.start(updated).catch(() => undefined);
       return this.input.view(updated);

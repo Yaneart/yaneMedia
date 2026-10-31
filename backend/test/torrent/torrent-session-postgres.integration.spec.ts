@@ -342,6 +342,38 @@ describePostgres('torrent session PostgreSQL persistence', () => {
       'ready',
       { playbackTimeline: timeline },
     );
+    const capabilities = { originalVideo: false, audio: 'aac-6' as const };
+    const negotiated = await repository.beginPlayback(
+      owners[0],
+      pending.sessionId,
+      ready.version,
+      probe.audioTracks[1].trackRef,
+      1.5,
+      'playback-capabilities-1',
+      '6'.repeat(64),
+      'h264-1080p',
+      capabilities,
+    );
+    expect(negotiated.session.generation).toBe(ready.generation + 1);
+    expect(await repository.getProbe(pending.sessionId)).toMatchObject({ capabilities });
+    expect(
+      (
+        await repository.beginPlayback(
+          owners[0],
+          pending.sessionId,
+          ready.version,
+          probe.audioTracks[1].trackRef,
+          1.5,
+          'playback-capabilities-1',
+          '6'.repeat(64),
+          'h264-1080p',
+          capabilities,
+        )
+      ).replay,
+    ).toBe(true);
+    ready = await repository.transition(pending.sessionId, negotiated.session.version, 'ready', {
+      playbackTimeline: timeline,
+    });
     await repository.transition(pending.sessionId, ready.version, 'awaiting_playback', {
       failureCode: 'TORRENT_TRANSCODE_FAILED',
     });

@@ -4,10 +4,16 @@ import { torrentAccountSignal } from '../model/torrentClientScope';
 import { mapTorrentSession } from './mapTorrentSession';
 import { torrentOutputProfile } from '../model/torrentOutputProfile';
 import type { TorrentOutputProfile } from '../model/torrentOutput';
+import {
+  torrentClientCapabilities,
+  type TorrentClientCapabilities,
+  type TorrentClientMedia,
+} from '../model/torrentClientCapabilities';
 
 // Keep the hint stable when a lost POST is retried with the same logical key.
 // Entries contain only bounded profile promises, never account/session data.
 const outputProfiles = new Map<string, Promise<TorrentOutputProfile>>();
+const clientCapabilities = new Map<string, Promise<TorrentClientCapabilities>>();
 
 export class TorrentRequestError extends Error {
   readonly kind: 'http' | 'network' | 'aborted' | 'invalid_response';
@@ -154,8 +160,10 @@ export async function startTorrentPlayback(
   signal: AbortSignal,
   audioTrackRef?: string,
   negotiatedProfile?: TorrentOutputProfile,
+  media?: TorrentClientMedia,
 ): Promise<TorrentSession> {
   let outputProfile;
+  let capabilities;
   signal = AbortSignal.any([signal, torrentAccountSignal()]);
   try {
     signal.throwIfAborted();
@@ -167,7 +175,15 @@ export async function startTorrentPlayback(
       outputProfiles.set(idempotencyKey, profile);
       void profile.catch(() => outputProfiles.delete(idempotencyKey));
     }
-    outputProfile = await outputProfiles.get(idempotencyKey)!;
+    if (media && !clientCapabilities.has(idempotencyKey)) {
+      if (clientCapabilities.size >= 32)
+        clientCapabilities.delete(clientCapabilities.keys().next().value!);
+      clientCapabilities.set(idempotencyKey, torrentClientCapabilities(media, audioTrackRef));
+    }
+    [outputProfile, capabilities] = await Promise.all([
+      outputProfiles.get(idempotencyKey)!,
+      clientCapabilities.get(idempotencyKey),
+    ]);
     signal.throwIfAborted();
   } catch (error) {
     throw toTorrentRequestError(error);
@@ -182,6 +198,7 @@ export async function startTorrentPlayback(
         startPositionSeconds,
         expectedVersion,
         outputProfile,
+        ...(capabilities ? { capabilities } : {}),
         ...(audioTrackRef ? { audioTrackRef } : {}),
       }),
     },

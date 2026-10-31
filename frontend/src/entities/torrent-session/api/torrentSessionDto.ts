@@ -1,5 +1,6 @@
 import type { TorrentFailureCode, TorrentSessionState } from '../model/torrentSession';
 import type { TorrentOutput } from '../model/torrentOutput';
+import type { TorrentClientMedia } from '../model/torrentClientCapabilities';
 
 export type TorrentAudioTrackDto = {
   trackRef: string;
@@ -40,6 +41,7 @@ export type TorrentSessionDto = {
   files: { fileRef: string; displayName: string; sizeBytes: number; mediaKind: 'video' }[];
   selectedFileRef: string | null;
   audioTracks: TorrentAudioTrackDto[];
+  media?: TorrentClientMedia;
   playback: {
     source: { type: 'hls'; url: string };
     generation: number;

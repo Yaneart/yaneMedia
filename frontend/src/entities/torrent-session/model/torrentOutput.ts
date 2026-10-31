@@ -7,12 +7,12 @@ export type TorrentOutput = {
     height: number;
     bitDepth: number;
     fps: number;
-    dynamicRange: 'sdr';
+    dynamicRange: 'sdr' | 'hdr';
   };
   video: {
-    codec: 'h264';
-    bitDepth: 8;
-    dynamicRange: 'sdr';
+    codec: string;
+    bitDepth: number;
+    dynamicRange: 'sdr' | 'hdr';
     width: number;
     height: number;
     fps: number;
@@ -25,10 +25,11 @@ export type TorrentOutput = {
       | 'resolution'
       | 'frame_rate'
       | 'level'
-      | 'bitrate';
+      | 'bitrate'
+      | 'dynamic_range';
   };
   audio: {
-    codec: 'aac';
+    codec: string;
     sourceCodec: string;
     sourceChannels: number | null;
     channels: number;

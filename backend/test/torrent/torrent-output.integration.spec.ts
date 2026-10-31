@@ -8,12 +8,7 @@ import {
   TorrentStreamGateway,
   TorrentGatewayCapacity,
 } from '../../src/torrent/torrent-stream.gateway';
-import {
-  selectTorrentOutput,
-  torrentOutputInfo,
-  type TorrentOutputProfile,
-} from '../../src/torrent/torrent-output-policy';
-import { UnsupportedTorrentMedia } from '../../src/torrent/torrent-media-policy';
+import { selectTorrentOutput, torrentOutputInfo } from '../../src/torrent/torrent-output-policy';
 import type { EngineFileKey, EngineTorrentKey } from '../../src/torrent/torrent-engine.port';
 import type { TorrServerClient } from '../../src/torrent/torrserver.client';
 
@@ -37,7 +32,7 @@ const streams = (file: string) => {
 };
 
 describeOutput('bounded torrent output profiles with real FFmpeg', () => {
-  it('preserves 1080p remux pixels, converts 10-bit SDR/surround and rejects signalled HDR', async () => {
+  it('preserves 1080p remux pixels, converts 10-bit SDR/surround and admits signalled HDR', async () => {
     const root = await mkdtemp(join(tmpdir(), 'torrent-output-test-'));
     const original = join(root, '1080p.mkv');
     const hevc = join(root, '10bit-sdr.mkv');
@@ -146,7 +141,7 @@ describeOutput('bounded torrent output profiles with real FFmpeg', () => {
           size: (await stat(input)).size,
         };
         const parsed = await gateway.probe(source, 'torrent_file_output');
-        const probe = selectTorrentOutput(parsed, profile as TorrentOutputProfile);
+        const probe = selectTorrentOutput(parsed, profile);
         const output = torrentOutputInfo(probe, probe.audioTracks[0])!;
         expect(output.audio).toMatchObject({
           sourceChannels: 6,
@@ -263,7 +258,7 @@ describeOutput('bounded torrent output profiles with real FFmpeg', () => {
           },
           'hdr',
         ),
-      ).rejects.toBeInstanceOf(UnsupportedTorrentMedia);
+      ).resolves.toMatchObject({ video: { dynamicRange: 'hdr' } });
       expect(gateway.activeTranscodes()).toEqual({ copy: 0, transcode: 0 });
       const memoryPeak = await readFile('/sys/fs/cgroup/memory.peak', 'utf8').catch(
         () => 'unavailable',

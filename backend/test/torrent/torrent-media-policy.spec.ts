@@ -154,18 +154,25 @@ describe('torrent FFmpeg probe policy', () => {
   );
 
   it.each([
+    { width: 4097, height: 2160 },
+    { avg_frame_rate: '120/1' },
+    { avg_frame_rate: '24/1', r_frame_rate: '120/1' },
+    { avg_frame_rate: '0/0' },
+    { bits_per_raw_sample: '1000' },
+  ])('rejects excessive decode budgets before output admission: %j', (video) => {
+    expect(() => probeVideo(video)).toThrow(UnsupportedTorrentMedia);
+  });
+
+  it.each([
     { color_transfer: 'smpte2084' },
     { color_transfer: 'arib-std-b67' },
     { color_primaries: 'bt2020' },
     { color_space: 'bt2020nc' },
     { side_data_list: [{ side_data_type: 'DOVI configuration record' }] },
     { side_data_list: [{ side_data_type: 'Mastering display metadata' }] },
-    { width: 3840, height: 2160 },
-    { avg_frame_rate: '120/1' },
-    { avg_frame_rate: '24/1', r_frame_rate: '120/1' },
-    { avg_frame_rate: '0/0' },
-    { bits_per_raw_sample: '1000' },
-  ])('rejects unsupported colour and decode budgets before output admission: %j', (video) => {
-    expect(() => probeVideo(video)).toThrow(UnsupportedTorrentMedia);
+  ])('admits HDR signalling without an implicit SDR transcode: %j', (video) => {
+    const probe = probeVideo(video);
+    expect(probe.video?.dynamicRange).toBe('hdr');
+    expect(probe.copyVideo).toBe(false);
   });
 });

@@ -93,9 +93,7 @@ export class TorrentSessionReconciler implements OnModuleInit, BeforeApplication
           await this.repository.saveProbe(session.sessionId, session.version, probe);
         } catch (error) {
           const code =
-            error instanceof UnsupportedTorrentMedia
-              ? 'TORRENT_UNSUPPORTED_MEDIA'
-              : 'TORRENT_PROBE_TIMEOUT';
+            error instanceof UnsupportedTorrentMedia ? error.code : 'TORRENT_PROBE_TIMEOUT';
           await this.repository
             .transition(session.sessionId, session.version, 'failed', { failureCode: code })
             .catch(() => undefined);

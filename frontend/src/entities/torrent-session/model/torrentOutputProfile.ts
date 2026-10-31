@@ -3,8 +3,7 @@ import type { TorrentOutputProfile } from './torrentOutput';
 
 // A performance hint chooses between fixed server profiles; it never grants
 // arbitrary codecs, dimensions, bitrates or access to server-side resources.
-export async function torrentOutputProfile(): Promise<TorrentOutputProfile> {
-  if (typeof document === 'undefined') return 'h264-720p';
+export function torrentDecodingContext() {
   const video = document.createElement('video');
   const mse =
     (globalThis as { ManagedMediaSource?: typeof MediaSource }).ManagedMediaSource ??
@@ -17,6 +16,12 @@ export async function torrentOutputProfile(): Promise<TorrentOutputProfile> {
     Boolean(video.canPlayType('application/vnd.apple.mpegurl'));
   const supports = (mime: string) =>
     native ? Boolean(video.canPlayType(mime)) : Boolean(mse?.isTypeSupported(mime));
+  return { native, supports, videoType, audioType };
+}
+
+export async function torrentOutputProfile(): Promise<TorrentOutputProfile> {
+  if (typeof document === 'undefined') return 'h264-720p';
+  const { native, supports, videoType, audioType } = torrentDecodingContext();
   const unsupported = () =>
     new ApiClientError(
       'Браузер не поддерживает H.264/AAC для этого потока.',
