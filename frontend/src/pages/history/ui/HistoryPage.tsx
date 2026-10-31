@@ -249,7 +249,7 @@ export function HistoryPage() {
           onRetry={retry}
         />
       ) : visibleHistoryMedia.length > 0 ? (
-        <MediaGrid>
+        <MediaGrid virtualized>
           {visibleHistoryMedia.map(({ media, openedAt, storedRefs }) => (
             <div key={media.mediaRef} className="min-w-0">
               <MediaCard

@@ -12,6 +12,7 @@ import {
 
 import { IconButton } from './IconButton';
 import { LeftIcon, RightIcon } from './Icons';
+import { VirtualGrid } from './VirtualGrid';
 
 export type ContentRowVariant = 'continuation' | 'collection';
 
@@ -293,7 +294,8 @@ export function ContentRow({
 
   return (
     <div className="relative min-w-0">
-      <div
+      <VirtualGrid
+        enabled={variant === 'collection'}
         {...props}
         ref={setRowRef}
         className={[
@@ -315,7 +317,7 @@ export function ContentRow({
         onScroll={handleScroll}
       >
         {children}
-      </div>
+      </VirtualGrid>
 
       {canScrollBack && (
         <IconButton

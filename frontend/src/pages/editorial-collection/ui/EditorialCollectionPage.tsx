@@ -54,7 +54,7 @@ export function EditorialCollectionPage() {
         </p>
       </div>
 
-      <MediaGrid>
+      <MediaGrid virtualized>
         {collection.items.map((media) => (
           <MediaCard
             key={media.mediaRef}

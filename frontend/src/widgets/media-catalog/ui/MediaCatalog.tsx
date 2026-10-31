@@ -387,7 +387,7 @@ export function MediaCatalog({ type, title, filters }: MediaCatalogProps) {
           />
         ) : searchItems.length > 0 ? (
           <div>
-            <MediaGrid>
+            <MediaGrid virtualized>
               {searchItems.map((item) => (
                 <MediaCard
                   key={item.mediaRef}

@@ -8,6 +8,7 @@ import {
 } from 'react';
 
 import { CheckIcon, DownIcon } from './Icons';
+import { VirtualSelectMenu } from './VirtualSelectMenu';
 
 export type SelectOption = {
   value: string;
@@ -24,6 +25,7 @@ export type SelectProps = Omit<ComponentPropsWithoutRef<'div'>, 'onChange'> & {
   allowEmpty?: boolean;
   menuPlacement?: 'top' | 'bottom';
   menuAlign?: 'start' | 'end';
+  virtualized?: boolean;
 };
 
 export function Select({
@@ -36,10 +38,12 @@ export function Select({
   allowEmpty = true,
   menuPlacement = 'bottom',
   menuAlign = 'start',
+  virtualized = false,
   className = '',
   ...props
 }: SelectProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const useVirtualMenu = virtualized && options.length > 40;
 
   const listboxId = useId();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -84,7 +88,7 @@ export function Select({
   }, [isOpen]);
 
   useEffect(() => {
-    if (!isOpen) {
+    if (!isOpen || useVirtualMenu) {
       return;
     }
 
@@ -99,7 +103,7 @@ export function Select({
     });
 
     return () => cancelAnimationFrame(frameId);
-  }, [allowEmpty, isOpen, options, value]);
+  }, [allowEmpty, isOpen, options, value, useVirtualMenu]);
 
   const selectValue = (nextValue: string | null) => {
     onChange(nextValue);
@@ -190,7 +194,29 @@ export function Select({
         />
       </button>
 
-      {isOpen && (
+      {isOpen && useVirtualMenu && (
+        <VirtualSelectMenu
+          id={listboxId}
+          label={ariaLabel}
+          options={options}
+          value={value}
+          placeholder={placeholder}
+          allowEmpty={allowEmpty}
+          onSelect={selectValue}
+          onClose={() => {
+            setIsOpen(false);
+            triggerRef.current?.focus();
+          }}
+          className={[
+            `absolute z-30 max-h-[20.5rem] ${menuAlign === 'end' ? 'right-0' : 'left-0'}`,
+            menuPlacement === 'top' ? 'bottom-full mb-2' : 'top-full mt-2',
+            matchMenuWidth ? 'w-full' : 'w-max min-w-full',
+            'overflow-x-hidden overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
+            'rounded-overlay border border-border bg-popover p-1 shadow-overlay',
+          ].join(' ')}
+        />
+      )}
+      {isOpen && !useVirtualMenu && (
         <div
           id={listboxId}
           role="listbox"

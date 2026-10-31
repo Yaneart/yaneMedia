@@ -46,6 +46,7 @@ export function EpisodeSelector({
       </span>
 
       <Select
+        virtualized
         aria-label="Серия для просмотра"
         value={selectedEpisodeNumber?.toString() ?? null}
         options={options}

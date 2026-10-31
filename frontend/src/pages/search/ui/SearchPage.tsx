@@ -239,7 +239,7 @@ export function SearchPage() {
             </p>
           </div>
 
-          <MediaGrid>
+          <MediaGrid virtualized>
             {results.map((media) => (
               <MediaCard
                 key={media.mediaRef}

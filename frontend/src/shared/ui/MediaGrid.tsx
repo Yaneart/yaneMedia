@@ -1,10 +1,12 @@
 import type { ComponentPropsWithRef } from 'react';
+import { VirtualGrid } from './VirtualGrid';
 
-export type MediaGridProps = ComponentPropsWithRef<'div'>;
+export type MediaGridProps = ComponentPropsWithRef<'div'> & { virtualized?: boolean };
 
-export function MediaGrid({ className = '', ...props }: MediaGridProps) {
+export function MediaGrid({ className = '', virtualized = false, ...props }: MediaGridProps) {
   return (
-    <div
+    <VirtualGrid
+      enabled={virtualized}
       className={[
         'grid grid-cols-2 gap-x-4 gap-y-6',
         'lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6',

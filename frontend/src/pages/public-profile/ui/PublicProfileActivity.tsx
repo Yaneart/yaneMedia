@@ -203,7 +203,7 @@ export function PublicProfileActivity({
     ) : (
       <>
         <PanelContent>
-          <MediaGrid className="lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4">
+          <MediaGrid virtualized className="lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4">
             {items.map((rating) => (
               <div key={rating.media.mediaRef} className="relative min-w-0">
                 <MediaCard
@@ -248,7 +248,7 @@ export function PublicProfileActivity({
     ) : (
       <>
         <PanelContent>
-          <MediaGrid className="lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4">
+          <MediaGrid virtualized className="lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4">
             {items.map((media) => (
               <MediaCard
                 key={media.mediaRef}

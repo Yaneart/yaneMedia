@@ -2,6 +2,7 @@ import { FavoriteFilledIcon, FavoriteIcon, IconButton } from '@/shared';
 import { MediaPosterFallback } from './MediaPosterFallback';
 import { MediaLink } from './MediaLink';
 import type { MediaSummary } from '../model/media';
+import { getCardPosterUrl } from '../model/cardPoster';
 import { useEffect, useState } from 'react';
 
 export type MediaCardProps = {
@@ -49,7 +50,7 @@ export function MediaCard({
         <div className="aspect-2/3 overflow-hidden rounded-card border border-context-border bg-elevated">
           {canShowPoster ? (
             <img
-              src={poster.url}
+              src={getCardPosterUrl(poster.url)}
               alt=""
               width={poster.width}
               height={poster.height}

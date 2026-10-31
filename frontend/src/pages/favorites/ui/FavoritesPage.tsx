@@ -125,7 +125,7 @@ export function FavoritesPage() {
           onRetry={retry}
         />
       ) : visibleFavoriteMedia.length > 0 ? (
-        <MediaGrid>
+        <MediaGrid virtualized>
           {visibleFavoriteMedia.map((media) => (
             <MediaCard
               key={media.mediaRef}
