@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { Transform } from 'node:stream';
-import { Injectable, type BeforeApplicationShutdown } from '@nestjs/common';
+import { Injectable, Logger, type BeforeApplicationShutdown } from '@nestjs/common';
 import type { EngineFileKey, EngineTorrentKey } from './torrent-engine.port';
 import {
   parseTorrentProbe,
@@ -77,6 +77,7 @@ export class TorrentGatewayTimeout extends Error {}
 
 @Injectable()
 export class TorrentStreamGateway implements BeforeApplicationShutdown {
+  private readonly logger = new Logger(TorrentStreamGateway.name);
   private readonly workers = new Map<string, Worker>();
   private readonly completed = new Map<
     string,
@@ -632,6 +633,7 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
       let ticks = 0;
       let checking = false;
       let invalidOutput = false;
+      let failureReason: string | undefined;
       const heartbeat = setInterval(() => {
         if (++ticks % 600 === 0)
           void this.engine.heartbeat(source.key, AbortSignal.timeout(5_000)).catch(() => undefined);
@@ -649,6 +651,7 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
             const ahead = buffer.edge - buffer.position;
             if (
               !current.suspended &&
+              ahead > TORRENT_STARTUP_SECONDS &&
               (buffer.bytes >= TORRENT_WINDOW_TARGET_BYTES ||
                 ahead >= TORRENT_WINDOW_SECONDS ||
                 buffer.count >= TORRENT_WINDOW_SEGMENTS - 4)
@@ -656,8 +659,9 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
               current.suspended = process.kill('SIGSTOP');
             } else if (
               current.suspended &&
-              buffer.bytes < TORRENT_WINDOW_TARGET_BYTES * 0.75 &&
-              ahead < TORRENT_WINDOW_SECONDS * 0.75 &&
+              ((buffer.bytes < TORRENT_WINDOW_TARGET_BYTES * 0.75 &&
+                ahead < TORRENT_WINDOW_SECONDS * 0.75) ||
+                ahead <= TORRENT_STARTUP_SECONDS) &&
               buffer.count < TORRENT_WINDOW_SEGMENTS - 8
             ) {
               process.kill('SIGCONT');
@@ -667,12 +671,16 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
           .catch((error: unknown) => {
             if (error instanceof InvalidTorrentPlaylist) {
               invalidOutput = true;
+              failureReason = error.reason;
               process.kill('SIGKILL');
             }
           })
           .finally(() => {
             checking = false;
-            if (Date.now() - lastOutput > 90_000) process.kill('SIGKILL');
+            if (Date.now() - lastOutput > 90_000) {
+              failureReason = 'output_stalled';
+              process.kill('SIGKILL');
+            }
           });
       }, 100);
       heartbeat.unref();
@@ -712,7 +720,21 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
               absoluteAnchorSeconds: anchor,
               buffer,
             });
-          else await rm(directory, { recursive: true, force: true }).catch(() => undefined);
+          else {
+            this.logger.warn({
+              event: 'torrent.worker_failed',
+              sessionId,
+              generation,
+              reason: failureReason ?? 'ffmpeg_exit',
+              exitCode: code,
+              signal: process.signalCode,
+              bytes: buffer.bytes,
+              segments: buffer.count,
+              positionSeconds: buffer.position,
+              edgeSeconds: buffer.edge,
+            });
+            await rm(directory, { recursive: true, force: true }).catch(() => undefined);
+          }
         }
       };
       process.once('exit', (code) => {

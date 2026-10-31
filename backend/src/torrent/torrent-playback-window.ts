@@ -4,9 +4,10 @@ export const TORRENT_WINDOW_SECONDS = 120;
 export const TORRENT_STARTUP_SECONDS = 6;
 export const TORRENT_WINDOW_SEGMENTS = 64;
 export const TORRENT_WINDOW_BYTES = 128 * 1024 * 1024;
-// Leave room for the current GOP, muxer buffers and the monitor's polling interval.
-export const TORRENT_WINDOW_TARGET_BYTES = 80 * 1024 * 1024;
-export const TORRENT_SEGMENT_BYTES = 32 * 1024 * 1024;
+// Original streams split at source keyframes: a VBR GOP can exceed 32 MiB.
+// Reserve the rest of the 128 MiB cache for that GOP and the monitor's interval.
+export const TORRENT_WINDOW_TARGET_BYTES = 48 * 1024 * 1024;
+export const TORRENT_SEGMENT_BYTES = 64 * 1024 * 1024;
 
 export function torrentWindowSeconds(
   bitrate: number | null,

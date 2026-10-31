@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { TorrentSegmentBuffer } from '../../src/torrent/torrent-segment-buffer';
 import { InvalidTorrentPlaylist } from '../../src/torrent/torrent-hls-playlist';
+import { TORRENT_SEGMENT_BYTES } from '../../src/torrent/torrent-playback-window';
 
 const name = (index: number) => `segment-${String(index).padStart(6, '0')}.m4s`;
 const playlist = (start: number, end: number) =>
@@ -68,10 +69,63 @@ describe('continuous torrent segment buffer', () => {
       await writeFile(join(directory, 'media.m3u8'), playlist(0, 1));
       await writeFile(join(directory, name(0)), 'fragment');
       await writeFile(join(directory, `${name(1)}.tmp`), '');
-      await truncate(join(directory, `${name(1)}.tmp`), 32 * 1024 * 1024 + 1);
+      await truncate(join(directory, `${name(1)}.tmp`), TORRENT_SEGMENT_BYTES + 1);
       await expect(new TorrentSegmentBuffer(directory, 0, 0).refresh()).rejects.toBeInstanceOf(
         InvalidTorrentPlaylist,
       );
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('retains long VBR GOPs and frees consumed ones under pressure without requiring three fragments', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'torrent-buffer-'));
+    const buffer = new TorrentSegmentBuffer(directory, 0, 0);
+    const large = 45 * 1024 * 1024;
+    try {
+      for (let index = 0; index < 2; index++) {
+        await writeFile(join(directory, name(index)), '');
+        await truncate(join(directory, name(index)), large);
+      }
+      await writeFile(
+        join(directory, 'media.m3u8'),
+        playlist(0, 2).replaceAll('2.000000', '10.000000'),
+      );
+      expect((await buffer.refresh()).segments).toHaveLength(2);
+      expect(buffer.bytes).toBeGreaterThan(2 * large);
+      expect(buffer.confirm(14)).toBe(true);
+      // The first GOP has been consumed, but its end is inside the usual 8s
+      // lookbehind. Retaining it would prevent the next 45 MiB GOP from fitting.
+      expect((await buffer.refresh()).mediaSequence).toBe(1);
+      await expect(readFile(join(directory, name(0)))).rejects.toMatchObject({ code: 'ENOENT' });
+      await writeFile(join(directory, name(2)), '');
+      await truncate(join(directory, name(2)), large);
+      await writeFile(
+        join(directory, 'media.m3u8'),
+        playlist(0, 3).replaceAll('2.000000', '10.000000'),
+      );
+      const current = await buffer.refresh();
+      expect(current.segments.map((segment) => segment.filename)).toEqual([name(1), name(2)]);
+      expect(buffer.bytes).toBeLessThan(128 * 1024 * 1024);
+      expect(buffer.edge).toBe(30);
+      expect(buffer.confirm(20)).toBe(true);
+      expect((await buffer.refresh()).mediaSequence).toBe(2);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('still rejects total cache overflow from individually valid large GOPs', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'torrent-buffer-'));
+    try {
+      for (let index = 0; index < 3; index++) {
+        await writeFile(join(directory, name(index)), '');
+        await truncate(join(directory, name(index)), 45 * 1024 * 1024);
+      }
+      await writeFile(join(directory, 'media.m3u8'), playlist(0, 3));
+      await expect(new TorrentSegmentBuffer(directory, 0, 0).refresh()).rejects.toMatchObject({
+        reason: 'cache_limit',
+      });
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

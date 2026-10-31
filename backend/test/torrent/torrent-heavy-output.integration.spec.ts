@@ -9,6 +9,7 @@ import { selectTorrentOutput } from '../../src/torrent/torrent-output-policy';
 import { parseTorrentPlaylist } from '../../src/torrent/torrent-hls-playlist';
 import type { TorrServerClient } from '../../src/torrent/torrserver.client';
 import type { EngineFileKey, EngineTorrentKey } from '../../src/torrent/torrent-engine.port';
+import { TORRENT_WINDOW_TARGET_BYTES } from '../../src/torrent/torrent-playback-window';
 
 const describeHeavy = process.env.TORRENT_GATEWAY_TEST === '1' ? describe : describe.skip;
 const ffmpeg = (args: string[]) => {
@@ -150,7 +151,7 @@ describeHeavy('heavy original 1080p continuous streams', () => {
           const bytes = (
             await Promise.all(files.map(async (name) => (await stat(join(directory, name))).size))
           ).reduce((a, b) => a + b, 0);
-          if (bytes >= 80 * 1024 * 1024) break;
+          if (bytes >= TORRENT_WINDOW_TARGET_BYTES) break;
           if (Date.now() > deadline) throw new Error('Buffer did not fill');
           await new Promise((resolve) => setTimeout(resolve, 100));
         }

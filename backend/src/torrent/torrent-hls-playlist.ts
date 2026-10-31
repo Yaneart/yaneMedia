@@ -1,6 +1,10 @@
 import { TORRENT_WINDOW_SEGMENTS } from './torrent-playback-window';
 
-export class InvalidTorrentPlaylist extends Error {}
+export class InvalidTorrentPlaylist extends Error {
+  constructor(readonly reason = 'invalid_playlist') {
+    super(reason);
+  }
+}
 
 export type ParsedTorrentPlaylist = {
   targetDuration: number;

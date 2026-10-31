@@ -9,6 +9,7 @@ import {
   TORRENT_SEGMENT_BYTES,
   TORRENT_WINDOW_BYTES,
   TORRENT_WINDOW_SEGMENTS,
+  TORRENT_WINDOW_TARGET_BYTES,
 } from './torrent-playback-window';
 
 type Segment = ParsedTorrentPlaylist['segments'][number] & { start: number; end: number };
@@ -55,7 +56,7 @@ export class TorrentSegmentBuffer {
     for (let index = 0; index < raw.segments.length; index++) {
       const sequence = raw.mediaSequence + index;
       if (sequence < this.next) continue;
-      if (sequence !== this.next) throw new InvalidTorrentPlaylist();
+      if (sequence !== this.next) throw new InvalidTorrentPlaylist('sequence_gap');
       const item = raw.segments[index];
       const end = this.edge + Number(item.duration.slice(8, -1));
       this.segments.set(sequence, { ...item, start: this.edge, end });
@@ -64,13 +65,6 @@ export class TorrentSegmentBuffer {
     }
     this.ended = raw.ended;
     this.targetDuration = Math.max(this.targetDuration, raw.targetDuration);
-    for (const [sequence, segment] of this.segments) {
-      if (segment.end > this.position - 8 || this.segments.size <= 3) break;
-      await unlink(join(this.directory, segment.filename)).catch((error: NodeJS.ErrnoException) => {
-        if (error.code !== 'ENOENT') throw error;
-      });
-      this.segments.delete(sequence);
-    }
     const files = await readdir(this.directory);
     const sizes = await Promise.all(
       files.map((name) =>
@@ -84,14 +78,27 @@ export class TorrentSegmentBuffer {
     this.bytes = sizes.reduce((sum, info) => sum + (info?.size ?? 0), 0);
     this.count = files.filter((name) => /^segment-\d{6}\.m4s$/.test(name)).length;
     if (
-      this.bytes > TORRENT_WINDOW_BYTES ||
-      this.count > TORRENT_WINDOW_SEGMENTS ||
       sizes.some(
         (info, index) =>
           /^segment-/.test(files[index]) && (info?.size ?? 0) > TORRENT_SEGMENT_BYTES,
       )
     )
-      throw new InvalidTorrentPlaylist();
+      throw new InvalidTorrentPlaylist('segment_bytes');
+    // Three long GOPs can already exceed the entire cache. Under byte pressure,
+    // drop consumed GOPs even inside the normal 8-second seek lookbehind. Keep
+    // the fragment containing the viewer and every fragment ahead of it.
+    const cutoff = this.position - (this.bytes >= TORRENT_WINDOW_TARGET_BYTES * 0.75 ? 0 : 8);
+    for (const [sequence, segment] of this.segments) {
+      if (segment.end > cutoff || this.segments.size <= 1) break;
+      await unlink(join(this.directory, segment.filename)).catch((error: NodeJS.ErrnoException) => {
+        if (error.code !== 'ENOENT') throw error;
+      });
+      this.bytes -= sizes[files.indexOf(segment.filename)]?.size ?? 0;
+      this.count--;
+      this.segments.delete(sequence);
+    }
+    if (this.bytes > TORRENT_WINDOW_BYTES || this.count > TORRENT_WINDOW_SEGMENTS)
+      throw new InvalidTorrentPlaylist('cache_limit');
     return {
       targetDuration: this.targetDuration,
       mediaSequence: (this.segments.keys().next().value as number | undefined) ?? raw.mediaSequence,
