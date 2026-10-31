@@ -86,11 +86,11 @@ export function MediaCard({
         disabled={favoriteDisabled}
         className={[
           'absolute right-2 top-2 rounded-full border border-white/25',
-          'bg-black/55 text-white shadow-lg backdrop-blur-sm',
-          'hover:border-watermark/70 hover:bg-black/75 hover:text-watermark hover:shadow-xl',
+          'bg-black/65 text-white',
+          'hover:border-watermark/70 hover:bg-black/75 hover:text-watermark',
           'focus-visible:border-white/80 focus-visible:bg-black/75 focus-visible:outline-none',
           'focus-visible:ring-2 focus-visible:ring-white/70',
-          'transition-[transform,background-color,border-color,color,box-shadow] duration-200 ease-out',
+          'transition-[transform,background-color,border-color,color] duration-200 ease-out',
           'hover:scale-110 active:scale-95 active:duration-75',
           'motion-reduce:transform-none motion-reduce:transition-none',
         ].join(' ')}

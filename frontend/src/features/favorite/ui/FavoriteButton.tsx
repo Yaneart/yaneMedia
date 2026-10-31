@@ -25,14 +25,12 @@ export function FavoriteButton({
       aria-pressed={isFavorite}
       disabled={disabled}
       className={[
-        'group min-h-11 w-auto min-w-[10.5rem] justify-start gap-2 rounded-pill border p-1.5 pr-4 backdrop-blur-md',
-        'text-sm text-text-primary shadow-[0_8px_24px_rgb(0_0_0/18%)] transition-[background-color,border-color,box-shadow,transform]',
-        'duration-200 ease-out hover:shadow-[0_0_0_1px_rgb(49_95_189/32%),0_0_18px_rgb(49_95_189/42%)]',
+        'group min-h-11 w-auto min-w-[10.5rem] justify-start gap-2 rounded-pill border p-1.5 pr-4',
+        'text-sm text-text-primary shadow-[0_8px_24px_rgb(0_0_0/18%)] transition-[background-color,border-color,transform]',
+        'duration-200 ease-out hover:border-watermark/70 hover:bg-watermark/35',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-watermark/50',
         'motion-reduce:transform-none motion-reduce:transition-none',
-        isFavorite
-          ? 'border-watermark/55 bg-watermark/30'
-          : 'border-watermark/45 bg-watermark/20',
+        isFavorite ? 'border-watermark/55 bg-watermark/30' : 'border-watermark/45 bg-watermark/20',
         className,
       ].join(' ')}
       onClick={() => onFavoriteChange(!isFavorite)}

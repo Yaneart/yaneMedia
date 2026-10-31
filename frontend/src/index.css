@@ -47,12 +47,13 @@
 }
 
 @keyframes yane-loader-shimmer {
-  0% {
-    background-position: 125% 0;
+  0%,
+  100% {
+    opacity: 0.2;
   }
 
-  100% {
-    background-position: -125% 0;
+  50% {
+    opacity: 1;
   }
 }
 
@@ -66,20 +67,8 @@
   inset: 0;
   bottom: -0.4em;
   content: attr(data-text);
-  color: transparent;
-  background-image: linear-gradient(
-    105deg,
-    transparent 25%,
-    var(--theme-text-primary) 44%,
-    var(--theme-text-primary) 56%,
-    transparent 75%
-  );
-  background-position: 125% 0;
-  background-size: 250% 100%;
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: yane-loader-shimmer 1.6s linear infinite;
+  color: var(--theme-text-primary);
+  animation: yane-loader-shimmer 1.6s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -180,8 +169,6 @@
   );
   --theme-watch-dock-border: rgb(67 113 211 / 72%);
   --theme-watch-dock-hover-border: rgb(88 139 242 / 95%);
-  --theme-watch-dock-hover-shadow:
-    0 0 0 1px rgb(88 139 242 / 24%), 0 0 22px rgb(49 95 189 / 48%), 0 12px 30px rgb(0 0 0 / 34%);
 
   --theme-hero-overlay-start: rgb(0 0 0 / 95%);
   --theme-hero-overlay-middle: rgb(0 0 0 / 55%);
@@ -249,9 +236,6 @@
   );
   --theme-watch-dock-border: rgb(76 161 218 / 78%);
   --theme-watch-dock-hover-border: rgb(35 91 163 / 96%);
-  --theme-watch-dock-hover-shadow:
-    0 0 0 1px rgb(23 79 150 / 34%), 0 0 14px rgb(23 79 150 / 46%), 0 0 30px rgb(23 79 150 / 24%),
-    0 12px 28px rgb(24 25 26 / 18%);
 
   --theme-hero-overlay-start: rgb(244 243 239 / 99%);
   --theme-hero-overlay-middle: rgb(244 243 239 / 5%);
@@ -463,24 +447,27 @@
   }
 }
 
+.loading-state-glow {
+  background: radial-gradient(
+    ellipse,
+    color-mix(in srgb, var(--theme-watermark) 12%, transparent),
+    transparent 70%
+  );
+}
+
+.load-more-button {
+  transition-property: background-color, border-color, color, opacity, transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .load-more-button {
+    transition-property: none;
+  }
+}
+
 @media (hover: hover) and (pointer: fine) {
-  [data-theme='light'] :is(.watch-dock-sidebar, .load-more-button) {
-    box-shadow:
-      0 0 0 1px rgb(23 79 150 / 0%),
-      0 0 14px rgb(23 79 150 / 0%),
-      0 0 30px rgb(23 79 150 / 0%),
-      0 12px 28px rgb(24 25 26 / 10%);
-    transition-duration: 500ms;
-    transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
-  }
-
-  :is(.watch-dock-sidebar, .load-more-button) {
-    transition-duration: 300ms;
-  }
-
   :is(.watch-dock-sidebar, .load-more-button):hover {
     border-color: var(--theme-watch-dock-hover-border);
-    box-shadow: var(--theme-watch-dock-hover-shadow);
   }
 }
 

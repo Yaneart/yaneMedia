@@ -65,7 +65,7 @@ export function WatchDock({
     return (
       <section
         aria-label={`Свёрнутый просмотр: ${mediaTitle}`}
-        className="watch-dock-sidebar pointer-events-auto relative isolate aspect-square w-full max-w-[calc(100dvh-38.5rem)] overflow-hidden rounded-card border border-[var(--theme-watch-dock-border)] bg-black shadow-surface ring-1 ring-inset ring-white/5 transition-[border-color,box-shadow] duration-300 ease-out motion-reduce:transition-none"
+        className="watch-dock-sidebar pointer-events-auto relative isolate aspect-square w-full max-w-[calc(100dvh-38.5rem)] overflow-hidden rounded-card border border-[var(--theme-watch-dock-border)] bg-black shadow-surface ring-1 ring-inset ring-white/5 transition-colors duration-200 ease-out motion-reduce:transition-none"
       >
         {artwork && (
           <img
@@ -89,7 +89,7 @@ export function WatchDock({
         <button
           type="button"
           aria-label="Закрыть просмотр"
-          className="absolute top-2.5 right-2.5 z-10 inline-flex size-8 items-center justify-center rounded-full border border-white/10 bg-black/60 text-white/80 shadow-lg backdrop-blur-md transition-[background-color,color,transform] duration-200 hover:bg-black/80 hover:text-white active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 motion-reduce:transform-none"
+          className="absolute top-2.5 right-2.5 z-10 inline-flex size-8 items-center justify-center rounded-full border border-white/10 bg-black/70 text-white/80 transition-[background-color,color,transform] duration-200 hover:bg-black/85 hover:text-white active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 motion-reduce:transform-none motion-reduce:transition-none"
           onClick={onClose}
         >
           <CloseIcon className="size-4.5" />
@@ -98,7 +98,7 @@ export function WatchDock({
         <button
           type="button"
           aria-label={`Вернуться к просмотру: ${mediaTitle}`}
-          className="absolute top-1/2 left-1/2 z-10 inline-flex size-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-white shadow-lg backdrop-blur-sm transition-[background-color,transform] duration-200 hover:scale-105 hover:bg-black/70 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 motion-reduce:transform-none"
+          className="absolute top-1/2 left-1/2 z-10 inline-flex size-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-black/60 text-white transition-[background-color,transform] duration-200 hover:scale-105 hover:bg-black/80 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 motion-reduce:transform-none motion-reduce:transition-none"
           onClick={onExpand}
         >
           <PlayIcon className="size-5 translate-x-px" />
@@ -212,7 +212,7 @@ export function WatchDock({
         <button
           type="button"
           aria-label="Вернуться к просмотру"
-          className="inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-black/55 text-white/70 shadow-lg backdrop-blur-sm transition-[background-color,color,transform] duration-200 hover:bg-black/75 hover:text-white active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 motion-reduce:transform-none sm:size-11"
+          className="inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-black/65 text-white/70 transition-[background-color,color,transform] duration-200 hover:bg-black/80 hover:text-white active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 motion-reduce:transform-none motion-reduce:transition-none sm:size-11"
           onClick={onExpand}
         >
           <PlayIcon className="size-5 translate-x-px" />
@@ -221,7 +221,7 @@ export function WatchDock({
         <button
           type="button"
           aria-label="Закрыть просмотр"
-          className="inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-black/55 text-white/70 backdrop-blur-sm transition-[background-color,color,transform] duration-200 hover:bg-black/75 hover:text-white active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 motion-reduce:transform-none sm:size-11"
+          className="inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-white/10 bg-black/65 text-white/70 transition-[background-color,color,transform] duration-200 hover:bg-black/80 hover:text-white active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 motion-reduce:transform-none motion-reduce:transition-none sm:size-11"
           onClick={onClose}
         >
           <CloseIcon className="size-5" />

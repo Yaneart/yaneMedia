@@ -69,10 +69,10 @@ export function FeaturedMedia({ media }: FeaturedMediaProps) {
           summary={media}
           className={[
             'inline-flex min-h-12 items-center justify-center gap-2 rounded-pill border border-watermark/45',
-            'bg-watermark/20 pr-5 pl-2 text-base font-semibold text-hero-text backdrop-blur-md',
+            'bg-watermark/20 pr-5 pl-2 text-base font-semibold text-hero-text',
             'shadow-[0_8px_24px_rgb(0_0_0/18%)]',
-            'transition-[background-color,color,opacity,transform,box-shadow] duration-200 ease-out',
-            'hover:shadow-[0_0_0_1px_rgb(49_95_189/32%),0_0_18px_rgb(49_95_189/42%)]',
+            'transition-[background-color,border-color,color,opacity,transform] duration-200 ease-out',
+            'hover:border-watermark/70 hover:bg-watermark/35',
             'active:scale-[0.985] active:duration-75',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/30',
             'motion-reduce:transform-none motion-reduce:transition-none',
