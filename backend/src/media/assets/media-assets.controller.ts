@@ -10,11 +10,20 @@ import {
 import type { Response } from 'express';
 import { createReadStream } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
-import { MediaAssetStore } from './media-asset-store';
+import { MediaAssetStore, type PublicMediaAsset } from './media-asset-store';
 
 @Controller('media/assets')
 export class MediaAssetsController {
   constructor(private readonly store: MediaAssetStore) {}
+
+  @Get('backdrop/:objectKey/card')
+  async getCardBackdrop(
+    @Param('objectKey') objectKey: string,
+    @Headers('if-none-match') ifNoneMatch: string | undefined,
+    @Res() response: Response,
+  ): Promise<void> {
+    await this.sendAsset(await this.store.getCardBackdrop(objectKey), ifNoneMatch, response);
+  }
 
   @Get(':kind/:objectKey')
   async getAsset(
@@ -23,7 +32,14 @@ export class MediaAssetsController {
     @Headers('if-none-match') ifNoneMatch: string | undefined,
     @Res() response: Response,
   ): Promise<void> {
-    const asset = await this.store.getPublicAsset(kind, objectKey);
+    await this.sendAsset(await this.store.getPublicAsset(kind, objectKey), ifNoneMatch, response);
+  }
+
+  private async sendAsset(
+    asset: PublicMediaAsset | undefined,
+    ifNoneMatch: string | undefined,
+    response: Response,
+  ): Promise<void> {
     if (!asset) throw new NotFoundException('Media asset not found');
 
     response.set({

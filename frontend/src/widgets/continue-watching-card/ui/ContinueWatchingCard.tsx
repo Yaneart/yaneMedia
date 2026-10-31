@@ -1,4 +1,9 @@
-import { MediaLandscapeArtwork, MediaLink, type MediaSummary } from '@/entities/media';
+import {
+  getCardBackdrop,
+  MediaLandscapeArtwork,
+  MediaLink,
+  type MediaSummary,
+} from '@/entities/media';
 import type { PlaybackEpisodeSelection, PlaybackProgress } from '@/entities/playback';
 import { CloseIcon, IconButton, PlayIcon } from '@/shared';
 import type { MouseEvent } from 'react';
@@ -80,33 +85,31 @@ export function ContinueWatchingCard({
         aria-label={`Продолжить просмотр: ${media.title}`}
         className={[
           'group relative block aspect-[2.35/1] w-full overflow-hidden rounded-card border border-context-border bg-elevated text-left',
-          'transition-[transform,box-shadow] duration-200 ease-out',
+          'transition-transform duration-150 ease-out',
           'active:scale-[0.992] active:duration-75',
           'motion-reduce:transform-none motion-reduce:transition-none',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action',
         ].join(' ')}
         onClick={(event) => handleLinkClick(event, onContinue)}
       >
-        <div
-          className={[
-            'absolute inset-0 transition-transform duration-300 ease-out',
-            'group-hover:scale-[1.015] group-active:scale-[1.005]',
-            'motion-reduce:transform-none motion-reduce:transition-none',
-          ].join(' ')}
-        >
-          <MediaLandscapeArtwork media={media} loading="eager" allowPosterFallback={false} />
+        <div className="absolute inset-0">
+          <MediaLandscapeArtwork
+            media={{ ...media, backdrop: getCardBackdrop(media.backdrop) }}
+            loading="lazy"
+            allowPosterFallback={false}
+            backdropFit="cover"
+          />
         </div>
 
         <div className="absolute inset-0 bg-linear-to-t from-black/95 via-black/25 to-transparent" />
-        <div className="absolute inset-0 bg-black/0 transition-colors duration-200 ease-out group-hover:bg-black/10 motion-reduce:transition-none" />
 
         <span
           aria-hidden="true"
           className={[
             'absolute left-1/2 top-1/2 z-10 flex size-12 -translate-x-1/2 -translate-y-1/2',
             'scale-95 items-center justify-center rounded-full bg-black/55 text-white',
-            'opacity-0 shadow-overlay backdrop-blur-sm',
-            'transition-[opacity,transform] duration-200 ease-out',
+            'opacity-0',
+            'transition-[opacity,transform] duration-150 ease-out',
             'group-hover:scale-100 group-hover:opacity-100',
             'group-focus-visible:scale-100 group-focus-visible:opacity-100',
             'motion-reduce:transition-none',
@@ -140,7 +143,7 @@ export function ContinueWatchingCard({
         <IconButton
           size="custom"
           variant="bare"
-          className="size-9 rounded-full border border-white/20 bg-black/65 text-white shadow-overlay backdrop-blur-sm transition-colors hover:bg-black/85 focus-visible:ring-white/70"
+          className="size-9 rounded-full border border-white/20 bg-black/65 text-white transition-colors hover:bg-black/85 focus-visible:ring-white/70 motion-reduce:transition-none"
           aria-label={`Убрать «${media.title}» из продолжения просмотра`}
           title="Убрать из списка"
           onClick={onRemove}

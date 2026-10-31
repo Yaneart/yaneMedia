@@ -9,6 +9,7 @@ export type MediaBackdropArtworkProps = {
   imageClassName?: string;
   loading?: 'eager' | 'lazy';
   fetchPriority?: 'high' | 'low' | 'auto';
+  fit?: 'adaptive' | 'cover';
   transparentBackground?: boolean;
   showLoadingSkeleton?: boolean;
   onError?: () => void;
@@ -29,6 +30,7 @@ export function MediaBackdropArtwork({
   imageClassName,
   loading,
   fetchPriority,
+  fit = 'adaptive',
   transparentBackground = false,
   showLoadingSkeleton = false,
   onError,
@@ -37,7 +39,8 @@ export function MediaBackdropArtwork({
   const [measuredArtwork, setMeasuredArtwork] = useState<MeasuredArtwork | null>(null);
   const [retryState, setRetryState] = useState({ attempt: 0, url: artwork.url });
   const retryTimerRef = useRef<number | undefined>(undefined);
-  const isPanoramic = measuredArtwork?.url === artwork.url && measuredArtwork.isPanoramic;
+  const isPanoramic =
+    fit === 'adaptive' && measuredArtwork?.url === artwork.url && measuredArtwork.isPanoramic;
   const retryAttempt = retryState.url === artwork.url ? retryState.attempt : 0;
 
   useEffect(() => {
@@ -57,7 +60,8 @@ export function MediaBackdropArtwork({
     const image = event.currentTarget;
     const aspectRatio = image.naturalWidth / image.naturalHeight;
 
-    const nextIsPanoramic = Number.isFinite(aspectRatio) && aspectRatio >= PANORAMIC_ASPECT_RATIO;
+    const nextIsPanoramic =
+      fit === 'adaptive' && Number.isFinite(aspectRatio) && aspectRatio >= PANORAMIC_ASPECT_RATIO;
 
     setMeasuredArtwork({
       isPanoramic: nextIsPanoramic,

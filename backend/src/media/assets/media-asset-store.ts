@@ -1,7 +1,16 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createHash, randomUUID } from 'node:crypto';
-import { access, mkdir, readdir, rename, stat, unlink, writeFile } from 'node:fs/promises';
+import {
+  access,
+  mkdir,
+  readFile,
+  readdir,
+  rename,
+  stat,
+  unlink,
+  writeFile,
+} from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import sharp from 'sharp';
 import { inspectImage } from './image-metadata';
@@ -23,6 +32,13 @@ export type StoredMediaAssetFile = Pick<StoredMediaAsset, 'kind' | 'objectKey'> 
   modifiedAt: Date;
 };
 
+export type PublicMediaAsset = {
+  path: string;
+  mimeType: string;
+  byteSize: number;
+  etag: string;
+};
+
 const OBJECT_KEY_PATTERN = /^[a-f0-9]{64}\.(?:jpg|png|webp)$/;
 const KIND_DIRECTORIES: Record<MediaAssetKind, string> = {
   poster: 'posters',
@@ -39,6 +55,7 @@ const MEDIA_ASSET_WEBP_QUALITY = 82;
 export class MediaAssetStore implements OnModuleInit {
   private readonly root: string;
   private readonly sourceImports = new Map<string, Promise<StoredMediaAsset>>();
+  private readonly cardBackdrops = new Map<string, Promise<void>>();
 
   constructor(
     config: ConfigService,
@@ -124,7 +141,10 @@ export class MediaAssetStore implements OnModuleInit {
     };
   }
 
-  async getPublicAsset(kindValue: string, objectKey: string) {
+  async getPublicAsset(
+    kindValue: string,
+    objectKey: string,
+  ): Promise<PublicMediaAsset | undefined> {
     const path = this.resolveAssetPath(kindValue, objectKey);
     if (!path) return undefined;
 
@@ -139,6 +159,43 @@ export class MediaAssetStore implements OnModuleInit {
       byteSize: file.size,
       etag: `"${objectKey.slice(0, 64)}"`,
     };
+  }
+
+  async getCardBackdrop(objectKey: string): Promise<PublicMediaAsset | undefined> {
+    const source = await this.getPublicAsset('backdrop', objectKey);
+    if (!source) return undefined;
+
+    const path = `${source.path}.card-v1.webp`;
+    if (!(await stat(path).catch(() => undefined))?.isFile()) {
+      let pending = this.cardBackdrops.get(objectKey);
+      if (!pending) {
+        pending = this.createCardBackdrop(source.path, path).finally(() =>
+          this.cardBackdrops.delete(objectKey),
+        );
+        this.cardBackdrops.set(objectKey, pending);
+      }
+      await pending;
+    }
+
+    return {
+      path,
+      mimeType: 'image/webp',
+      byteSize: (await stat(path)).size,
+      etag: `"${objectKey}-card-v1"`,
+    };
+  }
+
+  private async createCardBackdrop(sourcePath: string, path: string): Promise<void> {
+    const temporary = `${path}.${randomUUID()}.tmp`;
+    try {
+      await sharp(await readFile(sourcePath))
+        .resize({ width: 960, height: 540, fit: 'inside', withoutEnlargement: true })
+        .webp({ quality: 76, effort: 4 })
+        .toFile(temporary);
+      await rename(temporary, path);
+    } finally {
+      await unlink(temporary).catch(() => undefined);
+    }
   }
 
   async listStoredAssets(): Promise<StoredMediaAssetFile[]> {
@@ -161,13 +218,19 @@ export class MediaAssetStore implements OnModuleInit {
     const path = this.resolveAssetPath(kind, objectKey);
     if (!path) throw new Error('Media asset cleanup target is outside the configured root');
 
+    let deleted = true;
     try {
       await unlink(path);
-      return true;
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
-      throw error;
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      deleted = false;
     }
+    if (kind === 'backdrop') {
+      await unlink(`${path}.card-v1.webp`).catch((error: NodeJS.ErrnoException) => {
+        if (error.code !== 'ENOENT') throw error;
+      });
+    }
+    return deleted;
   }
 
   async clear(): Promise<number> {

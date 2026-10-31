@@ -5,7 +5,7 @@ import type { EditorialCollection } from './editorialCollection';
 
 type EditorialCollectionStatus = 'loading' | 'success' | 'error';
 
-const collectionPageSize = 20;
+const collectionPageSize = 24;
 
 function mergeCollectionPages(pages: EditorialCollection[]): EditorialCollection {
   const knownMediaRefs = new Set<string>();

@@ -74,6 +74,7 @@ export type { SkeletonProps } from './ui/Skeleton';
 export { MediaPageSkeleton } from './ui/MediaPageSkeleton';
 export { SearchPageSkeleton } from './ui/SearchPageSkeleton';
 export { EditorialCollectionPageSkeleton } from './ui/EditorialCollectionPageSkeleton';
+export { EditorialCollectionHeader } from './ui/EditorialCollectionHeader';
 export { SocialPageSkeleton } from './ui/SocialPageSkeleton';
 export type { SocialPageSkeletonProps } from './ui/SocialPageSkeleton';
 export { SocialNotFoundState } from './ui/SocialNotFoundState';

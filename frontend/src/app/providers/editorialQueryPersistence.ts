@@ -67,7 +67,7 @@ export function isEditorialQueryKey(queryKey: readonly unknown[]): boolean {
     queryKey.length === 4 &&
     queryKey[1] === 'collection' &&
     queryKey[2] === 'editorial-picks' &&
-    hasExactNumberProperty(queryKey[3], 'limit', 20)
+    hasExactNumberProperty(queryKey[3], 'limit', 24)
   ) {
     return true;
   }

@@ -19,6 +19,7 @@ export type {
   SeriesDetails,
 } from './model/media';
 export { isCanonicalMediaRef, isMediaRef } from './model/media';
+export { getCardBackdrop } from './model/cardBackdrop';
 
 export { useMediaSearch } from './model/useMediaSearch';
 export type { MediaSearchFilters, MediaSearchStatus } from './model/useMediaSearch';

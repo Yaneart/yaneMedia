@@ -14,7 +14,7 @@ describe('MediaCollectionQueryDto', () => {
   it('uses bounded defaults and removes unknown values', async () => {
     await expect(transform({ internal: 'remove-me' })).resolves.toEqual({
       offset: 0,
-      limit: 20,
+      limit: 24,
     });
   });
 
@@ -25,7 +25,11 @@ describe('MediaCollectionQueryDto', () => {
     });
   });
 
-  it.each([{ offset: '-1' }, { offset: '1.5' }, { limit: '0' }, { limit: '21' }, { limit: '1.5' }])(
+  it.each([20, 24])('accepts a collection page of %i items', async (limit) => {
+    await expect(transform({ limit: String(limit) })).resolves.toEqual({ offset: 0, limit });
+  });
+
+  it.each([{ offset: '-1' }, { offset: '1.5' }, { limit: '0' }, { limit: '25' }, { limit: '1.5' }])(
     'rejects an invalid collection page %#',
     async (query) => {
       await expect(transform(query)).rejects.toBeInstanceOf(BadRequestException);

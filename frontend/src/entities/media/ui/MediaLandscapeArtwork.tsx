@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 
 import type { MediaArtwork, MediaSummary } from '../model/media';
-import { MediaBackdropArtwork } from './MediaBackdropArtwork';
+import { MediaBackdropArtwork, type MediaBackdropArtworkProps } from './MediaBackdropArtwork';
 import { MediaLandscapeFallback } from './MediaLandscapeFallback';
 
 export type MediaLandscapeArtworkProps = {
   allowPosterFallback?: boolean;
   backdropClassName?: string;
+  backdropFit?: MediaBackdropArtworkProps['fit'];
   loading?: 'eager' | 'lazy';
   media: Pick<MediaSummary, 'backdrop' | 'mediaRef' | 'poster' | 'title' | 'type'>;
   variant?: 'card' | 'hero';
@@ -80,6 +81,7 @@ function PosterComposition({ loading, onError, poster, variant }: PosterComposit
 export function MediaLandscapeArtwork({
   allowPosterFallback = true,
   backdropClassName,
+  backdropFit,
   loading,
   media,
   variant = 'card',
@@ -143,6 +145,7 @@ export function MediaLandscapeArtwork({
           imageClassName={backdropClassName}
           loading={imageLoading}
           fetchPriority={variant === 'hero' ? 'high' : 'auto'}
+          fit={backdropFit}
           transparentBackground={canShowPoster}
           showLoadingSkeleton={!allowPosterFallback}
           onError={handleBackdropError}

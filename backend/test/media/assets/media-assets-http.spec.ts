@@ -26,6 +26,17 @@ describe('media asset HTTP contract', () => {
         {
           provide: MediaAssetStore,
           useValue: {
+            getCardBackdrop: (objectKey: string) =>
+              Promise.resolve(
+                objectKey === OBJECT_KEY
+                  ? {
+                      path,
+                      mimeType: 'image/webp',
+                      byteSize: BODY.length,
+                      etag: `"${OBJECT_KEY}-card-v1"`,
+                    }
+                  : undefined,
+              ),
             getPublicAsset: (kind: string, objectKey: string) =>
               Promise.resolve(
                 kind === 'poster' && objectKey === OBJECT_KEY
@@ -73,5 +84,24 @@ describe('media asset HTTP contract', () => {
   it('returns 404 for a non-addressable path', async () => {
     const response = await fetch(`${origin}/api/v1/media/assets/poster/not-an-object-key`);
     expect(response.status).toBe(404);
+  });
+
+  it('serves the fixed card variant with its own immutable ETag and conditional GET', async () => {
+    const url = `${origin}/api/v1/media/assets/backdrop/${OBJECT_KEY}/card`;
+    const response = await fetch(url);
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('image/webp');
+    expect(response.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
+    expect(response.headers.get('content-length')).toBe(String(BODY.length));
+    expect(Buffer.from(await response.arrayBuffer())).toEqual(BODY);
+    const etag = response.headers.get('etag')!;
+    expect(etag).toBe(`"${OBJECT_KEY}-card-v1"`);
+
+    const cached = await fetch(url, { headers: { 'If-None-Match': etag } });
+    expect(cached.status).toBe(304);
+    expect(await cached.text()).toBe('');
+    const originalEtag = await fetch(url, { headers: { 'If-None-Match': `"${CHECKSUM}"` } });
+    expect(originalEtag.status).toBe(200);
+    expect((await fetch(`${origin}/api/v1/media/assets/backdrop/missing/card`)).status).toBe(404);
   });
 });

@@ -10,6 +10,6 @@ export class MediaCollectionQueryDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  @Max(20)
-  limit = 20;
+  @Max(24)
+  limit = 24;
 }

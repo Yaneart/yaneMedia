@@ -43,10 +43,11 @@ describe('editorial query persistence', () => {
     const includedKeys = [
       ['media', 'home'],
       ['media', 'catalog', 'movie', { limit: 2 }],
-      ['media', 'collection', 'editorial-picks', { limit: 20 }],
+      ['media', 'collection', 'editorial-picks', { limit: 24 }],
       ['media', 'summary', 'imdb:tt1234567'],
     ] as const;
     const excludedKeys = [
+      ['media', 'collection', 'editorial-picks', { limit: 20 }],
       ['account', 'me'],
       ['account', 'owner@example.com', 'social', 'profile'],
       ['social', 'public', 'profiles', 'owner'],
