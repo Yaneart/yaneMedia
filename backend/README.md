@@ -6,7 +6,7 @@ API на NestJS для каталога, поиска, аккаунтов, из�
 
 ## Локальный запуск
 
-Нужны Node.js 24, Bun и работающий PostgreSQL. Команды этого README выполняются из `yaneMedia/backend`. Для перехода из корня проекта выполните `cd backend`; на вашем компьютере можно из любой папки выполнить `cd C:\Users\artem\yaneMedia\backend`.
+Нужны Node.js 24, Bun и работающий PostgreSQL. Откройте терминал в корне скачанного или склонированного проекта и выполните `cd backend`. Команды этого README запускаются из папки `backend`, обозначенной ниже как `yaneMedia/backend`.
 
 ```sh
 # Папка: yaneMedia/backend

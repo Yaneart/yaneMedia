@@ -6,7 +6,7 @@
 
 ## Локальный запуск
 
-Нужны Bun и запущенный [backend](../backend/README.md). Команды этого README выполняются из `yaneMedia/frontend`. Для перехода из корня проекта выполните `cd frontend`; на вашем компьютере можно из любой папки выполнить `cd C:\Users\artem\yaneMedia\frontend`.
+Нужны Bun и запущенный [backend](../backend/README.md). Откройте терминал в корне скачанного или склонированного проекта и выполните `cd frontend`. Команды этого README запускаются из папки `frontend`, обозначенной ниже как `yaneMedia/frontend`.
 
 ```sh
 # Папка: yaneMedia/frontend
