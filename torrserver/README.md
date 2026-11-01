@@ -1,6 +1,6 @@
 # Private TorrServer
 
-Первый запуск Home на Windows: [пять простых шагов](SETUP.md).
+Первый запуск Home на Windows, Linux и macOS: [пять простых шагов](SETUP.md).
 
 This is the preserved **Home** implementation. Public mode does not start this service.
 Use [Home/Public switching](../docs/home-torrent.md); viewer-local companion work follows
@@ -19,6 +19,13 @@ Create local credentials once before starting Compose:
 ```powershell
 # Папка: yaneMedia/ (корень проекта)
 powershell -NoProfile -ExecutionPolicy Bypass -File .\torrserver\init-secrets.ps1
+```
+
+Linux / macOS:
+
+```sh
+# Папка: yaneMedia/ (корень проекта)
+sh torrserver/init-secrets.sh
 ```
 
 The generated username and password stay under the ignored `storage/` directory and are mounted as

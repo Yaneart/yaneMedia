@@ -64,4 +64,4 @@ bun run catalog:sync
 
 При локальном запуске из `.env.example` серверный torrent выключен. Для домашнего просмотра используйте режим Home из корня проекта: он подключает TorrServer, Prowlarr и необходимые секреты.
 
-Первый запуск — в [короткой инструкции Home для Windows](../torrserver/SETUP.md), проверки — в [руководстве по torrent-тестам](test/torrent/README.md).
+Первый запуск — в [короткой инструкции Home для Windows, Linux и macOS](../torrserver/SETUP.md), проверки — в [руководстве по torrent-тестам](test/torrent/README.md).
