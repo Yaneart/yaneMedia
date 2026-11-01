@@ -1,0 +1,25 @@
+# Public-site baseline. Local companion playback is added by the LC roadmap.
+# Use with compose.yaml; home-server mode uses compose.yaml alone.
+services:
+  torrserver:
+    profiles: [home-torrent]
+  prowlarr:
+    profiles: [home-torrent]
+  backend:
+    environment:
+      TORRENT_STREAMING_ENABLED: "false"
+      TORRSERVER_BASE_URL: null
+      TORRSERVER_USERNAME_FILE: null
+      TORRSERVER_PASSWORD_FILE: null
+      TORRENT_IDEMPOTENCY_SECRET_FILE: null
+      PROWLARR_BASE_URL: null
+      PROWLARR_API_KEY_FILE: null
+      JACRED_BASE_URL: null
+    depends_on: !override
+      postgres:
+        condition: service_healthy
+    secrets: !reset []
+    networks: !override [app, database]
+  frontend:
+    environment:
+      VITE_SERVER_TORRENT_ENABLED: "false"

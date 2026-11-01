@@ -1,5 +1,11 @@
 # Private TorrServer
 
+Первый запуск Home на Windows: [пять простых шагов](SETUP.md).
+
+This is the preserved **Home** implementation. Public mode does not start this service.
+Use [Home/Public switching](../docs/home-torrent.md); viewer-local companion work follows
+the [current roadmap](../docs/development/roadmap.md). The commands below refer to Home.
+
 Operator procedures: [эксплуатация, диагностика, обновление, rollback и отключение](OPERATIONS.md).
 Browser/codec evidence and limits: [acceptance](ACCEPTANCE.md).
 Playback decision and spike findings: [architecture](ARCHITECTURE.md).
@@ -11,6 +17,7 @@ its SHA-256 during the build. GStreamer routes are not used by the product playb
 Create local credentials once before starting Compose:
 
 ```powershell
+# Папка: yaneMedia/ (корень проекта)
 powershell -NoProfile -ExecutionPolicy Bypass -File .\torrserver\init-secrets.ps1
 ```
 
@@ -56,6 +63,7 @@ allocations and decoder threads are bounded; these controls do not replace codec
 Focused verification (from the project root):
 
 ```powershell
+# Папка: yaneMedia/ (корень проекта)
 docker compose config --quiet
 docker compose exec -T torrserver bash -n /usr/local/bin/torrserver-firewall
 docker compose exec -T torrserver iptables -nvL TORRENT_EGRESS

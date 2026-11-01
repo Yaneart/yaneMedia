@@ -30,6 +30,7 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto): Promise<{ user: AuthUserDto }> {
+    this.mailService.ensureConfigured();
     const existingUser = await this.usersService.findByEmail(dto.email);
 
     if (existingUser) {
@@ -145,6 +146,7 @@ export class AuthService {
   }
 
   async resendVerification(email: string): Promise<{ success: true }> {
+    this.mailService.ensureConfigured();
     const user = await this.usersService.findByEmail(email);
 
     if (user && !user.emailVerifiedAt) {
@@ -160,6 +162,7 @@ export class AuthService {
 
     if (user) {
       try {
+        this.mailService.ensureConfigured();
         const token = generateToken();
         const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
         const saved = await this.authRepository.savePasswordResetToken({

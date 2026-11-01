@@ -6,6 +6,7 @@ import {
 } from '@/entities/media-source';
 import { ErrorState, IconButton, PlayIcon, Spinner } from '@/shared';
 import { useEffect, useRef, useState } from 'react';
+import type { PreferencesAdapter } from '@yaneart/yaneplayer';
 
 import {
   MediaVideoRenderer,
@@ -46,6 +47,7 @@ export type MediaPlayerProps = {
   embedded?: boolean;
   directControls?: MediaVideoDirectControls;
   torrentTimeline?: TorrentVideoTimeline;
+  preferences?: PreferencesAdapter;
 };
 
 type PlaybackIssueContent = {
@@ -117,6 +119,7 @@ export function MediaPlayer({
   embedded = false,
   directControls,
   torrentTimeline,
+  preferences,
 }: MediaPlayerProps) {
   const sectionRef = useRef<HTMLElement>(null);
   const [theater, setTheater] = useState(false);
@@ -220,6 +223,7 @@ export function MediaPlayer({
             initialPositionSeconds={initialPositionSeconds}
             directControls={directControls}
             torrentTimeline={torrentTimeline}
+            preferences={preferences}
             onReady={onReady}
             onError={onError}
             onPlay={onPlay}

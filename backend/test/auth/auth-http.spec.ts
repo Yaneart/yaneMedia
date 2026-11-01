@@ -47,6 +47,7 @@ describe('auth HTTP contract', () => {
     SESSION_TTL_DAYS: 30,
   });
   let passwordHash: string;
+  const ensureConfigured = jest.fn();
 
   beforeAll(async () => {
     passwordHash = await hashPassword(dto.password);
@@ -67,7 +68,10 @@ describe('auth HTTP contract', () => {
         },
         {
           provide: MailService,
-          useValue: { sendVerificationEmail: jest.fn().mockResolvedValue(undefined) },
+          useValue: {
+            ensureConfigured,
+            sendVerificationEmail: jest.fn().mockResolvedValue(undefined),
+          },
         },
         { provide: ConfigService, useValue: config },
       ],
@@ -94,6 +98,7 @@ describe('auth HTTP contract', () => {
   });
 
   beforeEach(() => {
+    ensureConfigured.mockReset();
     config.set('NODE_ENV', 'test');
     createSession.mockReset().mockImplementation((data) => Promise.resolve({ ...data, createdAt }));
     findUserBySessionHash.mockReset().mockResolvedValue(undefined);
@@ -144,6 +149,19 @@ describe('auth HTTP contract', () => {
     const stored = create.mock.calls[0][0];
     expect(Object.keys(stored).sort()).toEqual(['displayName', 'email', 'passwordHash']);
     await expect(verifyPassword(stored.passwordHash, dto.password)).resolves.toBe(true);
+  });
+
+  it('returns a clear 503 without creating an account when mail is not configured', async () => {
+    const message = 'Отправка писем не настроена. Можно продолжить без аккаунта.';
+    ensureConfigured.mockImplementation(() => {
+      new MailService(new ConfigService({ RESEND_API_KEY: '', MAIL_FROM: '' })).ensureConfigured();
+    });
+    const response = await register(dto);
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: { code: 'MAIL_NOT_CONFIGURED', message } });
+    expect(response.headers.get('set-cookie')).toBeNull();
+    expect(findByEmail).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
   });
 
   it('rejects invalid input with 400 before accessing users', async () => {

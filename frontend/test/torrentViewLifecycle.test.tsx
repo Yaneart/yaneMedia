@@ -39,22 +39,25 @@ mock.module('@/widgets/media-info', () => ({
   MediaFacts: () => null,
   MediaDescriptionPanel: () => null,
 }));
+let playback: any = {
+  status: 'ready',
+  continueWatchingEntries: [],
+  session: {
+    mediaRef,
+    sourceRef: `torrent:${id}`,
+    state: 'paused',
+    positionSeconds: 42,
+    episode: null,
+  },
+  startSession: noop,
+  pauseSession: noop,
+  resumeSession: noop,
+  updateProgress: noop,
+  endSession: noop,
+};
 mock.module('@/features/playback-session', () => ({
-  usePlaybackSession: () => ({
-    continueWatchingEntries: [],
-    session: {
-      mediaRef,
-      sourceRef: `torrent:${id}`,
-      state: 'paused',
-      positionSeconds: 42,
-      episode: null,
-    },
-    startSession: noop,
-    pauseSession: noop,
-    resumeSession: noop,
-    updateProgress: noop,
-    endSession: noop,
-  }),
+  usePlayerPreferences: () => undefined,
+  usePlaybackSession: () => playback,
 }));
 
 const players: FakePlayer[] = [];
@@ -64,8 +67,14 @@ class FakePlayer extends HTMLElement {
   volume = 1;
   muted = false;
   disconnected = false;
-  setSource = mock(async () => {});
+  descriptor: any;
+  options: any;
+  setSource = mock(async (source: any, options: any) => {
+    this.descriptor = source;
+    this.options = options;
+  });
   selectAudio = mock(async () => {});
+  selectQuality = mock(async () => {});
   connectedCallback() {
     players.push(this);
   }
@@ -183,6 +192,142 @@ test('owner preparing updates keep the mounted torrent player and its volume/mut
   });
   expect(player.disconnected).toBe(true);
   expect(document.querySelector('yane-player')).toBeNull();
+  view.unmount();
+  client.clear();
+});
+
+test('series next preserves pause and track, quality changes keep position, history reopens the saved episode', async () => {
+  players.length = 0;
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  globalThis.fetch = mock(() => new Promise<Response>(() => {}));
+  const source = (episode: number, height: number) => ({
+    sourceRef: `episode-${episode}-${height}`,
+    provider: 'fixture',
+    kind: 'mp4' as const,
+    label: 'English',
+    translation: { title: 'English', type: 'original' as const, language: 'en' },
+    quality: { label: `${height}p`, height },
+    episode: { seasonNumber: 1, episodeNumber: episode },
+    url: `/episode-${episode}-${height}.mp4`,
+    availability: 'available' as const,
+    browserSupported: true,
+  });
+  const start = mock((input: any) => {
+      playback = { ...playback, session: { ...playback.session, ...input } };
+    }),
+    pause = mock(() => {});
+  playback = {
+    ...playback,
+    continueWatchingEntries: [],
+    startSession: start,
+    pauseSession: pause,
+    session: {
+      mediaRef,
+      sourceRef: 'episode-2-720',
+      state: 'paused',
+      positionSeconds: 67,
+      durationSeconds: 1200,
+      episode: { seasonNumber: 1, episodeNumber: 2 },
+    },
+  };
+  const media = {
+    mediaRef: mediaRef as any,
+    type: 'series' as const,
+    seasons: [],
+    slug: 'fixture',
+    title: 'Fixture',
+    genres: [],
+    countries: [],
+    languages: [],
+    persons: [],
+  };
+  const props = {
+    media,
+    animeSeasonChain: [],
+    onAnimeSeasonChange: noop,
+    onAnimeEpisodeChange: noop,
+    availability: {
+      sources: [],
+      episodes: [1, 2, 3].map((episodeNumber) => ({
+        seasonNumber: 1,
+        episodeNumber,
+        sources: [source(episodeNumber, 720), source(episodeNumber, 1080)],
+      })),
+      checkedAt: new Date().toISOString(),
+      degraded: false,
+      hasExpiredSources: false,
+    },
+    availabilityPending: false,
+    availabilityStatus: 'ready' as const,
+  };
+  const tree = (key: string) => (
+    <QueryClientProvider client={client}>
+      <MemoryRouter>
+        <AuthContext
+          value={{
+            state: { status: 'guest', user: null },
+            setAuthenticated: noop,
+            setGuest: noop,
+            refresh: async () => {},
+          }}
+        >
+          <MediaView key={key} {...props} />
+        </AuthContext>
+      </MemoryRouter>
+    </QueryClientProvider>
+  );
+  const view = render(tree('playing'));
+  await waitFor(() => expect(players).toHaveLength(1));
+  const player = players[0];
+  expect(player.options).toMatchObject({ positionSeconds: 67, intent: 'paused' });
+  let changed: Promise<unknown>;
+  await act(async () => {
+    changed = player.host.execute(
+      { type: 'quality', target: { qualityId: '1080\u001f1080p' } },
+      { signal: new AbortController().signal, positionSeconds: 67, intent: 'paused' },
+    );
+  });
+  expect(start.mock.calls.at(-1)?.[0]).toMatchObject({
+    sourceRef: 'episode-2-1080',
+    positionSeconds: 67,
+    episode: { episodeNumber: 2 },
+  });
+  expect(pause).toHaveBeenCalled();
+  await changed!;
+  await act(async () => player.navigation.next());
+  await waitFor(() =>
+    expect(start.mock.calls.at(-1)?.[0]).toMatchObject({
+      sourceRef: 'episode-3-1080',
+      positionSeconds: 0,
+      episode: { episodeNumber: 3 },
+    }),
+  );
+  expect(pause.mock.calls.length).toBeGreaterThanOrEqual(2);
+  await act(async () => {
+    playback = { ...playback, status: 'loading', continueWatchingEntries: [], session: null };
+    view.rerender(tree('history'));
+  });
+  await act(async () => {
+    playback = {
+      ...playback,
+      status: 'ready',
+      continueWatchingEntries: [
+        {
+          mediaRef,
+          sourceRef: 'episode-2-720',
+          positionSeconds: 95,
+          episode: { seasonNumber: 1, episodeNumber: 2 },
+        },
+      ],
+    };
+    view.rerender(tree('history'));
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Запустить English', exact: true }));
+  expect(start.mock.calls.at(-1)?.[0]).toMatchObject({
+    sourceRef: 'episode-2-720',
+    positionSeconds: 95,
+    episode: { episodeNumber: 2 },
+  });
   view.unmount();
   client.clear();
 });

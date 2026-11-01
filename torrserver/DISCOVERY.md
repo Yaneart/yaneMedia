@@ -12,7 +12,8 @@ Prowlarr хранит `/config` в `prowlarr-config`; backend обращаетс
 `storage/torrent-discovery/secrets/api-key`. Этот файл и volume содержат secrets.
 Для начальной настройки запустить только Prowlarr с loopback admin override,
 получить API key через UI и сохранить в файл, затем запускать backend.
-Порядок команд и ротация — в [OPERATIONS.md](OPERATIONS.md#настройки-secrets-и-сеть).
+Первый запуск — в [короткой инструкции Home](SETUP.md), замена ключей — в
+[OPERATIONS.md](OPERATIONS.md#настройки-secrets-и-сеть).
 
 Добавлять только разрешённые владельцем источники. Проверить connection test,
 credentials и movie/TV/anime categories каждой definition. Выбрать до восьми
@@ -58,6 +59,7 @@ Nyaa — 51 s / 1238 frames, Anime Tosho — 31 s / 752 frames после явн
 без создания сессии и скачивания torrent):
 
 ```powershell
+# Папка: yaneMedia/ (корень проекта)
 docker compose exec -T backend npm run probe:torrent-discovery -- --query Oppenheimer --kind movie --rounds 2
 docker compose exec -T backend npm run probe:torrent-discovery -- --query Shogun --kind tv --rounds 2
 docker compose exec -T backend npm run probe:torrent-discovery -- --query "Sousou no Frieren" --kind anime --rounds 2

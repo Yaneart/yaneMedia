@@ -609,6 +609,7 @@ describe('torrent player adapter contract', () => {
       onPause: () => {},
     };
     const view = render(<MediaVideoRenderer {...props} />);
+    await act(async () => {});
     const player = players[0];
     expect(player.descriptor.capabilities.audio).toBe('host');
     expect(player.descriptor.capabilities.quality).toBe('none');
@@ -706,6 +707,7 @@ describe('torrent player adapter contract', () => {
       onPause: () => {},
     };
     const view = render(<MediaVideoRenderer {...props} />);
+    await act(async () => {});
     const player = players[0];
     expect(player.descriptor.crossOrigin).toBeNull();
     const snapshot = {
@@ -810,6 +812,7 @@ describe('torrent player adapter contract', () => {
       onPause: pause,
     };
     const view = render(<MediaVideoRenderer {...props} />);
+    await act(async () => {});
     const player = players[0];
     expect(player.descriptor.src).toBe(url);
     expect(player.descriptor.crossOrigin).toBe('use-credentials');

@@ -1,11 +1,17 @@
 # Torrent contract tests
 
-Run the torrent area and its HTTP error boundary, without project-wide checks:
+Run the torrent area and its HTTP error boundary, without project-wide checks.
+Start in the project root (`yaneMedia`, the folder containing `compose.yaml`), then run `cd backend`:
 
 ```powershell
-cd backend
+# Папка: yaneMedia/backend
 npm.cmd run test:torrent
-cd ../frontend
+```
+
+From `yaneMedia/backend`, run `cd ../frontend`, then:
+
+```powershell
+# Папка: yaneMedia/frontend
 bun run test:torrent
 ```
 
@@ -31,7 +37,7 @@ test unmounts React, clears queries/storage and resets the account cancellation 
 | Terminal polling, retry bounds, abort, account cache isolation and login return                                  | frontend boundary/social-access suites                                                                       |
 
 The HLS renderer test checks callbacks, credentials and absolute torrent progress with
-a fake HLS library. It does not decode video or replace the browser matrix in T-023.
+a fake player element. It does not decode video or replace the current browser matrix.
 The HTTP lifecycle fixture does not prove database transactions; those are checked separately.
 
 ## Opt-in PostgreSQL and FFmpeg
@@ -41,9 +47,11 @@ admission tests use the configured database, create isolated users and delete th
 global quotas still apply. FFmpeg tests generate their own short local video and hostile playlist.
 Neither suite uses the live engine or public torrents.
 
-From the project root, using the running backend image containing the matching source/tests:
+Return from `yaneMedia/frontend` to the project root with `cd ..`.
+Run from `yaneMedia`, using the running backend image containing the matching source/tests:
 
 ```powershell
+# Папка: yaneMedia/ (корень проекта)
 docker compose exec -T -e TORRENT_POSTGRES_TEST=1 -e TORRENT_GATEWAY_TEST=1 backend npm test -- --runInBand test/torrent/torrent-session-postgres.integration.spec.ts test/torrent/torrent-gateway.integration.spec.ts
 ```
 
@@ -54,8 +62,8 @@ check the actual host port mapping before using the host database URL. FFmpeg te
 both binaries on `PATH`.
 
 Real TorrServer/browser smoke remains a separate, explicitly selected exercise with permitted
-content and owned-session cleanup. The disposable spike stack and generated fixtures were
-removed in T-025; no maintained test depends on them. The [architecture decision](../../../torrserver/ARCHITECTURE.md)
-retains the spike findings, [acceptance](../../../torrserver/ACCEPTANCE.md) records browser evidence,
+content and owned-session cleanup. No maintained test depends on the removed disposable
+spike stack or generated development artifacts. The [architecture](../../../torrserver/ARCHITECTURE.md)
+describes the current Home path, [acceptance](../../../torrserver/ACCEPTANCE.md) defines the browser matrix,
 and [operations](../../../torrserver/OPERATIONS.md) describes safe diagnostics and recovery.
 Public releases and their peer availability are outside this deterministic suite.

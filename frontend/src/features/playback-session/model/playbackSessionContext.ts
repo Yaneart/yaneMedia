@@ -29,12 +29,13 @@ export type PlaybackSessionContextValue = {
   canonicalizeContinueWatching: (
     canonicalMediaRefs: ReadonlyMap<MediaLocator, CanonicalMediaRef>,
   ) => void;
-  pauseSession: () => void;
-  resumeSession: () => void;
+  pauseSession: (expected?: PlaybackSession) => void;
+  resumeSession: (expected?: PlaybackSession) => void;
   updateProgress: (
     positionSeconds: number,
     durationSeconds?: number | null,
     reason?: 'periodic' | 'metadata' | 'seek' | 'pause' | 'ended',
+    expected?: PlaybackSession,
   ) => void;
   setVolume: (volume: number) => void;
   endSession: () => void;

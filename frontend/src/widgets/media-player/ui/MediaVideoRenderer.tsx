@@ -6,13 +6,14 @@ import {
   type HostResult,
   type PlayerEvent,
   type PlayerSource,
+  type PreferencesAdapter,
   type YanePlayerElement,
 } from '@yaneart/yaneplayer';
 import '@yaneart/yaneplayer';
 import { createTorrentStream } from '../model/torrentStream';
 
 export type MediaVideoDirectControls = {
-  tracks: readonly SelectOption[];
+  tracks: readonly (SelectOption & { language?: string })[];
   selectedTrackKey: string | null;
   qualities: readonly SelectOption[];
   selectedQualityKey: string | null;
@@ -100,6 +101,7 @@ type MediaVideoRendererProps = {
   initialPositionSeconds: number;
   directControls?: MediaVideoDirectControls;
   torrentTimeline?: TorrentVideoTimeline;
+  preferences?: PreferencesAdapter;
   onReady: () => void;
   onError: () => void;
   onPlay: () => void;
@@ -121,6 +123,8 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
   const torrentCommandRef = useRef(false);
   const torrentAudioRef = useRef<string | null>(null);
   const streamRef = useRef<ReturnType<typeof createTorrentStream> | null>(null);
+  const initializingRef = useRef<{ position: number } | null>(null);
+  const settleSourceRef = useRef<() => void>(() => undefined);
 
   useLayoutEffect(() => {
     propsRef.current = props;
@@ -133,6 +137,7 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
     streamRef.current = stream;
     player.lang = 'ru';
     player.className = 'media-video-player';
+    player.preferences = propsRef.current.preferences;
     let disposed = false;
     let ready = false;
     let readyRevision: string | null = null;
@@ -140,6 +145,16 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
     let previousIntent: PlayerEvent['snapshot']['intent'] = 'paused';
     let seeking = false;
     let renewedRevision: string | null = null;
+    let confirmed: {
+      position: number;
+      duration: number | undefined;
+      props: MediaVideoRendererProps;
+    } | null = null;
+    const flush = () => {
+      if (!confirmed) return;
+      confirmed.props.onProgress(confirmed.position, confirmed.duration, 'pause');
+      confirmed.props.onPause();
+    };
     const continueTorrent = (snapshot: PlayerEvent['snapshot']) => {
       if (
         disposed ||
@@ -150,6 +165,7 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
         snapshot.playback !== 'ended' ||
         snapshot.intent !== 'playing' ||
         snapshot.source?.revision !== loadedRevisionRef.current ||
+        initializingRef.current ||
         renewedRevision === snapshot.source?.revision ||
         snapshot.positionSeconds === null ||
         (snapshot.durationSeconds !== null &&
@@ -208,6 +224,11 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
         snapshot.positionSeconds === null
       )
         return;
+      confirmed = {
+        position: snapshot.positionSeconds,
+        duration: snapshot.durationSeconds ?? undefined,
+        props: propsRef.current,
+      };
       propsRef.current.onProgress(
         snapshot.positionSeconds,
         snapshot.durationSeconds ?? undefined,
@@ -218,6 +239,7 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
       if (disposed || event.source?.revision !== loadedRevisionRef.current) return;
       const { snapshot } = event;
       stream.update(snapshot);
+      if (initializingRef.current) return;
       if (snapshot.source?.revision !== readyRevision) {
         readyRevision = snapshot.source?.revision ?? null;
         ready = false;
@@ -250,6 +272,13 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
       }
       previousIntent = snapshot.intent;
       continueTorrent(snapshot);
+    };
+    settleSourceRef.current = () => {
+      const snapshot = player.runtime?.getSnapshot();
+      if (snapshot?.source)
+        onState({
+          detail: { type: 'statechange', source: snapshot.source, snapshot },
+        } as CustomEvent<PlayerEvent>);
     };
     const onPosition = ({ detail: event }: CustomEvent<PlayerEvent>) => {
       if (disposed || event.source?.revision !== loadedRevisionRef.current) return;
@@ -294,7 +323,10 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
             command.target.audioId === torrentAudioRef.current
           )
             return Promise.resolve({ selection: { audioId: command.target.audioId } });
-          const position = command.target.positionSeconds ?? context.positionSeconds;
+          const position =
+            command.target.positionSeconds ??
+            initializingRef.current?.position ??
+            context.positionSeconds;
           if (position === null || position === undefined)
             return Promise.reject(new Error('Torrent position unavailable'));
           return replaceTorrent(position, context.signal, command.target.audioId);
@@ -310,7 +342,7 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
           return Promise.resolve({ selection: { audioId, qualityId } });
         }
         // Save confirmed position before the app replaces its source/session.
-        if (context.positionSeconds !== null) {
+        if (context.positionSeconds !== null && !initializingRef.current) {
           current.onProgress(
             context.positionSeconds,
             player.runtime?.getSnapshot().durationSeconds ?? undefined,
@@ -338,7 +370,7 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
               controls.onSelectionChange(
                 audioId,
                 qualityId,
-                context.positionSeconds ?? 0,
+                initializingRef.current?.position ?? context.positionSeconds ?? 0,
                 context.intent,
               );
             else finish();
@@ -349,8 +381,11 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
       },
     };
     containerRef.current!.append(player);
+    window.addEventListener('pagehide', flush);
     return () => {
       disposed = true;
+      flush();
+      window.removeEventListener('pagehide', flush);
       stream.dispose();
       streamRef.current = null;
       player.removeEventListener('yp-statechange', onState);
@@ -379,7 +414,11 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
             ? { crossOrigin: null }
             : {}),
           title: props.mediaTitle,
-          audioTracks: controls?.tracks.map(({ value, label }) => ({ id: value, label })),
+          audioTracks: controls?.tracks.map(({ value, label, language }) => ({
+            id: value,
+            label,
+            language,
+          })),
           qualities: controls?.qualities.map(({ value, label }) => ({ id: value, label })),
           capabilities: {
             audio: controls && controls.tracks.length > 1 ? 'host' : 'transport',
@@ -403,24 +442,41 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
       });
     } else {
       torrentAudioRef.current = timeline?.selectedAudioTrackRef ?? null;
+      const initial = {
+        position: timeline
+          ? timeline.timeline.continuous
+            ? Math.max(timeline.startPositionSeconds, props.initialPositionSeconds)
+            : timeline.startPositionSeconds
+          : props.initialPositionSeconds,
+      };
+      initializingRef.current = initial;
       void player
         .setSource(descriptor, {
-          positionSeconds: timeline
-            ? timeline.timeline.continuous
-              ? Math.max(timeline.startPositionSeconds, props.initialPositionSeconds)
-              : timeline.startPositionSeconds
-            : props.initialPositionSeconds,
+          positionSeconds: initial.position,
           intent: props.shouldAutoPlay ? 'playing' : 'paused',
         })
         .then(async () => {
-          if (timeline) await player.selectAudio(timeline.selectedAudioTrackRef);
-          if (controls?.selectedTrackKey && descriptor.capabilities?.audio === 'host')
+          if (loadedRevisionRef.current !== descriptor.revision) return;
+          const selection = player.runtime?.getSnapshot().selection;
+          if (timeline && !selection?.audioId)
+            await player.selectAudio(timeline.selectedAudioTrackRef);
+          if (
+            controls?.selectedTrackKey &&
+            descriptor.capabilities?.audio === 'host' &&
+            !selection?.audioId
+          )
             await player.selectAudio(controls.selectedTrackKey);
           if (controls?.selectedQualityKey && descriptor.capabilities?.quality === 'host')
             await player.selectQuality(controls.selectedQualityKey);
         })
         .catch(() => {
           /* yp-error carries normalized fatal errors. */
+        })
+        .finally(() => {
+          if (initializingRef.current === initial) {
+            initializingRef.current = null;
+            settleSourceRef.current();
+          }
         });
     }
   });

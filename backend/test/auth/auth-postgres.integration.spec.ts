@@ -35,7 +35,10 @@ describePostgres('auth with PostgreSQL', () => {
       .overrideProvider(DatabaseService)
       .useValue({ db: drizzle(client) })
       .overrideProvider(MailService)
-      .useValue({ sendVerificationEmail: jest.fn().mockResolvedValue(undefined) })
+      .useValue({
+        ensureConfigured: jest.fn(),
+        sendVerificationEmail: jest.fn().mockResolvedValue(undefined),
+      })
       .compile();
     app = module.createNestApplication();
     app.use(cookieParser());

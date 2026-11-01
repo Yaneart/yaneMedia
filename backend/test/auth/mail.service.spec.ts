@@ -1,6 +1,37 @@
 import { Logger, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { MailService } from '../../src/mail/mail.service';
+import { appConfigValidationSchema } from '../../src/config/config.module';
+
+describe('Optional email configuration', () => {
+  const base = {
+    DATABASE_URL: 'postgresql://user:pass@localhost:5432/app',
+    FRONTEND_ORIGIN: 'http://localhost:5173',
+  };
+
+  it.each([
+    {},
+    { RESEND_API_KEY: '', MAIL_FROM: '' },
+    { RESEND_API_KEY: 're_test' },
+    { MAIL_FROM: 'mail@example.com' },
+  ])('allows startup with missing or incomplete mail settings: %j', (settings) => {
+    expect(appConfigValidationSchema.validate({ ...base, ...settings }).error).toBeUndefined();
+    const service = new MailService(
+      new ConfigService({ RESEND_API_KEY: '', MAIL_FROM: '', ...settings }),
+    );
+    expect(() => service.ensureConfigured()).toThrow(ServiceUnavailableException);
+  });
+
+  it('fails explicitly instead of silently dropping verification and password reset emails', async () => {
+    const service = new MailService(new ConfigService({ RESEND_API_KEY: '', MAIL_FROM: '' }));
+    await expect(
+      service.sendVerificationEmail('user@example.com', 'http://localhost:5173/verify-email'),
+    ).rejects.toThrow('Отправка писем не настроена.');
+    await expect(
+      service.sendPasswordResetEmail('user@example.com', 'http://localhost:5173/reset-password'),
+    ).rejects.toMatchObject({ status: 503 });
+  });
+});
 
 describe('MailService password reset delivery', () => {
   interface MailPayload {

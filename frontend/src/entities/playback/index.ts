@@ -1,4 +1,5 @@
 export type { PlaybackProgress } from './model/playbackProgress';
+export { createPlayerPreferences } from './model/playerPreferences';
 
 export type {
   PlaybackState,

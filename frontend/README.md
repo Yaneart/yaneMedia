@@ -1,24 +1,42 @@
 # yaneMedia frontend
 
-React/Vite-клиент yaneMedia.
+Интерфейс yaneMedia на React, TypeScript и Tailwind CSS. Каталог, поиск, страницы фильмов и сериалов, личная библиотека и просмотр через yanePlayer или встроенные плееры источников.
+
+Для запуска всего приложения через Docker используйте [общий README](../README.md).
 
 ## Локальный запуск
 
-```bash
-bun install
+Нужны Bun и запущенный [backend](../backend/README.md). Команды этого README выполняются из `yaneMedia/frontend`. Для перехода из корня проекта выполните `cd frontend`; на вашем компьютере можно из любой папки выполнить `cd C:\Users\artem\yaneMedia\frontend`.
+
+```sh
+# Папка: yaneMedia/frontend
+bun install --frozen-lockfile
 cp .env.example .env
 bun run dev
 ```
 
-Приложение доступно на `http://localhost:5173`. `VITE_API_BASE_URL` должен указывать на backend API, по умолчанию `http://localhost:3000/api/v1`.
+Откройте **[localhost:5173](http://localhost:5173)**.
 
-## Команды
+## Настройки
 
-```bash
-bun run build
-bun run lint
-bun run format:check
-bun run preview
-```
+Настройки Vite задаются в `.env`. После изменения перезапустите dev-сервер.
 
-Архитектурные правила описаны в [`../docs/frontend-architecture.md`](../docs/frontend-architecture.md).
+| Настройка                     | Для чего нужна                                                                    |
+| ----------------------------- | --------------------------------------------------------------------------------- |
+| `VITE_API_BASE_URL`           | Адрес API, по умолчанию `http://localhost:3000/api/v1`.                           |
+| `VITE_SERVER_TORRENT_ENABLED` | `true` показывает домашний серверный torrent, `false` отключает его в интерфейсе. |
+
+Для переключения всего приложения между Home и Public используйте [скрипты из корня проекта](../README.md#public-и-home): они согласуют настройки интерфейса и backend. Один frontend-флаг не запускает torrent-сервисы.
+
+## Основные команды
+
+Все команды таблицы запускайте из `yaneMedia/frontend`.
+
+| Команда                                     | Действие                                      |
+| ------------------------------------------- | --------------------------------------------- |
+| `bun run dev`                               | Запуск Vite с обновлением при изменении кода. |
+| `bun run build`                             | Проверка TypeScript и сборка приложения.      |
+| `bun run preview`                           | Просмотр готовой сборки.                      |
+| `bun test ./test/playerPreferences.test.ts` | Пример запуска одного набора тестов.          |
+
+Скриншоты интерфейса и возможности приложения — в [общем README](../README.md).

@@ -5,16 +5,31 @@ import { Resend } from 'resend';
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
-  private readonly resend: Resend;
+  private readonly resend: Resend | undefined;
   private readonly from: string;
 
   constructor(configService: ConfigService) {
-    this.resend = new Resend(configService.getOrThrow<string>('RESEND_API_KEY'));
-    this.from = configService.getOrThrow<string>('MAIL_FROM');
+    const apiKey = configService.get<string>('RESEND_API_KEY')?.trim();
+    this.from = configService.get<string>('MAIL_FROM')?.trim() ?? '';
+    this.resend = apiKey && this.from ? new Resend(apiKey) : undefined;
+  }
+
+  ensureConfigured(): void {
+    this.getClient();
+  }
+
+  private getClient(): Resend {
+    if (!this.resend) {
+      throw new ServiceUnavailableException({
+        code: 'MAIL_NOT_CONFIGURED',
+        message: 'Отправка писем не настроена. Можно продолжить без аккаунта.',
+      });
+    }
+    return this.resend;
   }
 
   async sendVerificationEmail(to: string, verificationUrl: string): Promise<void> {
-    const { error } = await this.resend.emails.send({
+    const { error } = await this.getClient().emails.send({
       from: this.from,
       to,
       subject: 'Подтверждение email в yaneMedia',
@@ -33,7 +48,7 @@ export class MailService {
   }
 
   async sendPasswordResetEmail(to: string, resetUrl: string): Promise<void> {
-    const { error } = await this.resend.emails.send({
+    const { error } = await this.getClient().emails.send({
       from: this.from,
       to,
       subject: 'Сброс пароля в yaneMedia',

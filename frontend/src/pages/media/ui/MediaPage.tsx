@@ -1,4 +1,5 @@
 import { useOpeningHistory } from '@/features/opening-history';
+import { useAuth } from '@/entities/auth';
 import { EmptyState, ErrorState, MediaPageSkeleton } from '@/shared';
 import { useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
@@ -19,6 +20,8 @@ function parseEpisodeNumber(value: string | null): number | undefined {
 }
 
 export function MediaPage() {
+  const { state: authState } = useAuth();
+  const ownerKey = authState.status === 'authenticated' ? authState.user.email : authState.status;
   const { mediaRef } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -92,7 +95,7 @@ export function MediaPage() {
   return (
     <div>
       <MediaView
-        key={media.mediaRef}
+        key={`${media.mediaRef}:${ownerKey}`}
         media={media}
         animeSeasonChain={result?.animeSeasonChain ?? []}
         initialAnimeEpisodeNumber={parseEpisodeNumber(searchParams.get('episode'))}

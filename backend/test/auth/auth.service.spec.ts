@@ -1,4 +1,9 @@
-import { BadRequestException, ConflictException, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DrizzleQueryError } from 'drizzle-orm';
 import { DatabaseError } from 'pg';
@@ -45,6 +50,7 @@ describe('AuthService', () => {
     ReturnType<AuthRepository['resetPasswordByTokenHash']>,
     Parameters<AuthRepository['resetPasswordByTokenHash']>
   >();
+  const ensureConfigured = jest.fn();
   const sendVerificationEmail = jest.fn<
     ReturnType<MailService['sendVerificationEmail']>,
     Parameters<MailService['sendVerificationEmail']>
@@ -67,7 +73,7 @@ describe('AuthService', () => {
       resetPasswordByTokenHash,
     } as unknown as AuthRepository,
     config,
-    { sendVerificationEmail, sendPasswordResetEmail } as unknown as MailService,
+    { ensureConfigured, sendVerificationEmail, sendPasswordResetEmail } as unknown as MailService,
   );
 
   function databaseError(code: string, constraint: string) {
@@ -83,6 +89,7 @@ describe('AuthService', () => {
     saveVerificationToken.mockReset().mockResolvedValue(true);
     savePasswordResetToken.mockReset().mockResolvedValue(true);
     resetPasswordByTokenHash.mockReset().mockResolvedValue(true);
+    ensureConfigured.mockReset();
     sendVerificationEmail.mockReset().mockResolvedValue();
     sendPasswordResetEmail.mockReset().mockResolvedValue();
     jest.spyOn(password, 'hashPassword').mockResolvedValue(user.passwordHash);
@@ -106,6 +113,26 @@ describe('AuthService', () => {
     });
     expect(saveVerificationToken).toHaveBeenCalledTimes(1);
     expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects registration before any user or token writes when mail is not configured', async () => {
+    ensureConfigured.mockImplementation(() => {
+      throw new ServiceUnavailableException('Mail is not configured');
+    });
+    await expect(service.register(dto)).rejects.toMatchObject({ status: 503 });
+    expect(findByEmail).not.toHaveBeenCalled();
+    expect(password.hashPassword).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
+    expect(saveVerificationToken).not.toHaveBeenCalled();
+  });
+
+  it('does not look up an account or save a verification token without mail', async () => {
+    ensureConfigured.mockImplementation(() => {
+      throw new ServiceUnavailableException('Mail is not configured');
+    });
+    await expect(service.resendVerification(dto.email)).rejects.toMatchObject({ status: 503 });
+    expect(findByEmail).not.toHaveBeenCalled();
+    expect(saveVerificationToken).not.toHaveBeenCalled();
   });
 
   it('rejects an existing email before hashing or creating', async () => {
@@ -154,6 +181,21 @@ describe('AuthService', () => {
       findByEmail.mockResolvedValue(user);
       jest.spyOn(password, 'verifyPassword').mockResolvedValue(true);
       jest.spyOn(Date, 'now').mockReturnValue(user.createdAt.getTime());
+    });
+
+    it('allows a verified account to log in without configured mail', async () => {
+      ensureConfigured.mockImplementation(() => {
+        throw new ServiceUnavailableException('Mail is not configured');
+      });
+      await expect(service.login(dto)).resolves.toMatchObject({ user: { email: user.email } });
+      expect(ensureConfigured).not.toHaveBeenCalled();
+      expect(createSession).toHaveBeenCalledTimes(1);
+    });
+
+    it('still rejects an unverified account without configured mail', async () => {
+      findByEmail.mockResolvedValue({ ...user, emailVerifiedAt: null });
+      await expect(service.login(dto)).rejects.toMatchObject({ status: 403 });
+      expect(createSession).not.toHaveBeenCalled();
     });
 
     it('creates independent 30-day sessions storing only digests', async () => {
@@ -206,6 +248,20 @@ describe('AuthService', () => {
   });
 
   describe('password recovery', () => {
+    it.each([false, true])(
+      'keeps the neutral response and existing reset tokens without mail (known account: %s)',
+      async (known) => {
+        findByEmail.mockResolvedValue(known ? user : undefined);
+        jest.spyOn(Logger.prototype, 'error').mockImplementation();
+        ensureConfigured.mockImplementation(() => {
+          throw new ServiceUnavailableException('Mail is not configured');
+        });
+        await expect(service.requestPasswordReset(dto.email)).resolves.toEqual({ success: true });
+        expect(savePasswordResetToken).not.toHaveBeenCalled();
+        expect(sendPasswordResetEmail).not.toHaveBeenCalled();
+      },
+    );
+
     it('stores only a digest and emails a one-hour fragment URL for an existing account', async () => {
       findByEmail.mockResolvedValue(user);
       jest.spyOn(Date, 'now').mockReturnValue(createdAt.getTime());

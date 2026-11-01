@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/entities/auth';
+import { SERVER_TORRENT_ENABLED } from '@/shared/config/serverTorrent';
 import type { AnimeSeasonChainEntry, MediaDetails, MediaEpisode } from '@/entities/media';
 import {
   getMediaSourcePlaybackIssue,
@@ -21,7 +22,7 @@ import {
 } from '@/entities/torrent-session';
 import { EpisodeSelector } from '@/features/episode-selection';
 import { FavoriteButton, useFavorites } from '@/features/favorite';
-import { usePlaybackSession } from '@/features/playback-session';
+import { usePlaybackSession, usePlayerPreferences } from '@/features/playback-session';
 import { MediaCommunity } from '@/features/media-community';
 import { UserRating } from '@/features/user-rating';
 import { SeasonSelector } from '@/features/season-selection';
@@ -41,7 +42,6 @@ import {
   getDirectTrackOptions,
   getNextDirectEpisode,
   getPreferredSource,
-  getDirectSourceForTrackPreference,
   isDirectMediaSource,
   mergeEpisodeEmbedSources,
   type DirectEpisodeOption,
@@ -90,6 +90,7 @@ type PendingDirectEpisodeTransition = {
   trackKey: string | null;
   qualityKey: string | null;
   continuePlayback: boolean;
+  intent: 'playing' | 'paused';
 };
 
 const emptyAvailability: MediaAvailability = {
@@ -268,6 +269,7 @@ export function MediaView({
   const {
     session,
     continueWatchingEntries,
+    status: progressStatus,
     startSession,
     pauseSession,
     resumeSession,
@@ -278,6 +280,9 @@ export function MediaView({
     useFavorites();
   const mediaIsFavorite = isFavorite(media.mediaRef);
   const mediaSession = session?.mediaRef === media.mediaRef ? session : null;
+  const savedProgress =
+    mediaSession ?? continueWatchingEntries.find((entry) => entry.mediaRef === media.mediaRef);
+  const preferences = usePlayerPreferences();
   const { state: authState } = useAuth();
   const accountKey = authState.status === 'authenticated' ? authState.user.email : 'inactive';
   const queryClient = useQueryClient();
@@ -291,7 +296,7 @@ export function MediaView({
     session: TorrentSession;
   } | null>(null);
   const savedTorrentId =
-    mediaSession && isTorrentPlaybackSourceRef(mediaSession.sourceRef)
+    SERVER_TORRENT_ENABLED && mediaSession && isTorrentPlaybackSourceRef(mediaSession.sourceRef)
       ? mediaSession.sourceRef.slice('torrent:'.length)
       : null;
   const torrentQuery = useQuery({
@@ -397,19 +402,19 @@ export function MediaView({
   const hasInitialPlaybackSources = hasInitialEmbedMode || hasInitialDirectMode;
 
   const sessionEmbedSource = catalog.embedSources.find(
-    (source) => source.sourceRef === mediaSession?.sourceRef,
+    (source) => source.sourceRef === savedProgress?.sourceRef,
   );
   const sessionDirectEpisode = usesDirectEpisodes
-    ? (findDirectEpisodeBySourceRef(directEpisodes, mediaSession?.sourceRef) ??
-      findDirectEpisodeByRef(directEpisodes, mediaSession?.episode))
+    ? (findDirectEpisodeBySourceRef(directEpisodes, savedProgress?.sourceRef) ??
+      findDirectEpisodeByRef(directEpisodes, savedProgress?.episode))
     : undefined;
   const sessionDirectSource = usesDirectEpisodes
-    ? sessionDirectEpisode?.sources.find((source) => source.sourceRef === mediaSession?.sourceRef)
-    : catalog.directSources.find((source) => source.sourceRef === mediaSession?.sourceRef);
+    ? sessionDirectEpisode?.sources.find((source) => source.sourceRef === savedProgress?.sourceRef)
+    : catalog.directSources.find((source) => source.sourceRef === savedProgress?.sourceRef);
 
   const initialMode: PlaybackMode = sessionEmbedSource
     ? 'embed'
-    : sessionDirectSource || (sessionDirectEpisode && mediaSession)
+    : sessionDirectSource || (sessionDirectEpisode && savedProgress)
       ? 'direct'
       : hasInitialEmbedMode
         ? 'embed'
@@ -424,22 +429,27 @@ export function MediaView({
     : catalog.directSources;
 
   const [selectedPlaybackMode, setSelectedPlaybackMode] = useState<PlaybackMode>(initialMode);
-  const [isPlaybackModeInitialized, setIsPlaybackModeInitialized] =
-    useState(hasInitialPlaybackSources);
+  const [isPlaybackModeInitialized, setIsPlaybackModeInitialized] = useState(
+    hasInitialPlaybackSources && progressStatus === 'ready',
+  );
   const [selectedEmbedSourceRef, setSelectedEmbedSourceRef] = useState<string | null>(
     sessionEmbedSource?.sourceRef ?? getPreferredSource(catalog.embedSources)?.sourceRef ?? null,
   );
   const [selectedDirectEpisodeKey, setSelectedDirectEpisodeKey] = useState<string | null>(
-    initialDirectEpisode?.key ?? null,
+    progressStatus === 'ready' ? (initialDirectEpisode?.key ?? null) : null,
   );
   const [selectedDirectSourceRef, setSelectedDirectSourceRef] = useState<string | null>(
-    sessionDirectSource?.sourceRef ??
-      (sessionDirectEpisode && mediaSession ? mediaSession.sourceRef : undefined) ??
-      getPreferredSource(initialDirectSources)?.sourceRef ??
-      null,
+    progressStatus !== 'ready'
+      ? null
+      : (sessionDirectSource?.sourceRef ??
+          (sessionDirectEpisode && mediaSession ? mediaSession.sourceRef : undefined) ??
+          getPreferredSource(initialDirectSources)?.sourceRef ??
+          null),
   );
   const [preferredDirectTrackKey, setPreferredDirectTrackKey] = useState<string | null>(
-    sessionDirectSource ? getDirectTrackKey(sessionDirectSource) : null,
+    sessionDirectSource && progressStatus === 'ready'
+      ? getDirectTrackKey(sessionDirectSource)
+      : null,
   );
   const [pendingDirectEpisodeTransition, setPendingDirectEpisodeTransition] =
     useState<PendingDirectEpisodeTransition | null>(null);
@@ -509,6 +519,7 @@ export function MediaView({
   }, [media.mediaRef, sourceSearchSettledMediaRef, sourcesPending]);
 
   useEffect(() => {
+    if (progressStatus !== 'ready') return;
     if (!hasPlaybackSources && !directModePending) return;
 
     if (!isPlaybackModeInitialized) {
@@ -533,6 +544,7 @@ export function MediaView({
     initialMode,
     isPlaybackModeInitialized,
     playbackMode,
+    progressStatus,
   ]);
   const adjacentAvailabilityEpisodes = getAdjacentDirectEpisodes(
     directEpisodes,
@@ -556,7 +568,7 @@ export function MediaView({
 
   const selectedDirectSource =
     currentDirectSources.find((source) => source.sourceRef === selectedDirectSourceRef) ??
-    currentDirectSources.find((source) => source.sourceRef === mediaSession?.sourceRef) ??
+    currentDirectSources.find((source) => source.sourceRef === savedProgress?.sourceRef) ??
     getPreferredSource(currentDirectSources);
 
   const selectedDirectTrackKey = selectedDirectSource
@@ -572,19 +584,24 @@ export function MediaView({
       setSelectedEmbedSourceRef(selectedEmbedSource.sourceRef);
     }
 
-    if (selectedDirectEpisodeKey === null && selectedDirectEpisode) {
+    if (selectedDirectEpisodeKey === null && selectedDirectEpisode && progressStatus === 'ready') {
       setSelectedDirectEpisodeKey(selectedDirectEpisode.key);
     }
 
-    if (selectedDirectSourceRef === null && selectedDirectSource) {
+    if (selectedDirectSourceRef === null && selectedDirectSource && progressStatus === 'ready') {
       setSelectedDirectSourceRef(selectedDirectSource.sourceRef);
     }
 
-    if (preferredDirectTrackKey === null && selectedDirectTrackKey !== null) {
+    if (
+      preferredDirectTrackKey === null &&
+      selectedDirectTrackKey !== null &&
+      progressStatus === 'ready'
+    ) {
       setPreferredDirectTrackKey(selectedDirectTrackKey);
     }
   }, [
     preferredDirectTrackKey,
+    progressStatus,
     selectedDirectEpisode,
     selectedDirectEpisodeKey,
     selectedDirectSource,
@@ -808,7 +825,7 @@ export function MediaView({
 
   const selectDirectSource = (
     source: MediaSourceOption | undefined,
-    continuePlayback = false,
+    continuePlayback = true,
     positionSeconds = mediaSession?.positionSeconds ?? 0,
     intent = mediaSession?.state,
   ) => {
@@ -825,13 +842,18 @@ export function MediaView({
   };
 
   const selectDirectEpisode = (episode: DirectEpisodeOption) => {
-    setPendingDirectEpisodeTransition(null);
     setSelectedDirectEpisodeKey(episode.key);
-    setSelectedDirectSourceRef(
-      getDirectSourceForTrackPreference(episode.sources, preferredDirectTrackKey)?.sourceRef ??
-        null,
-    );
-    resetPlayer();
+    setSelectedDirectSourceRef(null);
+    setPendingDirectEpisodeTransition({
+      episodeKey: episode.key,
+      trackKey:
+        pendingDirectEpisodeTransition?.trackKey ??
+        selectedDirectTrackKey ??
+        preferredDirectTrackKey,
+      qualityKey: pendingDirectEpisodeTransition?.qualityKey ?? selectedDirectQualityKey,
+      continuePlayback: pendingDirectEpisodeTransition?.continuePlayback ?? Boolean(mediaSession),
+      intent: pendingDirectEpisodeTransition?.intent ?? mediaSession?.state ?? 'playing',
+    });
   };
 
   const selectSeason = (seasonNumber: number) => {
@@ -861,7 +883,7 @@ export function MediaView({
     selectDirectEpisode(nextEpisode);
   };
 
-  const selectTrack = (trackKey: string, continuePlayback = false) => {
+  const selectTrack = (trackKey: string, continuePlayback = true) => {
     const track = directTracks.find((option) => option.key === trackKey);
 
     setPreferredDirectTrackKey(trackKey);
@@ -869,16 +891,7 @@ export function MediaView({
   };
 
   const selectNextEpisode = () => {
-    if (nextDirectEpisode) {
-      setSelectedDirectEpisodeKey(nextDirectEpisode.key);
-      setSelectedDirectSourceRef(null);
-      setPendingDirectEpisodeTransition({
-        episodeKey: nextDirectEpisode.key,
-        trackKey: selectedDirectTrackKey ?? preferredDirectTrackKey,
-        qualityKey: selectedDirectQualityKey,
-        continuePlayback: isPlayerStarted,
-      });
-    }
+    if (nextDirectEpisode) selectDirectEpisode(nextDirectEpisode);
   };
 
   useEffect(() => {
@@ -910,6 +923,7 @@ export function MediaView({
 
     if (pendingDirectEpisodeTransition.continuePlayback) {
       startDirectPlayback(nextSource, selectedDirectEpisode, 0);
+      if (pendingDirectEpisodeTransition.intent === 'paused') pauseSession();
     } else {
       resetPlayer();
     }
@@ -917,6 +931,7 @@ export function MediaView({
     currentDirectSources,
     directModePending,
     pendingDirectEpisodeTransition,
+    pauseSession,
     resetPlayer,
     selectedDirectEpisode,
     startDirectPlayback,
@@ -938,6 +953,10 @@ export function MediaView({
       },
       sourceRef: selectedSource.sourceRef,
       episode: selectedPlaybackEpisode,
+      positionSeconds:
+        savedProgress && hasSameEpisode(savedProgress.episode, selectedPlaybackEpisode)
+          ? savedProgress.positionSeconds
+          : 0,
       durationSeconds:
         selectedSource.kind === 'hls' || selectedSource.kind === 'mp4'
           ? selectedEpisodeMetadata?.runtimeMinutes !== undefined
@@ -1028,53 +1047,57 @@ export function MediaView({
                         selectedDirectSource={selectedDirectSource}
                         selectedTrackKey={selectedDirectTrackKey}
                         onTorrentOpenChange={setTorrentOpen}
-                        torrentPanel={(close) => (
-                          <TorrentLaunch
-                            selected={torrentSelected || !!activeTorrentId}
-                            open={torrentOpen}
-                            onOpenChange={setTorrentOpen}
-                            mediaRef={media.mediaRef}
-                            season={
-                              usesEpisodePlayback(media)
-                                ? selectedDirectEpisode?.seasonNumber
-                                : undefined
-                            }
-                            episode={
-                              usesEpisodePlayback(media) &&
-                              selectedDirectEpisode?.seasonNumber !== undefined
-                                ? selectedDirectEpisode.episodeNumber
-                                : undefined
-                            }
-                            activeSession={torrentSession}
-                            resumePositionSeconds={
-                              continueWatchingEntries.find(
-                                (entry) =>
-                                  entry.mediaRef === media.mediaRef &&
-                                  entry.sourceRef ===
-                                    torrentPlaybackSourceRef(
-                                      activeTorrentId ??
-                                        (launchedTorrent?.accountKey === accountKey
-                                          ? launchedTorrent.session.id
-                                          : ''),
-                                    ),
-                              )?.positionSeconds ?? 0
-                            }
-                            playRequest={torrentPlayRequest}
-                            onSourceSelect={() => {
-                              if (mediaSession) endSession();
-                              setTorrentStarting(true);
-                              setTorrentLaunchError(null);
-                              setPlayerStatus('loading');
-                              setTorrentPlayRequest((request) => request + 1);
-                              setTorrentSelected(true);
-                              setTorrentOpen(false);
-                              close();
-                            }}
-                            onPlaybackError={handleTorrentPlaybackError}
-                            onPlaybackReady={handleTorrentReady}
-                            onSessionChange={handleTorrentSessionChange}
-                          />
-                        )}
+                        torrentPanel={
+                          SERVER_TORRENT_ENABLED
+                            ? (close) => (
+                                <TorrentLaunch
+                                  selected={torrentSelected || !!activeTorrentId}
+                                  open={torrentOpen}
+                                  onOpenChange={setTorrentOpen}
+                                  mediaRef={media.mediaRef}
+                                  season={
+                                    usesEpisodePlayback(media)
+                                      ? selectedDirectEpisode?.seasonNumber
+                                      : undefined
+                                  }
+                                  episode={
+                                    usesEpisodePlayback(media) &&
+                                    selectedDirectEpisode?.seasonNumber !== undefined
+                                      ? selectedDirectEpisode.episodeNumber
+                                      : undefined
+                                  }
+                                  activeSession={torrentSession}
+                                  resumePositionSeconds={
+                                    continueWatchingEntries.find(
+                                      (entry) =>
+                                        entry.mediaRef === media.mediaRef &&
+                                        entry.sourceRef ===
+                                          torrentPlaybackSourceRef(
+                                            activeTorrentId ??
+                                              (launchedTorrent?.accountKey === accountKey
+                                                ? launchedTorrent.session.id
+                                                : ''),
+                                          ),
+                                    )?.positionSeconds ?? 0
+                                  }
+                                  playRequest={torrentPlayRequest}
+                                  onSourceSelect={() => {
+                                    if (mediaSession) endSession();
+                                    setTorrentStarting(true);
+                                    setTorrentLaunchError(null);
+                                    setPlayerStatus('loading');
+                                    setTorrentPlayRequest((request) => request + 1);
+                                    setTorrentSelected(true);
+                                    setTorrentOpen(false);
+                                    close();
+                                  }}
+                                  onPlaybackError={handleTorrentPlaybackError}
+                                  onPlaybackReady={handleTorrentReady}
+                                  onSessionChange={handleTorrentSessionChange}
+                                />
+                              )
+                            : undefined
+                        }
                         torrentOpen={torrentOpen}
                         onEmbedSelect={(sourceRef) => {
                           if (activeTorrentId || torrentSelected) resetPlayer();
@@ -1102,6 +1125,8 @@ export function MediaView({
             </div>
 
             <MediaPlayer
+              key={accountKey}
+              preferences={preferences}
               mediaTitle={media.title}
               backdrop={media.backdrop}
               source={selectedSource?.url ? selectedSource : undefined}
@@ -1118,9 +1143,15 @@ export function MediaView({
               onStart={torrentSelected ? requestTorrentPlayback : loadPlayer}
               onReady={handlePlayerReady}
               onError={handlePlayerError}
-              onPlay={resumeSession}
-              onPause={pauseSession}
-              onProgress={updateProgress}
+              onPlay={() => {
+                if (mediaSession) resumeSession(mediaSession);
+              }}
+              onPause={() => {
+                if (mediaSession) pauseSession(mediaSession);
+              }}
+              onProgress={(position, duration, reason) => {
+                if (mediaSession) updateProgress(position, duration, reason, mediaSession);
+              }}
               onRetry={
                 torrentSelected
                   ? requestTorrentPlayback
@@ -1155,6 +1186,7 @@ export function MediaView({
                       tracks: directTracks.map((track) => ({
                         value: track.key,
                         label: track.label,
+                        language: track.sources[0]?.translation?.language,
                       })),
                       selectedTrackKey: selectedDirectTrackKey,
                       qualities: directQualities.map((quality) => ({

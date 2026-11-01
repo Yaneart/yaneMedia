@@ -87,6 +87,11 @@ export function RegisterPage({ homePath, loginPath }: RegisterPageProps) {
       form.reset();
       setVerificationEmail(user.email);
     } catch (error: unknown) {
+      if (error instanceof ApiClientError && error.code === 'MAIL_NOT_CONFIGURED') {
+        setSubmitError(error.message);
+        return;
+      }
+
       if (!(error instanceof ApiClientError) || error.status === 409 || error.status >= 500) {
         setRecoveryEmail(fields.email.trim().toLowerCase());
       }

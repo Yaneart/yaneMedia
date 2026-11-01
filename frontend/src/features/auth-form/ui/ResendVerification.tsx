@@ -45,6 +45,11 @@ export function ResendVerification({ email }: ResendVerificationProps) {
           'письмо будет отправлено. Проверьте также папку «Спам».',
       );
     } catch (error: unknown) {
+      if (error instanceof ApiClientError && error.code === 'MAIL_NOT_CONFIGURED') {
+        setError(error.message);
+        return;
+      }
+
       if (!(error instanceof ApiClientError)) {
         setError('Не удалось получить ответ сервера. Проверьте соединение и почту.');
       } else {

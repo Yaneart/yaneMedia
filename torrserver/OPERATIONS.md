@@ -1,5 +1,8 @@
 # Эксплуатация torrent-функции
 
+Для первого запуска используйте [короткую инструкцию Home для Windows](SETUP.md).
+Ниже — подробности для обслуживания уже настроенного приложения.
+
 Инструкция для текущего Docker Compose, T-024. Rollout и изменение прав доступа
 исключены по решению владельца проекта. Команды PowerShell выполняются из корня
 репозитория. Это процедуры обслуживания; обновление, очистка и отключение не
@@ -38,6 +41,7 @@ standalone default `false`. Значения `environment` в Compose имеют
 Создание отсутствующих engine secrets без перезаписи существующих:
 
 ```powershell
+# Папка: yaneMedia/ (корень проекта)
 powershell -NoProfile -ExecutionPolicy Bypass -File .\torrserver\init-secrets.ps1
 ```
 
@@ -53,6 +57,7 @@ engine credentials сначала завершить сессии, затем п
 Локальная настройка индексаторов:
 
 ```powershell
+# Папка: yaneMedia/ (корень проекта)
 docker compose -f compose.yaml -f compose.prowlarr-admin.yaml up -d --no-deps prowlarr
 # Открыть http://127.0.0.1:9696; настроить источники и сохранить API key локально.
 docker compose up -d --no-deps prowlarr
@@ -136,6 +141,7 @@ generation и candidate refs. Пользователю может понадоб
 ## Диагностика без чувствительных данных
 
 ```powershell
+# Папка: yaneMedia/ (корень проекта)
 docker compose config --quiet
 docker compose ps --format 'table {{.Service}}\t{{.State}}\t{{.Health}}\t{{.Ports}}'
 curl.exe --fail --silent --show-error --max-time 15 http://localhost:3000/api/v1/health
@@ -169,6 +175,7 @@ bodies, API keys, cookies или сырые ответы engine/Prowlarr для 
 печатает только длительность, количество результатов по source и degraded/error:
 
 ```powershell
+# Папка: yaneMedia/ (корень проекта)
 docker compose exec -T backend npm run probe:torrent-discovery -- --query Oppenheimer --kind movie --rounds 2
 ```
 
@@ -200,6 +207,7 @@ grace 120 s. Удаление stopped/expired DB tombstones — после 24 h.
 Сводка без идентификаторов и пользовательских данных:
 
 ```powershell
+# Папка: yaneMedia/ (корень проекта)
 @'
 SELECT state, count(*) FROM torrent_sessions GROUP BY state ORDER BY state;
 SELECT count(*) AS bindings FROM torrent_engine_bindings;
@@ -212,6 +220,7 @@ yaneMedia torrent-сессии этой БД**. Это прерывает про
 затем выполнить только следующий bounded update и вернуть тот же backend:
 
 ```powershell
+# Папка: yaneMedia/ (корень проекта)
 docker compose stop -t 30 backend
 @'
 BEGIN;
@@ -234,6 +243,7 @@ failed/stopping/expiring сессий, bindings=0, метрики copy/transcode
 количество записей engine через adapter без raw JSON:
 
 ```powershell
+# Папка: yaneMedia/ (корень проекта)
 @'
 const { ConfigService } = require('@nestjs/config');
 const { createTorrServerConfig } = require('./dist/torrent/torrserver.config');
@@ -260,37 +270,26 @@ const config = new ConfigService({
 
 ## Полное отключение и возврат
 
-Штатно сначала выполнить завершение/проверку очистки выше. После этого изменить
-эффективное `services.backend.environment` в `compose.yaml`:
-
-```yaml
-TORRENT_STREAMING_ENABLED: "false"
-```
-
-Для прекращения discovery убрать Prowlarr URL/key из этого же блока и JacRed URL
-из backend `.env`. Сохранить secret-файлы и volumes для возврата. Применить:
+Для обычного переключения не редактировать `compose.yaml` и `.env` вручную.
+Из корня проекта выбрать один режим:
 
 ```powershell
-docker compose config --quiet
-docker compose up -d --no-deps backend
-docker compose stop -t 30 torrserver prowlarr
+# Папка: yaneMedia/ (корень проекта)
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start.ps1 -Mode Public -Build
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start.ps1 -Mode Home -Build
 ```
 
-Проверить core health=200, strict feature status=`disabled`, работоспособность
-обычных online sources. Torrent UI может оставаться видимым; новые операции
-недоступны. При последующих `up` оставлять `--no-deps`, иначе зависимость backend
-может снова запустить engine даже при выключенном флаге.
+Linux/macOS: `sh scripts/start.sh Public --build` или `sh scripts/start.sh Home --build`.
+Public применяет дополнительный `compose.public.yaml`, останавливает TorrServer/Prowlarr,
+выключает server streaming и скрывает его панель. Проверить core health=200 и strict
+feature status=`disabled`. Исправный Home возвращает `ready`.
 
-Аварийно можно сначала остановить engine и пересоздать backend с флагом false и
-без discovery config. Это прекращает обслуживание, **но не очищает** engine/DB
-state: выключенный reconciler не делает sweep. Для последующей очистки временно
-вернуть engine и backend с true в закрытом окне обслуживания и выполнить процедуру
-выше. Не удалять secrets/volumes как замену корректному отключению.
-
-Для возврата восстановить приватные URL/key settings и флаг true, запустить
-`docker compose up -d --no-deps torrserver prowlarr`, дождаться engine healthy,
-затем `docker compose up -d --no-deps backend`. Проверить readiness и firewall.
-Старые candidate refs после recreate недействительны; выполнить новый поиск.
+Смена режима прерывает текущий просмотр, но сохраняет БД, assets, credentials и volumes.
+Она не является процедурой физической очистки engine/DB state: выключенный reconciler
+не делает sweep. Для полного освобождения ресурсов выполнить процедуру выше в Home.
+Старые candidate refs после recreate недействительны; нужен новый поиск.
+Не удалять secrets/volumes как замену переключению или корректной очистке.
+Подробности и проверка без запуска — [Home/Public](../docs/home-torrent.md).
 
 ## Обновление pinned engine и rollback
 
@@ -311,10 +310,17 @@ state: выключенный reconciler не делает sweep. Для пос�
    контрольный разрешённый playback/Stop и проверить очистку. Fixture проверяет
    gateway, а не полную совместимость новой engine версии.
 
+Из корня проекта перейдите в backend: `cd backend`. Сфокусированные проверки без public peers:
+
 ```powershell
-# Из backend, focused проверки без public peers:
+# Папка: yaneMedia/backend
 npm.cmd test -- --runInBand test/torrent/torrserver-client.spec.ts test/torrent/torrent-engine-lifecycle.integration.spec.ts
-# Из корня, отдельный реальный FFmpeg fixture на idle dev-стенде:
+```
+
+Вернитесь в корень проекта командой `cd ..`. Отдельный реальный FFmpeg fixture на idle dev-стенде:
+
+```powershell
+# Папка: yaneMedia/ (корень проекта)
 docker compose exec -T -e TORRENT_GATEWAY_TEST=1 backend npm test -- --runInBand test/torrent/torrent-gateway.integration.spec.ts
 ```
 
@@ -322,6 +328,7 @@ docker compose exec -T -e TORRENT_GATEWAY_TEST=1 backend npm test -- --runInBand
 предыдущие URL/SHA в Compose, затем вернуть сохранённый image и пересоздать только engine:
 
 ```powershell
+# Папка: yaneMedia/ (корень проекта)
 docker image tag yanemedia-torrserver:before-maintenance yanemedia-torrserver
 docker compose up -d --no-deps --no-build --force-recreate torrserver
 ```
