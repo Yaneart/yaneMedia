@@ -130,43 +130,67 @@ export function MediaInfo({
       ? `Рейтинг каталога: ${media.rating.value} / ${media.rating.scale}`
       : undefined,
   ].filter((item): item is string => item !== undefined);
+  if (isWatchLayout) {
+    return (
+      <section className="media-info-watch" aria-label="Информация о произведении">
+        <div className="media-info-poster">
+          <MediaInfoPoster media={media} className="rounded-overlay" />
+        </div>
+        <div className="media-info-content">
+          <div className="media-info-heading min-w-0">
+            <h1 data-page-heading tabIndex={-1} className="text-text-primary">
+              {media.title}
+            </h1>
+            {media.originalTitle && (
+              <p
+                className="mt-1 truncate text-caption text-text-secondary"
+                title={media.originalTitle}
+              >
+                {media.originalTitle}
+              </p>
+            )}
+            <p className="mt-2 flex flex-wrap gap-x-2 gap-y-1 text-caption text-text-secondary">
+              {metadata.map((item, index) => (
+                <span key={item}>
+                  {index > 0 && (
+                    <span className="mr-2" aria-hidden="true">
+                      ·
+                    </span>
+                  )}
+                  {item}
+                </span>
+              ))}
+            </p>
+          </div>
+          {actions && (
+            <div className="media-info-actions flex min-w-0 flex-wrap gap-2">{actions}</div>
+          )}
+          {ratings && <div className="media-info-ratings min-w-0">{ratings}</div>}
+          <MediaFacts media={media} className="media-info-facts text-caption" />
+          {navigation && <div className="media-info-navigation min-w-0">{navigation}</div>}
+        </div>
+      </section>
+    );
+  }
   const mobileMetadata = [
     media.year?.toString(),
     media.runtimeMinutes ? formatRuntime(media.runtimeMinutes) : undefined,
     !ratings && media.rating ? `Каталог: ${media.rating.value}` : undefined,
   ].filter((item): item is string => item !== undefined);
 
-  const fullWidthOnMobile = isWatchLayout
-    ? 'col-span-2 xl:col-span-1'
-    : media.poster
-      ? 'col-span-2 md:col-span-1 md:col-start-2'
-      : '';
+  const fullWidthOnMobile = media.poster ? 'col-span-2 md:col-span-1 md:col-start-2' : '';
 
   return (
     <section
       className={[
         'grid gap-x-4 sm:gap-x-6 md:gap-x-8',
-        isWatchLayout
-          ? 'max-w-none grid-cols-[6rem_minmax(0,1fr)] gap-y-4 min-[360px]:grid-cols-[7rem_minmax(0,1fr)] sm:grid-cols-[9.5rem_minmax(0,1fr)] xl:grid-cols-1'
-          : 'max-w-6xl gap-y-5',
-        !isWatchLayout && media.poster
+        'max-w-6xl gap-y-5',
+        media.poster
           ? 'grid-cols-[6rem_minmax(0,1fr)] min-[360px]:grid-cols-[7rem_minmax(0,1fr)] sm:grid-cols-[9rem_minmax(0,1fr)] md:grid-cols-[minmax(180px,240px)_minmax(0,1fr)]'
-          : !isWatchLayout
-            ? 'grid-cols-1'
-            : '',
+          : 'grid-cols-1',
       ].join(' ')}
     >
-      {isWatchLayout && (
-        <div className="min-w-0">
-          <MediaInfoPoster media={media} className="rounded-overlay xl:rounded-card" />
-
-          {actions && (
-            <div className="mt-4 hidden w-full flex-wrap gap-3 sm:flex xl:hidden">{actions}</div>
-          )}
-        </div>
-      )}
-
-      {!isWatchLayout && media.poster && (
+      {media.poster && (
         <MediaInfoPoster
           media={media}
           className="rounded-overlay md:row-span-3 md:max-w-60 md:rounded-card"
@@ -177,7 +201,7 @@ export function MediaInfo({
         <div
           className={[
             'order-3 mt-3 flex-wrap items-center gap-x-2 gap-y-1 text-caption text-text-secondary',
-            isWatchLayout ? 'flex xl:hidden' : 'flex md:hidden',
+            'flex md:hidden',
           ].join(' ')}
         >
           {mobileMetadata.map((item, index) => (
@@ -195,7 +219,7 @@ export function MediaInfo({
         <div
           className={[
             'order-1 flex-wrap items-center gap-x-2 gap-y-1 text-caption text-text-secondary',
-            isWatchLayout ? 'hidden xl:flex' : 'hidden md:flex',
+            'hidden md:flex',
           ].join(' ')}
         >
           {metadata.map((item, index) => (
@@ -215,7 +239,7 @@ export function MediaInfo({
           tabIndex={-1}
           className={[
             'order-1 text-heading text-text-primary md:order-2 md:mt-3',
-            isWatchLayout ? 'xl:text-title' : 'md:text-title',
+            'md:text-title',
           ].join(' ')}
         >
           {media.title}
@@ -226,39 +250,24 @@ export function MediaInfo({
             {media.originalTitle}
           </p>
         )}
-        {isWatchLayout && actions && (
-          <div className="order-4 mt-4 flex w-full flex-wrap gap-3 sm:hidden xl:flex">
-            {actions}
-          </div>
-        )}
       </div>
 
       {ratings && <div className={`${fullWidthOnMobile} min-w-0`}>{ratings}</div>}
 
-      {media.description && !isWatchLayout && (
+      {media.description && (
         <p className={[fullWidthOnMobile, 'max-w-3xl text-body text-text-secondary'].join(' ')}>
           {media.description}
         </p>
       )}
 
-      {isWatchLayout ? (
-        <MediaFacts media={media} className={`${fullWidthOnMobile} gap-2 text-caption`} />
-      ) : (
-        <div
-          className={`${fullWidthOnMobile} flex flex-col items-start gap-5 md:flex-row md:items-center md:gap-8`}
-        >
-          {actions && <div className="flex w-full flex-wrap gap-3">{actions}</div>}
-          <MediaFacts media={media} className="gap-y-2 text-caption" />
-        </div>
-      )}
+      <div
+        className={`${fullWidthOnMobile} flex flex-col items-start gap-5 md:flex-row md:items-center md:gap-8`}
+      >
+        {actions && <div className="flex w-full flex-wrap gap-3">{actions}</div>}
+        <MediaFacts media={media} className="gap-y-2 text-caption" />
+      </div>
 
       {navigation && <div className={`${fullWidthOnMobile} min-w-0`}>{navigation}</div>}
-
-      {isWatchLayout && media.description && (
-        <MediaDescriptionPanel className="col-span-2 hidden sm:block xl:hidden" compact>
-          <p className="mt-2 line-clamp-6 text-body text-text-secondary">{media.description}</p>
-        </MediaDescriptionPanel>
-      )}
     </section>
   );
 }

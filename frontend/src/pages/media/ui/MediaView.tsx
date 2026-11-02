@@ -104,8 +104,8 @@ function AvailabilityToolbarStatus({ hasEpisodeControls }: { hasEpisodeControls:
   return (
     <div
       className={[
-        'col-span-2 flex w-full items-center justify-center 2xl:flex-1',
-        hasEpisodeControls ? 'min-h-32 sm:min-h-25 2xl:min-h-11' : 'min-h-10',
+        'media-player-loading flex w-full items-center justify-center',
+        hasEpisodeControls ? 'media-player-loading-episodes' : '',
       ].join(' ')}
       aria-live="polite"
     >
@@ -984,297 +984,287 @@ export function MediaView({
   }, []);
 
   return (
-    <div className="media-view grid min-w-0 items-start gap-8 xl:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)] xl:gap-10">
-      <div className="media-view-playback order-2 min-w-0 space-y-8 xl:order-none xl:col-start-2 xl:row-start-1">
-        <div className="min-w-0">
-          <div className="media-player-frame min-w-0 overflow-visible rounded-card border border-context-border bg-surface shadow-surface">
-            <div className="relative z-20 isolate">
-              <div
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-0 z-0 overflow-hidden rounded-t-card bg-linear-to-br from-watermark/28 via-watermark/18 to-watermark/24"
-              >
-                <YaneMarkField />
-                <YaneMark className="absolute -top-10 -right-12 size-56 rotate-[138deg] text-watermark opacity-[0.26]" />
-                <div className="absolute inset-0 bg-linear-to-br from-transparent via-transparent to-watermark/8" />
-              </div>
-              <div className="media-player-toolbar relative z-10 grid min-w-0 grid-cols-2 gap-3 rounded-t-card bg-surface/70 px-4 py-3 sm:px-5 2xl:flex 2xl:flex-nowrap 2xl:items-center 2xl:gap-x-3">
-                {isToolbarLoading ? (
-                  <AvailabilityToolbarStatus hasEpisodeControls={showLocalEpisodeControls} />
-                ) : (
-                  <>
-                    {showLocalEpisodeControls &&
-                      !animeSeasonSelector &&
-                      directSeasonNumbers.length > 0 && (
-                        <SeasonSelector
-                          seasons={directSeasons}
-                          selectedSeasonNumber={selectedDirectEpisode?.seasonNumber ?? null}
-                          onSeasonChange={selectSeason}
+    <div className="media-view-container">
+      <div className={`media-view${media.description ? ' media-view-with-description' : ''}`}>
+        <div className="media-view-info min-w-0">
+          <MediaInfo
+            media={media}
+            variant="watch"
+            ratings={<UserRating media={media} compact />}
+            navigation={
+              animeSeasonSelector && (
+                <SeasonSelector
+                  seasons={animeSeasonSelector.options}
+                  selectedSeasonNumber={animeSeasonSelector.selectedSeasonNumber}
+                  onSeasonChange={onAnimeSeasonChange}
+                  variant="inline"
+                />
+              )
+            }
+            actions={
+              <FavoriteButton
+                isFavorite={mediaIsFavorite}
+                disabled={!canUpdateFavorites || isFavoriteUpdating(media.mediaRef)}
+                onFavoriteChange={(nextIsFavorite) => {
+                  if (nextIsFavorite) {
+                    addFavorite(media.mediaRef);
+                  } else {
+                    removeFavorite(media.mediaRef);
+                  }
+                }}
+                mediaTitle={media.title}
+              />
+            }
+          />
+        </div>
+
+        <div className="media-view-playback min-w-0">
+          <div className="min-w-0">
+            <div className="media-player-frame min-w-0 overflow-visible rounded-card border border-context-border bg-surface shadow-surface">
+              <div className="relative z-20 isolate">
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-0 z-0 overflow-hidden rounded-t-card bg-linear-to-br from-watermark/28 via-watermark/18 to-watermark/24"
+                >
+                  <YaneMarkField />
+                  <YaneMark className="absolute -top-10 -right-12 size-56 rotate-[138deg] text-watermark opacity-[0.26]" />
+                  <div className="absolute inset-0 bg-linear-to-br from-transparent via-transparent to-watermark/8" />
+                </div>
+                <div className="media-player-toolbar relative z-10 flex min-w-0 flex-wrap items-center gap-3 rounded-t-card bg-surface/70 px-4 py-3">
+                  {isToolbarLoading ? (
+                    <AvailabilityToolbarStatus hasEpisodeControls={showLocalEpisodeControls} />
+                  ) : (
+                    <>
+                      {showLocalEpisodeControls &&
+                        !animeSeasonSelector &&
+                        directSeasonNumbers.length > 0 && (
+                          <SeasonSelector
+                            seasons={directSeasons}
+                            selectedSeasonNumber={selectedDirectEpisode?.seasonNumber ?? null}
+                            onSeasonChange={selectSeason}
+                            variant="inline"
+                            compactDesktop
+                          />
+                        )}
+
+                      {showLocalEpisodeControls && (
+                        <EpisodeSelector
+                          episodes={directEpisodeOptions}
+                          selectedEpisodeNumber={
+                            selectedDirectEpisode
+                              ? (getDirectEpisodeDisplayNumber(selectedDirectEpisode) ?? null)
+                              : null
+                          }
+                          onEpisodeChange={selectEpisode}
                           variant="inline"
                           compactDesktop
                         />
                       )}
 
-                    {showLocalEpisodeControls && (
-                      <EpisodeSelector
-                        episodes={directEpisodeOptions}
-                        selectedEpisodeNumber={
-                          selectedDirectEpisode
-                            ? (getDirectEpisodeDisplayNumber(selectedDirectEpisode) ?? null)
-                            : null
-                        }
-                        onEpisodeChange={selectEpisode}
-                        variant="inline"
-                        compactDesktop
-                      />
-                    )}
-
-                    <div className="media-player-source-picker col-span-2 w-full 2xl:ml-auto 2xl:w-auto">
-                      <PlaybackSourcePicker
-                        embedSources={currentEmbedSources}
-                        directSources={currentDirectSources}
-                        selectedSource={selectedSource}
-                        selectedDirectSource={selectedDirectSource}
-                        selectedTrackKey={selectedDirectTrackKey}
-                        onTorrentOpenChange={setTorrentOpen}
-                        torrentPanel={
-                          SERVER_TORRENT_ENABLED
-                            ? (close) => (
-                                <TorrentLaunch
-                                  selected={torrentSelected || !!activeTorrentId}
-                                  open={torrentOpen}
-                                  onOpenChange={setTorrentOpen}
-                                  mediaRef={media.mediaRef}
-                                  season={
-                                    usesEpisodePlayback(media)
-                                      ? selectedDirectEpisode?.seasonNumber
-                                      : undefined
-                                  }
-                                  episode={
-                                    usesEpisodePlayback(media) &&
-                                    selectedDirectEpisode?.seasonNumber !== undefined
-                                      ? selectedDirectEpisode.episodeNumber
-                                      : undefined
-                                  }
-                                  activeSession={torrentSession}
-                                  resumePositionSeconds={
-                                    continueWatchingEntries.find(
-                                      (entry) =>
-                                        entry.mediaRef === media.mediaRef &&
-                                        entry.sourceRef ===
-                                          torrentPlaybackSourceRef(
-                                            activeTorrentId ??
-                                              (launchedTorrent?.accountKey === accountKey
-                                                ? launchedTorrent.session.id
-                                                : ''),
-                                          ),
-                                    )?.positionSeconds ?? 0
-                                  }
-                                  playRequest={torrentPlayRequest}
-                                  onSourceSelect={() => {
-                                    if (mediaSession) endSession();
-                                    setTorrentStarting(true);
-                                    setTorrentLaunchError(null);
-                                    setPlayerStatus('loading');
-                                    setTorrentPlayRequest((request) => request + 1);
-                                    setTorrentSelected(true);
-                                    setTorrentOpen(false);
-                                    close();
-                                  }}
-                                  onPlaybackError={handleTorrentPlaybackError}
-                                  onPlaybackReady={handleTorrentReady}
-                                  onSessionChange={handleTorrentSessionChange}
-                                />
-                              )
-                            : undefined
-                        }
-                        torrentOpen={torrentOpen}
-                        onEmbedSelect={(sourceRef) => {
-                          if (activeTorrentId || torrentSelected) resetPlayer();
-                          if (playbackMode !== 'embed') selectPlaybackMode('embed');
-                          selectEmbedSource(sourceRef);
-                        }}
-                        onDirectSelect={(trackKey) => {
-                          if (activeTorrentId || torrentSelected) resetPlayer();
-                          if (playbackMode !== 'direct') selectPlaybackMode('direct');
-                          selectTrack(trackKey);
-                        }}
-                        onQualitySelect={(sourceRef) => {
-                          if (activeTorrentId || torrentSelected) resetPlayer();
-                          selectDirectSource(
-                            currentDirectSources.find((source) => source.sourceRef === sourceRef),
-                          );
-                        }}
-                        isLoading={sourcesPending && sourceSearchSettledMediaRef !== media.mediaRef}
-                        align="end"
-                      />
-                    </div>
-                  </>
-                )}
+                      <div className="media-player-source-picker min-w-0">
+                        <PlaybackSourcePicker
+                          embedSources={currentEmbedSources}
+                          directSources={currentDirectSources}
+                          selectedSource={selectedSource}
+                          selectedDirectSource={selectedDirectSource}
+                          selectedTrackKey={selectedDirectTrackKey}
+                          onTorrentOpenChange={setTorrentOpen}
+                          torrentPanel={
+                            SERVER_TORRENT_ENABLED
+                              ? (close) => (
+                                  <TorrentLaunch
+                                    selected={torrentSelected || !!activeTorrentId}
+                                    open={torrentOpen}
+                                    onOpenChange={setTorrentOpen}
+                                    mediaRef={media.mediaRef}
+                                    season={
+                                      usesEpisodePlayback(media)
+                                        ? selectedDirectEpisode?.seasonNumber
+                                        : undefined
+                                    }
+                                    episode={
+                                      usesEpisodePlayback(media) &&
+                                      selectedDirectEpisode?.seasonNumber !== undefined
+                                        ? selectedDirectEpisode.episodeNumber
+                                        : undefined
+                                    }
+                                    activeSession={torrentSession}
+                                    resumePositionSeconds={
+                                      continueWatchingEntries.find(
+                                        (entry) =>
+                                          entry.mediaRef === media.mediaRef &&
+                                          entry.sourceRef ===
+                                            torrentPlaybackSourceRef(
+                                              activeTorrentId ??
+                                                (launchedTorrent?.accountKey === accountKey
+                                                  ? launchedTorrent.session.id
+                                                  : ''),
+                                            ),
+                                      )?.positionSeconds ?? 0
+                                    }
+                                    playRequest={torrentPlayRequest}
+                                    onSourceSelect={() => {
+                                      if (mediaSession) endSession();
+                                      setTorrentStarting(true);
+                                      setTorrentLaunchError(null);
+                                      setPlayerStatus('loading');
+                                      setTorrentPlayRequest((request) => request + 1);
+                                      setTorrentSelected(true);
+                                      setTorrentOpen(false);
+                                      close();
+                                    }}
+                                    onPlaybackError={handleTorrentPlaybackError}
+                                    onPlaybackReady={handleTorrentReady}
+                                    onSessionChange={handleTorrentSessionChange}
+                                  />
+                                )
+                              : undefined
+                          }
+                          torrentOpen={torrentOpen}
+                          onEmbedSelect={(sourceRef) => {
+                            if (activeTorrentId || torrentSelected) resetPlayer();
+                            if (playbackMode !== 'embed') selectPlaybackMode('embed');
+                            selectEmbedSource(sourceRef);
+                          }}
+                          onDirectSelect={(trackKey) => {
+                            if (activeTorrentId || torrentSelected) resetPlayer();
+                            if (playbackMode !== 'direct') selectPlaybackMode('direct');
+                            selectTrack(trackKey);
+                          }}
+                          onQualitySelect={(sourceRef) => {
+                            if (activeTorrentId || torrentSelected) resetPlayer();
+                            selectDirectSource(
+                              currentDirectSources.find((source) => source.sourceRef === sourceRef),
+                            );
+                          }}
+                          isLoading={
+                            sourcesPending && sourceSearchSettledMediaRef !== media.mediaRef
+                          }
+                          align="end"
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
-            </div>
 
-            <MediaPlayer
-              key={accountKey}
-              preferences={preferences}
-              mediaTitle={media.title}
-              backdrop={media.backdrop}
-              source={selectedSource?.url ? selectedSource : undefined}
-              isStarted={isPlayerStarted}
-              shouldAutoPlay={mediaSession?.state === 'playing'}
-              initialPositionSeconds={mediaSession?.positionSeconds ?? 0}
-              status={
-                activeTorrentId && torrentUnavailable
-                  ? 'error'
-                  : activeTorrentId && !torrentPlayback
-                    ? 'loading'
-                    : playerStatus
-              }
-              onStart={torrentSelected ? requestTorrentPlayback : loadPlayer}
-              onReady={handlePlayerReady}
-              onError={handlePlayerError}
-              onPlay={() => {
-                if (mediaSession) resumeSession(mediaSession);
-              }}
-              onPause={() => {
-                if (mediaSession) pauseSession(mediaSession);
-              }}
-              onProgress={(position, duration, reason) => {
-                if (mediaSession) updateProgress(position, duration, reason, mediaSession);
-              }}
-              onRetry={
-                torrentSelected
-                  ? requestTorrentPlayback
-                  : activeTorrentId
-                    ? () => void torrentQuery.refetch()
-                    : loadPlayer
-              }
-              errorDescription={
-                torrentLaunchError ?? (activeTorrentId ? torrentErrorDescription : undefined)
-              }
-              emptyState={playerEmptyState}
-              embedded
-              torrentTimeline={
-                torrentPlayback
-                  ? {
-                      startPositionSeconds: torrentPlayback.startPositionSeconds,
-                      durationSeconds: torrentPlayback.durationSeconds,
-                      timeline: torrentPlayback.timeline,
-                      playbackRates: torrentPlayback.playbackRates,
-                      audioTracks: torrentPlayback.audioTracks,
-                      selectedAudioTrackRef: torrentPlayback.selectedAudioTrackRef,
-                      generation: torrentPlayback.generation,
-                      subtitleTracks: torrentPlayback.subtitleTracks,
-                      output: torrentPlayback.output,
-                      onReplace: replaceTorrent,
-                    }
-                  : undefined
-              }
-              directControls={
-                !activeTorrentId && selectedDirectSource
-                  ? {
-                      tracks: directTracks.map((track) => ({
-                        value: track.key,
-                        label: track.label,
-                        language: track.sources[0]?.translation?.language,
-                      })),
-                      selectedTrackKey: selectedDirectTrackKey,
-                      qualities: directQualities.map((quality) => ({
-                        value: quality.key,
-                        label: quality.label,
-                      })),
-                      selectedQualityKey: selectedDirectQualityKey,
-                      onSelectionChange: (trackKey, qualityKey, position, intent) => {
-                        if (trackKey) setPreferredDirectTrackKey(trackKey);
-                        selectDirectSource(
-                          getAvailableDirectSourceForPlaybackPreference(
-                            currentDirectSources,
-                            trackKey,
-                            qualityKey,
-                          ),
-                          true,
-                          position,
-                          intent,
-                        );
-                      },
-                      onNextEpisode: nextDirectEpisode ? selectNextEpisode : undefined,
-                    }
-                  : undefined
-              }
-            />
+              <MediaPlayer
+                key={accountKey}
+                preferences={preferences}
+                mediaTitle={media.title}
+                backdrop={media.backdrop}
+                source={selectedSource?.url ? selectedSource : undefined}
+                isStarted={isPlayerStarted}
+                shouldAutoPlay={mediaSession?.state === 'playing'}
+                initialPositionSeconds={mediaSession?.positionSeconds ?? 0}
+                status={
+                  activeTorrentId && torrentUnavailable
+                    ? 'error'
+                    : activeTorrentId && !torrentPlayback
+                      ? 'loading'
+                      : playerStatus
+                }
+                onStart={torrentSelected ? requestTorrentPlayback : loadPlayer}
+                onReady={handlePlayerReady}
+                onError={handlePlayerError}
+                onPlay={() => {
+                  if (mediaSession) resumeSession(mediaSession);
+                }}
+                onPause={() => {
+                  if (mediaSession) pauseSession(mediaSession);
+                }}
+                onProgress={(position, duration, reason) => {
+                  if (mediaSession) updateProgress(position, duration, reason, mediaSession);
+                }}
+                onRetry={
+                  torrentSelected
+                    ? requestTorrentPlayback
+                    : activeTorrentId
+                      ? () => void torrentQuery.refetch()
+                      : loadPlayer
+                }
+                errorDescription={
+                  torrentLaunchError ?? (activeTorrentId ? torrentErrorDescription : undefined)
+                }
+                emptyState={playerEmptyState}
+                embedded
+                torrentTimeline={
+                  torrentPlayback
+                    ? {
+                        startPositionSeconds: torrentPlayback.startPositionSeconds,
+                        durationSeconds: torrentPlayback.durationSeconds,
+                        timeline: torrentPlayback.timeline,
+                        playbackRates: torrentPlayback.playbackRates,
+                        audioTracks: torrentPlayback.audioTracks,
+                        selectedAudioTrackRef: torrentPlayback.selectedAudioTrackRef,
+                        generation: torrentPlayback.generation,
+                        subtitleTracks: torrentPlayback.subtitleTracks,
+                        output: torrentPlayback.output,
+                        onReplace: replaceTorrent,
+                      }
+                    : undefined
+                }
+                directControls={
+                  !activeTorrentId && selectedDirectSource
+                    ? {
+                        tracks: directTracks.map((track) => ({
+                          value: track.key,
+                          label: track.label,
+                          language: track.sources[0]?.translation?.language,
+                        })),
+                        selectedTrackKey: selectedDirectTrackKey,
+                        qualities: directQualities.map((quality) => ({
+                          value: quality.key,
+                          label: quality.label,
+                        })),
+                        selectedQualityKey: selectedDirectQualityKey,
+                        onSelectionChange: (trackKey, qualityKey, position, intent) => {
+                          if (trackKey) setPreferredDirectTrackKey(trackKey);
+                          selectDirectSource(
+                            getAvailableDirectSourceForPlaybackPreference(
+                              currentDirectSources,
+                              trackKey,
+                              qualityKey,
+                            ),
+                            true,
+                            position,
+                            intent,
+                          );
+                        },
+                        onNextEpisode: nextDirectEpisode ? selectNextEpisode : undefined,
+                      }
+                    : undefined
+                }
+              />
+            </div>
           </div>
         </div>
 
         {media.description && (
-          <MediaDescriptionPanel className="hidden xl:block 2xl:hidden">
-            <p className="mt-3 text-body text-text-secondary">{media.description}</p>
-          </MediaDescriptionPanel>
+          <section className="media-view-details min-w-0">
+            <MediaDescriptionPanel compact>
+              <p
+                className={[
+                  'mt-2 text-body text-text-secondary',
+                  isDescriptionExpanded ? '' : 'line-clamp-4 sm:line-clamp-none',
+                ].join(' ')}
+              >
+                {media.description}
+              </p>
+              <button
+                type="button"
+                className="mt-2 text-sm font-semibold text-text-primary transition-colors hover:text-watermark sm:hidden"
+                onClick={() => setIsDescriptionExpanded((current) => !current)}
+                aria-expanded={isDescriptionExpanded}
+              >
+                {isDescriptionExpanded ? 'Свернуть' : 'Подробнее'}
+              </button>
+            </MediaDescriptionPanel>
+          </section>
         )}
+
+        <MediaCommunity media={media} />
       </div>
-
-      <div className="media-view-info contents xl:col-start-1 xl:row-start-1 xl:block">
-        <MediaInfo
-          media={media}
-          variant="watch"
-          ratings={<UserRating media={media} compact />}
-          navigation={
-            animeSeasonSelector && (
-              <SeasonSelector
-                seasons={animeSeasonSelector.options}
-                selectedSeasonNumber={animeSeasonSelector.selectedSeasonNumber}
-                onSeasonChange={onAnimeSeasonChange}
-                variant="inline"
-              />
-            )
-          }
-          actions={
-            <FavoriteButton
-              isFavorite={mediaIsFavorite}
-              disabled={!canUpdateFavorites || isFavoriteUpdating(media.mediaRef)}
-              onFavoriteChange={(nextIsFavorite) => {
-                if (nextIsFavorite) {
-                  addFavorite(media.mediaRef);
-                } else {
-                  removeFavorite(media.mediaRef);
-                }
-              }}
-              mediaTitle={media.title}
-            />
-          }
-        />
-      </div>
-
-      {media.description && (
-        <section className="order-4 sm:hidden">
-          <MediaDescriptionPanel compact>
-            <p
-              className={[
-                'mt-2 text-body text-text-secondary',
-                isDescriptionExpanded ? '' : 'line-clamp-4',
-              ].join(' ')}
-            >
-              {media.description}
-            </p>
-            <button
-              type="button"
-              className="mt-2 text-sm font-semibold text-text-primary transition-colors hover:text-watermark"
-              onClick={() => setIsDescriptionExpanded((current) => !current)}
-              aria-expanded={isDescriptionExpanded}
-            >
-              {isDescriptionExpanded ? 'Свернуть' : 'Подробнее'}
-            </button>
-          </MediaDescriptionPanel>
-        </section>
-      )}
-
-      {media.description && (
-        <div className="media-view-details order-4 hidden 2xl:col-span-2 2xl:block">
-          <MediaDescriptionPanel>
-            <p className="mt-3 max-w-5xl text-body text-text-secondary">{media.description}</p>
-          </MediaDescriptionPanel>
-        </div>
-      )}
-
-      <MediaCommunity media={media} />
     </div>
   );
 }

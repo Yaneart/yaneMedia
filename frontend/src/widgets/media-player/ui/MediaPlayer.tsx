@@ -147,14 +147,14 @@ export function MediaPlayer({
     const align = () => {
       const bounds = scroller.getBoundingClientRect();
       const toolbarHeight = frame.firstElementChild!.getBoundingClientRect().height;
+      const inset = window.matchMedia('(min-width: 1024px)').matches ? 16 : 80;
       const height = Math.min(
         (frame.clientWidth * 9) / 16,
-        scroller.clientHeight - 32 - toolbarHeight - 2,
+        scroller.clientHeight - inset * 2 - toolbarHeight - 2,
       );
       section.style.setProperty('--media-theater-height', `${Math.max(0, height)}px`);
-      const top = window.matchMedia('(min-width: 768px)').matches ? 16 : 80;
       scroller.scrollTo({
-        top: scroller.scrollTop + frame.getBoundingClientRect().top - bounds.top - top,
+        top: scroller.scrollTop + frame.getBoundingClientRect().top - bounds.top - inset,
         behavior: 'instant',
       });
     };

@@ -122,19 +122,19 @@ export function PlaybackSourcePicker({
         onTorrentOpenChange?.(open && activePanel === 'torrent');
       }}
       trigger={
-        <span className="flex max-w-52 items-center gap-2 truncate">
-          <span className="text-caption text-text-secondary">{labels.source}</span>
+        <span className="flex min-w-0 flex-1 items-center gap-2">
+          <span className="shrink-0 text-caption text-text-secondary">{labels.source}</span>
           <span className="truncate font-medium text-text-primary">
             {selectedLabel ?? labels.chooseSource}
           </span>
-          <DownIcon aria-hidden="true" className="size-4 shrink-0 text-text-secondary" />
+          <DownIcon aria-hidden="true" className="ml-auto size-4 shrink-0 text-text-secondary" />
         </span>
       }
       triggerLabel={selectedLabel ?? labels.source}
       triggerVariant="secondary"
       triggerSize="custom"
-      triggerClassName="min-h-10 w-full justify-between rounded-control border border-border bg-control px-3 2xl:w-auto 2xl:min-w-44"
-      className="w-full min-w-0 2xl:w-auto"
+      triggerClassName="min-h-10 w-full justify-between rounded-control border border-border bg-control px-3"
+      className="w-full min-w-0"
       align={align}
       panelClassName={`playback-source-popover ${torrentPanel ? 'w-[min(36rem,calc(100vw-2rem))]' : 'w-[min(23rem,calc(100vw-2rem))]'} overflow-y-auto overscroll-contain rounded-overlay px-3 pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden`}
     >

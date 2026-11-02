@@ -17,11 +17,11 @@ export function MediaCommunity({ media }: { media: MediaSummary }) {
   };
 
   return (
-    <section aria-label="Мнения о произведении" className="order-6 min-w-0 xl:col-span-2">
+    <section aria-label="Мнения о произведении" className="media-view-community min-w-0">
       <div
         role="tablist"
         aria-label="Обсуждение и рецензии"
-        className="mb-3 inline-flex gap-1 rounded-control border border-context-border bg-surface/70 p-1.5 shadow-surface backdrop-blur-sm"
+        className="mb-3 flex w-full items-center gap-1 rounded-control border border-context-border bg-surface/70 p-1.5 shadow-surface"
       >
         {(
           [
