@@ -8,30 +8,35 @@ export function createTorrentStream(player: YanePlayerElement) {
     url: string;
     playback: Omit<TorrentVideoTimeline, 'onReplace'>;
     revision: string;
+    nextReport: number;
+    reporting: boolean;
+    textId: string | null;
+    nextText: number;
+    coverage: number;
+    captionJob: AbortController | null;
+    applyingCaptions: boolean;
+    position: number | null;
   } | null = null;
   let lifetime = new AbortController();
-  let nextReport = 0;
-  let reporting = false;
-  let textId: string | null = null;
-  let nextText = 0;
-  let coverage = 0;
-  let refreshing = false;
-  let captionJob: AbortController | null = null;
-  let applyingCaptions = false;
 
   function update(snapshot: PlayerEvent['snapshot']) {
     const current = stream;
     if (
       !current?.playback.timeline.continuous ||
       snapshot.source?.revision !== current.revision ||
-      (snapshot.pending && snapshot.pending.type !== 'text') ||
       snapshot.positionSeconds === null
     )
       return;
+    if (snapshot.pending && snapshot.pending.type !== 'text') {
+      current.captionJob?.abort();
+      current.captionJob = null;
+      current.coverage = 0;
+      current.nextText = 0;
+    }
     const position = snapshot.positionSeconds;
-    if (!reporting && Date.now() >= nextReport) {
-      nextReport = Date.now() + 2_000;
-      reporting = true;
+    if (!current.reporting && Date.now() >= current.nextReport) {
+      current.nextReport = Date.now() + 2_000;
+      current.reporting = true;
       void fetch(new URL('progress', current.url), {
         method: 'POST',
         credentials: 'include',
@@ -48,25 +53,43 @@ export function createTorrentStream(player: YanePlayerElement) {
       })
         .catch(() => undefined)
         .finally(() => {
-          reporting = false;
+          current.reporting = false;
         });
     }
+    // A host seek/audio replacement can already be playing while captions are
+    // restored in the same command. Feed actual media position during that wait
+    // so the bounded producer can advance; caption work still yields to commands.
+    if (snapshot.pending && snapshot.pending.type !== 'text') return;
     const selected = snapshot.selection?.textId ?? null;
-    if (applyingCaptions && snapshot.pending?.type === 'text' && selected === null) return;
-    if (selected !== textId) {
-      captionJob?.abort();
-      textId = selected;
-      nextText = position + 30;
-      coverage = 0;
+    if (current.applyingCaptions && snapshot.pending?.type === 'text' && selected === null) return;
+    if (selected !== current.textId) {
+      current.captionJob?.abort();
+      current.captionJob = null;
+      current.textId = selected;
+      current.nextText = position + 10;
+      current.coverage = 0;
     }
+    if (
+      current.position !== null &&
+      (position < current.position - 1 || position > current.position + 10)
+    ) {
+      current.nextText = 0;
+      current.coverage = 0;
+    }
+    current.position = position;
     const track = current.playback.subtitleTracks?.find(
       (item) => `subtitle:${item.ref}` === selected,
     );
-    if (!track || refreshing || position < nextText || snapshot.intent !== 'playing') return;
-    nextText = position + 30;
-    refreshing = true;
+    if (
+      !track ||
+      current.captionJob ||
+      position < current.nextText ||
+      snapshot.intent !== 'playing'
+    )
+      return;
+    current.nextText = position + 30;
     const job = new AbortController();
-    captionJob = job;
+    current.captionJob = job;
     const signal = AbortSignal.any([
       job.signal,
       lifetime.signal,
@@ -89,23 +112,22 @@ export function createTorrentStream(player: YanePlayerElement) {
         latest?.source?.revision === current.revision &&
         !latest.pending &&
         latest.selection.textId === selected &&
-        end > coverage
+        end > current.coverage
       ) {
-        coverage = end;
+        current.coverage = end;
         // The resource is now in the backend's bounded cache. Re-selecting a
         // managed caption track updates cues without replacing or pausing video.
-        applyingCaptions = true;
+        current.applyingCaptions = true;
         try {
           await player.selectText(selected);
         } finally {
-          applyingCaptions = false;
+          current.applyingCaptions = false;
         }
       }
     })()
       .catch(() => undefined)
       .finally(() => {
-        if (captionJob === job) captionJob = null;
-        refreshing = false;
+        if (current.captionJob === job) current.captionJob = null;
       });
   }
   return {
@@ -114,11 +136,19 @@ export function createTorrentStream(player: YanePlayerElement) {
       if (stream?.revision === revision) return;
       lifetime.abort();
       lifetime = new AbortController();
-      stream = { url, playback, revision };
-      nextReport = 0;
-      textId = null;
-      coverage = 0;
-      nextText = 0;
+      stream = {
+        url,
+        playback,
+        revision,
+        nextReport: 0,
+        reporting: false,
+        textId: null,
+        coverage: 0,
+        nextText: 0,
+        captionJob: null,
+        applyingCaptions: false,
+        position: null,
+      };
     },
     dispose() {
       lifetime.abort();

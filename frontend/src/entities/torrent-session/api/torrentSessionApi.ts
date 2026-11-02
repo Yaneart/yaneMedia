@@ -53,9 +53,11 @@ export function toTorrentRequestError(error: unknown): TorrentRequestError {
 }
 
 async function request<T>(path: string, init: RequestInit, map: (value: unknown) => T): Promise<T> {
-  const signal = init.signal
-    ? AbortSignal.any([init.signal, torrentAccountSignal()])
-    : torrentAccountSignal();
+  const signal = AbortSignal.any([
+    ...(init.signal ? [init.signal] : []),
+    torrentAccountSignal(),
+    AbortSignal.timeout(15_000),
+  ]);
   try {
     const value = await apiRequest<unknown>(path, { credentials: 'include', ...init, signal });
     signal.throwIfAborted();

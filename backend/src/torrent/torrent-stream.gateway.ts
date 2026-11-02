@@ -215,7 +215,9 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
     const end =
       position +
       (continuous
-        ? TORRENT_WINDOW_SECONDS
+        ? prefetch
+          ? 90
+          : 30
         : Math.min(
             TORRENT_WINDOW_SECONDS,
             2 +
@@ -329,7 +331,9 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
       }
       const continuing =
         cached && cached.start <= position && cached.end >= position - SUBTITLE_LOOKBEHIND;
-      const start = continuing ? cached.end : Math.max(0, position - SUBTITLE_LOOKBEHIND);
+      // Matroska seeks can skip sparse cues near the boundary. Re-read the
+      // overlap on extension too; mergeSubtitleWindows removes duplicate cues.
+      const start = Math.max(0, (continuing ? cached.end : position) - SUBTITLE_LOOKBEHIND);
       const args = [
         '-v',
         'error',

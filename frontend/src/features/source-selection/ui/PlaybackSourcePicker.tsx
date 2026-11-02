@@ -101,8 +101,8 @@ export function PlaybackSourcePicker({
   }, [popoverOpen, activePanel]);
 
   useEffect(() => {
-    setActivePanel(selectedPanel);
-  }, [selectedSource?.sourceRef, selectedPanel]);
+    if (!popoverOpen) setActivePanel(selectedPanel);
+  }, [popoverOpen, selectedPanel]);
 
   useEffect(() => {
     if (!torrentOpen) return;

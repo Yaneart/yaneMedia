@@ -86,3 +86,84 @@ test('finite windows do not start the continuous feedback protocol', () => {
   expect(fetch).not.toHaveBeenCalled();
   stream.dispose();
 });
+
+test('feeds the producer while seek/audio commands wait for replacement captions', async () => {
+  const fetch = mock(async () => new Response(null, { status: 204 }));
+  globalThis.fetch = fetch as unknown as typeof globalThis.fetch;
+  const stream = createTorrentStream({} as YanePlayerElement);
+  for (const [generation, type] of [
+    [2, 'seek'],
+    [3, 'audio'],
+  ] as const) {
+    stream.configure(
+      'http://localhost/hls/master.m3u8',
+      {
+        generation,
+        timeline: { continuous: true },
+      } as TorrentVideoTimeline,
+      String(generation),
+    );
+    stream.update({
+      source: { id: 'media', revision: String(generation) },
+      positionSeconds: 310,
+      pending: { type },
+      captions: { status: 'loading' },
+    } as PlayerEvent['snapshot']);
+    await settle();
+    expect(JSON.parse(fetch.mock.calls.at(-1)![1].body)).toEqual({
+      generation,
+      positionSeconds: 310,
+    });
+  }
+  expect(fetch).toHaveBeenCalledTimes(2);
+  stream.dispose();
+});
+
+test('a seek aborts prefetch immediately and a new revision does not wait for stale fetch completion', async () => {
+  let snapshot = {
+    source: { id: 'media', revision: 'old' },
+    pending: null,
+    positionSeconds: 0,
+    intent: 'playing',
+    selection: { textId: 'subtitle:full' },
+  } as PlayerEvent['snapshot'];
+  const selectText = mock(async () => {});
+  const stream = createTorrentStream({
+    runtime: { getSnapshot: () => snapshot },
+    selectText,
+  } as unknown as YanePlayerElement);
+  const jobs: { signal: AbortSignal; resolve: (response: Response) => void }[] = [];
+  globalThis.fetch = mock((input, init) =>
+    String(input).endsWith('/progress')
+      ? Promise.resolve(new Response(null, { status: 204 }))
+      : new Promise<Response>((resolve) => jobs.push({ signal: init!.signal!, resolve })),
+  ) as typeof fetch;
+  const playback = {
+    generation: 1,
+    timeline: { continuous: true },
+    subtitleTracks: [{ ref: 'full', url: 'http://localhost/subtitles/full' }],
+  } as unknown as TorrentVideoTimeline;
+  stream.configure('http://localhost/hls/master.m3u8', playback, 'old');
+  stream.update(snapshot);
+  stream.update((snapshot = { ...snapshot, positionSeconds: 31 }));
+  expect(jobs).toHaveLength(1);
+  stream.update({ ...snapshot, pending: { type: 'seek' } } as PlayerEvent['snapshot']);
+  expect(jobs[0].signal.aborted).toBe(true);
+  stream.configure('http://localhost/hls/master.m3u8', playback, 'new');
+  stream.update((snapshot = { ...snapshot, source: { id: 'media', revision: 'new' } }));
+  stream.update((snapshot = { ...snapshot, positionSeconds: 62 }));
+  expect(jobs).toHaveLength(2);
+  jobs[0].resolve(new Response('WEBVTT', { headers: { 'X-YaneMedia-Subtitle-End': '120' } }));
+  await settle();
+  expect(selectText).not.toHaveBeenCalled();
+  jobs[1].resolve(new Response('WEBVTT', { headers: { 'X-YaneMedia-Subtitle-End': '180' } }));
+  await settle();
+  expect(selectText).toHaveBeenCalledTimes(1);
+  // A backwards local seek must refresh even though the previous window ended later.
+  stream.update((snapshot = { ...snapshot, positionSeconds: 5 }));
+  expect(jobs).toHaveLength(3);
+  jobs[2].resolve(new Response('WEBVTT', { headers: { 'X-YaneMedia-Subtitle-End': '95' } }));
+  await settle();
+  expect(selectText).toHaveBeenCalledTimes(2);
+  stream.dispose();
+});

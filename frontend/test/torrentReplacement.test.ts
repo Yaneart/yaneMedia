@@ -1,4 +1,4 @@
-import { afterEach, expect, mock, test } from 'bun:test';
+import { afterEach, expect, mock, spyOn, test } from 'bun:test';
 const sharedApi = await import('../src/shared/api/index');
 mock.module('@/shared/api', () => sharedApi);
 const { replaceTorrentPlayback, resetTorrentClientScope } =
@@ -76,7 +76,7 @@ test('reconciles a lost POST response with the same key and waits beyond admissi
   expect(keys[0]).toBe(keys[1]);
 });
 
-test('reconciles an admitted mutation before rejecting a cancelled command', async () => {
+test('releases a cancelled admitted command without waiting for the old preparation', async () => {
   const abort = new AbortController();
   let gets = 0;
   globalThis.fetch = mock(async (_url: string, init: RequestInit) => {
@@ -90,7 +90,91 @@ test('reconciles an admitted mutation before rejecting a cancelled command', asy
   await expect(
     replaceTorrentPlayback(mapTorrentSession(wire), 350, abort.signal),
   ).rejects.toMatchObject({ name: 'AbortError' });
-  expect(gets).toBe(1);
+  expect(gets).toBe(0);
+});
+
+test('cancellation does not retry a lost POST and aborts an in-flight reconciliation poll', async () => {
+  const abort = new AbortController();
+  let posts = 0;
+  globalThis.fetch = mock(async () => {
+    posts++;
+    abort.abort();
+    throw new TypeError('Response lost');
+  });
+  await expect(
+    replaceTorrentPlayback(mapTorrentSession(wire), 350, abort.signal),
+  ).rejects.toMatchObject({ name: 'AbortError' });
+  expect(posts).toBe(1);
+  const next = new AbortController();
+  globalThis.fetch = mock((_url: string, init: RequestInit) => {
+    if (init.method === 'POST')
+      return Promise.resolve(response({ ...wire, state: 'preparing', version: 6, playback: null }));
+    const waiting = new Promise<Response>((_resolve, reject) =>
+      init.signal!.addEventListener('abort', () => reject(init.signal!.reason), { once: true }),
+    );
+    next.abort();
+    return waiting;
+  });
+  await expect(
+    replaceTorrentPlayback(mapTorrentSession(wire), 350, next.signal),
+  ).rejects.toMatchObject({ name: 'AbortError' });
+});
+
+test('a stalled request has a finite deadline and a following request still works', async () => {
+  const { stopTorrentSession } = await import('../src/entities/torrent-session');
+  const deadline = spyOn(AbortSignal, 'timeout').mockImplementation(() => {
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(new DOMException('Timed out', 'TimeoutError')), 5);
+    return controller.signal;
+  });
+  try {
+    globalThis.fetch = mock(
+      (_url, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          init!.signal!.addEventListener('abort', () => reject(init!.signal!.reason), {
+            once: true,
+          });
+        }),
+    ) as typeof fetch;
+    await expect(stopTorrentSession(id, new AbortController().signal)).rejects.toMatchObject({
+      kind: 'network',
+    });
+    expect(deadline).toHaveBeenCalledWith(15_000);
+    globalThis.fetch = mock(async () => new Response(null, { status: 204 }));
+    await expect(stopTorrentSession(id, new AbortController().signal)).resolves.toBeUndefined();
+  } finally {
+    deadline.mockRestore();
+  }
+});
+
+test('a successor reconciles preparing state before admitting its own mutation', async () => {
+  const bodies: any[] = [];
+  let gets = 0;
+  globalThis.fetch = mock(async (_url: string, init: RequestInit) => {
+    if (init.method !== 'POST') {
+      return response(
+        ++gets === 1 ? { ...wire, state: 'preparing', version: 6, playback: null } : ready,
+      );
+    }
+    bodies.push(JSON.parse(String(init.body)));
+    return bodies.length === 1
+      ? Response.json(
+          { error: { code: 'TORRENT_SESSION_CHANGED', message: 'Conflict' } },
+          { status: 409 },
+        )
+      : response({
+          ...ready,
+          version: 9,
+          playback: { ...ready.playback, startPositionSeconds: 500 },
+        });
+  });
+  const result = await replaceTorrentPlayback(
+    mapTorrentSession(wire),
+    500,
+    new AbortController().signal,
+  );
+  expect(bodies.map((body) => body.expectedVersion)).toEqual([5, 7]);
+  expect(result.playback?.startPositionSeconds).toBe(500);
 });
 
 test('recovers a CAS conflict without changing the logical retry key', async () => {

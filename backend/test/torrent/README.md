@@ -35,10 +35,18 @@ test unmounts React, clears queries/storage and resets the account cancellation 
 | Discovery, candidate ownership, safe magnets, ranking and catalog failure                                        | discovery/Jacred suites                                                                                      |
 | Protected flow, file choice, explicit HLS start/error/retry, progress, Stop and account reset                    | `frontend/test/torrentLifecycle.test.tsx`: real React/query/API mapping, fake fetch and HLS library          |
 | Terminal polling, retry bounds, abort, account cache isolation and login return                                  | frontend boundary/social-access suites                                                                       |
+| Cancelled seek/audio admission, repeated commands and stalled-request recovery                                   | `frontend/test/torrentReplacement.test.ts`                                                                   |
+| Producer feedback during caption restoration, prefetch cancellation and backwards seek                           | `frontend/test/torrentStream.test.ts`                                                                        |
+| Release/provider switch during a pending torrent command, confirmed progress and source cleanup                  | frontend lifecycle/view/continuity suites                                                                    |
 
 The HLS renderer test checks callbacks, credentials and absolute torrent progress with
 a fake player element. It does not decode video or replace the current browser matrix.
 The HTTP lifecycle fixture does not prove database transactions; those are checked separately.
+
+Continuous subtitle extraction initially covers 30 seconds, then prefetch extends coverage by
+90 seconds. Both paths retain the lookbehind needed for overlapping/sparse Matroska cues.
+Producer feedback continues while a seek/audio command restores captions. Session API requests
+have a 15-second deadline; cancelled commands leave admission reconciliation to their successor.
 
 ## Opt-in PostgreSQL and FFmpeg
 

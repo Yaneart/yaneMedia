@@ -120,7 +120,7 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
   const propsRef = useRef(props);
   const pendingRef = useRef<((result?: HostResult) => void) | null>(null);
   const loadedRevisionRef = useRef<string | null>(null);
-  const torrentCommandRef = useRef(false);
+  const torrentCommandRef = useRef<{ sourceRef: string } | null>(null);
   const torrentAudioRef = useRef<string | null>(null);
   const streamRef = useRef<ReturnType<typeof createTorrentStream> | null>(null);
   const initializingRef = useRef<{ position: number } | null>(null);
@@ -184,7 +184,8 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
       });
     };
     const replaceTorrent = async (position: number, signal: AbortSignal, audioId?: string) => {
-      torrentCommandRef.current = true;
+      const command = { sourceRef: propsRef.current.source.sourceRef };
+      torrentCommandRef.current = command;
       torrentAudioRef.current = null;
       try {
         const current = propsRef.current;
@@ -210,7 +211,7 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
         torrentAudioRef.current = ready.playback.selectedAudioTrackRef;
         return { source: descriptor, selection: { audioId: ready.playback.selectedAudioTrackRef } };
       } finally {
-        torrentCommandRef.current = false;
+        if (torrentCommandRef.current === command) torrentCommandRef.current = null;
       }
     };
     const report = (
@@ -218,9 +219,16 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
       reason: Parameters<MediaVideoRendererProps['onProgress']>[2],
     ) => {
       const { snapshot } = event;
+      const captionsOnly =
+        snapshot.pending?.type === 'text' ||
+        (propsRef.current.torrentTimeline &&
+          snapshot.captions?.status === 'loading' &&
+          snapshot.playback === 'playing' &&
+          snapshot.selection?.audioId === torrentAudioRef.current);
       if (
+        initializingRef.current ||
         snapshot.source?.revision !== loadedRevisionRef.current ||
-        snapshot.pending ||
+        (snapshot.pending && !captionsOnly) ||
         snapshot.positionSeconds === null
       )
         return;
@@ -429,9 +437,22 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
     player.navigation = controls?.onNextEpisode
       ? { next: () => propsRef.current.directControls?.onNextEpisode?.() }
       : {};
-    if (torrentCommandRef.current || loadedRevisionRef.current === descriptor.revision) return;
+    const command = torrentCommandRef.current;
+    // Host commands own generation updates only within their torrent session.
+    // A different release/provider must replace the source immediately, which
+    // aborts the old command through the player's source lifetime.
+    if (
+      (command &&
+        source.provider === 'torrent' &&
+        command.sourceRef.split(':').slice(0, 2).join(':') ===
+          source.sourceRef.split(':').slice(0, 2).join(':')) ||
+      loadedRevisionRef.current === descriptor.revision
+    )
+      return;
+    torrentCommandRef.current = null;
     loadedRevisionRef.current = descriptor.revision;
     if (timeline) streamRef.current?.configure(source.url, timeline, descriptor.revision);
+    else streamRef.current?.dispose();
     if (pendingRef.current) {
       pendingRef.current({
         source: descriptor,

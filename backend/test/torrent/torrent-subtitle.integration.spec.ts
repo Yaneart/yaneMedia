@@ -87,6 +87,32 @@ integration('bounded subtitle delivery from a real MKV', () => {
       expect(short.toString()).toContain('Early cue');
       expect(short.toString()).not.toContain('Outside short window');
       expect(bytes).toBeLessThan(longWindowBytes);
+      const initial = await gateway.subtitleResource(
+        'continuous',
+        1,
+        source,
+        probe,
+        probe.subtitleTracks![0],
+        0,
+        AbortSignal.timeout(20_000),
+        true,
+      );
+      expect(initial.toString()).toContain('Early cue');
+      expect(initial.toString()).not.toContain('Outside short window');
+      expect(gateway.subtitleCoverage('continuous', probe, probe.subtitleTracks![0])).toBe(30);
+      const extended = await gateway.subtitleResource(
+        'continuous',
+        1,
+        source,
+        probe,
+        probe.subtitleTracks![0],
+        15,
+        AbortSignal.timeout(20_000),
+        true,
+        true,
+      );
+      expect(extended.toString()).toContain('Outside short window');
+      expect(gateway.subtitleCoverage('continuous', probe, probe.subtitleTracks![0])).toBe(105);
       bytes = 0;
       const empty = await gateway.subtitleResource(
         'sparse',

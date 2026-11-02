@@ -9,7 +9,7 @@ import { torrentAccountSignal } from './torrentClientScope';
 import { torrentOutputProfile } from './torrentOutputProfile';
 
 // Keep one logical key through uncertain admission. Abort cannot undo a POST:
-// reconcile its outcome before letting the player's queue start another mutation.
+// A successor reconciles preparing state and uses CAS before another mutation.
 export async function replaceTorrentPlayback(
   initial: TorrentSession,
   position: number,
@@ -26,6 +26,7 @@ export async function replaceTorrentPlayback(
   const audio = audioTrackRef;
   const outputProfile = initial.playback?.output?.profile ?? (await torrentOutputProfile());
   while (!deadline.aborted) {
+    signal.throwIfAborted();
     if (current.selectedFileRef !== initial.selectedFileRef)
       throw new Error('Playback file replaced');
     if (admittedVersion === null && current.state !== 'preparing') {
@@ -43,6 +44,7 @@ export async function replaceTorrentPlayback(
         );
         admittedVersion = current.version;
       } catch (error) {
+        signal.throwIfAborted();
         if (
           !(error instanceof TorrentRequestError) ||
           !(
@@ -53,6 +55,7 @@ export async function replaceTorrentPlayback(
         )
           throw error;
       }
+      signal.throwIfAborted();
     }
     if (admittedVersion !== null && current.state === 'ready') {
       if (
@@ -74,10 +77,26 @@ export async function replaceTorrentPlayback(
     )
       throw new Error('Playback preparation failed');
     // A short fast phase avoids extra startup delay without exhausting polling budgets.
-    await new Promise<void>((resolve) => setTimeout(resolve, ++polls <= 12 ? 250 : 1_000));
+    const polling = AbortSignal.any([deadline, signal]);
+    await new Promise<void>((resolve, reject) => {
+      const cancel = () => {
+        clearTimeout(timer);
+        reject(polling.reason);
+      };
+      const timer = setTimeout(
+        () => {
+          polling.removeEventListener('abort', cancel);
+          resolve();
+        },
+        ++polls <= 12 ? 250 : 1_000,
+      );
+      polling.addEventListener('abort', cancel, { once: true });
+      if (polling.aborted) cancel();
+    });
     try {
-      current = await getTorrentSession(initial.id, deadline);
+      current = await getTorrentSession(initial.id, polling);
     } catch (error) {
+      polling.throwIfAborted();
       if (
         !(error instanceof TorrentRequestError) ||
         !(error.kind === 'network' || [429, 502, 503, 504].includes(error.status ?? 0))

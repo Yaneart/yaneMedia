@@ -312,6 +312,52 @@ function openTorrent() {
 }
 
 describe('torrent user lifecycle', () => {
+  test('an open source picker retains the chosen tab while torrent generations change', async () => {
+    const noop = () => {};
+    const props = {
+      embedSources: [
+        {
+          sourceRef: 'embed',
+          provider: 'rutube-streaming',
+          kind: 'embed' as const,
+          label: 'Rutube',
+          url: 'https://example.test/embed',
+          availability: 'available' as const,
+          browserSupported: true,
+        },
+      ],
+      directSources: [],
+      selectedTrackKey: null,
+      onEmbedSelect: noop,
+      onDirectSelect: noop,
+      onQualitySelect: noop,
+      torrentPanel: () => <span>Releases</span>,
+      selectedSource: {
+        sourceRef: `torrent:${id}:1`,
+        provider: 'torrent',
+        kind: 'hls' as const,
+        label: 'Torrent',
+        url: '/stream.m3u8',
+        availability: 'available' as const,
+        browserSupported: true,
+      },
+    };
+    const view = render(<PlaybackSourcePicker {...props} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Torrent', exact: true }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Плееры', exact: true }));
+    view.rerender(
+      <PlaybackSourcePicker
+        {...props}
+        selectedSource={{ ...props.selectedSource, sourceRef: `torrent:${id}:2` }}
+      />,
+    );
+    expect(
+      screen.getByRole('tab', { name: 'Плееры', exact: true }).getAttribute('aria-selected'),
+    ).toBe('true');
+    expect(screen.getByRole('button', { name: 'Rutube', exact: true })).toBeDefined();
+    view.unmount();
+  });
+
   test('chooses a probed audio track before starting playback', async () => {
     session = {
       ...session,
@@ -659,6 +705,73 @@ describe('torrent player adapter contract', () => {
     view.unmount();
   });
 
+  test('switches release/provider while an old torrent command is unresolved', async () => {
+    const noop = () => {};
+    let settle!: (value: any) => void;
+    const onReplace = mock(
+      () =>
+        new Promise<any>((resolve) => {
+          settle = resolve;
+        }),
+    );
+    const props = {
+      source: {
+        sourceRef: `torrent:${id}:1`,
+        provider: 'torrent',
+        kind: 'hls' as const,
+        label: 'Torrent',
+        url: '/old.m3u8',
+        availability: 'available' as const,
+        browserSupported: true,
+      },
+      mediaTitle: 'Fixture',
+      shouldAutoPlay: true,
+      initialPositionSeconds: 0,
+      torrentTimeline: {
+        generation: 1,
+        startPositionSeconds: 0,
+        durationSeconds: 1200,
+        timeline: { absoluteAnchorSeconds: 0, mediaAnchorSeconds: 0, windowEndSeconds: 120 },
+        playbackRates: [1],
+        audioTracks: [],
+        selectedAudioTrackRef: 'main',
+        onReplace,
+      },
+      onReady: noop,
+      onError: noop,
+      onPlay: noop,
+      onPause: noop,
+      onProgress: noop,
+    };
+    const view = render(<MediaVideoRenderer {...props} />);
+    await act(async () => {});
+    const player = players[0];
+    for (const source of [
+      { ...props.source, sourceRef: 'torrent:other:1', url: '/other.m3u8' },
+      { ...props.source, sourceRef: 'direct', provider: 'direct', url: '/direct.m3u8' },
+    ]) {
+      const controller = new AbortController();
+      const pending = player.host.execute(
+        { type: 'seek', target: { positionSeconds: 300 } },
+        { signal: controller.signal, positionSeconds: 20 },
+      );
+      view.rerender(
+        <MediaVideoRenderer
+          {...props}
+          source={source}
+          torrentTimeline={source.provider === 'torrent' ? props.torrentTimeline : undefined}
+        />,
+      );
+      expect(player.descriptor.src).toBe(source.url);
+      controller.abort();
+      settle({ id, playback: props.torrentTimeline });
+      await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+      view.rerender(<MediaVideoRenderer {...props} />);
+      await act(async () => {});
+    }
+    view.unmount();
+  });
+
   test('bridges combined source selection with confirmed position and paused intent without reloading twice', async () => {
     const ready = mock(() => {});
     const selection = mock((track: string | null, quality: string | null) => {
@@ -873,6 +986,26 @@ describe('torrent player adapter contract', () => {
     expect(progress).not.toHaveBeenCalled();
     await act(async () => player.emit('positionchange', { ...snapshot, positionSeconds: 49 }));
     expect(progress).toHaveBeenCalledWith(49, 1200, 'periodic');
+    await act(async () =>
+      player.emit('positionchange', {
+        ...snapshot,
+        positionSeconds: 50,
+        pending: { type: 'text' },
+        captions: { status: 'loading' },
+      }),
+    );
+    expect(progress).toHaveBeenCalledWith(50, 1200, 'periodic');
+    await act(async () =>
+      player.emit('positionchange', {
+        ...snapshot,
+        positionSeconds: 51,
+        playback: 'playing',
+        pending: { type: 'seek' },
+        selection: { audioId: 'audio' },
+        captions: { status: 'loading' },
+      }),
+    );
+    expect(progress).toHaveBeenCalledWith(51, 1200, 'periodic');
     view.rerender(<MediaVideoRenderer {...props} initialPositionSeconds={49} />);
     expect(player.setSource).toHaveBeenCalledTimes(1);
     await act(async () =>
