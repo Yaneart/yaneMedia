@@ -10,33 +10,29 @@
 
 ## Настройки, secrets и сеть
 
-`compose.yaml` включает `TORRENT_STREAMING_ENABLED=true` и задаёт приватные адреса
-TorrServer/Prowlarr и пути secrets. `backend/.env.example` содержит безопасный
+`compose.yaml` включает `TORRENT_STREAMING_ENABLED=true` и задаёт приватный адрес
+TorrServer и пути secrets. `backend/.env.example` содержит безопасный
 standalone default `false`. Значения `environment` в Compose имеют приоритет над
 `env_file`: изменение только `backend/.env` **не отключает** текущий Docker backend.
 `docker compose restart` не применяет новое окружение; нужен `up -d --no-deps backend`.
 
-| Настройка                                                     | Назначение                                                                        |
-| ------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `TORRENT_STREAMING_ENABLED`                                   | Общий флаг движка, подготовки HLS и фонового reconciler                           |
-| `TORRSERVER_BASE_URL`                                         | В Compose `http://torrserver:8090`, без credentials в URL                         |
-| `TORRSERVER_USERNAME_FILE`, `TORRSERVER_PASSWORD_FILE`        | Файлы Basic Auth, одинаковые для backend и engine                                 |
-| `TORRENT_IDEMPOTENCY_SECRET_FILE`                             | Постоянный ключ 32 bytes в base64; сохранять между перезапусками                  |
-| `TORRSERVER_CONNECT_TIMEOUT_MS`                               | 3000 ms                                                                           |
-| `TORRSERVER_HEADERS_TIMEOUT_MS`, `TORRSERVER_BODY_TIMEOUT_MS` | По 30000 ms                                                                       |
-| `TORRSERVER_METADATA_TIMEOUT_MS`                              | 120000 ms; отдельный probe ограничен 30 s                                         |
-| `PROWLARR_BASE_URL`, `PROWLARR_API_KEY_FILE`                  | В Compose приватный origin и файл ключа; задаются вместе                          |
-| `PROWLARR_TIMEOUT_MS`                                         | Default 10000 ms; локальные настройки могут отличаться                            |
-| `PROWLARR_INDEXER_IDS`                                        | До восьми локальных ID через запятую; перепроверить после восстановления Prowlarr |
-| `JACRED_BASE_URL`                                             | Необязательный внешний каталог; без него работает только Prowlarr                 |
+| Настройка                                                     | Назначение                                                             |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `TORRENT_STREAMING_ENABLED`                                   | Общий флаг движка, подготовки HLS и фонового reconciler                |
+| `TORRSERVER_BASE_URL`                                         | В Compose `http://torrserver:8090`, без credentials в URL              |
+| `TORRSERVER_USERNAME_FILE`, `TORRSERVER_PASSWORD_FILE`        | Файлы Basic Auth, одинаковые для backend и engine                      |
+| `TORRENT_IDEMPOTENCY_SECRET_FILE`                             | Постоянный ключ 32 bytes в base64; сохранять между перезапусками       |
+| `TORRSERVER_CONNECT_TIMEOUT_MS`                               | 3000 ms                                                                |
+| `TORRSERVER_HEADERS_TIMEOUT_MS`, `TORRSERVER_BODY_TIMEOUT_MS` | По 30000 ms                                                            |
+| `TORRSERVER_METADATA_TIMEOUT_MS`                              | 120000 ms; отдельный probe ограничен 30 s                              |
+| `JACRED_BASE_URL`                                             | Адрес Jacred v1 API из `backend/.env`; пустое значение отключает поиск |
 
 Отдельных runtime flags ручного ввода и discovery, admin-only режима и allowlist
 сейчас нет. API требует подтверждённый аккаунт; ownership, CSRF и origin checks
 действуют дополнительно. Общий флаг не скрывает панель frontend и не является
-сетевой блокировкой всего discovery API. Для отключения поиска убрать из эффективного
-окружения backend **все три** `PROWLARR_BASE_URL`, `PROWLARR_API_KEY_FILE`,
-`JACRED_BASE_URL` и пересоздать backend. При этом ручной ввод может работать, если
-общий флаг включён. Текущие Prowlarr URL/key заданы в Compose, а JacRed — опционально в `.env`.
+сетевой блокировкой всего discovery API. Для отключения поиска задайте
+`JACRED_BASE_URL=` в `backend/.env` и пересоздайте backend. Ручной ввод остаётся
+доступным при включённом общем флаге. Поиск использует только API Jacred.
 
 Создание отсутствующих engine secrets без перезаписи существующих:
 
@@ -46,35 +42,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\torrserver\init-secrets.ps
 ```
 
 Файлы находятся в ignored `storage/torrent-engine/secrets/{username,password,idempotency}`.
-Prowlarr API key хранится отдельно в `storage/torrent-discovery/secrets/api-key`;
-скрипт его не создаёт. Сначала запустить Prowlarr, через локальную admin UI получить
-ключ и сохранить в этот файл без публикации в консоль/репозиторий. Ключ должен
-совпадать с Prowlarr; при его ротации обновить файл и пересоздать backend. При смене
-engine credentials сначала завершить сессии, затем пересоздать engine и backend.
+При смене engine credentials сначала завершить сессии, затем пересоздать engine и backend.
 Не менять idempotency key при обычном обновлении. Ограничить доступ к secret-файлам
 учётной записью оператора и Docker; Compose secrets здесь являются файлами хоста.
 
-Локальная настройка индексаторов:
-
-```powershell
-# Папка: yaneMedia/ (корень проекта)
-docker compose -f compose.yaml -f compose.prowlarr-admin.yaml up -d --no-deps prowlarr
-# Открыть http://127.0.0.1:9696; настроить источники и сохранить API key локально.
-docker compose up -d --no-deps prowlarr
-```
-
-Последняя команда убирает временную публикацию admin-порта. Индексаторы и их
-credentials живут в volume, а не в Git. Рабочий набор этого стенда: BigFANGroup,
-Nyaa.si, Anime Tosho, YTS через Prowlarr и Kinozal/RuTracker/NoNaMe Club через
-JacRed. Доступность источника и peers меняется; успешный search не доказывает playback.
-
-В Prowlarr проверить API authentication, connection test каждого разрешённого
-indexer и его movie/TV/anime categories. В `backend/.env` задать
-`PROWLARR_INDEXER_IDS` фактическими локальными ID (до восьми через запятую),
-затем пересоздать только backend. После восстановления volume перепроверить ID:
-имена источников не являются переносимыми числовыми идентификаторами.
-Без этой настройки adapter использует общий поиск Prowlarr. Подробности текущего
-набора и диагностики — в [discovery](DISCOVERY.md).
+Поиск не требует локальных индексаторов и ключа API: достаточно `JACRED_BASE_URL`.
+Поддержаны Kinozal, RuTracker и NoNaMe Club через Jacred. Подробности — в
+[discovery](DISCOVERY.md). Доступность каталога и peers меняется;
+успешный поиск не доказывает playback.
 
 | Порт / сеть                     | Граница                                                                                  |
 | ------------------------------- | ---------------------------------------------------------------------------------------- |
@@ -83,7 +58,6 @@ indexer и его movie/TV/anime categories. В `backend/.env` задать
 | TorrServer `8090`               | Только `torrent-control`; nginx разрешает settings/torrents/stream                       |
 | TorrServer `18090`              | Raw engine только container loopback                                                     |
 | BitTorrent `32000` TCP/UDP      | Внутри engine, host publication отсутствует; входящая доступность peers не гарантируется |
-| Prowlarr `9696`                 | Только приватная control-сеть, кроме временного loopback override                        |
 
 Не публиковать engine и его raw UI/MCP. Сохранить startup firewall,
 сброс capabilities и IPv6 deny: `internal` Docker network сама по себе не блокирует
@@ -93,15 +67,14 @@ indexer и его movie/TV/anime categories. В `backend/.env` задать
 
 ## Диски, ресурсы и резервные копии
 
-| Данные                                       | Где                                              | Политика                                                                   |
-| -------------------------------------------- | ------------------------------------------------ | -------------------------------------------------------------------------- |
-| Данные приложения, torrent sessions/bindings | `postgres-data`                                  | Обычный согласованный DB backup; содержит пользовательские данные          |
-| Engine config/auth                           | `torrserver-config` → `/config`                  | Чувствительные данные; закрытая копия для восстановления                   |
-| Части torrent                                | `torrserver-cache` → `/cache`                    | Расходный cache, исключить из backup                                       |
-| Prowlarr config, indexers, credentials       | `prowlarr-config` → `/config`                    | Закрытый согласованный backup; остановить Prowlarr на время файловой копии |
-| Engine/Prowlarr secret-файлы, backend `.env` | Хост, ignored                                    | Отдельный защищённый backup, без вывода значений в логи                    |
-| HLS                                          | backend `/tmp/yanemedia-torrent-hls`             | Временный container layer, исключить из backup; пропадает при recreate     |
-| Media/profile assets                         | `storage/media-assets`, `storage/profile-assets` | Пользовательские данные; torrent cleanup их не затрагивает                 |
+| Данные                                       | Где                                              | Политика                                                               |
+| -------------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------- |
+| Данные приложения, torrent sessions/bindings | `postgres-data`                                  | Обычный согласованный DB backup; содержит пользовательские данные      |
+| Engine config/auth                           | `torrserver-config` → `/config`                  | Чувствительные данные; закрытая копия для восстановления               |
+| Части torrent                                | `torrserver-cache` → `/cache`                    | Расходный cache, исключить из backup                                   |
+| Engine secret-файлы, backend `.env`          | Хост, ignored                                    | Отдельный защищённый backup, без вывода значений в логи                |
+| HLS                                          | backend `/tmp/yanemedia-torrent-hls`             | Временный container layer, исключить из backup; пропадает при recreate |
+| Media/profile assets                         | `storage/media-assets`, `storage/profile-assets` | Пользовательские данные; torrent cleanup их не затрагивает             |
 
 В `settings.json`: disk cache 24 GiB (`25769803776`), удаление cache при Drop,
 25 peer connections, UPnP/LPD отключены. `--maxsize` engine и app validation
@@ -120,7 +93,8 @@ Entrypoint при каждом старте заменяет `/config/settings.j
 
 TorrServer ограничен 4 CPU, 4 GiB RAM, swap сверх лимита отсутствует, 256 PIDs и
 tmpfs 256 MiB. Cache дисковый, поэтому 24 GiB cache не означает 24 GiB heap.
-У backend в Compose нет CPU/RAM лимита; FFmpeg работает **в backend**. Требуется одна
+Backend ограничен 2 CPU, 4 ГиБ RAM без дополнительного swap и 256 PIDs;
+его tmpfs — 384 МиБ. FFmpeg работает **в backend** и разделяет этот лимит с Node.js. Требуется одна
 реплика backend: бюджеты и candidate cache находятся в памяти процесса. Допускаются
 две активные сессии всего, одна на аккаунт, два FFmpeg worker, из них максимум один
 с video transcode. Увеличение ресурсов само по себе не меняет эти ограничения.
@@ -169,7 +143,7 @@ HTTP. Пробы кешируются 5 s. У engine PID 1 ожидаются UI
 проверки доступности engine; повторная очистка идёт раз в минуту. Большое значение
 terminal session gauges само по себе не означает утечку: tombstones хранятся сутки.
 Не публиковать полный `docker compose config`, `docker inspect`, `.env`, request
-bodies, API keys, cookies или сырые ответы engine/Prowlarr для диагностики.
+bodies, API keys, cookies или сырые ответы engine/Jacred для диагностики.
 
 Необязательный live search probe обращается к настроенным внешним источникам, но
 печатает только длительность, количество результатов по source и degraded/error:
@@ -180,7 +154,7 @@ docker compose exec -T backend npm run probe:torrent-discovery -- --query Oppenh
 ```
 
 `--kind` допускает `movie|tv|anime`. Ненулевой exit при degraded не доказывает отказ
-ручного ввода. При пустом поиске проверить indexer IDs, source cooldown и доступность
+ручного ввода. При пустом поиске проверить `JACRED_BASE_URL` и доступность API
 каталога; при no-peers timeout не увеличивать лимиты бесконечно. Ошибки metadata/probe
 связаны также с peers, transcode — с media/ресурсами, 429 — с budget (`Retry-After`).
 Не повторять create автоматически: общий бюджет 20 новых попыток / 10 min и
@@ -280,7 +254,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start.ps1 -Mode Ho
 ```
 
 Linux/macOS: `sh scripts/start.sh Public --build` или `sh scripts/start.sh Home --build`.
-Public применяет дополнительный `compose.public.yaml`, останавливает TorrServer/Prowlarr,
+Public применяет дополнительный `compose.public.yaml`, останавливает TorrServer,
 выключает server streaming и скрывает его панель. Проверить core health=200 и strict
 feature status=`disabled`. Исправный Home возвращает `ready`.
 

@@ -1,7 +1,6 @@
 import { ConfigService } from '@nestjs/config';
 import { JacredClient } from '../../src/torrent/jacred.client';
-import { TorrentDiscoveryClient } from '../../src/torrent/torrent-discovery.client';
-import { ProwlarrClient } from '../../src/torrent/prowlarr.client';
+import { appConfigValidationSchema } from '../../src/config/config.module';
 
 const input = { query: 'Oppenheimer 2023', kind: 'movie' as const, limit: 50, offset: 0 };
 const row = {
@@ -117,21 +116,39 @@ describe('JacRed discovery boundary', () => {
     expect((fetchSpy.mock.calls[1][0] as URL).searchParams.get('search')).toBe('Shogun');
   });
 
-  it('preserves successful providers and reports a partial outage', async () => {
-    const prowlarr = {
-      enabled: true,
-      search: jest.fn().mockResolvedValue({ releases: [], degraded: false }),
-    };
-    const jacred = { enabled: true, search: jest.fn().mockRejectedValue(new Error('offline')) };
-    const discovery = new TorrentDiscoveryClient(
-      prowlarr as unknown as ProwlarrClient,
-      jacred as unknown as JacredClient,
-    );
-    expect(await discovery.search(input, AbortSignal.timeout(1000))).toEqual({
+  it.each([undefined, ''])('disables search without a catalog URL (%s)', async (baseUrl) => {
+    const fetchSpy = jest.spyOn(global, 'fetch');
+    const discovery = new JacredClient({ get: () => baseUrl } as unknown as ConfigService);
+    await expect(discovery.search(input, AbortSignal.timeout(1000))).resolves.toEqual({
       releases: [],
-      degraded: true,
+      degraded: false,
     });
-    prowlarr.search.mockRejectedValueOnce(new Error('offline'));
-    await expect(discovery.search(input, AbortSignal.timeout(1000))).rejects.toThrow();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('reports a catalog outage without falling back to another source', async () => {
+    const fetchSpy = jest.spyOn(global, 'fetch').mockRejectedValue(new Error('offline'));
+    await expect(client().search(input, AbortSignal.timeout(1000))).rejects.toThrow();
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect((fetchSpy.mock.calls[0][0] as URL).origin).toBe('https://catalog.example');
+  });
+
+  it('accepts an empty catalog setting and rejects non-origin URLs', () => {
+    const base = {
+      DATABASE_URL: 'postgresql://user:pass@localhost/db',
+      FRONTEND_ORIGIN: 'http://localhost:5173',
+    };
+    for (const url of ['', 'https://catalog.example'])
+      expect(
+        appConfigValidationSchema.validate({ ...base, JACRED_BASE_URL: url }).error,
+      ).toBeUndefined();
+    for (const url of [
+      'ftp://catalog.example',
+      'https://user:pass@catalog.example',
+      'https://catalog.example/api',
+    ])
+      expect(
+        appConfigValidationSchema.validate({ ...base, JACRED_BASE_URL: url }).error,
+      ).toBeDefined();
   });
 });

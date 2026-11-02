@@ -41,7 +41,6 @@ describe('torrent discovery', () => {
   const input = { create: jest.fn().mockResolvedValue({ sessionId: 'session' }) };
   const service = new TorrentDiscoveryService(
     discovery,
-    { baseUrl: new URL('http://prowlarr:9696'), apiKey: 'a'.repeat(32), timeoutMs: 1000 },
     registry as unknown as MediaRegistryService,
     media as unknown as MediaService,
     input as unknown as TorrentInputService,
@@ -54,10 +53,10 @@ describe('torrent discovery', () => {
 
   it('builds bounded trusted queries, ranks and hides download targets', async () => {
     const result = await service.search('owner', mediaRef, 1, 2);
-    expect(discovery.search).toHaveBeenCalledTimes(4);
+    expect(discovery.search).toHaveBeenCalledTimes(2);
     expect(discovery.search).toHaveBeenCalledWith(
       expect.objectContaining({
-        query: 'Interstellar S01E02',
+        query: 'Interstellar',
         kind: 'tv',
         limit: 50,
         offset: 0,
@@ -146,13 +145,13 @@ describe('torrent discovery', () => {
   });
 
   it('keeps successful searches when another query fails', async () => {
-    discovery.search.mockRejectedValueOnce(new Error('indexer timeout')).mockResolvedValue(found);
+    discovery.search.mockRejectedValueOnce(new Error('catalog timeout')).mockResolvedValue(found);
     const result = await service.search('owner-partial', mediaRef);
     expect(result.degraded).toBe(true);
     expect(result.candidates).toHaveLength(1);
   });
 
-  it('reports a failed indexer while retaining other candidates', async () => {
+  it('reports a degraded catalog query while retaining other candidates', async () => {
     discovery.search.mockResolvedValue({ ...found, degraded: true });
     const result = await service.search('owner-source-partial', mediaRef);
     expect(result.degraded).toBe(true);
@@ -173,138 +172,34 @@ describe('torrent discovery', () => {
     expect(peak).toBe(1);
   });
 
-  it('downloads only from the configured adapter origin and validates metainfo', async () => {
-    discovery.search.mockResolvedValueOnce({
-      releases: [
-        {
-          ...release,
-          infoHash: null,
-          downloadUrl: 'http://prowlarr:9696/api/v1/indexer/1/download',
-        },
-      ],
+  it.each([
+    'https://catalog.example/file.torrent',
+    'http://127.0.0.1/admin',
+    'magnet:?xt=invalid',
+    release.downloadUrl + '&xs=http://127.0.0.1/private',
+  ])('rejects unsafe candidates without fetching their target: %s', async (downloadUrl) => {
+    const fetchSpy = jest.spyOn(global, 'fetch');
+    discovery.search.mockResolvedValue({
+      releases: [{ ...release, downloadUrl }],
       degraded: false,
     });
-    const { candidates } = await service.search('owner-4', mediaRef);
-    const body = Buffer.from(
-      'd4:infod6:lengthi10e4:name9:movie.mkv12:piece lengthi16e6:pieces20:aaaaaaaaaaaaaaaaaaaaee',
-    );
-    const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue(new Response(body));
-    await service.create('owner-4', candidates[0].candidateRef, 'y'.repeat(16));
-    expect(fetchSpy).toHaveBeenCalledWith(
-      new URL('http://prowlarr:9696/api/v1/indexer/1/download'),
-      expect.objectContaining({ redirect: 'manual', headers: { 'X-Api-Key': 'a'.repeat(32) } }),
-    );
-    expect(input.create).toHaveBeenCalledWith(
-      'owner-4',
-      'file',
-      expect.any(Uint8Array),
-      mediaRef,
-      'y'.repeat(16),
-    );
+    expect((await service.search('owner-unsafe', mediaRef)).candidates).toHaveLength(0);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(input.create).not.toHaveBeenCalled();
   });
 
-  it('accepts Prowlarr proxy links while removing the URL API key', async () => {
-    const downloadUrl = `http://prowlarr:9696/1/download?apikey=${'a'.repeat(32)}&link=${'A'.repeat(144)}&file=movie.torrent`;
-    discovery.search.mockResolvedValue({
-      releases: [{ ...release, infoHash: null, downloadUrl }],
-      degraded: false,
-    });
-    const { candidates } = await service.search('owner-5', mediaRef);
-    expect(candidates).toHaveLength(1);
-    expect(JSON.stringify(candidates)).not.toContain('apikey');
-    const body = Buffer.from(
-      'd4:infod6:lengthi10e4:name9:movie.mkv12:piece lengthi16e6:pieces20:aaaaaaaaaaaaaaaaaaaaee',
-    );
-    const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue(new Response(body));
-    await service.create('owner-5', candidates[0].candidateRef, 'z'.repeat(16));
-    const [target, options] = fetchSpy.mock.calls[0];
-    expect((target as URL).pathname).toBe('/1/download');
-    expect((target as URL).searchParams.has('apikey')).toBe(false);
-    expect(options?.headers).toEqual({ 'X-Api-Key': 'a'.repeat(32) });
-    discovery.search.mockResolvedValue({
-      releases: [
-        {
-          ...release,
-          infoHash: null,
-          downloadUrl: downloadUrl.replace('a'.repeat(32), 'b'.repeat(32)),
-        },
-      ],
-      degraded: false,
-    });
-    expect((await service.search('owner-6', mediaRef)).candidates).toHaveLength(0);
+  it('reports total catalog failure as unavailable', async () => {
+    discovery.search.mockRejectedValue(new Error('catalog offline'));
+    await expect(service.search('owner-offline', mediaRef)).rejects.toMatchObject({ status: 503 });
+    expect(input.create).not.toHaveBeenCalled();
   });
 
-  it.each([301, 302])(
-    'accepts a validated magnet from a Prowlarr %s without following it',
-    async (status) => {
-      const owner = `owner-redirect-${status}`;
-      discovery.search.mockResolvedValue({
-        releases: [{ ...release, downloadUrl: 'http://prowlarr:9696/api/v1/indexer/1/download' }],
-        degraded: false,
-      });
-      const { candidates } = await service.search(owner, mediaRef);
-      const fetchSpy = jest
-        .spyOn(global, 'fetch')
-        .mockResolvedValue(
-          new Response(null, { status, headers: { Location: release.downloadUrl } }),
-        );
-      await service.create(owner, candidates[0].candidateRef, 'redirect-key-123456');
-      expect(fetchSpy).toHaveBeenCalledTimes(1);
-      expect(input.create).toHaveBeenCalledWith(
-        owner,
-        'magnet',
-        expect.stringContaining('xt=urn%3Abtih%3A'),
-        mediaRef,
-        'redirect-key-123456',
-        expect.stringContaining('xt=urn%3Abtih%3A'),
-      );
-    },
-  );
-
-  it.each(['https://tracker.example/file', 'http://127.0.0.1/admin', 'magnet:?xt=invalid'])(
-    'rejects an unsafe download redirect: %s',
-    async (location) => {
-      discovery.search.mockResolvedValue({
-        releases: [{ ...release, downloadUrl: 'http://prowlarr:9696/api/v1/indexer/1/download' }],
-        degraded: false,
-      });
-      const { candidates } = await service.search(`owner-unsafe-${location}`, mediaRef);
-      const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue(
-        new Response(null, {
-          status: 302,
-          headers: { Location: location },
-        }),
-      );
-      await expect(
-        service.create(
-          `owner-unsafe-${location}`,
-          candidates[0].candidateRef,
-          'redirect-key-123456',
-        ),
-      ).rejects.toMatchObject({ status: 422 });
-      expect(fetchSpy).toHaveBeenCalledTimes(1);
-      expect(input.create).not.toHaveBeenCalled();
-    },
-  );
-
-  it('reports an interrupted download body as an upstream failure', async () => {
-    discovery.search.mockResolvedValue({
-      releases: [{ ...release, downloadUrl: 'http://prowlarr:9696/api/v1/indexer/1/download' }],
-      degraded: false,
-    });
-    const { candidates } = await service.search('owner-broken-body', mediaRef);
-    jest.spyOn(global, 'fetch').mockResolvedValue(
-      new Response(
-        new ReadableStream({
-          start(controller) {
-            controller.error(new Error('connection reset'));
-          },
-        }),
-      ),
-    );
+  it('expires owner candidates before creating a session', async () => {
+    const { candidates } = await service.search('owner-expired', mediaRef);
+    jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 10 * 60_000 + 1);
     await expect(
-      service.create('owner-broken-body', candidates[0].candidateRef, 'broken-body-123456'),
-    ).rejects.toMatchObject({ status: 503 });
+      service.create('owner-expired', candidates[0].candidateRef, 'x'.repeat(16)),
+    ).rejects.toMatchObject({ status: 404 });
     expect(input.create).not.toHaveBeenCalled();
   });
 

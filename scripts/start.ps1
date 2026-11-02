@@ -20,10 +20,10 @@ if ($Mode -eq 'Public') {
     $resolvedText = & docker @composeArguments config --format json
     if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect public Compose configuration.' }
     $resolved = ($resolvedText -join "`n") | ConvertFrom-Json
-    if ($resolved.services.torrserver -or $resolved.services.prowlarr) {
+    if ($resolved.services.torrserver) {
         throw 'Public mode must not enable home-torrent. Check COMPOSE_PROFILES.'
     }
-    foreach ($key in @('TORRSERVER_BASE_URL', 'TORRSERVER_USERNAME_FILE', 'TORRSERVER_PASSWORD_FILE', 'TORRENT_IDEMPOTENCY_SECRET_FILE', 'PROWLARR_BASE_URL', 'PROWLARR_API_KEY_FILE', 'JACRED_BASE_URL')) {
+    foreach ($key in @('TORRSERVER_BASE_URL', 'TORRSERVER_USERNAME_FILE', 'TORRSERVER_PASSWORD_FILE', 'TORRENT_IDEMPOTENCY_SECRET_FILE', 'JACRED_BASE_URL')) {
         if ($resolved.services.backend.environment.$key) {
             throw "Public mode inherited $key from the host environment. Unset it before starting."
         }
@@ -36,7 +36,7 @@ if ($Check) {
 
 if ($Mode -eq 'Public') {
     # Inactive profiles do not stop existing containers. Keep their volumes for Home.
-    & docker @baseArguments stop torrserver prowlarr
+    & docker @baseArguments stop torrserver
     if ($LASTEXITCODE -ne 0) { throw 'Cannot stop the home torrent services.' }
 }
 $startArguments = @('up', '-d')

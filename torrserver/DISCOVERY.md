@@ -1,87 +1,51 @@
-# Настройка torrent discovery
+# Поиск раздач через Jacred
 
-Backend объединяет приватный Prowlarr и необязательный JacRed v1 catalog.
-Ручной magnet/`.torrent` использует тот же playback pipeline и не требует
-настроенных indexers. Secrets, URL скачивания и magnets не передаются frontend:
-он получает ограниченные по времени candidate refs, принадлежащие аккаунту.
+Backend использует только Jacred v1 API. Локальная база раздач, отдельный поисковый контейнер и ключ API не нужны.
+Адрес задаётся в `backend/.env`:
 
-## Prowlarr и индексаторы
-
-Prowlarr хранит `/config` в `prowlarr-config`; backend обращается к
-`http://prowlarr:9696` по control-сети с `X-Api-Key` из
-`storage/torrent-discovery/secrets/api-key`. Этот файл и volume содержат secrets.
-Для начальной настройки запустить только Prowlarr с loopback admin override,
-получить API key через UI и сохранить в файл, затем запускать backend.
-Первый запуск — в [короткой инструкции Home](SETUP.md), замена ключей — в
-[OPERATIONS.md](OPERATIONS.md#настройки-secrets-и-сеть).
-
-Добавлять только разрешённые владельцем источники. Проверить connection test,
-credentials и movie/TV/anime categories каждой definition. Выбрать до восьми
-фактических локальных indexer IDs в `PROWLARR_INDEXER_IDS` backend `.env`;
-без списка используется общий поиск. После замены volume/definition проверить
-IDs заново. Изменение окружения требует recreate backend, обычный restart
-его не применяет. После настройки убрать admin-порт базовым Compose.
-
-Набор, принятый 2026-10-22: BigFANGroup, Nyaa.si, Anime Tosho и YTS через
-Prowlarr; Kinozal, RuTracker и NoNaMe Club через JacRed. Локальные IDs native
-источников на том стенде — `2,7,8,9`; это пример, а не переносимый default.
-Nyaa/Anime Tosho расширяют anime coverage, YTS — movie coverage; русская озвучка
-не гарантируется. Одинаковый hash у двух источников не означает независимых peers.
-
-## Необязательный JacRed
-
-Принятый стенд задавал `JACRED_BASE_URL=https://jacred.su` в backend `.env`.
-Backend запрашивает внешний catalog по bounded title и не хранит его базу
-локально; tracker credentials туда не отправляются. Без URL остаётся Prowlarr.
-Совместимый origin должен предоставлять `/api/v1.0/torrents` с `title`, `tracker`,
-`url`, `size`, числовым `sid` и `magnet`; `createTime` необязателен, `{}` означает
-пустой ответ. Adapter ограничен тремя распознаваемыми tracker/topic origins,
-8 s, 2 MiB и проверкой magnet; redirects и не-JSON отклоняются.
-
-Candidate list ограничен 50 результатами с сохранением разнообразия источников.
-Catalog seed counts могут устареть и не доказывают доступность peers. Проверять
-реальную metadata и playback, а не только результаты поиска. Отказ одного
-provider сохраняет результаты другого с `degraded`; cached results помечаются
-как stale. Backend restart сбрасывает in-memory cache и candidate refs.
-
-## Проверка и диагностика
-
-Сохранённые результаты приёмки 2026-10-22: BigFANGroup, Kinozal, RuTracker и
-NoNaMe Club дали decoded video/audio в app HLS (59–129 s на выбранных releases,
-первый кадр через 5.8–13.4 s после отдельного Play). Подготовка тогда выполнялась
-до Play; эти timings не описывают поздний one-click UX. YTS играл 36 s / 886 frames,
-Nyaa — 51 s / 1238 frames, Anime Tosho — 31 s / 752 frames после явного retry
-из-за медленного swarm. Connection-refused probes каждого provider сохраняли
-результаты другого с `degraded=true`; обычный запрос подтверждал recovery.
-Это отдельные исторические samples, не гарантия текущей доступности источника.
-
-После сборки backend необязательные probes из корня проекта (внешний поиск,
-без создания сессии и скачивания torrent):
-
-```powershell
-# Папка: yaneMedia/ (корень проекта)
-docker compose exec -T backend npm run probe:torrent-discovery -- --query Oppenheimer --kind movie --rounds 2
-docker compose exec -T backend npm run probe:torrent-discovery -- --query Shogun --kind tv --rounds 2
-docker compose exec -T backend npm run probe:torrent-discovery -- --query "Sousou no Frieren" --kind anime --rounds 2
+```dotenv
+JACRED_BASE_URL=https://jacred.su
 ```
 
-Probe печатает timing/source counts без ключей, credentials и magnets;
-при degraded/unavailable exit ненулевой. Пустой catalog, provider failure и
-release без peers — разные состояния. При пустом поиске проверить IDs,
-categories, source cooldown и доступность provider. Повторный поиск после
-восстановления проверяет recovery; успешный probe не доказывает playback.
+Можно указать origin своего совместимого сервиса без пути и завершающего `/`.
+Пустое значение отключает поиск, сохраняя ручной ввод magnet/`.torrent` и тот же playback pipeline.
+После изменения `.env` пересоздайте backend:
 
-Прямой доступ к protected trackers зависит от сети/Cloudflare. Исторические
-browser/solver prototypes не доказали устойчивые login/search/download;
-увеличение timeout само по себе проблему не решает. Существующие отключённые
-definitions и credentials сохранены в Prowlarr; старые сторонние Docker volumes
-не удаляются этой уборкой.
+```sh
+# Папка: yaneMedia/ (корень проекта)
+docker compose up -d --no-deps backend
+```
 
-Текущая схема использует JacRed и доступные индексаторы Prowlarr без browser/solver
-proxy. Возврат к прямому доступу к защищённым трекерам требует отдельной проверки
-search/download и authenticated playback/cleanup.
+## Как работает поиск
 
-Доказательства browser/codec playback и их границы — в
-[ACCEPTANCE.md](ACCEPTANCE.md). Readiness, метрики, отключение и восстановление
-описаны в [OPERATIONS.md](OPERATIONS.md). Отдельных runtime flags manual/discovery
-нет; общий engine flag не является выключателем всех discovery routes.
+Backend запрашивает `/api/v1.0/torrents?search=...&sort=sid` по оригинальному и локализованному названию.
+Год, сезон и серия учитываются при ранжировании. Поиск ничего не скачивает через TorrServer;
+сессия создаётся только после выбора результата пользователем.
+
+Ответ API содержит `title`, `tracker`, `url`, `size`, числовой `sid` и `magnet`; `createTime` необязателен.
+Пустые `[]` и `{}` означают отсутствие результатов. Поддержаны Kinozal, RuTracker и NoNaMe Club
+с проверкой адреса страницы трекера и magnet. Запрос ограничен 8 секундами и 2 МиБ ответа;
+redirects, HTML и некорректные данные отклоняются. Пароли трекеров в API не передаются.
+
+Frontend получает до 50 результатов с непрозрачными `candidateRef`, привязанными к аккаунту на 10 минут.
+Magnet и внутренние адреса остаются на backend. При запуске кандидата используется только проверенный magnet;
+backend не загружает `.torrent` по URL из результата поиска. Ручная загрузка `.torrent` остаётся отдельной возможностью.
+
+Если один запрос по названию завершился ошибкой, успешные результаты другого сохраняются с `degraded=true`.
+При полном отказе API возвращается `TORRENT_DISCOVERY_UNAVAILABLE`; автоматической замены источника нет.
+Перезапуск backend сбрасывает candidate refs. Число сидов в каталоге может устареть и не гарантирует playback.
+
+## Диагностика
+
+Необязательная проверка обращается к настроенному API без создания torrent-сессии:
+
+```sh
+# Папка: yaneMedia/ (корень проекта)
+docker compose exec -T backend npm run probe:torrent-discovery -- --query Oppenheimer --kind movie --rounds 2
+```
+
+Probe печатает длительность, число результатов по трекерам и degraded/error, без magnet и сырых ответов.
+При пустом поиске проверьте `JACRED_BASE_URL`, доступность API и наличие названия в каталоге.
+Поиск и доступность peers — разные проверки.
+
+Первый запуск описан в [SETUP.md](SETUP.md), эксплуатация — в [OPERATIONS.md](OPERATIONS.md).

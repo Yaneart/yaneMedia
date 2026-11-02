@@ -23,7 +23,7 @@ if [ "$mode" = Public ]; then
     exit 2
   fi
   unset TORRSERVER_BASE_URL TORRSERVER_USERNAME_FILE TORRSERVER_PASSWORD_FILE
-  unset TORRENT_IDEMPOTENCY_SECRET_FILE PROWLARR_BASE_URL PROWLARR_API_KEY_FILE JACRED_BASE_URL
+  unset TORRENT_IDEMPOTENCY_SECRET_FILE JACRED_BASE_URL
   set -- "$@" -f "$project_root/compose.public.yaml"
 fi
 "$@" config --quiet
@@ -32,7 +32,7 @@ if "$check"; then
   exit 0
 fi
 if [ "$mode" = Public ]; then
-  docker compose --project-directory "$project_root" -f "$project_root/compose.yaml" stop torrserver prowlarr
+  docker compose --project-directory "$project_root" -f "$project_root/compose.yaml" stop torrserver
 fi
 if "$build"; then "$@" up --build -d; else "$@" up -d; fi
 echo "$mode mode started. Existing database, assets and Docker volumes were preserved."

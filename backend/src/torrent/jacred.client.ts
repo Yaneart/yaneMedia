@@ -6,6 +6,7 @@ import type {
   DiscoveryRelease,
   DiscoverySearch,
   DiscoverySearchResult,
+  TorrentDiscoveryPort,
 } from './torrent-discovery.port';
 
 const SOURCES = {
@@ -16,15 +17,11 @@ const SOURCES = {
 const MAX_BYTES = 2 * 1024 * 1024;
 
 @Injectable()
-export class JacredClient {
+export class JacredClient implements TorrentDiscoveryPort {
   private readonly baseUrl: string | undefined;
 
   constructor(config: ConfigService) {
-    this.baseUrl = config.get<string>('JACRED_BASE_URL');
-  }
-
-  get enabled(): boolean {
-    return Boolean(this.baseUrl);
+    this.baseUrl = config.get<string>('JACRED_BASE_URL') || undefined;
   }
 
   async search(input: DiscoverySearch, signal: AbortSignal): Promise<DiscoverySearchResult> {

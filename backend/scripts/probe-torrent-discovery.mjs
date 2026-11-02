@@ -3,10 +3,7 @@ import { parseArgs } from 'node:util';
 
 const require = createRequire(import.meta.url);
 const { ConfigService } = require('@nestjs/config');
-const { createProwlarrConfig } = require('../dist/torrent/prowlarr.config');
-const { ProwlarrClient } = require('../dist/torrent/prowlarr.client');
 const { JacredClient } = require('../dist/torrent/jacred.client');
-const { TorrentDiscoveryClient } = require('../dist/torrent/torrent-discovery.client');
 const { values } = parseArgs({
   options: {
     query: { type: 'string' },
@@ -24,14 +21,7 @@ if (
 ) {
   throw new Error('Usage: --query TITLE [--kind movie|tv|anime] [--rounds 1|2|3]');
 }
-const config = new ConfigService({
-  ...process.env,
-  PROWLARR_TIMEOUT_MS: Number(process.env.PROWLARR_TIMEOUT_MS ?? 10000),
-});
-const discovery = new TorrentDiscoveryClient(
-  new ProwlarrClient(createProwlarrConfig(config)),
-  new JacredClient(config),
-);
+const discovery = new JacredClient(new ConfigService(process.env));
 for (let round = 1; round <= rounds; round++) {
   const start = Date.now();
   try {

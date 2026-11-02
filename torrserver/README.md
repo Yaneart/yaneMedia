@@ -1,6 +1,6 @@
 # Private TorrServer
 
-Первый запуск Home на Windows, Linux и macOS: [пять простых шагов](SETUP.md).
+Первый запуск Home на Windows, Linux и macOS: [три простых шага](SETUP.md).
 
 This is the preserved **Home** implementation. Public mode does not start this service.
 Use [Home/Public switching](../docs/home-torrent.md); viewer-local companion work follows
@@ -9,7 +9,7 @@ the [current roadmap](../docs/development/roadmap.md). The commands below refer 
 Operator procedures: [эксплуатация, диагностика, обновление, rollback и отключение](OPERATIONS.md).
 Browser/codec evidence and limits: [acceptance](ACCEPTANCE.md).
 Playback decision and spike findings: [architecture](ARCHITECTURE.md).
-Indexer setup and discovery troubleshooting: [discovery](DISCOVERY.md).
+Jacred API setup and search troubleshooting: [discovery](DISCOVERY.md).
 
 The image downloads the pinned `MatriX.146.2` GStreamer binary verified by `T-002` and validates
 its SHA-256 during the build. GStreamer routes are not used by the product playback path.

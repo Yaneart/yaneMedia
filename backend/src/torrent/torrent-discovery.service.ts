@@ -3,8 +3,7 @@ import { Inject, Injectable, HttpException } from '@nestjs/common';
 import { MediaRegistryService } from '../media/registry/media-registry.service';
 import { MediaService } from '../media/media.service';
 import { TorrentInputService } from './torrent-input.service';
-import { TorrentInputError, validateMagnet, validateMetainfo } from './torrent-input.validation';
-import { PROWLARR_CONFIG, type ProwlarrConfig } from './prowlarr.config';
+import { TorrentInputError, validateMagnet } from './torrent-input.validation';
 import {
   TORRENT_DISCOVERY_PORT,
   type DiscoveryRelease,
@@ -19,7 +18,6 @@ import {
 
 const TTL_MS = 10 * 60_000;
 const MAX_CANDIDATES = 500;
-const MAX_DOWNLOAD_BYTES = 2 * 1024 * 1024;
 const error = (status: number, code: string) => new HttpException({ code, message: code }, status);
 const safeText = (value: string) =>
   [...value]
@@ -41,7 +39,6 @@ export class TorrentDiscoveryService {
 
   constructor(
     @Inject(TORRENT_DISCOVERY_PORT) private readonly discovery: TorrentDiscoveryPort,
-    @Inject(PROWLARR_CONFIG) private readonly config: ProwlarrConfig,
     private readonly registry: MediaRegistryService,
     private readonly media: MediaService,
     private readonly input: TorrentInputService,
@@ -75,30 +72,17 @@ export class TorrentDiscoveryService {
     };
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 25_000);
-    const queries = titles
-      .flatMap((title) => {
-        const clean = safeText(title).replace(/\s+/g, ' ').trim().slice(0, 120);
-        if (clean.length < 2) return [];
-        const suffix =
-          identity.kind === 'movie' && summary.year
-            ? String(summary.year)
-            : season !== undefined
-              ? `S${String(season).padStart(2, '0')}${episode === undefined ? '' : `E${String(episode).padStart(2, '0')}`}`
-              : '';
-        return (suffix ? [`${clean} ${suffix}`, clean] : [clean]).map((query) => ({
-          query,
-          title: clean,
-        }));
-      })
-      .slice(0, 4);
+    const queries = [
+      ...new Set(titles.map((title) => safeText(title).replace(/\s+/g, ' ').trim().slice(0, 120))),
+    ].filter((title) => title.length >= 2);
     try {
       const results: DiscoveryRelease[][] = [];
       let failed = 0;
-      for (const { query, title } of queries) {
+      for (const title of queries) {
         if (controller.signal.aborted) break;
         try {
           const result = await this.discovery.search(
-            { query, title, kind: identity.kind, limit: 50, offset: 0 },
+            { query: title, title, kind: identity.kind, limit: 50, offset: 0 },
             controller.signal,
           );
           results.push(result.releases);
@@ -161,63 +145,13 @@ export class TorrentDiscoveryService {
       throw error(404, 'TORRENT_CANDIDATE_NOT_FOUND');
     const { release, mediaRef } = candidate;
     try {
-      if (release.downloadUrl.startsWith('magnet:?')) {
-        return await this.input.create(
-          ownerId,
-          'magnet',
-          validateMagnet(release.downloadUrl),
-          mediaRef,
-          key,
-          release.downloadUrl,
-        );
-      }
-      const url = this.safeDownloadUrl(release.downloadUrl);
-      if (!url) throw error(422, 'TORRENT_CANDIDATE_UNSAFE');
-      const response = await fetch(url, {
-        headers: { 'X-Api-Key': this.config.apiKey! },
-        redirect: 'manual',
-        signal: AbortSignal.timeout(this.config.timeoutMs),
-      }).catch(() => {
-        throw error(503, 'TORRENT_DISCOVERY_UNAVAILABLE');
-      });
-      if ([301, 302, 303, 307, 308].includes(response.status)) {
-        await response.body?.cancel().catch(() => undefined);
-        const magnet = validateMagnet(response.headers.get('location'));
-        return await this.input.create(ownerId, 'magnet', magnet, mediaRef, key, magnet);
-      }
-      if (!response.ok || response.redirected) {
-        await response.body?.cancel().catch(() => undefined);
-        throw error(503, 'TORRENT_DISCOVERY_UNAVAILABLE');
-      }
-      if (Number(response.headers.get('content-length')) > MAX_DOWNLOAD_BYTES) {
-        await response.body?.cancel().catch(() => undefined);
-        throw error(422, 'TORRENT_CANDIDATE_UNSAFE');
-      }
-      const reader = response.body?.getReader();
-      if (!reader) throw error(503, 'TORRENT_DISCOVERY_UNAVAILABLE');
-      const parts: Uint8Array[] = [];
-      let bytes = 0;
-      try {
-        while (true) {
-          const part = await reader.read();
-          if (part.done) break;
-          bytes += part.value.byteLength;
-          if (bytes > MAX_DOWNLOAD_BYTES) throw error(422, 'TORRENT_CANDIDATE_UNSAFE');
-          parts.push(part.value);
-        }
-      } catch (cause) {
-        if (cause instanceof HttpException) throw cause;
-        throw error(503, 'TORRENT_DISCOVERY_UNAVAILABLE');
-      } finally {
-        await reader.cancel().catch(() => undefined);
-        reader.releaseLock();
-      }
       return await this.input.create(
         ownerId,
-        'file',
-        validateMetainfo(Buffer.concat(parts)),
+        'magnet',
+        validateMagnet(release.downloadUrl),
         mediaRef,
         key,
+        release.downloadUrl,
       );
     } catch (cause) {
       if (cause instanceof TorrentInputError) throw error(422, 'TORRENT_CANDIDATE_UNSAFE');
@@ -237,43 +171,11 @@ export class TorrentDiscoveryService {
   }
 
   private usable(downloadUrl: string): boolean {
-    if (downloadUrl.startsWith('magnet:?')) {
-      try {
-        validateMagnet(downloadUrl);
-        return true;
-      } catch {
-        return false;
-      }
-    }
-    return this.safeDownloadUrl(downloadUrl) !== null;
-  }
-
-  private safeDownloadUrl(downloadUrl: string): URL | null {
     try {
-      const url = new URL(downloadUrl);
-      if (
-        !this.config.baseUrl ||
-        url.origin !== this.config.baseUrl.origin ||
-        url.username ||
-        url.password ||
-        url.hash
-      )
-        return null;
-      if (/^\/api\/v1\/indexer\/\d+\/download$/.test(url.pathname) && !url.search) return url;
-      if (!/^\/\d+\/download$/.test(url.pathname)) return null;
-      const params = url.searchParams;
-      if (
-        [...params.keys()].sort().join(',') !== 'apikey,file,link' ||
-        params.get('apikey') !== this.config.apiKey ||
-        !/^[A-Za-z0-9_-]{16,1024}$/.test(params.get('link') ?? '') ||
-        !params.get('file') ||
-        params.get('file')!.length > 512
-      )
-        return null;
-      params.delete('apikey');
-      return url;
+      validateMagnet(downloadUrl);
+      return true;
     } catch {
-      return null;
+      return false;
     }
   }
 

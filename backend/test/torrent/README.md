@@ -32,7 +32,7 @@ test unmounts React, clears queries/storage and resets the account cancellation 
 | Ref-count cleanup, failed cleanup retry and orphan grace                                                         | `torrent-session-reconciler.spec.ts`                                                                         |
 | Response/log redaction, rate limits, CSRF and origin checks                                                      | `torrent-security.spec.ts`, `test/platform/http/api-exception.filter.spec.ts`                                |
 | Safe metrics and independent feature readiness                                                                   | `torrent-observability.spec.ts`                                                                              |
-| Discovery, candidate ownership, safe download, ranking and partial source failure                                | discovery/JacRed/Prowlarr suites                                                                             |
+| Discovery, candidate ownership, safe magnets, ranking and catalog failure                                        | discovery/Jacred suites                                                                                      |
 | Protected flow, file choice, explicit HLS start/error/retry, progress, Stop and account reset                    | `frontend/test/torrentLifecycle.test.tsx`: real React/query/API mapping, fake fetch and HLS library          |
 | Terminal polling, retry bounds, abort, account cache isolation and login return                                  | frontend boundary/social-access suites                                                                       |
 

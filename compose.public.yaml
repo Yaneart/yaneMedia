@@ -3,8 +3,6 @@
 services:
   torrserver:
     profiles: [home-torrent]
-  prowlarr:
-    profiles: [home-torrent]
   backend:
     environment:
       TORRENT_STREAMING_ENABLED: "false"
@@ -12,8 +10,6 @@ services:
       TORRSERVER_USERNAME_FILE: null
       TORRSERVER_PASSWORD_FILE: null
       TORRENT_IDEMPOTENCY_SECRET_FILE: null
-      PROWLARR_BASE_URL: null
-      PROWLARR_API_KEY_FILE: null
       JACRED_BASE_URL: null
     depends_on: !override
       postgres:

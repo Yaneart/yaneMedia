@@ -1,4 +1,0 @@
-services:
-  prowlarr:
-    ports:
-      - "127.0.0.1:9696:9696"

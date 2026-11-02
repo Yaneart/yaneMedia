@@ -62,6 +62,6 @@ bun run catalog:sync
 
 ## Torrent
 
-При локальном запуске из `.env.example` серверный torrent выключен. Для домашнего просмотра используйте режим Home из корня проекта: он подключает TorrServer, Prowlarr и необходимые секреты.
+При локальном запуске из `.env.example` серверный torrent выключен. Для домашнего просмотра используйте режим Home из корня проекта: он подключает TorrServer и необходимые секреты. Поиск раздач работает через API Jacred по адресу `JACRED_BASE_URL` из `backend/.env`; пустое значение отключает поиск, сохраняя ручной ввод magnet/`.torrent`.
 
 Первый запуск — в [короткой инструкции Home для Windows, Linux и macOS](../torrserver/SETUP.md), проверки — в [руководстве по torrent-тестам](test/torrent/README.md).
