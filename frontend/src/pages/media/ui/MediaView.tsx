@@ -47,8 +47,7 @@ import {
   type DirectEpisodeOption,
   type PlaybackMode,
 } from '@/features/source-selection';
-import { MediaCast } from '@/widgets/mdeia-cast';
-import { MediaDescriptionPanel, MediaFacts, MediaInfo } from '@/widgets/media-info';
+import { MediaDescriptionPanel, MediaInfo } from '@/widgets/media-info';
 import {
   MediaPlayer,
   type MediaPlayerEmptyState,
@@ -1244,7 +1243,7 @@ export function MediaView({
         />
       </div>
 
-      <section className="order-4 space-y-5 xl:hidden">
+      <section className="order-4 space-y-5 sm:hidden">
         {media.description && (
           <div className="sm:hidden">
             <MediaDescriptionPanel compact>
@@ -1268,8 +1267,6 @@ export function MediaView({
           </div>
         )}
         <UserRating media={media} embedded className="sm:hidden" />
-
-        <MediaFacts media={media} className="grid gap-2 text-caption" showGenres={false} />
       </section>
 
       <div className="media-view-details order-4 hidden gap-8 2xl:col-span-2 2xl:grid 2xl:gap-10">
@@ -1282,8 +1279,6 @@ export function MediaView({
       </div>
 
       <MediaCommunity media={media} />
-
-      <MediaCast persons={media.persons} className="order-7 xl:col-span-2" />
     </div>
   );
 }

@@ -27,6 +27,8 @@ export function useMediaDetails(mediaRef: string | undefined) {
   return {
     result: query.data ?? null,
     status,
+    isUpdating: query.isFetching,
+    hasRefreshError: query.isRefetchError,
     retry: () => {
       void query.refetch({ cancelRefetch: false });
     },

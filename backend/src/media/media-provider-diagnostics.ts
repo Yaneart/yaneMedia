@@ -39,6 +39,8 @@ export function countProviderResults(provider: MediaProvider): MediaProvider {
 }
 
 const PROVIDERS = new Set([
+  'tmdb-official',
+  'shikimori-graphql',
   'kinobd',
   'cinemeta',
   'tmdb',
@@ -54,6 +56,7 @@ const PROVIDERS = new Set([
   'aderom-streaming',
   'initem-streaming',
   'rutube-streaming',
+  'kodik-streaming',
 ]);
 const FAILURE_CODES = new Set([
   'PROVIDER_ERROR',

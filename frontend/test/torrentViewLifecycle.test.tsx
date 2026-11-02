@@ -33,7 +33,6 @@ mock.module('@/features/favorite', () => ({
 }));
 mock.module('@/features/media-community', () => ({ MediaCommunity: () => null }));
 mock.module('@/features/user-rating', () => ({ UserRating: () => null }));
-mock.module('@/widgets/mdeia-cast', () => ({ MediaCast: () => null }));
 mock.module('@/widgets/media-info', () => ({
   MediaInfo: () => null,
   MediaFacts: () => null,
@@ -149,7 +148,7 @@ test('owner preparing updates keep the mounted torrent player and its volume/mut
               genres: [],
               countries: [],
               languages: [],
-              persons: [],
+              persons: [{ name: 'Fallback actor', roles: ['actor'] }],
             }}
             animeSeasonChain={[]}
             onAnimeSeasonChange={noop}
@@ -163,6 +162,8 @@ test('owner preparing updates keep the mounted torrent player and its volume/mut
     </QueryClientProvider>,
   );
   await waitFor(() => expect(players).toHaveLength(1));
+  expect(screen.queryByRole('heading', { name: 'В ролях' })).toBeNull();
+  expect(screen.queryByText('Fallback actor')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Торрент', exact: true }));
   fireEvent.click(screen.getByRole('tab', { name: 'Торренты' }));
   await waitFor(() => expect(launch).toBeDefined());

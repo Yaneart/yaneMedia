@@ -38,6 +38,21 @@ const meta: ResponseMeta = {
 };
 
 describe('provider diagnostics', () => {
+  it('includes current primary metadata providers and direct Kodik', () => {
+    const providers = ['tmdb-official', 'shikimori-graphql', 'kodik-streaming'];
+    const events = providerDiagnostics('details', {
+      providers: {
+        requested: [...providers, 'untrusted-provider'],
+        successful: providers,
+        failed: [],
+      },
+      cached: false,
+      tookMs: 10,
+    });
+    expect(events.map(({ provider }) => provider)).toEqual(providers);
+    expect(events.every(({ code, degraded }) => code === 'SUCCESS' && !degraded)).toBe(true);
+  });
+
   it('reports successful, empty, and timed out metadata providers without unsafe fields', () => {
     const events = providerDiagnostics(
       'details',

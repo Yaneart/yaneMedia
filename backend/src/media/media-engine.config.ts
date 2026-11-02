@@ -1,5 +1,5 @@
 import type { MediaEngine as MediaEngineInstance, StreamingProvider } from '@media-engine/core';
-import { createArtworkAwareCache } from './media-engine-cache';
+import { createMediaEngineCache } from './media-engine-cache';
 import { countProviderResults } from './media-provider-diagnostics';
 
 export interface MediaEngineEnvironment {
@@ -53,7 +53,7 @@ export async function createMediaEngine(
     },
   ] = await Promise.all([import('@media-engine/core'), import('@media-engine/providers')]);
 
-  const cache = createArtworkAwareCache(
+  const cache = createMediaEngineCache(
     new MemoryCache({
       defaultTtlMs: CACHE_TTL_MS,
       defaultStaleTtlMs: STALE_TTL_MS,

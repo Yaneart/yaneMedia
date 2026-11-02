@@ -1,6 +1,6 @@
-import { MediaPosterFallback, type MediaDetails, type MediaPersonRole } from '@/entities/media';
+import { MediaPosterFallback, type MediaDetails } from '@/entities/media';
 import { YaneMark, YaneMarkField } from '@/shared';
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 
 export type MediaInfoProps = {
   media: MediaDetails;
@@ -11,7 +11,6 @@ export type MediaInfoProps = {
 export type MediaFactsProps = {
   media: MediaDetails;
   className?: string;
-  showGenres?: boolean;
 };
 
 export function MediaDescriptionPanel({
@@ -28,7 +27,10 @@ export function MediaDescriptionPanel({
       aria-label="Полное описание"
       className={`relative isolate overflow-hidden rounded-card border border-context-border bg-linear-to-br from-watermark/28 via-watermark/18 to-watermark/24 p-2 shadow-surface sm:p-3 ${className}`}
     >
-      <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-0 overflow-hidden rounded-card">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 z-0 overflow-hidden rounded-card"
+      >
         <YaneMarkField />
         <YaneMark className="absolute -top-10 -right-12 size-56 rotate-[138deg] text-watermark opacity-[0.26]" />
         <div className="absolute inset-0 bg-linear-to-br from-transparent via-transparent to-watermark/8" />
@@ -60,38 +62,53 @@ function formatRuntime(runtimeMinutes: number) {
   return minutes === 0 ? `${hours} ч` : `${hours} ч ${minutes} мин`;
 }
 
-function findPeopleByRole(media: MediaDetails, role: MediaPersonRole) {
-  return media.persons.filter((credit) => credit.roles.includes(role));
-}
-
-export function MediaFacts({ media, className = '', showGenres = true }: MediaFactsProps) {
-  const directors = findPeopleByRole(media, 'director');
+export function MediaFacts({ media, className = '' }: MediaFactsProps) {
+  if (media.genres.length === 0) return null;
 
   return (
     <dl className={`grid min-w-0 grid-cols-[max-content_minmax(0,1fr)] gap-x-2 ${className}`}>
-      {directors.length > 0 && (
-        <div className="col-span-2 grid min-w-0 grid-cols-subgrid">
-          <dt className="shrink-0 text-text-secondary">Режиссёр:</dt>
-          <dd className="min-w-0 text-text-primary">
-            {directors.map((director) => director.name).join(', ')}
-          </dd>
-        </div>
-      )}
-
-      {media.countries.length > 0 && (
-        <div className="col-span-2 grid min-w-0 grid-cols-subgrid">
-          <dt className="shrink-0 text-text-secondary">Страна:</dt>
-          <dd className="min-w-0 text-text-primary">{media.countries.join(', ')}</dd>
-        </div>
-      )}
-
-      {showGenres && media.genres.length > 0 && (
-        <div className="col-span-2 grid min-w-0 grid-cols-subgrid">
-          <dt className="shrink-0 text-text-secondary">Жанры:</dt>
-          <dd className="min-w-0 text-text-primary">{media.genres.join(', ')}</dd>
-        </div>
-      )}
+      <div className="col-span-2 grid min-w-0 grid-cols-subgrid">
+        <dt className="shrink-0 text-text-secondary">Жанры:</dt>
+        <dd className="min-w-0 text-text-primary">{media.genres.join(', ')}</dd>
+      </div>
     </dl>
+  );
+}
+
+function MediaInfoPoster({ media, className }: { media: MediaDetails; className: string }) {
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!failedUrl) return;
+    const retry = () => setFailedUrl(null);
+    const timer = window.setTimeout(retry, 10_000);
+    window.addEventListener('online', retry);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener('online', retry);
+    };
+  }, [failedUrl]);
+
+  const poster = media.poster;
+  return (
+    <div
+      className={`relative aspect-2/3 w-full overflow-hidden bg-elevated shadow-surface ${className}`}
+    >
+      <MediaPosterFallback mediaRef={media.mediaRef} title={media.title} type={media.type} />
+      {poster && poster.url !== failedUrl && (
+        <img
+          src={poster.url}
+          alt={`Постер: ${media.title}`}
+          width={poster.width}
+          height={poster.height}
+          loading="eager"
+          fetchPriority="high"
+          decoding="async"
+          className="absolute inset-0 size-full object-cover"
+          onError={() => setFailedUrl(poster.url)}
+        />
+      )}
+    </div>
   );
 }
 
@@ -131,25 +148,7 @@ export function MediaInfo({ media, actions, variant = 'default' }: MediaInfoProp
     >
       {isWatchLayout && (
         <div className="min-w-0">
-          <div className="relative aspect-2/3 w-full overflow-hidden rounded-overlay bg-elevated shadow-surface xl:rounded-card">
-            <MediaPosterFallback mediaRef={media.mediaRef} title={media.title} type={media.type} />
-
-            {media.poster && (
-              <img
-                src={media.poster.url}
-                alt={`Постер: ${media.title}`}
-                width={media.poster.width}
-                height={media.poster.height}
-                loading="eager"
-                fetchPriority="high"
-                decoding="async"
-                className="absolute inset-0 size-full object-cover"
-                onError={(event) => {
-                  event.currentTarget.hidden = true;
-                }}
-              />
-            )}
-          </div>
+          <MediaInfoPoster media={media} className="rounded-overlay xl:rounded-card" />
 
           {actions && (
             <div className="mt-4 hidden w-full flex-wrap gap-3 sm:flex xl:hidden">{actions}</div>
@@ -158,18 +157,9 @@ export function MediaInfo({ media, actions, variant = 'default' }: MediaInfoProp
       )}
 
       {!isWatchLayout && media.poster && (
-        <img
-          src={media.poster.url}
-          alt={`Постер: ${media.title}`}
-          width={media.poster.width}
-          height={media.poster.height}
-          loading="eager"
-          fetchPriority="high"
-          decoding="async"
-          className={[
-            'aspect-2/3 w-full object-cover shadow-surface',
-            'rounded-overlay md:row-span-3 md:max-w-60 md:rounded-card',
-          ].join(' ')}
+        <MediaInfoPoster
+          media={media}
+          className="rounded-overlay md:row-span-3 md:max-w-60 md:rounded-card"
         />
       )}
 
@@ -226,7 +216,6 @@ export function MediaInfo({ media, actions, variant = 'default' }: MediaInfoProp
             {media.originalTitle}
           </p>
         )}
-
         {isWatchLayout && media.genres.length > 0 && (
           <p className="order-3 mt-3 text-caption text-text-secondary xl:hidden">
             <span>Жанры: </span>
@@ -245,7 +234,6 @@ export function MediaInfo({ media, actions, variant = 'default' }: MediaInfoProp
             <p className="mt-2 line-clamp-6 text-body text-text-secondary">{media.description}</p>
           </MediaDescriptionPanel>
         )}
-
       </div>
 
       {media.description && !isWatchLayout && (

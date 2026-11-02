@@ -1,30 +1,38 @@
 import type { Cache, CacheSetOptions } from '@media-engine/core';
 
-export const INCOMPLETE_ARTWORK_CACHE_TTL_MS = 15_000;
+export const RECOVERABLE_DETAILS_CACHE_TTL_MS = 15_000;
 
 type DetailsCacheCandidate = {
   details?: {
     backdrop?: unknown;
     type?: unknown;
   } | null;
+  meta?: {
+    stale?: boolean;
+    warnings?: unknown[];
+    providers?: { failed?: unknown[] };
+  };
 };
 
-function hasIncompleteLandscapeArtwork(key: string, value: unknown): boolean {
+function needsDetailsRefresh(key: string, value: unknown): boolean {
   if (!key.startsWith('details:') || typeof value !== 'object' || value === null) {
     return false;
   }
 
-  const details = (value as DetailsCacheCandidate).details;
+  const { details, meta } = value as DetailsCacheCandidate;
 
   return (
-    details !== null &&
-    details !== undefined &&
-    (details.type === 'movie' || details.type === 'series') &&
-    details.backdrop === undefined
+    meta?.stale === true ||
+    (meta?.warnings?.length ?? 0) > 0 ||
+    (meta?.providers?.failed?.length ?? 0) > 0 ||
+    (details !== null &&
+      details !== undefined &&
+      (details.type === 'movie' || details.type === 'series') &&
+      details.backdrop === undefined)
   );
 }
 
-export function createArtworkAwareCache(cache: Cache): Cache {
+export function createMediaEngineCache(cache: Cache): Cache {
   return {
     get: <T>(key: string) => cache.get<T>(key),
     getStale: cache.getStale ? <T>(key: string) => cache.getStale?.<T>(key) : undefined,
@@ -32,8 +40,11 @@ export function createArtworkAwareCache(cache: Cache): Cache {
       cache.set(
         key,
         value,
-        hasIncompleteLandscapeArtwork(key, value)
-          ? { ...options, ttlMs: INCOMPLETE_ARTWORK_CACHE_TTL_MS }
+        needsDetailsRefresh(key, value)
+          ? {
+              ...options,
+              ttlMs: Math.min(options?.ttlMs ?? Infinity, RECOVERABLE_DETAILS_CACHE_TTL_MS),
+            }
           : options,
       ),
     delete: (key: string) => cache.delete(key),

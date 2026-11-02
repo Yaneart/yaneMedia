@@ -1,6 +1,6 @@
 import { useOpeningHistory } from '@/features/opening-history';
 import { useAuth } from '@/entities/auth';
-import { EmptyState, ErrorState, MediaPageSkeleton } from '@/shared';
+import { Button, EmptyState, ErrorState, MediaPageSkeleton } from '@/shared';
 import { useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 
@@ -27,7 +27,13 @@ export function MediaPage() {
   const [searchParams] = useSearchParams();
   const { recordOpening } = useOpeningHistory();
 
-  const { result, status: detailsStatus, retry: retryDetails } = useMediaDetails(mediaRef);
+  const {
+    result,
+    status: detailsStatus,
+    retry: retryDetails,
+    isUpdating,
+    hasRefreshError,
+  } = useMediaDetails(mediaRef);
   const media = result?.details ?? null;
 
   const {
@@ -94,6 +100,21 @@ export function MediaPage() {
 
   return (
     <div>
+      {(result?.degraded || hasRefreshError) && (
+        <div
+          role="status"
+          className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-card border border-context-border bg-surface-elevated px-4 py-3"
+        >
+          <p className="text-caption text-text-secondary">
+            {hasRefreshError
+              ? 'Не удалось обновить информацию о произведении. Показаны сохранённые данные.'
+              : 'Информация о произведении может быть неполной. Обновим её автоматически.'}
+          </p>
+          <Button size="small" variant="ghost" disabled={isUpdating} onClick={retryDetails}>
+            Обновить
+          </Button>
+        </div>
+      )}
       <MediaView
         key={`${media.mediaRef}:${ownerKey}`}
         media={media}

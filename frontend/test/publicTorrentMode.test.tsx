@@ -21,7 +21,6 @@ mock.module('@/features/favorite', () => ({
 }));
 mock.module('@/features/media-community', () => ({ MediaCommunity: () => null }));
 mock.module('@/features/user-rating', () => ({ UserRating: () => null }));
-mock.module('@/widgets/mdeia-cast', () => ({ MediaCast: () => null }));
 mock.module('@/widgets/media-info', () => ({
   MediaInfo: () => null,
   MediaFacts: () => null,

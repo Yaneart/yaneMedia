@@ -8,6 +8,7 @@ export function mediaDetailsQueryOptions(mediaRef: string) {
   return queryOptions({
     queryKey: ['media', 'details', mediaRef] as const,
     queryFn: ({ signal }) => getMediaDetails(mediaRef, signal),
-    staleTime: detailsStaleTimeMs,
+    staleTime: ({ state }) => (state.data?.degraded ? 0 : detailsStaleTimeMs),
+    refetchInterval: ({ state }) => (state.data?.degraded ? 30_000 : false),
   });
 }
