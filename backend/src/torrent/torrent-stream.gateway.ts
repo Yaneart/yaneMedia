@@ -18,6 +18,7 @@ import {
 import { TorrServerClient } from './torrserver.client';
 import { InvalidTorrentPlaylist, parseTorrentPlaylist } from './torrent-hls-playlist';
 import { TorrentSegmentBuffer } from './torrent-segment-buffer';
+import { MatroskaIndexUnavailable, MatroskaSubtitleIndex } from './matroska-subtitle-index';
 import {
   TORRENT_OUTPUT_PROFILES,
   torrentOutputInfo,
@@ -100,6 +101,7 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
     { generation: number; controller: AbortController; finished: Promise<void> }
   >();
   private readonly subtitleCache = new Map<string, { start: number; end: number; text: string }>();
+  private readonly subtitleIndexes = new Map<string, MatroskaSubtitleIndex | null>();
 
   private trimSubtitleCache(sessionId?: string): void {
     let bytes = 0,
@@ -116,6 +118,10 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
         bytes += size;
         count++;
       }
+    }
+    if (sessionId) {
+      for (const key of this.subtitleIndexes.keys())
+        if (key.startsWith(`${sessionId}/`)) this.subtitleIndexes.delete(key);
     }
   }
 
@@ -281,6 +287,103 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
     try {
       bounded.throwIfAborted();
       const sidecar = track?.sidecar;
+      let indexed: Buffer | null = null;
+      if (track && !sidecar) {
+        let readBytes = 0,
+          requests = 0;
+        const read = async (offset: number, length: number) => {
+          bounded.throwIfAborted();
+          if (
+            !Number.isSafeInteger(offset) ||
+            !Number.isSafeInteger(length) ||
+            offset < 0 ||
+            length <= 0 ||
+            offset + length > source.size ||
+            ++requests > 512 ||
+            (readBytes += length) > 8 * 1024 * 1024
+          )
+            throw new MatroskaIndexUnavailable('Subtitle index read limit');
+          const { body } = await this.engine.openFileStream(
+            source.key,
+            source.file,
+            { offset, length },
+            bounded,
+          );
+          const chunks: Buffer[] = [];
+          let size = 0;
+          for await (const chunk of body) {
+            const bytes = Buffer.from(chunk as Uint8Array);
+            if ((size += bytes.length) > length) throw new Error('Invalid subtitle index range');
+            chunks.push(bytes);
+          }
+          if (size !== length) throw new Error('Truncated subtitle index range');
+          return Buffer.concat(chunks);
+        };
+        const indexKey = `${sessionId}/${probe.fileRef}`;
+        let index = this.subtitleIndexes.get(indexKey);
+        if (index === undefined) {
+          index = await MatroskaSubtitleIndex.load(read, source.size);
+          bounded.throwIfAborted();
+          const [oldest] = this.subtitleIndexes.keys();
+          if (this.subtitleIndexes.size >= 2 && oldest) this.subtitleIndexes.delete(oldest);
+          this.subtitleIndexes.set(indexKey, index);
+        }
+        const ordinal =
+          probe.subtitleTracks
+            ?.filter((x) => !x.sidecar)
+            .findIndex((x) => x.trackRef === track.trackRef) ?? -1;
+        if (index)
+          indexed = await index.window(
+            read,
+            ordinal,
+            format,
+            position + (probe.sourceStartSeconds ?? 0),
+            end + (probe.sourceStartSeconds ?? 0),
+            track.streamIndex,
+          );
+        bounded.throwIfAborted();
+      }
+      if (indexed) {
+        const output = indexed.length
+          ? await this.run(
+              'ffmpeg',
+              [
+                '-v',
+                'error',
+                '-nostdin',
+                '-max_alloc',
+                '67108864',
+                '-copyts',
+                '-itsoffset',
+                String(-(probe.sourceStartSeconds ?? 0)),
+                '-protocol_whitelist',
+                'pipe',
+                '-format_whitelist',
+                'matroska,webm',
+                '-max_streams',
+                '1',
+                '-i',
+                'pipe:0',
+                '-map',
+                '0:0',
+                '-c:s',
+                format === 'ass' ? 'ass' : 'webvtt',
+                '-f',
+                format === 'ass' ? 'ass' : 'webvtt',
+                'pipe:1',
+              ],
+              5_000,
+              bounded,
+              SUBTITLE_BYTES,
+              indexed,
+            )
+          : '';
+        const text = subtitleWindow(output, format, position, end);
+        this.subtitleCache.delete(cacheKey);
+        this.subtitleCache.set(cacheKey, { start: position, end, text });
+        this.trimSubtitleCache();
+        return Buffer.from(text);
+      }
       input = await this.inputServer(
         sidecar
           ? { ...source, file: sidecar.fileIndex as EngineFileKey, size: sidecar.size }
@@ -928,6 +1031,7 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
   async beforeApplicationShutdown(): Promise<void> {
     this.closing = true;
     this.subtitleCache.clear();
+    this.subtitleIndexes.clear();
     for (const job of this.subtitleJobs.values()) job.controller.abort();
     for (const reservation of this.starting.values()) reservation.cancelled = true;
     for (const command of this.commands) command.kill('SIGKILL');

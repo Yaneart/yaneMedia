@@ -43,8 +43,12 @@ The HLS renderer test checks callbacks, credentials and absolute torrent progres
 a fake player element. It does not decode video or replace the current browser matrix.
 The HTTP lifecycle fixture does not prove database transactions; those are checked separately.
 
-Continuous subtitle extraction initially covers 30 seconds, then prefetch extends coverage by
-90 seconds. Both paths retain the lookbehind needed for overlapping/sparse Matroska cues.
+Continuous subtitles initially cover 30 seconds, then prefetch extends coverage by 90 seconds.
+Indexed MKV subtitles read only metadata and the selected overlapping blocks by byte range;
+FFmpeg converts that small input. Missing/incomplete indexes fall back to bounded extraction
+with lookbehind. `matroska-subtitle-index.spec.ts` checks malformed indexes, ranges, track identity,
+empty windows and fallback; the real MKV integration checks text/ASS, overlap, sparse cues,
+nonzero timestamps, cancellation and identical fallback output with under 64 KiB of indexed reads.
 Producer feedback continues while a seek/audio command restores captions. Session API requests
 have a 15-second deadline; cancelled commands leave admission reconciliation to their successor.
 

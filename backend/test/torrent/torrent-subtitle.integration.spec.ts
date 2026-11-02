@@ -10,6 +10,7 @@ import {
 } from '../../src/torrent/torrent-stream.gateway';
 import type { TorrServerClient } from '../../src/torrent/torrserver.client';
 import type { EngineFileKey, EngineTorrentKey } from '../../src/torrent/torrent-engine.port';
+import { MatroskaSubtitleIndex } from '../../src/torrent/matroska-subtitle-index';
 
 const integration = process.env.TORRENT_GATEWAY_TEST === '1' ? describe : describe.skip;
 integration('bounded subtitle delivery from a real MKV', () => {
@@ -62,7 +63,23 @@ integration('bounded subtitle delivery from a real MKV', () => {
       expect(text.toString()).toContain('Early cue');
       expect(text.toString()).not.toContain('Late cue');
       expect(bytes).toBeLessThan(fixture.size * 0.65);
+      expect(bytes).toBeLessThan(64 * 1024);
       const longWindowBytes = bytes;
+      const legacyLoad = jest.spyOn(MatroskaSubtitleIndex, 'load').mockResolvedValueOnce(null);
+      try {
+        const fallback = await gateway.subtitleResource(
+          'fallback',
+          1,
+          source,
+          probe,
+          probe.subtitleTracks![0],
+          0,
+          AbortSignal.timeout(20_000),
+        );
+        expect(fallback).toEqual(text);
+      } finally {
+        legacyLoad.mockRestore();
+      }
       const boundary = await gateway.subtitleResource(
         'sparse',
         2,
@@ -199,6 +216,22 @@ integration('bounded subtitle delivery from a real MKV', () => {
         await gateway.subtitleResource(id, 2, source, probe, probe.subtitleTracks![0], 130, signal),
       ).toEqual(text);
       expect(inputRequests).toBe(readsBeforeReplay);
+      const offsetFallback = jest.spyOn(MatroskaSubtitleIndex, 'load').mockResolvedValueOnce(null);
+      try {
+        expect(
+          await gateway.subtitleResource(
+            'offset-fallback',
+            1,
+            source,
+            probe,
+            probe.subtitleTracks![0],
+            130,
+            signal,
+          ),
+        ).toEqual(text);
+      } finally {
+        offsetFallback.mockRestore();
+      }
       const continued = await gateway.subtitleResource(
         id,
         2,
@@ -221,6 +254,22 @@ integration('bounded subtitle delivery from a real MKV', () => {
       );
       expect(ass.toString()).toMatch(/0:02:05\.0\d,0:02:15\.0\d/);
       expect(ass.toString()).toContain('Style: Default,DejaVu Sans');
+      const assFallback = jest.spyOn(MatroskaSubtitleIndex, 'load').mockResolvedValueOnce(null);
+      try {
+        expect(
+          await gateway.subtitleResource(
+            'ass-fallback',
+            1,
+            source,
+            probe,
+            probe.subtitleTracks![1],
+            130,
+            signal,
+          ),
+        ).toEqual(ass);
+      } finally {
+        assFallback.mockRestore();
+      }
       const font = await gateway.subtitleResource(
         id,
         1,
@@ -240,6 +289,7 @@ integration('bounded subtitle delivery from a real MKV', () => {
       };
       const external = await gateway.subtitleResource(id, 1, source, probe, sidecar, 130, signal);
       expect(external.toString()).toContain('Перекрытие перемотки');
+      await gateway.stop(id, 1);
       const controller = new AbortController();
       const pending = gateway.subtitleResource(
         id,
@@ -297,6 +347,9 @@ integration('bounded subtitle delivery from a real MKV', () => {
       abandonedController.abort();
       await expect(abandoned).rejects.toThrow();
       expect((await latest).toString()).toContain('Styled overlap');
+      // Clear the index as well as text: an indexed empty window needs no I/O.
+      // Cancellation below deliberately stalls an actual metadata read.
+      await gateway.stop(id, 1);
       const reachedInput = new Promise<void>((resolve) => {
         stalled = resolve;
       });
