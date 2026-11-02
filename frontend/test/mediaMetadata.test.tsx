@@ -30,7 +30,10 @@ afterEach(() => {
   mock.restore();
   globalThis.fetch = originalFetch;
 });
-afterAll(() => GlobalRegistrator.unregister());
+afterAll(async () => {
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  GlobalRegistrator.unregister();
+});
 
 test('fallback-only people and countries do not change the visible metadata', () => {
   const view = render(<MediaInfo media={media} variant="watch" />);
@@ -112,7 +115,7 @@ test('degraded details refresh in the background and stop polling after primary 
   }
 });
 
-test('details refresh errors keep the view mounted and a manual retry clears the notice', async () => {
+test('degraded metadata and refresh errors stay quiet while the mounted view recovers', async () => {
   const noop = () => {};
   mock.module('@/entities/auth', () => ({ useAuth: () => ({ state: { status: 'guest' } }) }));
   mock.module('@/features/opening-history', () => ({
@@ -150,9 +153,14 @@ test('details refresh errors keep the view mounted and a manual retry clears the
       </QueryClientProvider>,
     );
     const player = screen.getByTestId('player');
-    await screen.findByText(/Не удалось обновить информацию/);
-    fireEvent.click(screen.getByRole('button', { name: 'Обновить' }));
-    await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
+    await waitFor(() => expect(client.getQueryState(options.queryKey)?.status).toBe('error'));
+    expect(screen.queryByText(/информация.*неполной|Не удалось обновить информацию/i)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Обновить' })).toBeNull();
+    expect(screen.getByTestId('player')).toBe(player);
+    await act(() => client.refetchQueries({ queryKey: options.queryKey }));
+    await waitFor(() =>
+      expect(client.getQueryData<{ degraded: boolean }>(options.queryKey)?.degraded).toBe(false),
+    );
     expect(requests).toBe(2);
     expect(screen.getByTestId('player')).toBe(player);
   } finally {

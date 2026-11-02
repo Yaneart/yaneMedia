@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { useAuth } from '@/entities/auth';
 import type { MediaSummary } from '@/entities/media';
@@ -24,7 +24,7 @@ import {
   useRestoreSocialAction,
 } from '@/features/social-access';
 import { ApiClientError } from '@/shared/api';
-import { Button, StarIcon } from '@/shared';
+import { Button, Popover, StarIcon } from '@/shared';
 import type { InfiniteData } from '@tanstack/react-query';
 import type { ProfileRatingPage } from '@/entities/profile';
 import {
@@ -52,9 +52,17 @@ export type UserRatingProps = {
   media: MediaSummary;
   className?: string;
   embedded?: boolean;
+  compact?: boolean;
 };
 
-export function UserRating({ media, className = '', embedded = false }: UserRatingProps) {
+export function UserRating({
+  media,
+  className = '',
+  embedded: isEmbedded = false,
+  compact = false,
+}: UserRatingProps) {
+  const embedded = isEmbedded || compact;
+  const [isOpen, setIsOpen] = useState(false);
   const { state: authState, setGuest, refresh } = useAuth();
   const queryClient = useQueryClient();
   const fieldsetRef = useRef<HTMLFieldSetElement>(null);
@@ -174,18 +182,35 @@ export function UserRating({ media, className = '', embedded = false }: UserRati
   const currentValue = ownRatingQuery.data?.value ?? null;
   useRestoreSocialAction(
     'rating',
-    () => fieldsetRef.current?.querySelector('input')?.focus(),
+    () => {
+      if (compact) setIsOpen(true);
+      else fieldsetRef.current?.querySelector('input')?.focus();
+    },
     authState.status === 'authenticated' && !ownRatingQuery.isPending,
   );
 
-  return (
+  useEffect(() => {
+    if (!compact || !isOpen) return;
+    const frame = requestAnimationFrame(() => {
+      const fieldset = fieldsetRef.current;
+      (
+        fieldset?.querySelector<HTMLInputElement>('input:checked') ??
+        fieldset?.querySelector<HTMLInputElement>('input')
+      )?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [compact, isOpen, ownRatingQuery.isPending]);
+
+  const panel = (
     <section
       aria-label="Оценка yaneMedia"
       className={[
-        embedded
-          ? 'relative grid grid-cols-1 gap-3 overflow-hidden rounded-control border border-context-border bg-surface/70 p-3 shadow-sm sm:p-4'
-          : 'rounded-card border border-context-border bg-surface-elevated p-4 sm:p-5',
-        className,
+        compact
+          ? 'space-y-3'
+          : embedded
+            ? 'relative grid grid-cols-1 gap-3 overflow-hidden rounded-control border border-context-border bg-surface/70 p-3 shadow-sm sm:p-4'
+            : 'rounded-card border border-context-border bg-surface-elevated p-4 sm:p-5',
+        compact ? '' : className,
       ].join(' ')}
     >
       <div
@@ -255,7 +280,9 @@ export function UserRating({ media, className = '', embedded = false }: UserRati
           Загружаем вашу оценку…
         </p>
       ) : ownRatingQuery.isError ? (
-        <div className={`${embedded ? '' : 'mt-4'} flex flex-wrap items-center justify-between gap-2`}>
+        <div
+          className={`${embedded ? '' : 'mt-4'} flex flex-wrap items-center justify-between gap-2`}
+        >
           <p className="text-sm text-danger" role="alert">
             Не удалось загрузить вашу оценку.
           </p>
@@ -272,23 +299,19 @@ export function UserRating({ media, className = '', embedded = false }: UserRati
         <div className={embedded ? 'min-w-0' : ''}>
           <fieldset
             ref={fieldsetRef}
-            className={
-              embedded
-                ? 'min-w-0'
-                : 'mt-4'
-            }
+            className={embedded ? 'min-w-0' : 'mt-4'}
             disabled={mutation.isPending}
           >
-            <legend
-              className="text-sm font-medium text-text-primary"
-            >
+            <legend className="text-sm font-medium text-text-primary">
               {currentValue === null ? 'Вы ещё не оценили' : `Ваша оценка: ${currentValue} из 10`}
             </legend>
             <div
               className={
-                embedded
-                  ? 'mt-2 grid w-full grid-cols-5 gap-2 sm:grid-cols-10'
-                  : 'mt-2 grid grid-cols-5 gap-2 sm:grid-cols-10 xl:grid-cols-5 2xl:grid-cols-10'
+                compact
+                  ? 'mt-2 grid grid-cols-5 gap-2'
+                  : embedded
+                    ? 'mt-2 grid w-full grid-cols-5 gap-2 sm:grid-cols-10'
+                    : 'mt-2 grid grid-cols-5 gap-2 sm:grid-cols-10 xl:grid-cols-5 2xl:grid-cols-10'
               }
             >
               {ratingValues.map((value) => (
@@ -316,7 +339,9 @@ export function UserRating({ media, className = '', embedded = false }: UserRati
             className={`${embedded ? 'mt-1 border-t border-context-border/60 pt-2' : 'mt-3'} flex min-h-8 items-center justify-between gap-2`}
           >
             <p
-              className={embedded ? 'text-caption text-text-secondary' : 'text-sm text-text-secondary'}
+              className={
+                embedded ? 'text-caption text-text-secondary' : 'text-sm text-text-secondary'
+              }
               aria-live="polite"
             >
               {mutation.isPending
@@ -345,5 +370,58 @@ export function UserRating({ media, className = '', embedded = false }: UserRati
         </div>
       )}
     </section>
+  );
+
+  if (!compact) return panel;
+
+  const badgeClassName =
+    'inline-flex min-h-9 items-center gap-1.5 rounded-control border border-context-border bg-surface/70 px-2.5 text-caption';
+  const summary = summaryQuery.data;
+
+  return (
+    <div
+      role="group"
+      aria-label="Оценки произведения"
+      className={`flex min-w-0 flex-wrap items-center gap-2 ${className}`}
+    >
+      {media.rating && (
+        <span className={badgeClassName} title="Рейтинг каталога">
+          <StarIcon className="size-3.5 text-action" aria-hidden="true" />
+          <span className="sr-only">Каталог</span>
+          <span className="font-semibold text-text-primary">{media.rating.value}</span>
+          <span className="sr-only">из {media.rating.scale}</span>
+        </span>
+      )}
+      <span
+        className={badgeClassName}
+        title={
+          summaryQuery.isError
+            ? 'Общий рейтинг временно недоступен'
+            : `Оценок: ${summary?.count ?? 0}`
+        }
+      >
+        <span className="text-text-secondary">yaneMedia</span>
+        <span className="font-semibold text-text-primary">
+          {summary?.average?.toFixed(1) ?? '—'}
+        </span>
+        {summary && <span className="text-text-secondary">({summary.count})</span>}
+      </span>
+      <Popover
+        trigger={currentValue === null ? 'Оценить' : `Ваша: ${currentValue}`}
+        triggerLabel={
+          currentValue === null ? 'Оценить произведение' : `Изменить оценку ${currentValue} из 10`
+        }
+        triggerSize="small"
+        triggerVariant="secondary"
+        triggerClassName="h-9 w-auto px-3 text-caption"
+        panelClassName="w-76 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-overlay bg-popover p-4"
+        align="start"
+        maxPanelHeight={400}
+        open={isOpen}
+        onOpenChange={setIsOpen}
+      >
+        {panel}
+      </Popover>
+    </div>
   );
 }

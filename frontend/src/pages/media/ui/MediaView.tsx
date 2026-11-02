@@ -1002,16 +1002,6 @@ export function MediaView({
                   <AvailabilityToolbarStatus hasEpisodeControls={showLocalEpisodeControls} />
                 ) : (
                   <>
-                    {showLocalEpisodeControls && animeSeasonSelector && (
-                      <SeasonSelector
-                        seasons={animeSeasonSelector.options}
-                        selectedSeasonNumber={animeSeasonSelector.selectedSeasonNumber}
-                        onSeasonChange={onAnimeSeasonChange}
-                        variant="inline"
-                        compactDesktop
-                      />
-                    )}
-
                     {showLocalEpisodeControls &&
                       !animeSeasonSelector &&
                       directSeasonNumbers.length > 0 && (
@@ -1219,13 +1209,23 @@ export function MediaView({
             <p className="mt-3 text-body text-text-secondary">{media.description}</p>
           </MediaDescriptionPanel>
         )}
-        <UserRating media={media} embedded className="hidden sm:block 2xl:hidden" />
       </div>
 
       <div className="media-view-info contents xl:col-start-1 xl:row-start-1 xl:block">
         <MediaInfo
           media={media}
           variant="watch"
+          ratings={<UserRating media={media} compact />}
+          navigation={
+            animeSeasonSelector && (
+              <SeasonSelector
+                seasons={animeSeasonSelector.options}
+                selectedSeasonNumber={animeSeasonSelector.selectedSeasonNumber}
+                onSeasonChange={onAnimeSeasonChange}
+                variant="inline"
+              />
+            )
+          }
           actions={
             <FavoriteButton
               isFavorite={mediaIsFavorite}
@@ -1243,40 +1243,36 @@ export function MediaView({
         />
       </div>
 
-      <section className="order-4 space-y-5 sm:hidden">
-        {media.description && (
-          <div className="sm:hidden">
-            <MediaDescriptionPanel compact>
-              <p
-                className={[
-                  'mt-2 text-body text-text-secondary',
-                  isDescriptionExpanded ? '' : 'line-clamp-4',
-                ].join(' ')}
-              >
-                {media.description}
-              </p>
-              <button
-                type="button"
-                className="mt-2 text-sm font-semibold text-text-primary transition-colors hover:text-watermark"
-                onClick={() => setIsDescriptionExpanded((current) => !current)}
-                aria-expanded={isDescriptionExpanded}
-              >
-                {isDescriptionExpanded ? 'Свернуть' : 'Подробнее'}
-              </button>
-            </MediaDescriptionPanel>
-          </div>
-        )}
-        <UserRating media={media} embedded className="sm:hidden" />
-      </section>
+      {media.description && (
+        <section className="order-4 sm:hidden">
+          <MediaDescriptionPanel compact>
+            <p
+              className={[
+                'mt-2 text-body text-text-secondary',
+                isDescriptionExpanded ? '' : 'line-clamp-4',
+              ].join(' ')}
+            >
+              {media.description}
+            </p>
+            <button
+              type="button"
+              className="mt-2 text-sm font-semibold text-text-primary transition-colors hover:text-watermark"
+              onClick={() => setIsDescriptionExpanded((current) => !current)}
+              aria-expanded={isDescriptionExpanded}
+            >
+              {isDescriptionExpanded ? 'Свернуть' : 'Подробнее'}
+            </button>
+          </MediaDescriptionPanel>
+        </section>
+      )}
 
-      <div className="media-view-details order-4 hidden gap-8 2xl:col-span-2 2xl:grid 2xl:gap-10">
-        {media.description && (
+      {media.description && (
+        <div className="media-view-details order-4 hidden 2xl:col-span-2 2xl:block">
           <MediaDescriptionPanel>
             <p className="mt-3 max-w-5xl text-body text-text-secondary">{media.description}</p>
           </MediaDescriptionPanel>
-        )}
-        <UserRating media={media} embedded />
-      </div>
+        </div>
+      )}
 
       <MediaCommunity media={media} />
     </div>

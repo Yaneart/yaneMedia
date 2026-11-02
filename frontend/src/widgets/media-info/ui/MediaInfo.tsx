@@ -5,6 +5,8 @@ import { useEffect, useState, type ReactNode } from 'react';
 export type MediaInfoProps = {
   media: MediaDetails;
   actions?: ReactNode;
+  ratings?: ReactNode;
+  navigation?: ReactNode;
   variant?: 'default' | 'watch';
 };
 
@@ -112,25 +114,33 @@ function MediaInfoPoster({ media, className }: { media: MediaDetails; className:
   );
 }
 
-export function MediaInfo({ media, actions, variant = 'default' }: MediaInfoProps) {
+export function MediaInfo({
+  media,
+  actions,
+  ratings,
+  navigation,
+  variant = 'default',
+}: MediaInfoProps) {
   const isWatchLayout = variant === 'watch';
   const metadata = [
     typeLabels[media.type],
     media.year?.toString(),
     media.runtimeMinutes ? formatRuntime(media.runtimeMinutes) : undefined,
-    media.rating ? `Рейтинг каталога: ${media.rating.value} / ${media.rating.scale}` : undefined,
+    !ratings && media.rating
+      ? `Рейтинг каталога: ${media.rating.value} / ${media.rating.scale}`
+      : undefined,
   ].filter((item): item is string => item !== undefined);
   const mobileMetadata = [
     media.year?.toString(),
     media.runtimeMinutes ? formatRuntime(media.runtimeMinutes) : undefined,
-    media.rating ? `Каталог: ${media.rating.value}` : undefined,
+    !ratings && media.rating ? `Каталог: ${media.rating.value}` : undefined,
   ].filter((item): item is string => item !== undefined);
 
-  const fullWidthOnMobile = media.poster
-    ? isWatchLayout
-      ? 'col-span-2 xl:col-span-1'
-      : 'col-span-2 md:col-span-1 md:col-start-2'
-    : '';
+  const fullWidthOnMobile = isWatchLayout
+    ? 'col-span-2 xl:col-span-1'
+    : media.poster
+      ? 'col-span-2 md:col-span-1 md:col-start-2'
+      : '';
 
   return (
     <section
@@ -166,7 +176,7 @@ export function MediaInfo({ media, actions, variant = 'default' }: MediaInfoProp
       <div className="flex min-w-0 flex-col self-start">
         <div
           className={[
-            'order-3 mt-3 items-center gap-x-2 text-caption text-text-secondary',
+            'order-3 mt-3 flex-wrap items-center gap-x-2 gap-y-1 text-caption text-text-secondary',
             isWatchLayout ? 'flex xl:hidden' : 'flex md:hidden',
           ].join(' ')}
         >
@@ -216,25 +226,14 @@ export function MediaInfo({ media, actions, variant = 'default' }: MediaInfoProp
             {media.originalTitle}
           </p>
         )}
-        {isWatchLayout && media.genres.length > 0 && (
-          <p className="order-3 mt-3 text-caption text-text-secondary xl:hidden">
-            <span>Жанры: </span>
-            <span className="text-text-primary">{media.genres.join(', ')}</span>
-          </p>
-        )}
-
         {isWatchLayout && actions && (
           <div className="order-4 mt-4 flex w-full flex-wrap gap-3 sm:hidden xl:flex">
             {actions}
           </div>
         )}
-
-        {isWatchLayout && media.description && (
-          <MediaDescriptionPanel className="order-5 mt-5 hidden sm:block xl:hidden" compact>
-            <p className="mt-2 line-clamp-6 text-body text-text-secondary">{media.description}</p>
-          </MediaDescriptionPanel>
-        )}
       </div>
+
+      {ratings && <div className={`${fullWidthOnMobile} min-w-0`}>{ratings}</div>}
 
       {media.description && !isWatchLayout && (
         <p className={[fullWidthOnMobile, 'max-w-3xl text-body text-text-secondary'].join(' ')}>
@@ -243,10 +242,7 @@ export function MediaInfo({ media, actions, variant = 'default' }: MediaInfoProp
       )}
 
       {isWatchLayout ? (
-        <MediaFacts
-          media={media}
-          className={`${fullWidthOnMobile} hidden gap-2 text-caption xl:grid`}
-        />
+        <MediaFacts media={media} className={`${fullWidthOnMobile} gap-2 text-caption`} />
       ) : (
         <div
           className={`${fullWidthOnMobile} flex flex-col items-start gap-5 md:flex-row md:items-center md:gap-8`}
@@ -254,6 +250,14 @@ export function MediaInfo({ media, actions, variant = 'default' }: MediaInfoProp
           {actions && <div className="flex w-full flex-wrap gap-3">{actions}</div>}
           <MediaFacts media={media} className="gap-y-2 text-caption" />
         </div>
+      )}
+
+      {navigation && <div className={`${fullWidthOnMobile} min-w-0`}>{navigation}</div>}
+
+      {isWatchLayout && media.description && (
+        <MediaDescriptionPanel className="col-span-2 hidden sm:block xl:hidden" compact>
+          <p className="mt-2 line-clamp-6 text-body text-text-secondary">{media.description}</p>
+        </MediaDescriptionPanel>
       )}
     </section>
   );
