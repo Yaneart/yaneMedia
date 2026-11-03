@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "test": "bun test",
-    "test:torrent": "bun test ./test/torrentSessionBoundary.test.ts ./test/torrentReplacement.test.ts ./test/torrentStream.test.ts ./test/socialAccess.test.ts ./test/playbackModeResolution.test.ts ./test/candidateView.test.ts && bun test ./test/torrentLifecycle.test.tsx && bun test ./test/torrentViewLifecycle.test.tsx && bun test ./test/playbackContinuity.test.tsx",
+    "test:torrent": "bun test ./test/torrentSessionBoundary.test.ts ./test/torrentReplacement.test.ts ./test/torrentStream.test.ts ./test/torrentEpisodes.test.ts ./test/torrentFileSwitch.test.ts ./test/socialAccess.test.ts ./test/playbackModeResolution.test.ts ./test/candidateView.test.ts && bun test ./test/torrentLifecycle.test.tsx && bun test ./test/torrentViewLifecycle.test.tsx && bun test ./test/playbackContinuity.test.tsx",
     "lint": "oxlint",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

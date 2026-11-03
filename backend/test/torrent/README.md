@@ -36,6 +36,7 @@ test unmounts React, clears queries/storage and resets the account cancellation 
 | Protected flow, file choice, explicit HLS start/error/retry, progress, Stop and account reset                    | `frontend/test/torrentLifecycle.test.tsx`: real React/query/API mapping, fake fetch and HLS library          |
 | Terminal polling, retry bounds, abort, account cache isolation and login return                                  | frontend boundary/social-access suites                                                                       |
 | Cancelled seek/audio admission, repeated commands and stalled-request recovery                                   | `frontend/test/torrentReplacement.test.ts`                                                                   |
+| Pack recognition, logical episode restore, missing/ambiguous files, CAS file switch and cancellation             | `frontend/test/torrentEpisodes.test.ts`, `frontend/test/torrentFileSwitch.test.ts`, lifecycle/view suites    |
 | Producer feedback during caption restoration, prefetch cancellation and backwards seek                           | `frontend/test/torrentStream.test.ts`                                                                        |
 | Release/provider switch during a pending torrent command, confirmed progress and source cleanup                  | frontend lifecycle/view/continuity suites                                                                    |
 

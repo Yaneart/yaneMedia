@@ -14,6 +14,8 @@ const { MemoryRouter } = await import('react-router');
 const { AuthContext } = await import('../src/entities/auth/model/authContext');
 const { privateProfileQueryOptions } = await import('../src/features/social-data');
 const { TorrentLaunch } = await import('../src/features/torrent-launch/ui/TorrentLaunch');
+const { TorrentFilePicker } = await import('../src/features/torrent-launch/ui/TorrentFilePicker');
+const { torrentEpisodes } = await import('../src/features/torrent-launch/model/torrentEpisodes');
 const { PlaybackSourcePicker } =
   await import('../src/features/source-selection/ui/PlaybackSourcePicker');
 const { PlaybackSessionProvider } =
@@ -37,7 +39,9 @@ class FakePlayer extends HTMLElement {
   });
   selectAudio = mock(async () => {});
   selectQuality = mock(async () => {});
+  selectText = mock(async (_id: string | null) => {});
   seek = mock(async (_position: number) => {});
+  navigate = mock(async (_direction: string) => {});
   connectedCallback() {
     players.push(this);
   }
@@ -72,9 +76,13 @@ let client: InstanceType<typeof QueryClient>;
 let failPlayback: boolean;
 let discoveryMode: boolean;
 let candidateCreateCount: number;
+let candidateNeedsFile: boolean;
 let activeAvailable: boolean;
 let failStop: boolean;
 let stopGate: Promise<void> | null;
+let launchMedia: any;
+let requestedEpisode: any;
+let createGate: Promise<void> | null;
 
 beforeEach(() => {
   resetTorrentClientScope();
@@ -84,9 +92,21 @@ beforeEach(() => {
   failPlayback = false;
   discoveryMode = false;
   candidateCreateCount = 0;
+  candidateNeedsFile = false;
   activeAvailable = true;
   failStop = false;
   stopGate = null;
+  launchMedia = {
+    type: 'movie',
+    mediaRef,
+    title: 'Fixture',
+    genres: [],
+    countries: [],
+    languages: [],
+    persons: [],
+  };
+  requestedEpisode = null;
+  createGate = null;
   session = {
     sessionId: id,
     mediaRef,
@@ -164,12 +184,13 @@ beforeEach(() => {
       });
     if (path.endsWith('/from-candidate')) {
       candidateCreateCount++;
+      if (createGate) await createGate;
       activeAvailable = true;
       session = {
         ...session,
         sessionId: candidateCreateCount === 1 ? id : 'torrent_session_zyxwvutsrqponmlkjihgfe',
-        state: 'awaiting_playback',
-        selectedFileRef: fileRef,
+        state: candidateNeedsFile ? 'awaiting_file' : 'awaiting_playback',
+        selectedFileRef: candidateNeedsFile ? null : fileRef,
         playback: null,
         failure: null,
       };
@@ -242,6 +263,9 @@ function mount(state: AuthState = authenticated, verified = true) {
     const [playRequest, setPlayRequest] = useState(0);
     const [selected, setSelected] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [needsFile, setNeedsFile] = useState(false);
+    const [requestedFileRef, setRequestedFileRef] = useState<string | null>(null);
+    const [sourceRevision, setSourceRevision] = useState(0);
     return (
       <>
         <PlaybackSourcePicker
@@ -255,6 +279,11 @@ function mount(state: AuthState = authenticated, verified = true) {
           torrentOpen={open}
           torrentPanel={(close) => (
             <TorrentLaunch
+              sourceRevision={sourceRevision}
+              media={launchMedia}
+              requestedEpisode={requestedEpisode}
+              requestedFileRef={requestedFileRef}
+              onFileSelectionRequired={() => setNeedsFile(true)}
               open={open}
               onOpenChange={setOpen}
               selected={selected}
@@ -269,7 +298,13 @@ function mount(state: AuthState = authenticated, verified = true) {
               activeSession={null}
               resumePositionSeconds={42}
               onPlaybackReady={ready}
-              onSessionChange={changed}
+              onSessionChange={(session) => {
+                changed(session);
+                if (!session) {
+                  setSelected(false);
+                  setNeedsFile(false);
+                }
+              }}
             />
           )}
         />
@@ -282,6 +317,32 @@ function mount(state: AuthState = authenticated, verified = true) {
           Retry
         </button>
         {error && <output role="alert">{error}</output>}
+        <button
+          onClick={() => {
+            setSelected(false);
+            setSourceRevision((revision) => revision + 1);
+          }}
+        >
+          Other source
+        </button>
+        {needsFile && (
+          <TorrentFilePicker
+            files={torrentEpisodes(
+              session.files.map((file) => ({
+                ref: file.fileRef,
+                name: file.displayName,
+                sizeBytes: file.sizeBytes,
+              })),
+              launchMedia,
+            )}
+            missing={!!requestedEpisode}
+            onSelect={(ref) => {
+              setRequestedFileRef(ref);
+              setNeedsFile(false);
+              setPlayRequest((request) => request + 1);
+            }}
+          />
+        )}
       </>
     );
   }
@@ -312,6 +373,74 @@ function openTorrent() {
 }
 
 describe('torrent user lifecycle', () => {
+  test('switching provider during candidate admission cannot resurrect the cancelled torrent', async () => {
+    discoveryMode = true;
+    let release!: () => void;
+    createGate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const view = mount();
+    openTorrent();
+    fireEvent.click(await screen.findByRole('button', { name: /Fixture 10/ }));
+    await waitFor(() => expect(candidateCreateCount).toBe(1));
+    fireEvent.click(screen.getByRole('button', { name: 'Other source' }));
+    await act(async () => {
+      release();
+      await createGate;
+    });
+    expect(view.ready).not.toHaveBeenCalled();
+    expect(calls.some((call) => call.path.endsWith('/playback'))).toBe(false);
+  });
+
+  test.each([null, { seasonNumber: 2, episodeNumber: 10 }])(
+    'recognized packs start the first actual season or the saved logical episode: %j',
+    async (saved) => {
+      launchMedia = { ...launchMedia, type: 'series', seasons: [] };
+      requestedEpisode = saved;
+      candidateNeedsFile = true;
+      session.files = ['Show.S02E10.mkv', 'Show.S02E02.mkv'].map((displayName, index) => ({
+        fileRef: `torrent_file_abcdefghijklmnopqrstu${index}`,
+        displayName,
+        sizeBytes: 100,
+        mediaKind: 'video',
+      }));
+      const view = mount();
+      openTorrent();
+      fireEvent.click(await screen.findByRole('button', { name: /Fixture 10/ }));
+      await waitFor(() => expect(view.ready).toHaveBeenCalledTimes(1));
+      expect(calls.find((call) => call.path.endsWith('/file'))?.body).toMatchObject({
+        fileRef: session.files[saved ? 0 : 1]!.fileRef,
+      });
+      expect(calls.find((call) => call.path.endsWith('/playback'))?.body).toMatchObject({
+        startPositionSeconds: saved ? 42 : 0,
+      });
+      expect(view.ready.mock.calls[0]?.[1]).toEqual(saved ?? { seasonNumber: 2, episodeNumber: 2 });
+      expect(screen.queryByLabelText('Выбор файла торрента')).toBeNull();
+    },
+  );
+
+  test('a missing saved episode waits for an in-player file choice and never transfers its position to another episode', async () => {
+    launchMedia = { ...launchMedia, type: 'series', seasons: [] };
+    requestedEpisode = { seasonNumber: 2, episodeNumber: 9 };
+    candidateNeedsFile = true;
+    session.files = [
+      { fileRef, displayName: 'Show.S02E01.mkv', sizeBytes: 100, mediaKind: 'video' },
+    ];
+    const view = mount();
+    openTorrent();
+    fireEvent.click(await screen.findByRole('button', { name: /Fixture 10/ }));
+    await screen.findByText('Сохранённая серия не найдена в этой раздаче');
+    expect(
+      calls.some((call) => call.path.endsWith('/file') || call.path.endsWith('/playback')),
+    ).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: '2 сезон · 1 серия' }));
+    await waitFor(() => expect(view.ready).toHaveBeenCalledTimes(1));
+    expect(calls.find((call) => call.path.endsWith('/playback'))?.body).toMatchObject({
+      startPositionSeconds: 0,
+    });
+    expect(view.ready.mock.calls[0]?.[1]).toEqual({ seasonNumber: 2, episodeNumber: 1 });
+  });
+
   test('an open source picker retains the chosen tab while torrent generations change', async () => {
     const noop = () => {};
     const props = {
@@ -451,14 +580,15 @@ describe('torrent user lifecycle', () => {
     expect(activeAvailable).toBe(true);
   });
 
-  test('autoplays after multi-file selection at saved progress and keeps the release list accessible', async () => {
+  test('an explicit torrent launch selects its single movie file without a confirmation dialog', async () => {
+    candidateNeedsFile = true;
     const view = mount();
     openTorrent();
-    await screen.findByText('Episode.mkv');
+    await screen.findByRole('button', { name: /Fixture 10/ });
     await waitFor(() => expect(client.isFetching()).toBe(0));
     expect(view.ready).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('radio', { name: /Episode.mkv/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Подтвердить выбор' }));
+    expect(screen.queryByRole('button', { name: 'Подтвердить выбор' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Fixture 10/ }));
     await waitFor(() => expect(calls.find(({ path }) => path.endsWith('/file'))).toBeDefined());
     expect(calls.find(({ path }) => path.endsWith('/file'))?.body).toEqual({
       fileRef,
@@ -482,11 +612,12 @@ describe('torrent user lifecycle', () => {
           hlsUrl: expect.stringContaining(`/torrent-sessions/${id}/hls/master.m3u8`),
         },
       },
+      null,
     ]);
     openTorrent();
     await screen.findByRole('button', { name: /Fixture 10/ });
     expect(screen.queryByRole('button', { name: 'Остановить сессию' })).toBeNull();
-    expect(calls.some(({ method }) => method === 'DELETE')).toBe(false);
+    expect(calls.filter(({ method }) => method === 'DELETE')).toHaveLength(1);
   });
 
   test('keeps a failed playback retry explicit and clears account state on logout', async () => {
@@ -866,6 +997,164 @@ describe('torrent player adapter contract', () => {
       />,
     );
     expect(player.descriptor.crossOrigin).toBeUndefined();
+    view.unmount();
+  });
+
+  test('a different torrent file restores the same descriptive subtitle instead of another track in the same language', async () => {
+    const props = {
+      source: {
+        sourceRef: `torrent:${id}:1`,
+        provider: 'torrent',
+        kind: 'hls' as const,
+        label: 'Torrent',
+        url: `/api/v1/torrent-sessions/${id}/hls/master.m3u8`,
+        availability: 'available' as const,
+        browserSupported: true,
+      },
+      mediaTitle: 'Fixture',
+      shouldAutoPlay: false,
+      initialPositionSeconds: 0,
+      torrentTimeline: {
+        generation: 1,
+        startPositionSeconds: 0,
+        durationSeconds: 1200,
+        timeline: { absoluteAnchorSeconds: 0, mediaAnchorSeconds: 0, windowEndSeconds: 120 },
+        playbackRates: [1],
+        audioTracks: [],
+        selectedAudioTrackRef: 'audio',
+        onReplace: async () => {
+          throw new Error('unused');
+        },
+      },
+      onReady: () => {},
+      onError: () => {},
+      onPlay: () => {},
+      onPause: () => {},
+      onProgress: () => {},
+    };
+    const view = render(<MediaVideoRenderer {...props} />);
+    await act(async () => {});
+    const player = players[0]!;
+    let snapshot: any = {
+      source: { id: 'media', revision: player.descriptor.revision },
+      selection: { audioId: 'audio', textId: 'old-rus' },
+      textTracks: [{ id: 'old-rus', label: 'Rus', language: 'rus', forced: false, sdh: false }],
+    };
+    (player as any).runtime = { getSnapshot: () => snapshot };
+    await act(async () =>
+      view.rerender(<MediaVideoRenderer {...props} navigation={{ pending: true }} />),
+    );
+    snapshot = { ...snapshot, selection: { audioId: 'audio', textId: null }, textTracks: [] };
+    player.setSource.mockImplementation(async (source: any, options: any) => {
+      player.descriptor = source;
+      player.options = options;
+      snapshot = {
+        ...snapshot,
+        selection: { audioId: 'audio', textId: null },
+        textTracks: [
+          { id: 'new-forc', label: 'Forc', language: 'rus' },
+          { id: 'new-rus', label: 'Rus', language: 'rus', forced: false, sdh: false },
+        ],
+      };
+    });
+    await act(async () =>
+      view.rerender(
+        <MediaVideoRenderer
+          {...props}
+          source={{ ...props.source, sourceRef: `torrent:${id}:2` }}
+          torrentTimeline={{ ...props.torrentTimeline, generation: 2 }}
+        />,
+      ),
+    );
+    expect(player.options.trackPreferences).toEqual({ text: null });
+    expect(player.selectText).toHaveBeenCalledWith('new-rus');
+    expect(players).toHaveLength(1);
+    view.unmount();
+  });
+
+  test('torrent auto advance ignores window EOF, stale and pending events, and only advances once at the actual episode end', async () => {
+    const play = mock(() => {});
+    const props = {
+      source: {
+        sourceRef: `torrent:${id}`,
+        provider: 'torrent',
+        kind: 'hls' as const,
+        label: 'Torrent',
+        url: `/api/v1/torrent-sessions/${id}/hls/master.m3u8`,
+        availability: 'available' as const,
+        browserSupported: true,
+      },
+      mediaTitle: 'Fixture',
+      shouldAutoPlay: true,
+      initialPositionSeconds: 0,
+      torrentTimeline: {
+        startPositionSeconds: 0,
+        durationSeconds: 1200,
+        timeline: { absoluteAnchorSeconds: 0, mediaAnchorSeconds: 0, windowEndSeconds: 120 },
+        playbackRates: [1],
+        audioTracks: [],
+        selectedAudioTrackRef: 'audio',
+        onReplace: async () => {
+          throw new Error('unused');
+        },
+      },
+      navigation: { autoAdvance: true, next: async () => {} },
+      onReady: () => {},
+      onError: () => {},
+      onPlay: play,
+      onPause: () => {},
+      onProgress: () => {},
+    };
+    const view = render(<MediaVideoRenderer {...props} />);
+    await act(async () => {});
+    const player = players[0]!;
+    const snapshot = {
+      source: { id: 'media', revision: player.descriptor.revision },
+      playback: 'playing',
+      intent: 'playing',
+      positionSeconds: 1199,
+      durationSeconds: 1200,
+      pending: null,
+      seekable: [[0, 1200]],
+    };
+    expect(player.navigation.autoAdvance).toBe(false);
+    await act(async () => {
+      player.emit('statechange', snapshot);
+      player.emit('ended', { ...snapshot, playback: 'ended', positionSeconds: 120 });
+    });
+    expect(player.navigate).not.toHaveBeenCalled();
+    await act(async () => {
+      player.emit('ended', {
+        ...snapshot,
+        playback: 'ended',
+        positionSeconds: 1200,
+        pending: { type: 'seek' },
+      });
+      player.emit('ended', {
+        ...snapshot,
+        playback: 'ended',
+        positionSeconds: 1200,
+        source: { id: 'media', revision: 'stale' },
+      });
+    });
+    expect(player.navigate).not.toHaveBeenCalled();
+    await act(async () => {
+      player.emit('statechange', {
+        ...snapshot,
+        playback: 'paused',
+        intent: 'paused',
+        positionSeconds: 1200,
+      });
+      player.emit('ended', {
+        ...snapshot,
+        playback: 'ended',
+        intent: 'paused',
+        positionSeconds: 1200,
+      });
+      player.emit('ended', { ...snapshot, playback: 'ended', positionSeconds: 1200 });
+    });
+    expect(player.navigate).toHaveBeenCalledTimes(1);
+    expect(player.navigate).toHaveBeenCalledWith('next');
     view.unmount();
   });
 

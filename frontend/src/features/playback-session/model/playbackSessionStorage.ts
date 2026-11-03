@@ -132,6 +132,7 @@ function isPlaybackSession(value: unknown): value is PlaybackSession {
     isNonEmptyString(value.mediaRef) &&
     isMediaSnapshot(value.mediaSnapshot) &&
     isNonEmptyString(value.sourceRef) &&
+    (value.playbackKey === undefined || isNonEmptyString(value.playbackKey)) &&
     isEpisodeSelection(value.episode) &&
     isPlaybackState(value.state) &&
     isNonNegativeFiniteNumber(value.positionSeconds) &&

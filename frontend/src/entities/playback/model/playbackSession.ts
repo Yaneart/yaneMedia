@@ -20,6 +20,7 @@ export interface PlaybackMediaSnapshot {
 }
 
 export interface PlaybackSession {
+  playbackKey?: string;
   mediaRef: string;
   mediaSnapshot: PlaybackMediaSnapshot;
   sourceRef: string;

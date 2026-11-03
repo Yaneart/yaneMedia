@@ -191,6 +191,19 @@ test('late callbacks from an old source or episode cannot overwrite the new sess
   });
 });
 
+test('callbacks from a previous playback of the same file identity cannot overwrite a restarted session', async () => {
+  mount();
+  await start();
+  const old = playback.session!;
+  await start();
+  expect(playback.session?.playbackKey).not.toBe(old.playbackKey);
+  await act(async () => {
+    playback.updateProgress(999, 1200, 'pause', old);
+    playback.pauseSession(old);
+  });
+  expect(playback.session).toMatchObject({ positionSeconds: 42, state: 'playing' });
+});
+
 test('pagehide writes confirmed session immediately and a different account inherits no session', async () => {
   const view = mount();
   await start();

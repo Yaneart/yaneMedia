@@ -2,6 +2,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useEffectEvent, useRef, useState, type FormEvent } from 'react';
 
 import { useAuth } from '@/entities/auth';
+import type { AnimeSeasonChainEntry, MediaDetails } from '@/entities/media';
+import type { PlaybackEpisodeSelection } from '@/entities/playback';
 import {
   activeTorrentSessionQueryOptions,
   cacheTorrentSession,
@@ -12,8 +14,7 @@ import {
   newTorrentIdempotencyKey,
   preferredTorrentAudio,
   rememberTorrentAudio,
-  selectTorrentFile,
-  startTorrentPlayback,
+  switchTorrentFile,
   stopTorrentSession,
   torrentSessionQueryOptions,
   torrentSessionQueryKeys,
@@ -25,6 +26,11 @@ import { ResendVerification } from '@/features/auth-form';
 import { privateProfileQueryOptions } from '@/features/social-data';
 import { SocialLoginLink, useRestoreSocialAction } from '@/features/social-access';
 import { Button, Select, Spinner } from '@/shared';
+import {
+  initialTorrentEpisode,
+  sameTorrentEpisode,
+  torrentEpisodes,
+} from '../model/torrentEpisodes';
 import {
   candidateOptions,
   candidateTrackerLabel,
@@ -198,7 +204,22 @@ export function TorrentLaunch({
   playRequest = 0,
   onPlaybackError,
   selected = false,
+  media,
+  animeRelease,
+  requestedEpisode = null,
+  requestedFileRef = null,
+  onFileSelectionRequired,
+  sourceRevision = 0,
 }: {
+  sourceRevision?: number;
+  media: MediaDetails;
+  animeRelease?: Pick<
+    AnimeSeasonChainEntry,
+    'number' | 'seasonEpisodeOffset' | 'absoluteEpisodeOffset' | 'canonicalMappingVerified'
+  >;
+  requestedEpisode?: PlaybackEpisodeSelection | null;
+  requestedFileRef?: string | null;
+  onFileSelectionRequired?: () => void;
   selected?: boolean;
   onSourceSelect?: () => void;
   playRequest?: number;
@@ -210,7 +231,7 @@ export function TorrentLaunch({
   episode?: number;
   activeSession: TorrentSession | null;
   resumePositionSeconds: number;
-  onPlaybackReady: (session: TorrentSession) => void;
+  onPlaybackReady: (session: TorrentSession, episode?: PlaybackEpisodeSelection | null) => void;
   onSessionChange: (session: TorrentSession | null) => void;
 }) {
   const { state: authState, refresh } = useAuth();
@@ -231,15 +252,13 @@ export function TorrentLaunch({
   const [file, setFile] = useState<File | null>(null);
   const [session, setSession] = useState<TorrentSession | null>(null);
   const [selectedCandidateRef, setSelectedCandidateRef] = useState<string | null>(null);
-  const [fileRef, setFileRef] = useState<string | null>(null);
   const [audioRef, setAudioRef] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestRef = useRef<AbortController | null>(null);
+  const playbackRequestRef = useRef<AbortController | null>(null);
   const createKeyRef = useRef<string | null>(null);
   const candidateKeyRef = useRef<{ ref: string; key: string } | null>(null);
-  const playbackKeyRef = useRef<string | null>(null);
-  const playbackRequestedRef = useRef(false);
   const previousPlayRequest = useRef(playRequest);
   const waitingForPlayback = useRef(false);
   const previousAccountRef = useRef(accountKey);
@@ -307,9 +326,7 @@ export function TorrentLaunch({
     )
       return;
     setSession(null);
-    setFileRef(null);
     waitingForPlayback.current = false;
-    playbackRequestedRef.current = false;
     queryClient.setQueryData(torrentSessionQueryKeys.active(accountKey, mediaRef), null);
     onSessionChange(null);
   }, [accountKey, mediaRef, onSessionChange, pending, queryClient, session, sessionQuery.error]);
@@ -317,21 +334,9 @@ export function TorrentLaunch({
   useEffect(() => {
     if (!selected) {
       waitingForPlayback.current = false;
-      playbackRequestedRef.current = false;
+      playbackRequestRef.current?.abort();
     }
   }, [selected]);
-
-  useEffect(() => {
-    if (
-      selected &&
-      playbackRequestedRef.current &&
-      currentSession?.state === 'ready' &&
-      currentSession.playback
-    ) {
-      playbackRequestedRef.current = false;
-      onPlaybackReady(currentSession);
-    }
-  }, [currentSession, selected, onPlaybackReady]);
 
   useRestoreSocialAction('torrent', () => onOpenChange(true));
 
@@ -346,18 +351,15 @@ export function TorrentLaunch({
     setSession(null);
     setSelectedCandidateRef(null);
     onSessionChange(null);
-    setFileRef(null);
     setError(null);
     setPending(false);
     setMagnet('');
     setFile(null);
     createKeyRef.current = null;
     candidateKeyRef.current = null;
-    playbackKeyRef.current = null;
-    playbackRequestedRef.current = false;
   }, [accountKey, onSessionChange]);
 
-  useEffect(() => () => requestRef.current?.abort(), []);
+  useEffect(() => () => requestRef.current?.abort(), [sourceRevision]);
 
   const stopPrevious = async (signal: AbortSignal) => {
     let previous = session ?? activeQuery.data ?? activeSession;
@@ -367,8 +369,6 @@ export function TorrentLaunch({
       previous = refreshed.data ?? null;
     }
     waitingForPlayback.current = false;
-    playbackRequestedRef.current = false;
-    playbackKeyRef.current = null;
     if (!previous) return;
     await queryClient.cancelQueries({
       queryKey: torrentSessionQueryKeys.session(accountKey, previous.id),
@@ -380,7 +380,6 @@ export function TorrentLaunch({
     }
     signal.throwIfAborted();
     setSession(null);
-    setFileRef(null);
     setSelectedCandidateRef(null);
     queryClient.setQueryData(torrentSessionQueryKeys.active(accountKey, mediaRef), null);
     onSessionChange(null);
@@ -420,7 +419,6 @@ export function TorrentLaunch({
       setSession(created);
       onSessionChange(created);
       onSourceSelect?.();
-      setFileRef(null);
       createKeyRef.current = null;
     } catch (cause) {
       if (!controller.signal.aborted) setError(describeCreateError(cause));
@@ -469,7 +467,6 @@ export function TorrentLaunch({
       setSelectedCandidateRef(candidate.candidateRef);
       onSessionChange(created);
       onSourceSelect?.();
-      setFileRef(null);
       candidateKeyRef.current = null;
     } catch (cause) {
       if (!controller.signal.aborted) {
@@ -491,83 +488,50 @@ export function TorrentLaunch({
     }
   };
 
-  const chooseFile = async () => {
-    if (!currentSession || !fileRef || pending) return;
-    const controller = new AbortController();
-    requestRef.current = controller;
-    setPending(true);
-    setError(null);
-    try {
-      await queryClient.cancelQueries({
-        queryKey: torrentSessionQueryKeys.session(accountKey, currentSession.id),
-      });
-      const updated = await selectTorrentFile(
-        currentSession.id,
-        fileRef,
-        currentSession.version,
-        controller.signal,
-      );
-      if (controller.signal.aborted) return;
-      cacheTorrentSession(queryClient, accountKey, updated);
-      setSession(updated);
-      onSourceSelect?.();
-    } catch (cause) {
-      if (!controller.signal.aborted) {
-        setError(describeCommandError(cause, 'выбрать файл'));
-        void sessionQuery.refetch();
-      }
-    } finally {
-      if (requestRef.current === controller) {
-        requestRef.current = null;
-        setPending(false);
-      }
-    }
-  };
-
   const play = async () => {
     if (!currentSession || pending || sessionQuery.isError) return;
-    const savedPosition =
-      Number.isFinite(resumePositionSeconds) && resumePositionSeconds > 0
-        ? resumePositionSeconds
-        : 0;
-    const duration = currentSession.playback?.durationSeconds;
-    const startPositionSeconds =
-      duration !== null && duration !== undefined && savedPosition >= duration ? 0 : savedPosition;
-    if (
-      currentSession.state === 'ready' &&
-      currentSession.playback &&
-      Math.abs(currentSession.playback.startPositionSeconds - startPositionSeconds) < 10
-    ) {
-      onPlaybackReady(currentSession);
+    const rows = torrentEpisodes(currentSession.files, media, animeRelease);
+    const movie = media.type === 'movie' || (media.type === 'anime' && media.animeKind === 'movie');
+    const target = requestedFileRef
+      ? rows.find((row) => row.file.ref === requestedFileRef)
+      : initialTorrentEpisode(rows, requestedEpisode, movie);
+    if (!target) {
+      onFileSelectionRequired?.();
       return;
     }
-    if (currentSession.state !== 'awaiting_playback' && currentSession.state !== 'ready') return;
+    const startPositionSeconds =
+      (sameTorrentEpisode(target.episode, requestedEpisode) || (movie && !requestedEpisode)) &&
+      Number.isFinite(resumePositionSeconds) &&
+      resumePositionSeconds > 0
+        ? resumePositionSeconds
+        : 0;
     const controller = new AbortController();
     requestRef.current = controller;
+    playbackRequestRef.current = controller;
     setPending(true);
     setError(null);
-    const key = (playbackKeyRef.current ??= newTorrentIdempotencyKey());
     try {
       await queryClient.cancelQueries({
         queryKey: torrentSessionQueryKeys.session(accountKey, currentSession.id),
       });
-      const updated = await startTorrentPlayback(
-        currentSession.id,
+      controller.signal.throwIfAborted();
+      if (selectedAudio) rememberTorrentAudio(selectedAudio);
+      const updated = await switchTorrentFile(
+        currentSession,
+        target.file.ref,
         startPositionSeconds,
-        currentSession.version,
-        key,
         controller.signal,
-        selectedAudio?.ref,
-        undefined,
-        currentSession.media,
       );
       if (controller.signal.aborted) return;
-      playbackRequestedRef.current = selectedRef.current;
-      playbackKeyRef.current = null;
+      await queryClient.cancelQueries({
+        queryKey: torrentSessionQueryKeys.session(accountKey, updated.id),
+        exact: true,
+      });
+      if (controller.signal.aborted) return;
       cacheTorrentSession(queryClient, accountKey, updated);
       setSession(updated);
       onSessionChange(updated);
-      if (selectedAudio) rememberTorrentAudio(selectedAudio);
+      if (selectedRef.current) onPlaybackReady(updated, target.episode);
     } catch (cause) {
       if (!controller.signal.aborted) {
         const message = describeCommandError(cause, 'подготовить воспроизведение');
@@ -576,6 +540,7 @@ export function TorrentLaunch({
         void sessionQuery.refetch();
       }
     } finally {
+      if (playbackRequestRef.current === controller) playbackRequestRef.current = null;
       if (requestRef.current === controller) {
         requestRef.current = null;
         setPending(false);
@@ -592,16 +557,12 @@ export function TorrentLaunch({
       onPlaybackError?.(message);
       return;
     }
-    if (currentSession.state === 'awaiting_file') {
-      onOpenChange(true);
-      return;
-    }
     if (currentSession.state === 'failed') {
       waitingForPlayback.current = false;
       onPlaybackError?.(describeFailure(currentSession));
       return;
     }
-    if (currentSession.state === 'awaiting_playback' || currentSession.state === 'ready') {
+    if (['awaiting_file', 'awaiting_playback', 'ready'].includes(currentSession.state)) {
       waitingForPlayback.current = false;
       void play();
     }
@@ -667,7 +628,6 @@ export function TorrentLaunch({
                       disabled={pending}
                       onChange={(event) => {
                         setAudioRef(event.target.value);
-                        playbackKeyRef.current = null;
                       }}
                       className="block w-full rounded-control border border-border bg-surface px-3 py-2"
                     >
@@ -685,43 +645,7 @@ export function TorrentLaunch({
                     </select>
                   </label>
                 )}
-              {currentSession?.state === 'awaiting_file' && (
-                <fieldset className="space-y-3">
-                  <legend className="text-sm font-semibold text-text-primary">
-                    Выберите видеофайл
-                  </legend>
-                  <div className="max-h-64 space-y-2 overflow-y-auto">
-                    {currentSession.files.map((item) => (
-                      <label
-                        key={item.ref}
-                        className="flex cursor-pointer items-start gap-3 rounded-control border border-border px-3 py-2 text-sm text-text-primary"
-                      >
-                        <input
-                          type="radio"
-                          name="torrent-file"
-                          value={item.ref}
-                          checked={fileRef === item.ref}
-                          onChange={() => setFileRef(item.ref)}
-                          className="mt-1"
-                        />
-                        <span className="min-w-0 break-words">
-                          {item.name}{' '}
-                          <span className="text-text-secondary">
-                            ({formatBytes(item.sizeBytes)})
-                          </span>
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                  <Button
-                    size="small"
-                    disabled={!fileRef || pending || sessionQuery.isError}
-                    onClick={() => void chooseFile()}
-                  >
-                    {pending ? 'Выбираем…' : 'Подтвердить выбор'}
-                  </Button>
-                </fieldset>
-              )}
+
               <div className="space-y-3" aria-label="Найденные раздачи">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h3 className="font-semibold text-text-primary">Найденные раздачи</h3>

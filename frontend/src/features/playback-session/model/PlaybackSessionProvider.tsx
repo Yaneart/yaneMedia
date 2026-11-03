@@ -108,6 +108,7 @@ function matchesSession(current: PlaybackSession | null, expected?: PlaybackSess
     current &&
     (!expected ||
       (current.mediaRef === expected.mediaRef &&
+        current.playbackKey === expected.playbackKey &&
         current.sourceRef === expected.sourceRef &&
         current.episode?.seasonNumber === expected.episode?.seasonNumber &&
         current.episode?.episodeNumber === expected.episode?.episodeNumber &&
@@ -596,6 +597,7 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
 
       const durationSeconds = normalizeDuration(input.durationSeconds ?? null);
       const nextSession: PlaybackSession = {
+        playbackKey: crypto.randomUUID(),
         mediaRef: input.mediaRef,
         mediaSnapshot: input.mediaSnapshot,
         sourceRef: input.sourceRef,

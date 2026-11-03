@@ -2,6 +2,10 @@ import { afterAll, expect, mock, test } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 
 GlobalRegistrator.register({ url: 'http://localhost:5173' });
+Object.defineProperty(globalThis, 'MediaSource', {
+  configurable: true,
+  value: { isTypeSupported: () => true },
+});
 const { act } = await import('react');
 const { render, fireEvent, screen, waitFor, cleanup } = await import('@testing-library/react');
 const { QueryClient, QueryClientProvider } = await import('@tanstack/react-query');
@@ -16,7 +20,11 @@ const id = 'torrent_session_abcdefghijklmnopqrstuv';
 const email = 'fixture@example.test';
 const noop = () => {};
 let launch: any;
+const episodeModel = await import('../src/features/torrent-launch/model/torrentEpisodes');
+const { TorrentFilePicker } = await import('../src/features/torrent-launch/ui/TorrentFilePicker');
 mock.module('@/features/torrent-launch', () => ({
+  ...episodeModel,
+  TorrentFilePicker,
   TorrentLaunch: (props: any) => {
     launch = props;
     return null;
@@ -193,6 +201,215 @@ test('owner preparing updates keep the mounted torrent player and its volume/mut
   });
   expect(player.disconnected).toBe(true);
   expect(document.querySelector('yane-player')).toBeNull();
+  view.unmount();
+  client.clear();
+});
+
+test('torrent episode navigation switches real file refs, keeps the element and pause, and commits episode history only when ready', async () => {
+  cleanup();
+  players.length = 0;
+  const audio = { ref: 'audio', label: 'English', language: 'eng', channels: 2, isDefault: true };
+  const ready: TorrentSession = {
+    id,
+    mediaRef,
+    state: 'ready',
+    version: 5,
+    createdAt: new Date().toISOString(),
+    expiresAt: new Date(Date.now() + 3600000).toISOString(),
+    idleExpiresAt: new Date(Date.now() + 3600000).toISOString(),
+    progress: { basisPoints: null, speedBytesPerSecond: 0, peers: 0, downloadedBytes: 0 },
+    files: ['Show.S01E01.mkv', 'Show.S01E02.mkv', 'Show.S02E01.mkv'].map((name, index) => ({
+      ref: `file-${index}`,
+      name,
+      sizeBytes: 100,
+    })),
+    selectedFileRef: 'file-0',
+    audioTracks: [audio],
+    failure: null,
+    playback: {
+      hlsUrl: `/api/v1/torrent-sessions/${id}/hls/master.m3u8`,
+      generation: 1,
+      startPositionSeconds: 42,
+      durationSeconds: 1200,
+      selectedAudioTrackRef: 'audio',
+      audioTracks: [audio],
+      playbackRates: [1],
+      timeline: { absoluteAnchorSeconds: 42, mediaAnchorSeconds: 0, windowEndSeconds: 162 },
+    },
+  };
+  let current = ready;
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const key = torrentSessionQueryKeys.session(email, id);
+  client.setQueryData(key, ready);
+  let releaseProbe!: () => void;
+  const probeGate = new Promise<void>((resolve) => {
+    releaseProbe = resolve;
+  });
+  const selections: any[] = [];
+  const wire = (value: TorrentSession) => ({
+    ...value,
+    sessionId: value.id,
+    status: {
+      progressBasisPoints: null,
+      downloadSpeedBytesPerSecond: 0,
+      peers: 0,
+      downloadedBytes: 0,
+    },
+    files: value.files.map((file) => ({
+      fileRef: file.ref,
+      displayName: file.name,
+      sizeBytes: file.sizeBytes,
+      mediaKind: 'video',
+    })),
+    audioTracks: value.audioTracks.map((track) => ({ ...track, trackRef: track.ref })),
+    playback: value.playback
+      ? {
+          ...value.playback,
+          source: { type: 'hls', url: value.playback.hlsUrl },
+          supportsSubtitleSelection: false,
+          audioTracks: value.playback.audioTracks.map((track) => ({
+            ...track,
+            trackRef: track.ref,
+          })),
+        }
+      : null,
+  });
+  globalThis.fetch = mock(async (_url: string, init: RequestInit = {}) => {
+    if (init.method === 'PUT') {
+      const body = JSON.parse(String(init.body));
+      selections.push(body);
+      current = {
+        ...current,
+        selectedFileRef: body.fileRef,
+        version: current.version + 1,
+        state: 'probing',
+        playback: null,
+      };
+      await probeGate;
+      current = { ...current, state: 'awaiting_playback', version: current.version + 1 };
+    }
+    if (init.method === 'POST') {
+      const body = JSON.parse(String(init.body));
+      current = {
+        ...current,
+        state: 'ready',
+        version: current.version + 1,
+        playback: {
+          ...ready.playback!,
+          hlsUrl: ready.playback!.hlsUrl,
+          generation: current.version,
+          startPositionSeconds: body.startPositionSeconds,
+          timeline: { absoluteAnchorSeconds: 0, mediaAnchorSeconds: 0, windowEndSeconds: 120 },
+        },
+      };
+    }
+    return Response.json({ data: wire(current) });
+  });
+  const started = mock((input: any) => {
+    playback = { ...playback, session: { ...playback.session, ...input, state: 'playing' } };
+  });
+  const paused = mock(() => {
+    playback.session.state = 'paused';
+  });
+  playback = {
+    ...playback,
+    status: 'ready',
+    startSession: started,
+    pauseSession: paused,
+    continueWatchingEntries: [],
+    session: {
+      mediaRef,
+      sourceRef: `torrent:${id}`,
+      episode: { seasonNumber: 1, episodeNumber: 1 },
+      positionSeconds: 42,
+      state: 'paused',
+    },
+  };
+  const view = render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter>
+        <AuthContext
+          value={{
+            state: {
+              status: 'authenticated',
+              user: { email, displayName: 'Fixture', createdAt: new Date().toISOString() },
+            },
+            setAuthenticated: noop,
+            setGuest: noop,
+            refresh: async () => {},
+          }}
+        >
+          <MediaView
+            media={{
+              mediaRef: mediaRef as any,
+              type: 'series',
+              title: 'Fixture',
+              genres: [],
+              countries: [],
+              languages: [],
+              persons: [],
+              seasons: [],
+            }}
+            animeSeasonChain={[]}
+            onAnimeSeasonChange={noop}
+            availability={null}
+            availabilityPending={false}
+            availabilityStatus="ready"
+          />
+        </AuthContext>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+  await waitFor(() => expect(players).toHaveLength(1));
+  const player = players[0]!;
+  expect(player.navigation.seasons.map((season: any) => season.id)).toEqual(['1', '2']);
+  let navigation!: Promise<void>;
+  await act(async () => {
+    navigation = player.navigation.next({ signal: new AbortController().signal });
+  });
+  await waitFor(() => expect(selections).toHaveLength(1));
+  expect(started).not.toHaveBeenCalled();
+  const confirmedRevision = player.descriptor.revision;
+  await act(async () =>
+    client.setQueryData(key, {
+      ...ready,
+      selectedFileRef: 'file-1',
+      version: 8,
+      playback: { ...ready.playback!, generation: 99 },
+    }),
+  );
+  expect(player.descriptor.revision).toBe(confirmedRevision);
+  await act(async () =>
+    player.dispatchEvent(
+      new CustomEvent('yp-error', {
+        detail: {
+          source: { revision: player.descriptor.revision },
+          snapshot: { playback: 'error' },
+        },
+      }),
+    ),
+  );
+  expect(document.querySelector('yane-player')).toBe(player);
+  expect(player.navigation.current).toEqual({ seasonId: '1', episodeId: 'file-0' });
+  await act(async () => {
+    releaseProbe();
+    await navigation;
+  });
+  expect(selections[0]).toEqual({ fileRef: 'file-1', expectedVersion: 5 });
+  expect(started.mock.calls[0]?.[0]).toMatchObject({
+    episode: { seasonNumber: 1, episodeNumber: 2 },
+    positionSeconds: 0,
+  });
+  expect(playback.session.state).toBe('paused');
+  expect(document.querySelector('yane-player')).toBe(player);
+  expect(players).toHaveLength(1);
+  expect(player.navigation.current).toEqual({ seasonId: '1', episodeId: 'file-1' });
+  await act(async () => {
+    await player.navigation.next({ signal: new AbortController().signal });
+  });
+  expect(playback.session.episode).toEqual({ seasonNumber: 2, episodeNumber: 1 });
+  expect(playback.session.positionSeconds).toBe(0);
+  expect(player.navigation.next).toBeUndefined();
   view.unmount();
   client.clear();
 });

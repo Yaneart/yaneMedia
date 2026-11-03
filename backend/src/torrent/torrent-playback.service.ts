@@ -45,7 +45,7 @@ export class TorrentPlaybackService {
         request.fileRef,
         request.expectedVersion as number,
       );
-      if (session.state === 'probing') await this.gateway.stop(sessionId);
+      if (session.state === 'probing') await this.gateway.stop(sessionId, session.generation - 1);
       return this.input.view(session);
     } catch (error) {
       this.mapError(error);

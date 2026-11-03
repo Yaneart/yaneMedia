@@ -15,6 +15,7 @@ export async function replaceTorrentPlayback(
   position: number,
   signal: AbortSignal,
   audioTrackRef = initial.playback?.selectedAudioTrackRef,
+  retryUnavailable = true,
 ): Promise<TorrentSession> {
   signal.throwIfAborted();
   const deadline = AbortSignal.any([AbortSignal.timeout(110_000), torrentAccountSignal()]);
@@ -47,6 +48,7 @@ export async function replaceTorrentPlayback(
         signal.throwIfAborted();
         if (
           !(error instanceof TorrentRequestError) ||
+          (!retryUnavailable && [429, 503].includes(error.status ?? 0)) ||
           !(
             error.kind === 'network' ||
             error.status === 409 ||
@@ -61,7 +63,7 @@ export async function replaceTorrentPlayback(
       if (
         current.version < admittedVersion ||
         current.playback?.startPositionSeconds !== position ||
-        current.playback.selectedAudioTrackRef !== audio ||
+        (audio !== undefined && current.playback.selectedAudioTrackRef !== audio) ||
         (current.playback.output !== undefined &&
           current.playback.output.profile !== outputProfile) ||
         current.selectedFileRef !== initial.selectedFileRef

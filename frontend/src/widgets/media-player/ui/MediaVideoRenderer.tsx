@@ -124,6 +124,9 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
   const loadedMediaRef = useRef<{ sourceRef: string; url: string } | null>(null);
   const torrentCommandRef = useRef<{ sourceRef: string } | null>(null);
   const torrentAudioRef = useRef<string | null>(null);
+  const torrentTextRef = useRef<{
+    text: PlayerEvent['snapshot']['textTracks'][number] | null;
+  } | null>(null);
   const streamRef = useRef<ReturnType<typeof createTorrentStream> | null>(null);
   const initializingRef = useRef<{ position: number } | null>(null);
   const settleSourceRef = useRef<() => void>(() => undefined);
@@ -147,6 +150,8 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
     let previousIntent: PlayerEvent['snapshot']['intent'] = 'paused';
     let seeking = false;
     let renewedRevision: string | null = null;
+    let advancedRevision: string | null = null;
+    let playingAtEnd = false;
     let confirmed: {
       position: number;
       duration: number | undefined;
@@ -250,6 +255,13 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
       const { snapshot } = event;
       stream.update(snapshot);
       if (initializingRef.current) return;
+      if (snapshot.playback === 'playing') playingAtEnd = true;
+      if (
+        snapshot.playback === 'paused' &&
+        (snapshot.durationSeconds === null ||
+          (snapshot.positionSeconds ?? 0) < snapshot.durationSeconds - 0.5)
+      )
+        playingAtEnd = false;
       if (snapshot.source?.revision !== readyRevision) {
         readyRevision = snapshot.source?.revision ?? null;
         ready = false;
@@ -312,11 +324,38 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
     const onError = ({ detail: event }: CustomEvent<PlayerEvent>) => {
       if (disposed || event.source?.revision !== loadedRevisionRef.current) return;
       // Autoplay denial and command/platform errors keep explicit controls usable.
-      if (event.snapshot.playback === 'error' && !torrentCommandRef.current)
+      if (
+        event.snapshot.playback === 'error' &&
+        !torrentCommandRef.current &&
+        !propsRef.current.navigation?.pending
+      )
         propsRef.current.onError();
     };
     const onEnded = ({ detail: event }: CustomEvent<PlayerEvent>) => {
+      if (
+        disposed ||
+        event.source?.revision !== loadedRevisionRef.current ||
+        initializingRef.current ||
+        event.snapshot.pending
+      )
+        return;
       continueTorrent(event.snapshot);
+      const { snapshot } = event;
+      if (
+        propsRef.current.torrentTimeline &&
+        propsRef.current.navigation?.autoAdvance &&
+        propsRef.current.navigation.next &&
+        playingAtEnd &&
+        snapshot.durationSeconds !== null &&
+        (snapshot.positionSeconds ?? 0) >= snapshot.durationSeconds - 0.5 &&
+        advancedRevision !== snapshot.source?.revision
+      ) {
+        advancedRevision = snapshot.source?.revision ?? null;
+        propsRef.current.onPlay();
+        void player.navigate('next').catch(() => {
+          /* The navigation menu owns retry. */
+        });
+      }
     };
     player.addEventListener('yp-statechange', onState);
     player.addEventListener('yp-positionchange', onPosition);
@@ -443,8 +482,20 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
             autoQuality: false,
           },
         };
+    if (timeline && props.navigation?.pending && !torrentTextRef.current) {
+      const snapshot = player.runtime?.getSnapshot();
+      torrentTextRef.current = {
+        text: snapshot?.textTracks?.find((track) => track.id === snapshot.selection.textId) ?? null,
+      };
+    }
+    if (!props.navigation?.pending && loadedRevisionRef.current === descriptor.revision)
+      torrentTextRef.current = null;
     player.label = `Плеер ${source.label}: ${props.mediaTitle}`;
-    player.navigation = props.navigation ?? {};
+    // A rolling HLS window emits media EOF before the episode finishes.
+    // Only the confirmed absolute episode end may advance torrent files.
+    player.navigation = timeline
+      ? { ...props.navigation, autoAdvance: false }
+      : (props.navigation ?? {});
     const command = torrentCommandRef.current;
     // Host commands own generation updates only within their torrent session.
     // A different release/provider must replace the source immediately, which
@@ -465,6 +516,14 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
     const retainedPosition = sameMedia
       ? ((!current?.pending ? current?.positionSeconds : null) ?? initializingRef.current?.position)
       : null;
+    const torrentTracks =
+      timeline && loadedMediaRef.current?.sourceRef.startsWith('torrent:')
+        ? player.runtime?.getSnapshot()
+        : undefined;
+    const previousText = torrentTextRef.current
+      ? torrentTextRef.current.text
+      : torrentTracks?.textTracks?.find((track) => track.id === torrentTracks.selection.textId);
+    torrentTextRef.current = null;
     torrentCommandRef.current = null;
     loadedRevisionRef.current = descriptor.revision;
     loadedMediaRef.current = { sourceRef: source.sourceRef, url: source.url };
@@ -492,6 +551,7 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
         .setSource(descriptor, {
           positionSeconds: initial.position,
           intent: current?.intent ?? (props.shouldAutoPlay ? 'playing' : 'paused'),
+          ...(torrentTracks ? { trackPreferences: { text: null } } : {}),
         })
         .then(async () => {
           if (loadedRevisionRef.current !== descriptor.revision) return;
@@ -506,6 +566,20 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
             await player.selectAudio(controls.selectedTrackKey);
           if (controls?.selectedQualityKey && descriptor.capabilities?.quality === 'host')
             await player.selectQuality(controls.selectedQualityKey);
+          if (timeline && previousText) {
+            const target = player.runtime
+              ?.getSnapshot()
+              .textTracks.find(
+                (track) =>
+                  track.available !== false &&
+                  track.label === previousText.label &&
+                  track.language === previousText.language &&
+                  !!track.forced === !!previousText.forced &&
+                  !!track.sdh === !!previousText.sdh,
+              );
+            if (target && loadedRevisionRef.current === descriptor.revision)
+              await player.selectText(target.id);
+          }
         })
         .catch(() => {
           /* yp-error carries normalized fatal errors. */

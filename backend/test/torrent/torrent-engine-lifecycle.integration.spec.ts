@@ -163,10 +163,10 @@ describe('torrent lifecycle against a fake HTTP TorrServer', () => {
     expect(files?.[0]?.fileRef).toMatch(/^torrent_file_[A-Za-z0-9_-]{22}$/);
     expect(files).toEqual([
       expect.objectContaining({
-        displayName: 'E01.mkv',
+        displayName: 'path/E01.mkv',
         engineFileIndex: 1,
       }),
-      expect.objectContaining({ displayName: 'E02.mp4', engineFileIndex: 2 }),
+      expect.objectContaining({ displayName: 'path/E02.mp4', engineFileIndex: 2 }),
     ]);
     expect(JSON.stringify(files)).not.toContain('private/path');
     expect(actions).toEqual(['get', 'get', 'get']);

@@ -328,4 +328,14 @@ describe('torrent playback commands', () => {
       service.selectFile('other', id, { fileRef, expectedVersion: 4 }),
     ).rejects.toMatchObject({ status: 404 });
   });
+
+  it('file selection only stops the previous generation, leaving a newer worker alone', async () => {
+    repository.selectFile.mockResolvedValue({ ...session, state: 'probing', generation: 8 });
+    await service.selectFile('owner', id, { fileRef, expectedVersion: 4 });
+    expect(gateway.stop).toHaveBeenCalledWith(id, 7);
+    repository.selectFile.mockResolvedValue({ ...session, state: 'ready', generation: 8 });
+    gateway.stop.mockClear();
+    await service.selectFile('owner', id, { fileRef, expectedVersion: 4 });
+    expect(gateway.stop).not.toHaveBeenCalled();
+  });
 });

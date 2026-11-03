@@ -24,7 +24,9 @@ export function createTorrentStream(player: YanePlayerElement) {
     if (
       !current?.playback.timeline.continuous ||
       snapshot.source?.revision !== current.revision ||
-      snapshot.positionSeconds === null
+      snapshot.positionSeconds === null ||
+      !Number.isFinite(snapshot.positionSeconds) ||
+      snapshot.positionSeconds < 0
     )
       return;
     if (snapshot.pending && snapshot.pending.type !== 'text') {

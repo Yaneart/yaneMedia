@@ -27,7 +27,12 @@ mock.module('@/widgets/media-info', () => ({
   MediaDescriptionPanel: () => null,
 }));
 const launch = mock(() => null);
-mock.module('@/features/torrent-launch', () => ({ TorrentLaunch: launch }));
+const episodeModel = await import('../src/features/torrent-launch/model/torrentEpisodes');
+mock.module('@/features/torrent-launch', () => ({
+  ...episodeModel,
+  TorrentFilePicker: () => null,
+  TorrentLaunch: launch,
+}));
 const { PlaybackSessionProvider } =
   await import('../src/features/playback-session/model/PlaybackSessionProvider');
 const { usePlaybackSession } =

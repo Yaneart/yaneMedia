@@ -17,6 +17,36 @@ const status = (files: Array<[number, string, number]>): EngineTorrentStatus => 
 });
 
 describe('torrent metadata mapping', () => {
+  it('keeps season folders in safe relative names and never publishes an absolute path or traversal', () => {
+    const files = mapTorrentFiles(
+      status([
+        [1, 'Show/Season 2/01.mkv', 100],
+        [2, 'Show/Season 3/01.mkv', 100],
+        [3, 'Show/Extras/trailer.mp4', 100],
+      ]),
+    );
+    expect(files.map((file) => file.displayName)).toEqual([
+      'Season 2/01.mkv',
+      'Season 3/01.mkv',
+      'Extras/trailer.mp4',
+    ]);
+    for (const path of ['/private/movie.mkv', 'C:\\private\\movie.mkv', 'root/../movie.mkv']) {
+      expect(mapTorrentFiles(status([[1, path, 100]]))[0].displayName).toBe('movie.mkv');
+    }
+    expect(mapTorrentFiles(status([[1, 'Season 2/01.mkv', 100]]))[0].displayName).toBe(
+      'Season 2/01.mkv',
+    );
+    expect(mapTorrentFiles(status([[1, '2 сезон/01.mkv', 100]]))[0].displayName).toBe(
+      '2 сезон/01.mkv',
+    );
+    const long = mapTorrentFiles(
+      status([
+        [1, `Show/${'😀'.repeat(100)}/${'😀'.repeat(100)}/${'😀'.repeat(100)}/clip.mkv`, 100],
+      ]),
+    )[0].displayName;
+    expect([...long]).toHaveLength(255);
+    expect(long.endsWith('/clip.mkv')).toBe(true);
+  });
   it('publishes only video with opaque refs and sanitized basenames', () => {
     const files = mapTorrentFiles(
       status([

@@ -5,7 +5,7 @@ import {
   type MediaSourcePlaybackIssue,
 } from '@/entities/media-source';
 import { ErrorState, IconButton, PlayIcon, Spinner } from '@/shared';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { PlayerNavigation, PreferencesAdapter } from '@yaneart/yaneplayer';
 
 import {
@@ -49,6 +49,7 @@ export type MediaPlayerProps = {
   torrentTimeline?: TorrentVideoTimeline;
   preferences?: PreferencesAdapter;
   navigation?: PlayerNavigation;
+  selection?: ReactNode;
 };
 
 type PlaybackIssueContent = {
@@ -122,6 +123,7 @@ export function MediaPlayer({
   torrentTimeline,
   preferences,
   navigation,
+  selection,
 }: MediaPlayerProps) {
   const sectionRef = useRef<HTMLElement>(null);
   const [theater, setTheater] = useState(false);
@@ -238,80 +240,85 @@ export function MediaPlayer({
         <div
           className={[
             'relative z-10 flex size-full items-center justify-center p-5 text-center sm:p-8',
-            activeSource && status === 'ready' ? 'pointer-events-none' : '',
+            activeSource && status === 'ready' && !selection ? 'pointer-events-none' : '',
           ].join(' ')}
         >
-          {!source && !isStarted && emptyState && (
-            <ErrorState
-              variant="player"
-              title={emptyState.title}
-              description={emptyState.description}
-              visualCode={emptyState.visualCode}
-              visualLabel={emptyState.visualLabel}
-              className={friendlyStateClassName}
-              tone="accent"
-            />
-          )}
+          {selection}
+          {!selection && (
+            <>
+              {!source && !isStarted && emptyState && (
+                <ErrorState
+                  variant="player"
+                  title={emptyState.title}
+                  description={emptyState.description}
+                  visualCode={emptyState.visualCode}
+                  visualLabel={emptyState.visualLabel}
+                  className={friendlyStateClassName}
+                  tone="accent"
+                />
+              )}
 
-          {source && sourceIssueContent && (
-            <ErrorState
-              variant="player"
-              title={sourceIssueContent.title}
-              description={sourceIssueContent.description}
-              visualCode={sourceIssueContent.visualCode}
-              visualLabel={sourceIssueContent.visualLabel}
-              className={friendlyStateClassName}
-              tone="accent"
-            />
-          )}
+              {source && sourceIssueContent && (
+                <ErrorState
+                  variant="player"
+                  title={sourceIssueContent.title}
+                  description={sourceIssueContent.description}
+                  visualCode={sourceIssueContent.visualCode}
+                  visualLabel={sourceIssueContent.visualLabel}
+                  className={friendlyStateClassName}
+                  tone="accent"
+                />
+              )}
 
-          {source && !isStarted && !sourceIssue && (
-            <div className="flex flex-col items-center">
-              <IconButton
-                size="custom"
-                variant="bare"
-                aria-label={`Запустить ${source.label}`}
-                className={[
-                  'size-16 rounded-full border border-white/30 bg-black/45 text-white',
-                  'backdrop-blur-sm hover:border-watermark/80 hover:bg-watermark/25',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-watermark/60',
-                ].join(' ')}
-                onClick={onStart}
-              >
-                <PlayIcon className="size-7" />
-              </IconButton>
+              {source && !isStarted && !sourceIssue && (
+                <div className="flex flex-col items-center">
+                  <IconButton
+                    size="custom"
+                    variant="bare"
+                    aria-label={`Запустить ${source.label}`}
+                    className={[
+                      'size-16 rounded-full border border-white/30 bg-black/45 text-white',
+                      'backdrop-blur-sm hover:border-watermark/80 hover:bg-watermark/25',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-watermark/60',
+                    ].join(' ')}
+                    onClick={onStart}
+                  >
+                    <PlayIcon className="size-7" />
+                  </IconButton>
 
-              <p className="mt-3 font-semibold text-white">{source.label}</p>
-              <p className="mt-1 text-caption text-white/70">{getSourceDescription(source)}</p>
-            </div>
-          )}
+                  <p className="mt-3 font-semibold text-white">{source.label}</p>
+                  <p className="mt-1 text-caption text-white/70">{getSourceDescription(source)}</p>
+                </div>
+              )}
 
-          {isStarted && status === 'loading' && (!source || !sourceIssue) && (
-            <Spinner
-              size="large"
-              label={source ? `Загрузка плеера ${source.label}` : 'Подготовка видео'}
-              className="[&>span:first-child]:text-white [&>span:first-child>span:last-child]:text-white/60"
-            />
-          )}
+              {isStarted && status === 'loading' && (!source || !sourceIssue) && (
+                <Spinner
+                  size="large"
+                  label={source ? `Загрузка плеера ${source.label}` : 'Подготовка видео'}
+                  className="[&>span:first-child]:text-white [&>span:first-child>span:last-child]:text-white/60"
+                />
+              )}
 
-          {source && isStarted && !sourceIssue && status === 'ready' && !activeSource && (
-            <div role="status">
-              <p className="text-heading text-white">{source.label}</p>
-              <p className="mt-2 text-caption text-white/60">
-                Этот тип источника пока не подключён
-              </p>
-            </div>
-          )}
+              {source && isStarted && !sourceIssue && status === 'ready' && !activeSource && (
+                <div role="status">
+                  <p className="text-heading text-white">{source.label}</p>
+                  <p className="mt-2 text-caption text-white/60">
+                    Этот тип источника пока не подключён
+                  </p>
+                </div>
+              )}
 
-          {isStarted && (!source || !sourceIssue) && status === 'error' && (
-            <ErrorState
-              variant="player"
-              title="Не удалось загрузить плеер"
-              description={errorDescription ?? 'Проверьте подключение и попробуйте ещё раз.'}
-              onRetry={onRetry}
-              retryLabel="Повторить"
-              visualLabel="Плеер недоступен"
-            />
+              {isStarted && (!source || !sourceIssue) && status === 'error' && (
+                <ErrorState
+                  variant="player"
+                  title="Не удалось загрузить плеер"
+                  description={errorDescription ?? 'Проверьте подключение и попробуйте ещё раз.'}
+                  onRetry={onRetry}
+                  retryLabel="Повторить"
+                  visualLabel="Плеер недоступен"
+                />
+              )}
+            </>
           )}
         </div>
       </div>

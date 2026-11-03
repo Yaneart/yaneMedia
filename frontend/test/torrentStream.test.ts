@@ -46,6 +46,9 @@ test('continuous feedback bypasses media commands and refreshes captions only af
     } as unknown as TorrentVideoTimeline,
     revision,
   );
+  stream.update({ ...snapshot, positionSeconds: -0.042 });
+  stream.update({ ...snapshot, positionSeconds: Number.NaN });
+  expect(calls).toHaveLength(0);
   stream.update(snapshot);
   await settle();
   expect(calls[0]).toEqual({
