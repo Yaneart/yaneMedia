@@ -17,16 +17,45 @@ export function createAnimePlaybackEpisodes(
   directEpisodes: readonly DirectEpisodeOption[],
   release?: Pick<AnimeSeasonChainEntry, 'number' | 'seasonEpisodeOffset' | 'absoluteEpisodeOffset'>,
 ): readonly DirectEpisodeOption[] {
+  if (media.type === 'series') {
+    const episodes = new Map(
+      directEpisodes
+        .filter((episode) => episode.seasonNumber !== 0)
+        .map((episode) => [episode.key, episode]),
+    );
+    for (const season of media.seasons) {
+      if (season.number === 0) continue;
+      const metadata: readonly MediaEpisode[] =
+        season.episodes.length > 0
+          ? season.episodes
+          : Array.from({ length: season.episodesCount ?? 0 }, (_, index) => ({
+              episodeNumber: index + 1,
+            }));
+      for (const episode of metadata) {
+        const key = `season:${season.number}:episode:${episode.episodeNumber}`;
+        episodes.set(key, {
+          key,
+          title: episode.title,
+          seasonNumber: season.number,
+          episodeNumber: episode.episodeNumber,
+          sources: [],
+          ...episodes.get(key),
+        });
+      }
+    }
+    return [...episodes.values()];
+  }
   if (media.type !== 'anime') return directEpisodes;
   if (!usesEpisodePlayback(media)) return [];
 
-  const matched = new Set<DirectEpisodeOption>();
-  const episodes = media.episodes.flatMap((episode) => {
+  const metadata: readonly MediaEpisode[] =
+    media.episodes.length > 0
+      ? media.episodes
+      : Array.from({ length: media.episodesCount ?? 0 }, (_, index) => ({
+          episodeNumber: index + 1,
+        }));
+  const episodes = metadata.flatMap((episode) => {
     const existing = directEpisodes.find((option) => matchesLocalEpisode(option, episode));
-
-    if (existing) {
-      matched.add(existing);
-    }
 
     const episodeNumber = release
       ? release.seasonEpisodeOffset + episode.episodeNumber
@@ -54,7 +83,7 @@ export function createAnimePlaybackEpisodes(
     ];
   });
 
-  return [...episodes, ...directEpisodes.filter((episode) => !matched.has(episode))];
+  return metadata.length > 0 ? episodes : directEpisodes;
 }
 
 export function getAvailabilityEpisode(

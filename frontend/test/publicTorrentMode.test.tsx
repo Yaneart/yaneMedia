@@ -97,7 +97,6 @@ function mount(withMedia = false) {
                 }}
                 animeSeasonChain={[]}
                 onAnimeSeasonChange={noop}
-                onAnimeEpisodeChange={noop}
                 availability={{
                   sources: [
                     {

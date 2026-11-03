@@ -6,7 +6,7 @@ import {
 } from '@/entities/media-source';
 import { ErrorState, IconButton, PlayIcon, Spinner } from '@/shared';
 import { useEffect, useRef, useState } from 'react';
-import type { PreferencesAdapter } from '@yaneart/yaneplayer';
+import type { PlayerNavigation, PreferencesAdapter } from '@yaneart/yaneplayer';
 
 import {
   MediaVideoRenderer,
@@ -48,6 +48,7 @@ export type MediaPlayerProps = {
   directControls?: MediaVideoDirectControls;
   torrentTimeline?: TorrentVideoTimeline;
   preferences?: PreferencesAdapter;
+  navigation?: PlayerNavigation;
 };
 
 type PlaybackIssueContent = {
@@ -120,6 +121,7 @@ export function MediaPlayer({
   directControls,
   torrentTimeline,
   preferences,
+  navigation,
 }: MediaPlayerProps) {
   const sectionRef = useRef<HTMLElement>(null);
   const [theater, setTheater] = useState(false);
@@ -224,6 +226,7 @@ export function MediaPlayer({
             directControls={directControls}
             torrentTimeline={torrentTimeline}
             preferences={preferences}
+            navigation={navigation}
             onReady={onReady}
             onError={onError}
             onPlay={onPlay}
@@ -286,7 +289,7 @@ export function MediaPlayer({
           {isStarted && status === 'loading' && (!source || !sourceIssue) && (
             <Spinner
               size="large"
-              label={`Загрузка плеера ${source?.label ?? 'торрента'}`}
+              label={source ? `Загрузка плеера ${source.label}` : 'Подготовка видео'}
               className="[&>span:first-child]:text-white [&>span:first-child>span:last-child]:text-white/60"
             />
           )}

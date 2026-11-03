@@ -19,6 +19,7 @@ export function useMediaEpisodeAvailability(
 
   return {
     availability,
+    retry: query.refetch,
     isPending:
       Boolean(episode) &&
       query.isFetching &&

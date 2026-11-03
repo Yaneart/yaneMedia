@@ -429,27 +429,12 @@
   grid-area: community;
 }
 
-.media-player-toolbar > section {
-  flex: 1 1 9rem;
-  max-width: 12rem;
-}
-
 .media-player-source-picker {
   flex: 1 1 12rem;
 }
 
 .media-player-loading {
   min-height: 40px;
-}
-
-.media-player-loading-episodes {
-  min-height: 100px;
-}
-
-@container media-page (min-width: 34rem) {
-  .media-player-loading-episodes {
-    min-height: 44px;
-  }
 }
 
 .media-info-watch {

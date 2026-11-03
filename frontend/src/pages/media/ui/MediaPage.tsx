@@ -7,10 +7,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { useMediaDetails } from '../model/useMediaDetails';
 import { useMediaAvailability } from '../model/useMediaAvailability';
 import { MediaView } from './MediaView';
-import {
-  getAnimeEpisodeNavigationTarget,
-  getAnimeSeasonNavigationTarget,
-} from '../model/animeSeasonNavigation';
+import { getAnimeSeasonNavigationTarget } from '../model/animeSeasonNavigation';
 
 function parseEpisodeNumber(value: string | null): number | undefined {
   if (!value || !/^\d+$/.test(value)) return undefined;
@@ -107,18 +104,6 @@ export function MediaPage() {
           );
 
           if (target) navigate(`/media/${encodeURIComponent(target)}`);
-        }}
-        onAnimeEpisodeChange={(seasonNumber, episodeNumber) => {
-          const target = getAnimeEpisodeNavigationTarget(
-            result?.animeSeasonChain ?? [],
-            seasonNumber,
-            episodeNumber,
-            media.mediaRef,
-          );
-
-          if (target) {
-            navigate(`/media/${encodeURIComponent(target)}?episode=${episodeNumber}`);
-          }
         }}
         availability={availability}
         availabilityPending={availabilityPending}

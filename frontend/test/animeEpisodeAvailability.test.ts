@@ -93,4 +93,46 @@ describe('episodic anime availability selection', () => {
       },
     ]);
   });
+
+  it('fills series seasons from catalog episode counts before sources arrive', () => {
+    const series = {
+      type: 'series',
+      seasons: [
+        { number: 1, episodes: [], episodesCount: 2 },
+        { number: 2, episodes: [], episodesCount: 3 },
+      ],
+    } as unknown as MediaDetails;
+    expect(createAnimePlaybackEpisodes(series, []).map(({ key }) => key)).toEqual([
+      'season:1:episode:1',
+      'season:1:episode:2',
+      'season:2:episode:1',
+      'season:2:episode:2',
+      'season:2:episode:3',
+    ]);
+  });
+
+  it('excludes specials from metadata and provider rows in direct series navigation', () => {
+    const series = {
+      type: 'series',
+      seasons: [
+        { number: 0, episodes: [{ episodeNumber: 1 }], episodesCount: 1 },
+        { number: 1, episodes: [], episodesCount: 1 },
+      ],
+    } as unknown as MediaDetails;
+    const special = { key: 'season:0:episode:1', seasonNumber: 0, episodeNumber: 1, sources: [] };
+    expect(createAnimePlaybackEpisodes(series, [special]).map(({ key }) => key)).toEqual([
+      'season:1:episode:1',
+    ]);
+  });
+
+  it('uses only the current anime work even when availability includes other release episodes', () => {
+    const foreignEpisode = { key: 'absolute:50', absoluteEpisodeNumber: 50, sources: [] };
+    expect(createAnimePlaybackEpisodes(media, [episode, foreignEpisode], release)).toHaveLength(1);
+    const countOnly = { ...media, episodes: [], episodesCount: 2 } as MediaDetails;
+    expect(
+      createAnimePlaybackEpisodes(countOnly, [], release).map(
+        ({ releaseEpisodeNumber }) => releaseEpisodeNumber,
+      ),
+    ).toEqual([1, 2]);
+  });
 });

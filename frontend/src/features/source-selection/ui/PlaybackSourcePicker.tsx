@@ -2,17 +2,13 @@ import type { MediaSourceOption } from '@/entities/media-source';
 import { Button, DownIcon, Popover } from '@/shared';
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 
-import { getDirectTrackKey, getPlaybackSourcePanel } from '../model/sourceSelection';
+import { getPlaybackSourcePanel } from '../model/sourceSelection';
 
 const labels = {
   source: '\u0418\u0441\u0442\u043e\u0447\u043d\u0438\u043a',
   chooseSource:
     '\u0412\u044b\u0431\u0440\u0430\u0442\u044c \u0438\u0441\u0442\u043e\u0447\u043d\u0438\u043a',
   players: '\u041f\u043b\u0435\u0435\u0440\u044b',
-  directVideo:
-    '\u041f\u0440\u044f\u043c\u043e\u0435 \u0432\u0438\u0434\u0435\u043e \u00b7 \u043e\u0437\u0432\u0443\u0447\u043a\u0430',
-  original: '\u041e\u0440\u0438\u0433\u0438\u043d\u0430\u043b',
-  auto: '\u0410\u0432\u0442\u043e',
   direct: '\u041f\u0440\u044f\u043c\u043e\u0435 \u0432\u0438\u0434\u0435\u043e',
   loading:
     '\u0418\u0449\u0435\u043c \u0435\u0449\u0451 \u0432\u0430\u0440\u0438\u0430\u043d\u0442\u044b',
@@ -22,11 +18,8 @@ type PlaybackSourcePickerProps = {
   embedSources: readonly MediaSourceOption[];
   directSources: readonly MediaSourceOption[];
   selectedSource?: MediaSourceOption;
-  selectedDirectSource?: MediaSourceOption;
-  selectedTrackKey: string | null;
   onEmbedSelect: (sourceRef: string) => void;
-  onDirectSelect: (trackKey: string) => void;
-  onQualitySelect: (sourceRef: string) => void;
+  onDirectSelect: (provider: string) => void;
   torrentOpen?: boolean;
   onTorrentOpenChange?: (open: boolean) => void;
   torrentPanel?: (close: () => void) => ReactNode;
@@ -64,11 +57,8 @@ export function PlaybackSourcePicker({
   embedSources,
   directSources,
   selectedSource,
-  selectedDirectSource,
-  selectedTrackKey,
   onEmbedSelect,
   onDirectSelect,
-  onQualitySelect,
   torrentOpen = false,
   onTorrentOpenChange,
   torrentPanel,
@@ -76,15 +66,12 @@ export function PlaybackSourcePicker({
   isLoading = false,
 }: PlaybackSourcePickerProps) {
   const selectedLabel = selectedSource?.label ?? null;
-  const tracks = Array.from(
-    new Map(directSources.map((source) => [getDirectTrackKey(source), source])).entries(),
+  const providers = Array.from(
+    new Map(directSources.map((source) => [source.provider, source])).entries(),
   );
   const directSelected =
     selectedSource?.provider !== 'torrent' &&
     (selectedSource?.kind === 'hls' || selectedSource?.kind === 'mp4');
-  const selectedQualities = directSources.filter(
-    (source) => getDirectTrackKey(source) === selectedTrackKey,
-  );
   const [popoverOpen, setPopoverOpen] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const [activePanel, setActivePanel] = useState<'players' | 'direct' | 'torrent'>(() =>
@@ -140,7 +127,7 @@ export function PlaybackSourcePicker({
     >
       {(close) => (
         <div ref={contentRef}>
-          {(torrentPanel || (embedSources.length > 0 && tracks.length > 0)) && (
+          {(torrentPanel || (embedSources.length > 0 && providers.length > 0)) && (
             <div className="playback-source-header sticky top-0 z-20 -mx-3 mb-3 px-3 pb-3">
               <div
                 role="tablist"
@@ -237,59 +224,31 @@ export function PlaybackSourcePicker({
               ))}
             </section>
           ) : visiblePanel === 'direct' ? (
-            <section aria-label={labels.directVideo} className="grid grid-cols-2 items-start gap-2">
-              {tracks.length === 0 && (
+            <section aria-label={labels.direct} className="grid grid-cols-2 items-start gap-2">
+              {providers.length === 0 && (
                 <p className="col-span-2 p-3 text-sm text-text-secondary">
                   Прямые источники пока не найдены.
                 </p>
               )}
-              {tracks.map(([trackKey, source]) => (
+              {providers.map(([provider, source]) => (
                 <Button
-                  key={trackKey}
+                  key={provider}
                   size="custom"
                   variant="bare"
-                  className={`min-h-16 w-full justify-start rounded-control border px-3 py-2 text-left text-sm text-text-primary ${getSourceButtonStyle(source.provider, directSelected && selectedTrackKey === trackKey)}`}
-                  aria-pressed={directSelected && selectedTrackKey === trackKey}
-                  onClick={() => onDirectSelect(trackKey)}
+                  className={`min-h-12 w-full justify-start rounded-control border px-3 py-2 text-left text-sm text-text-primary ${getSourceButtonStyle(provider, directSelected && selectedSource?.provider === provider)}`}
+                  aria-pressed={directSelected && selectedSource?.provider === provider}
+                  onClick={() => {
+                    onDirectSelect(provider);
+                    close();
+                  }}
                 >
                   <span
                     aria-hidden="true"
                     className={`size-2 shrink-0 rounded-full ${getProviderAccent(source.provider)}`}
                   />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate">{source.label}</span>
-                    <span
-                      className="block truncate text-xs font-medium text-text-secondary"
-                      title={source.translation?.title ?? labels.original}
-                    >
-                      {source.translation?.title ?? labels.original}
-                    </span>
-                  </span>
+                  <span className="min-w-0 flex-1 truncate">{source.label}</span>
                 </Button>
               ))}
-              {directSelected && selectedQualities.length > 1 && (
-                <div className="col-span-2 mt-1 flex flex-wrap items-center gap-1.5 border-t border-border pt-3">
-                  <span className="mr-1 text-xs text-text-secondary">Качество</span>
-                  {selectedQualities.map((qualitySource) => (
-                    <Button
-                      key={qualitySource.sourceRef}
-                      size="small"
-                      variant={
-                        selectedDirectSource?.sourceRef === qualitySource.sourceRef
-                          ? 'primary'
-                          : 'secondary'
-                      }
-                      aria-pressed={selectedDirectSource?.sourceRef === qualitySource.sourceRef}
-                      onClick={() => {
-                        onQualitySelect(qualitySource.sourceRef);
-                        close();
-                      }}
-                    >
-                      {qualitySource.quality?.label ?? labels.auto}
-                    </Button>
-                  ))}
-                </div>
-              )}
             </section>
           ) : null}
         </div>

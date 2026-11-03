@@ -16,7 +16,6 @@ export {
   getDirectTrackOptions,
   getPreferredSource,
   isDirectMediaSource,
-  mergeEpisodeEmbedSources,
 } from './model/sourceSelection';
 export type {
   DirectEpisodeOption,

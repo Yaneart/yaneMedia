@@ -8,6 +8,7 @@ const { QueryClient, QueryClientProvider } = await import('@tanstack/react-query
 const { MemoryRouter } = await import('react-router');
 const { AuthContext } = await import('../src/entities/auth/model/authContext');
 const { torrentSessionQueryKeys } = await import('../src/entities/torrent-session');
+const { mediaEpisodeAvailabilityQueryKey } = await import('../src/entities/media-source');
 import type { TorrentSession } from '../src/entities/torrent-session';
 
 const mediaRef = 'work_0b02a880-8fdd-43b6-92f2-7a093d9eab60';
@@ -152,7 +153,6 @@ test('owner preparing updates keep the mounted torrent player and its volume/mut
             }}
             animeSeasonChain={[]}
             onAnimeSeasonChange={noop}
-            onAnimeEpisodeChange={noop}
             availability={null}
             availabilityPending={false}
             availabilityStatus="ready"
@@ -246,7 +246,6 @@ test('series next preserves pause and track, quality changes keep position, hist
     media,
     animeSeasonChain: [],
     onAnimeSeasonChange: noop,
-    onAnimeEpisodeChange: noop,
     availability: {
       sources: [],
       episodes: [1, 2, 3].map((episodeNumber) => ({
@@ -261,6 +260,11 @@ test('series next preserves pause and track, quality changes keep position, hist
     availabilityPending: false,
     availabilityStatus: 'ready' as const,
   };
+  for (const episodeNumber of [1, 2, 3])
+    client.setQueryData(
+      mediaEpisodeAvailabilityQueryKey(mediaRef, { seasonNumber: 1, episodeNumber }),
+      { availability: props.availability, settled: true },
+    );
   const tree = (key: string) => (
     <QueryClientProvider client={client}>
       <MemoryRouter>
@@ -295,7 +299,9 @@ test('series next preserves pause and track, quality changes keep position, hist
   });
   expect(pause).toHaveBeenCalled();
   await changed!;
-  await act(async () => player.navigation.next());
+  expect(player.navigation.current).toEqual({ seasonId: '1', episodeId: 'season:1:episode:2' });
+  expect(document.querySelector('.media-player-toolbar [aria-label="Выбор серии"]')).toBeNull();
+  await act(async () => player.navigation.next({ signal: new AbortController().signal }));
   await waitFor(() =>
     expect(start.mock.calls.at(-1)?.[0]).toMatchObject({
       sourceRef: 'episode-3-1080',
@@ -304,6 +310,8 @@ test('series next preserves pause and track, quality changes keep position, hist
     }),
   );
   expect(pause.mock.calls.length).toBeGreaterThanOrEqual(2);
+  expect(document.querySelector('yane-player')).toBe(player);
+  expect(player.navigation.current).toEqual({ seasonId: '1', episodeId: 'season:1:episode:3' });
   await act(async () => {
     playback = { ...playback, status: 'loading', continueWatchingEntries: [], session: null };
     view.rerender(tree('history'));

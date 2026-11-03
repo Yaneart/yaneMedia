@@ -5,6 +5,7 @@ import { useLayoutEffect, useRef } from 'react';
 import {
   type HostResult,
   type PlayerEvent,
+  type PlayerNavigation,
   type PlayerSource,
   type PreferencesAdapter,
   type YanePlayerElement,
@@ -23,7 +24,6 @@ export type MediaVideoDirectControls = {
     positionSeconds: number,
     intent: 'playing' | 'paused',
   ) => void;
-  onNextEpisode?: () => void;
 };
 
 export type TorrentVideoTimeline = {
@@ -102,6 +102,7 @@ type MediaVideoRendererProps = {
   directControls?: MediaVideoDirectControls;
   torrentTimeline?: TorrentVideoTimeline;
   preferences?: PreferencesAdapter;
+  navigation?: PlayerNavigation;
   onReady: () => void;
   onError: () => void;
   onPlay: () => void;
@@ -120,6 +121,7 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
   const propsRef = useRef(props);
   const pendingRef = useRef<((result?: HostResult) => void) | null>(null);
   const loadedRevisionRef = useRef<string | null>(null);
+  const loadedMediaRef = useRef<{ sourceRef: string; url: string } | null>(null);
   const torrentCommandRef = useRef<{ sourceRef: string } | null>(null);
   const torrentAudioRef = useRef<string | null>(null);
   const streamRef = useRef<ReturnType<typeof createTorrentStream> | null>(null);
@@ -404,6 +406,7 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
       player.remove(); // disconnect disposes transport/workers
       elementRef.current = null;
       loadedRevisionRef.current = null;
+      loadedMediaRef.current = null;
     };
   }, []);
 
@@ -414,9 +417,15 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
       ? torrentDescriptor(source, props.mediaTitle, timeline)
       : {
           id: 'media',
-          revision: JSON.stringify([source.sourceRef, source.url]),
+          revision: JSON.stringify([
+            source.sourceRef,
+            source.url,
+            controls?.tracks,
+            controls?.qualities,
+          ]),
           kind: source.kind as 'mp4' | 'hls',
           src: source.url,
+          ...(source.kind === 'hls' ? { hlsRedirects: 'follow' as const } : {}),
           // VideoHUB serves native MP4 without CORS response headers.
           ...(source.kind === 'mp4' && source.provider === 'videohub-streaming'
             ? { crossOrigin: null }
@@ -431,12 +440,11 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
           capabilities: {
             audio: controls && controls.tracks.length > 1 ? 'host' : 'transport',
             quality: controls && controls.qualities.length > 1 ? 'host' : 'transport',
+            autoQuality: false,
           },
         };
     player.label = `Плеер ${source.label}: ${props.mediaTitle}`;
-    player.navigation = controls?.onNextEpisode
-      ? { next: () => propsRef.current.directControls?.onNextEpisode?.() }
-      : {};
+    player.navigation = props.navigation ?? {};
     const command = torrentCommandRef.current;
     // Host commands own generation updates only within their torrent session.
     // A different release/provider must replace the source immediately, which
@@ -449,8 +457,17 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
       loadedRevisionRef.current === descriptor.revision
     )
       return;
+    const sameMedia =
+      !timeline &&
+      loadedMediaRef.current?.sourceRef === source.sourceRef &&
+      loadedMediaRef.current.url === source.url;
+    const current = sameMedia ? player.runtime?.getSnapshot() : undefined;
+    const retainedPosition = sameMedia
+      ? ((!current?.pending ? current?.positionSeconds : null) ?? initializingRef.current?.position)
+      : null;
     torrentCommandRef.current = null;
     loadedRevisionRef.current = descriptor.revision;
+    loadedMediaRef.current = { sourceRef: source.sourceRef, url: source.url };
     if (timeline) streamRef.current?.configure(source.url, timeline, descriptor.revision);
     else streamRef.current?.dispose();
     if (pendingRef.current) {
@@ -468,13 +485,13 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
           ? timeline.timeline.continuous
             ? Math.max(timeline.startPositionSeconds, props.initialPositionSeconds)
             : timeline.startPositionSeconds
-          : props.initialPositionSeconds,
+          : (retainedPosition ?? props.initialPositionSeconds),
       };
       initializingRef.current = initial;
       void player
         .setSource(descriptor, {
           positionSeconds: initial.position,
-          intent: props.shouldAutoPlay ? 'playing' : 'paused',
+          intent: current?.intent ?? (props.shouldAutoPlay ? 'playing' : 'paused'),
         })
         .then(async () => {
           if (loadedRevisionRef.current !== descriptor.revision) return;

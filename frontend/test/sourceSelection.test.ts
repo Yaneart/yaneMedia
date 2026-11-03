@@ -7,11 +7,10 @@ import {
   getDirectQualityOptions,
   getDirectTrackKey,
   getPlaybackSourcePanel,
-  mergeEpisodeEmbedSources,
 } from '../src/features/source-selection/model/sourceSelection';
 
 describe('source-less episode catalogs', () => {
-  it('orders provider quality tiers from 4K through 2K to lower resolutions', () => {
+  it('normalizes and orders quality tiers by their actual height', () => {
     const sources = [720, 144, 1440, 480, 2160, 1080, 360, 240].map((height) => ({
       sourceRef: `videohub:${height}`,
       provider: 'videohub-streaming',
@@ -23,8 +22,8 @@ describe('source-less episode catalogs', () => {
       browserSupported: true,
     }));
     expect(getDirectQualityOptions(sources).map(({ label }) => label)).toEqual([
-      '4K',
-      '2K',
+      '2160p',
+      '1440p',
       '1080p',
       '720p',
       '480p',
@@ -214,40 +213,51 @@ describe('source-less episode catalogs', () => {
     ]);
   });
 
-  it('adds only the selected episode embed to a legacy player list', () => {
-    const source = (kind: 'embed' | 'hls', id: string) => ({
-      sourceRef: `stream:test:${id}`,
-      provider: 'test',
-      kind,
-      label: id,
-      url: `https://video.example/${id}`,
+  it('keeps the generic embed without importing episode links into the player list', () => {
+    const generic = {
+      sourceRef: 'kodik:generic',
+      provider: 'kodik-streaming',
+      kind: 'embed' as const,
+      label: 'Kodik',
+      url: 'https://kodik.example/serial',
       availability: 'available' as const,
       browserSupported: true,
-    });
-    const baseSource = source('embed', 'base');
-    const selectedEmbed = source('embed', 'episode-1');
-    const availability = {
-      sources: [],
-      episodes: [
-        {
-          seasonNumber: 1,
-          episodeNumber: 1,
-          absoluteEpisodeNumber: 1,
-          sources: [selectedEmbed, source('hls', 'direct-1')],
-        },
-      ],
-      checkedAt: '2026-10-08T00:00:00.000Z',
-      degraded: false,
-      hasExpiredSources: false,
     };
-
+    const scoped = {
+      ...generic,
+      sourceRef: 'kodik:episode',
+      episode: { seasonNumber: 1, episodeNumber: 1 },
+      url: 'https://kodik.example/episode/1',
+    };
     expect(
-      mergeEpisodeEmbedSources([baseSource], availability, {
-        seasonNumber: 1,
-        episodeNumber: 1,
-        absoluteEpisodeNumber: 1,
-      }).map(({ sourceRef }) => sourceRef),
-    ).toEqual(['stream:test:base', 'stream:test:episode-1']);
+      createPlaybackSourceCatalog({
+        sources: [generic],
+        episodes: [{ seasonNumber: 1, episodeNumber: 1, sources: [scoped] }],
+        checkedAt: '',
+        degraded: false,
+        hasExpiredSources: false,
+      }).embedSources,
+    ).toEqual([generic]);
+  });
+
+  it('deduplicates equivalent resolution labels and normalizes unknown Auto labels', () => {
+    const source = {
+      sourceRef: 'q',
+      provider: 'test',
+      kind: 'mp4' as const,
+      label: 'test',
+      url: 'https://video.example/q',
+      availability: 'available' as const,
+      browserSupported: true,
+    };
+    const variants = [
+      { ...source, quality: { height: 1440, label: '2K' } },
+      { ...source, sourceRef: 'q2', quality: { height: 1440, label: '1440p' } },
+    ];
+    expect(getDirectQualityOptions(variants).map((q) => q.label)).toEqual(['1440p']);
+    expect(
+      getDirectQualityOptions([{ ...source, quality: { label: 'Auto Auto' } }])[0]?.label,
+    ).toBe('Авто');
   });
 
   it('keeps the selected direct track and quality across episodes', () => {

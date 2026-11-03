@@ -104,35 +104,6 @@ export function createPlaybackSourceCatalog(
   };
 }
 
-export function mergeEpisodeEmbedSources(
-  baseSources: readonly MediaSourceOption[],
-  availability: MediaAvailability | null,
-  episodeRef: MediaSourceEpisodeRef | null,
-): readonly MediaSourceOption[] {
-  if (!availability || !episodeRef) return baseSources;
-
-  const episodeSources = availability.episodes
-    .filter((episode) => {
-      const matchesSeasonEpisode =
-        episodeRef.episodeNumber !== undefined &&
-        episode.episodeNumber === episodeRef.episodeNumber &&
-        (episodeRef.seasonNumber === undefined || episode.seasonNumber === episodeRef.seasonNumber);
-      const matchesAbsoluteEpisode =
-        episodeRef.absoluteEpisodeNumber !== undefined &&
-        episode.absoluteEpisodeNumber === episodeRef.absoluteEpisodeNumber;
-
-      return matchesSeasonEpisode || matchesAbsoluteEpisode;
-    })
-    .flatMap((episode) => episode.sources)
-    .filter((source) => source.kind === 'embed');
-
-  return [
-    ...new Map(
-      [...baseSources, ...episodeSources].map((source) => [source.sourceRef, source]),
-    ).values(),
-  ];
-}
-
 export function getPreferredSource(sources: readonly MediaSourceOption[]) {
   return (
     sources.find((source) => source.availability === 'available' && source.browserSupported) ??
@@ -259,8 +230,15 @@ export function getDirectTrackOptions(
   }));
 }
 
+function getDirectQualityLabel(source: MediaSourceOption) {
+  const height = source.quality?.height;
+  if (height && Number.isFinite(height) && height > 0) return `${Math.round(height)}p`;
+  const label = source.quality?.label?.trim();
+  return !label || /^(?:(?:auto|авто)\s*)+$/iu.test(label) ? 'Авто' : label;
+}
+
 export function getDirectQualityKey(source: MediaSourceOption) {
-  return `${source.quality?.height ?? 'auto'}\u001f${source.quality?.label ?? 'Авто'}`;
+  return `${source.quality?.height ?? 'auto'}\u001f${getDirectQualityLabel(source)}`;
 }
 
 export function getDirectQualityOptions(
@@ -274,7 +252,7 @@ export function getDirectQualityOptions(
     if (!qualities.has(key)) {
       qualities.set(key, {
         key,
-        label: source.quality?.label ?? 'Авто',
+        label: getDirectQualityLabel(source),
         source,
       });
     }

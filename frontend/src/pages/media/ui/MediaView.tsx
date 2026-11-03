@@ -1,9 +1,11 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/entities/auth';
 import { SERVER_TORRENT_ENABLED } from '@/shared/config/serverTorrent';
-import type { AnimeSeasonChainEntry, MediaDetails, MediaEpisode } from '@/entities/media';
+import type { AnimeSeasonChainEntry, MediaDetails } from '@/entities/media';
 import {
   getMediaSourcePlaybackIssue,
+  mediaEpisodeAvailabilityQueryOptions,
+  selectUsableAvailability,
   type MediaAvailability,
   type MediaSourceEpisodeRef,
   type MediaSourceOption,
@@ -20,7 +22,6 @@ import {
   type TorrentSession,
   TorrentRequestError,
 } from '@/entities/torrent-session';
-import { EpisodeSelector } from '@/features/episode-selection';
 import { FavoriteButton, useFavorites } from '@/features/favorite';
 import { usePlaybackSession, usePlayerPreferences } from '@/features/playback-session';
 import { MediaCommunity } from '@/features/media-community';
@@ -40,10 +41,8 @@ import {
   getDirectQualityOptions,
   getDirectTrackKey,
   getDirectTrackOptions,
-  getNextDirectEpisode,
   getPreferredSource,
   isDirectMediaSource,
-  mergeEpisodeEmbedSources,
   type DirectEpisodeOption,
   type PlaybackMode,
 } from '@/features/source-selection';
@@ -54,42 +53,28 @@ import {
   type MediaPlayerStatus,
 } from '@/widgets/media-player';
 import { Spinner, YaneMark, YaneMarkField } from '@/shared';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { MediaAvailabilityStatus } from '../model/useMediaAvailability';
 import { useMediaEpisodeAvailability } from '../model/useMediaEpisodeAvailability';
 import { useMediaEpisodePrefetch } from '../model/useMediaEpisodePrefetch';
-import {
-  createAnimeSeasonSelectorState,
-  createCanonicalAnimeEpisodeOptions,
-} from '../model/animeSeasonNavigation';
+import { createAnimeSeasonSelectorState } from '../model/animeSeasonNavigation';
+import { createPlayerEpisodeNavigation } from '../model/playerEpisodeNavigation';
 import {
   createAnimePlaybackEpisodes,
   getAvailabilityEpisode,
   usesEpisodePlayback,
 } from '../model/animeEpisodeAvailability';
-import {
-  resolveAvailablePlaybackMode,
-  shouldShowLocalEpisodeControls,
-} from '../model/playbackModeResolution';
+import { resolveAvailablePlaybackMode } from '../model/playbackModeResolution';
 
 export type MediaViewProps = {
   media: MediaDetails;
   animeSeasonChain: readonly AnimeSeasonChainEntry[];
   onAnimeSeasonChange: (seasonNumber: number) => void;
-  onAnimeEpisodeChange: (seasonNumber: number, episodeNumber: number) => void;
   initialAnimeEpisodeNumber?: number;
   availability: MediaAvailability | null;
   availabilityPending: boolean;
   availabilityStatus: MediaAvailabilityStatus;
-};
-
-type PendingDirectEpisodeTransition = {
-  episodeKey: string;
-  trackKey: string | null;
-  qualityKey: string | null;
-  continuePlayback: boolean;
-  intent: 'playing' | 'paused';
 };
 
 const emptyAvailability: MediaAvailability = {
@@ -100,13 +85,10 @@ const emptyAvailability: MediaAvailability = {
   hasExpiredSources: false,
 };
 
-function AvailabilityToolbarStatus({ hasEpisodeControls }: { hasEpisodeControls: boolean }) {
+function AvailabilityToolbarStatus() {
   return (
     <div
-      className={[
-        'media-player-loading flex w-full items-center justify-center',
-        hasEpisodeControls ? 'media-player-loading-episodes' : '',
-      ].join(' ')}
+      className="media-player-loading flex w-full items-center justify-center"
       aria-live="polite"
     >
       <Spinner size="medium" label="Подбираем варианты просмотра" />
@@ -197,9 +179,15 @@ function mergeEpisodeSources(
 
   if (exactSources.length === 0) return baseSources;
 
+  // Catalog track IDs can differ from the resolved episode IDs. Once a
+  // provider responds, its resolved variants replace its catalog placeholders.
+  const confirmedProviders = new Set(exactSources.map((source) => source.provider));
   return [
     ...new Map(
-      [...baseSources, ...exactSources].map((source) => [source.sourceRef, source]),
+      [
+        ...baseSources.filter((source) => !confirmedProviders.has(source.provider)),
+        ...exactSources,
+      ].map((source) => [source.sourceRef, source]),
     ).values(),
   ];
 }
@@ -229,19 +217,6 @@ function findEpisodeMetadata(media: MediaDetails, episode: DirectEpisodeOption |
   });
 }
 
-function toEpisodeSelectorOption(episode: DirectEpisodeOption): MediaEpisode | null {
-  const episodeNumber = getDirectEpisodeDisplayNumber(episode);
-
-  if (episodeNumber === undefined) return null;
-
-  return {
-    seasonNumber: episode.seasonNumber,
-    episodeNumber,
-    absoluteEpisodeNumber: episode.absoluteEpisodeNumber,
-    title: episode.title,
-  };
-}
-
 function hasSameEpisode(
   first: PlaybackEpisodeSelection | null,
   second: PlaybackEpisodeSelection | null,
@@ -259,7 +234,6 @@ export function MediaView({
   media,
   animeSeasonChain,
   onAnimeSeasonChange,
-  onAnimeEpisodeChange,
   initialAnimeEpisodeNumber,
   availability,
   availabilityPending,
@@ -279,6 +253,8 @@ export function MediaView({
     useFavorites();
   const mediaIsFavorite = isFavorite(media.mediaRef);
   const mediaSession = session?.mediaRef === media.mediaRef ? session : null;
+  const playbackIntentRef = useRef(mediaSession?.state);
+  playbackIntentRef.current = mediaSession?.state;
   const savedProgress =
     mediaSession ?? continueWatchingEntries.find((entry) => entry.mediaRef === media.mediaRef);
   const preferences = usePlayerPreferences();
@@ -422,7 +398,11 @@ export function MediaView({
     media.type === 'anime' && initialAnimeEpisodeNumber !== undefined
       ? directEpisodes.find(({ episodeNumber }) => episodeNumber === initialAnimeEpisodeNumber)
       : undefined;
-  const initialDirectEpisode = sessionDirectEpisode ?? requestedAnimeEpisode ?? directEpisodes[0];
+  const initialDirectEpisode =
+    sessionDirectEpisode ??
+    requestedAnimeEpisode ??
+    directEpisodes.find((episode) => (episode.seasonNumber ?? 1) > 0) ??
+    directEpisodes[0];
   const initialDirectSources = usesDirectEpisodes
     ? (initialDirectEpisode?.sources ?? [])
     : catalog.directSources;
@@ -450,8 +430,8 @@ export function MediaView({
       ? getDirectTrackKey(sessionDirectSource)
       : null,
   );
-  const [pendingDirectEpisodeTransition, setPendingDirectEpisodeTransition] =
-    useState<PendingDirectEpisodeTransition | null>(null);
+  const episodeRequestRef = useRef<AbortController | null>(null);
+  const userEpisodeSelectionRef = useRef(false);
   const [toolbarResolvedMediaRef, setToolbarResolvedMediaRef] = useState<string | null>(null);
   const [sourceSearchSettledMediaRef, setSourceSearchSettledMediaRef] = useState<string | null>(
     null,
@@ -465,14 +445,12 @@ export function MediaView({
       initialDirectEpisode)
     : undefined;
   const availabilityEpisode = getAvailabilityEpisode(media, selectedDirectEpisode);
-  const { availability: episodeAvailability, isPending: episodeAvailabilityPending } =
-    useMediaEpisodeAvailability(media.mediaRef, availabilityEpisode);
-  const hasPlayerManagedEpisodeEmbed = catalog.embedSources.some(
-    (source) => source.provider === 'kodik-streaming',
-  );
-  const currentEmbedSources = hasPlayerManagedEpisodeEmbed
-    ? catalog.embedSources
-    : mergeEpisodeEmbedSources(catalog.embedSources, episodeAvailability, availabilityEpisode);
+  const {
+    availability: episodeAvailability,
+    isPending: episodeAvailabilityPending,
+    retry: retryEpisodeAvailability,
+  } = useMediaEpisodeAvailability(media.mediaRef, availabilityEpisode);
+  const currentEmbedSources = catalog.embedSources;
   const hasEmbedMode = currentEmbedSources.length > 0;
   const selectedEmbedSource =
     currentEmbedSources.find((source) => source.sourceRef === selectedEmbedSourceRef) ??
@@ -487,11 +465,7 @@ export function MediaView({
     : catalog.directSources;
   const hasDirectMode = currentDirectSources.length > 0;
   const hasPlaybackSources = hasEmbedMode || hasDirectMode;
-  const showLocalEpisodeControls = shouldShowLocalEpisodeControls(
-    playbackMode,
-    usesDirectEpisodes,
-    hasPlayerManagedEpisodeEmbed,
-  );
+  const usesPlayerEpisodes = playbackMode === 'direct' && usesDirectEpisodes;
   const directModePending = usesDirectEpisodes && episodeAvailabilityPending;
   const sourcesPending = availabilityPending || directModePending;
   const hasToolbarControls = hasPlaybackSources && (media.type === 'movie' || usesDirectEpisodes);
@@ -565,9 +539,17 @@ export function MediaView({
     canPrefetchEpisodes,
   );
 
+  const catalogDirectSource = selectedDirectEpisode?.sources.find(
+    (source) => source.sourceRef === selectedDirectSourceRef,
+  );
   const selectedDirectSource =
     currentDirectSources.find((source) => source.sourceRef === selectedDirectSourceRef) ??
     currentDirectSources.find((source) => source.sourceRef === savedProgress?.sourceRef) ??
+    getPreferredSource(
+      currentDirectSources.filter(
+        (source) => source.provider === (catalogDirectSource ?? sessionDirectSource)?.provider,
+      ),
+    ) ??
     getPreferredSource(currentDirectSources);
 
   const selectedDirectTrackKey = selectedDirectSource
@@ -641,52 +623,47 @@ export function MediaView({
         : selectedDirectSource;
   const selectedSourceRef = selectedSource?.sourceRef ?? null;
 
-  const directTracks = getDirectTrackOptions(currentDirectSources);
+  const providerDirectSources = currentDirectSources.filter(
+    (source) => source.provider === selectedDirectSource?.provider,
+  );
+  const directTracks = getDirectTrackOptions(providerDirectSources);
   const selectedDirectTrack = directTracks.find((track) => track.key === selectedDirectTrackKey);
   const directQualities = getDirectQualityOptions(selectedDirectTrack?.sources ?? []);
   const selectedDirectQualityKey = selectedDirectSource
     ? getDirectQualityKey(selectedDirectSource)
     : null;
 
-  const directSeasonNumbers = Array.from(
-    new Set(
-      directEpisodes.flatMap((episode) =>
-        episode.seasonNumber === undefined ? [] : [episode.seasonNumber],
-      ),
-    ),
-  ).sort((first, second) => first - second);
-  const directSeasons = directSeasonNumbers.map((seasonNumber) => ({
-    number: seasonNumber,
-  }));
-  const episodesForSelectedSeason =
-    directSeasonNumbers.length > 0
-      ? directEpisodes.filter(
-          (episode) => episode.seasonNumber === selectedDirectEpisode?.seasonNumber,
-        )
-      : directEpisodes;
-  const canonicalAnimeEpisodeOptions = createCanonicalAnimeEpisodeOptions(
-    animeSeasonChain,
-    media.mediaRef,
-  );
-  const directEpisodeOptions =
-    canonicalAnimeEpisodeOptions.length > 0
-      ? canonicalAnimeEpisodeOptions
-      : episodesForSelectedSeason
-          .map(toEpisodeSelectorOption)
-          .filter((episode): episode is MediaEpisode => episode !== null);
-  const nextDirectEpisode = getNextDirectEpisode(directEpisodes, selectedDirectEpisode);
-
-  const selectedPlaybackEpisode =
-    playbackMode === 'direct' && usesDirectEpisodes
-      ? getPlaybackEpisode(selectedDirectEpisode)
-      : null;
+  const selectedPlaybackEpisode = usesPlayerEpisodes
+    ? getPlaybackEpisode(selectedDirectEpisode)
+    : null;
   const sessionPlaybackEpisode = mediaSession?.episode ?? null;
+  const sessionCatalogSource = selectedDirectEpisode?.sources.find(
+    (source) => source.sourceRef === mediaSession?.sourceRef,
+  );
+  const sessionSourceMatches =
+    mediaSession?.sourceRef === selectedSourceRef ||
+    (usesPlayerEpisodes &&
+      sessionCatalogSource !== undefined &&
+      sessionCatalogSource.provider === selectedDirectSource?.provider);
   const isPlayerStarted =
     activeTorrentId !== null || torrentStarting
       ? true
-      : mediaSession?.sourceRef === selectedSourceRef &&
-        (playbackMode === 'embed' ||
-          hasSameEpisode(sessionPlaybackEpisode, selectedPlaybackEpisode));
+      : sessionSourceMatches &&
+        (!usesPlayerEpisodes || hasSameEpisode(sessionPlaybackEpisode, selectedPlaybackEpisode));
+  // Catalog episode URLs may still be redirectors. The episode lookup confirms
+  // the playback URL, including progressive results from that lookup.
+  const directSourceUnconfirmed =
+    usesPlayerEpisodes &&
+    !activeTorrentId &&
+    !torrentSelected &&
+    !mergeEpisodeSources([], episodeAvailability, availabilityEpisode).some(
+      (source) => source.sourceRef === selectedDirectSource?.sourceRef,
+    );
+
+  useEffect(
+    () => () => episodeRequestRef.current?.abort(),
+    [accountKey, media.mediaRef, selectedSourceRef],
+  );
 
   const handleTorrentReady = useCallback(
     (ready: TorrentSession) => {
@@ -760,6 +737,7 @@ export function MediaView({
   );
 
   const resetPlayer = useCallback(() => {
+    episodeRequestRef.current?.abort();
     setTorrentSelected(false);
     setTorrentStarting(false);
     setTorrentLaunchError(null);
@@ -779,7 +757,6 @@ export function MediaView({
   const selectPlaybackMode = (mode: PlaybackMode) => {
     if (mode === playbackMode) return;
 
-    setPendingDirectEpisodeTransition(null);
     setSelectedPlaybackMode(mode);
     setIsPlaybackModeInitialized(true);
     resetPlayer();
@@ -799,6 +776,7 @@ export function MediaView({
       positionSeconds: number,
     ) => {
       const episodeMetadata = findEpisodeMetadata(media, episode);
+      userEpisodeSelectionRef.current = false;
 
       startSession({
         mediaRef: media.mediaRef,
@@ -830,7 +808,7 @@ export function MediaView({
   ) => {
     if (!source || source.sourceRef === selectedDirectSource?.sourceRef) return;
 
-    setPendingDirectEpisodeTransition(null);
+    episodeRequestRef.current?.abort();
     setSelectedDirectSourceRef(source.sourceRef);
     if (continuePlayback && isPlayerStarted) {
       startDirectPlayback(source, selectedDirectEpisode, positionSeconds);
@@ -840,101 +818,88 @@ export function MediaView({
     }
   };
 
-  const selectDirectEpisode = (episode: DirectEpisodeOption) => {
-    setSelectedDirectEpisodeKey(episode.key);
-    setSelectedDirectSourceRef(null);
-    setPendingDirectEpisodeTransition({
-      episodeKey: episode.key,
-      trackKey:
-        pendingDirectEpisodeTransition?.trackKey ??
-        selectedDirectTrackKey ??
-        preferredDirectTrackKey,
-      qualityKey: pendingDirectEpisodeTransition?.qualityKey ?? selectedDirectQualityKey,
-      continuePlayback: pendingDirectEpisodeTransition?.continuePlayback ?? Boolean(mediaSession),
-      intent: pendingDirectEpisodeTransition?.intent ?? mediaSession?.state ?? 'playing',
-    });
-  };
-
-  const selectSeason = (seasonNumber: number) => {
-    if (seasonNumber === selectedDirectEpisode?.seasonNumber) return;
-
-    const nextEpisode = directEpisodes.find((episode) => episode.seasonNumber === seasonNumber);
-
-    if (!nextEpisode) return;
-
-    selectDirectEpisode(nextEpisode);
-  };
-
-  const selectEpisode = (episodeNumber: number) => {
-    const nextEpisode = episodesForSelectedSeason.find(
-      (episode) => getDirectEpisodeDisplayNumber(episode) === episodeNumber,
-    );
-
-    if (!nextEpisode) {
-      if (media.type === 'anime' && currentAnimeSeason) {
-        onAnimeEpisodeChange(currentAnimeSeason.number, episodeNumber);
+  const selectDirectEpisode = async (episode: DirectEpisodeOption, hostSignal: AbortSignal) => {
+    hostSignal.throwIfAborted();
+    if (episode.key === selectedDirectEpisode?.key) return;
+    episodeRequestRef.current?.abort();
+    const request = new AbortController();
+    episodeRequestRef.current = request;
+    const signal = AbortSignal.any([hostSignal, request.signal]);
+    const coordinates = getAvailabilityEpisode(media, episode);
+    if (!coordinates) {
+      episodeRequestRef.current = null;
+      throw new Error('Серия недоступна');
+    }
+    const options = mediaEpisodeAvailabilityQueryOptions(queryClient, media.mediaRef, coordinates);
+    const cancel = () => {
+      const query = queryClient.getQueryCache().find({ queryKey: options.queryKey, exact: true });
+      if (query?.getObserversCount() === 0)
+        void queryClient.cancelQueries({ queryKey: options.queryKey, exact: true });
+    };
+    signal.addEventListener('abort', cancel, { once: true });
+    const candidates = (resolved: MediaAvailability | null) =>
+      mergeEpisodeSources([], resolved, coordinates).filter(
+        (source) =>
+          source.provider === selectedDirectSource?.provider &&
+          !getMediaSourcePlaybackIssue(source),
+      );
+    const preferred = (sources: readonly MediaSourceOption[]) =>
+      getAvailableDirectSourceForPlaybackPreference(
+        sources,
+        selectedDirectTrackKey ?? preferredDirectTrackKey,
+        selectedDirectQualityKey,
+      );
+    try {
+      const cached = queryClient.getQueryData(options.queryKey);
+      let sources = candidates(cached ? selectUsableAvailability(cached.availability) : null);
+      let source = preferred(sources);
+      if (!source) {
+        const result = await queryClient.fetchQuery({ ...options, staleTime: 0, retry: false });
+        signal.throwIfAborted();
+        sources = candidates(selectUsableAvailability(result.availability));
+        source = preferred(sources) ?? getPreferredSource(sources);
       }
-      return;
+      signal.throwIfAborted();
+      if (!source) throw new Error('Для этой серии пока нет доступного источника');
+      userEpisodeSelectionRef.current = true;
+      setIsPlaybackModeInitialized(true);
+      setSelectedPlaybackMode(playbackMode);
+      setSelectedDirectEpisodeKey(episode.key);
+      setSelectedDirectSourceRef(source.sourceRef);
+      episodeRequestRef.current = null;
+      if (isPlayerStarted) {
+        startDirectPlayback(source, episode, 0);
+        if (playbackIntentRef.current === 'paused') pauseSession();
+      } else resetPlayer();
+    } finally {
+      signal.removeEventListener('abort', cancel);
+      if (episodeRequestRef.current === request) episodeRequestRef.current = null;
     }
-
-    if (nextEpisode.key === selectedDirectEpisode?.key) return;
-
-    selectDirectEpisode(nextEpisode);
   };
 
-  const selectTrack = (trackKey: string, continuePlayback = true) => {
-    const track = directTracks.find((option) => option.key === trackKey);
-
-    setPreferredDirectTrackKey(trackKey);
-    selectDirectSource(getDirectQualityOptions(track?.sources ?? [])[0]?.source, continuePlayback);
+  const selectDirectProvider = (provider: string) => {
+    const sources = currentDirectSources.filter((source) => source.provider === provider);
+    const source =
+      getAvailableDirectSourceForPlaybackPreference(
+        sources,
+        preferredDirectTrackKey,
+        selectedDirectQualityKey,
+      ) ?? getPreferredSource(sources);
+    if (!source) return;
+    setPreferredDirectTrackKey(getDirectTrackKey(source));
+    selectDirectSource(source);
   };
 
-  const selectNextEpisode = () => {
-    if (nextDirectEpisode) selectDirectEpisode(nextDirectEpisode);
-  };
-
-  useEffect(() => {
-    if (
-      !pendingDirectEpisodeTransition ||
-      selectedDirectEpisode?.key !== pendingDirectEpisodeTransition.episodeKey
-    ) {
-      return;
-    }
-
-    const preferredSource = getAvailableDirectSourceForPlaybackPreference(
-      currentDirectSources,
-      pendingDirectEpisodeTransition.trackKey,
-      pendingDirectEpisodeTransition.qualityKey,
-    );
-
-    if (!preferredSource && directModePending) return;
-
-    const nextSource = preferredSource ?? getPreferredSource(currentDirectSources);
-
-    setPendingDirectEpisodeTransition(null);
-
-    if (!nextSource) {
-      resetPlayer();
-      return;
-    }
-
-    setSelectedDirectSourceRef(nextSource.sourceRef);
-
-    if (pendingDirectEpisodeTransition.continuePlayback) {
-      startDirectPlayback(nextSource, selectedDirectEpisode, 0);
-      if (pendingDirectEpisodeTransition.intent === 'paused') pauseSession();
-    } else {
-      resetPlayer();
-    }
-  }, [
-    currentDirectSources,
-    directModePending,
-    pendingDirectEpisodeTransition,
-    pauseSession,
-    resetPlayer,
-    selectedDirectEpisode,
-    startDirectPlayback,
-  ]);
+  const playerNavigation =
+    usesPlayerEpisodes && !activeTorrentId && !torrentSelected
+      ? createPlayerEpisodeNavigation(
+          directEpisodes,
+          selectedDirectEpisode,
+          media.type === 'anime' ||
+            directEpisodes.every((episode) => episode.seasonNumber === undefined),
+          selectDirectEpisode,
+        )
+      : undefined;
 
   const loadPlayer = () => {
     if (!selectedSource || getMediaSourcePlaybackIssue(selectedSource)) {
@@ -953,7 +918,9 @@ export function MediaView({
       sourceRef: selectedSource.sourceRef,
       episode: selectedPlaybackEpisode,
       positionSeconds:
-        savedProgress && hasSameEpisode(savedProgress.episode, selectedPlaybackEpisode)
+        savedProgress &&
+        !userEpisodeSelectionRef.current &&
+        hasSameEpisode(savedProgress.episode, selectedPlaybackEpisode)
           ? savedProgress.positionSeconds
           : 0,
       durationSeconds:
@@ -965,6 +932,7 @@ export function MediaView({
               : null
           : null,
     });
+    userEpisodeSelectionRef.current = false;
     const canLoadSource =
       (selectedSource.kind === 'embed' ||
         selectedSource.kind === 'hls' ||
@@ -1032,42 +1000,14 @@ export function MediaView({
                 </div>
                 <div className="media-player-toolbar relative z-10 flex min-w-0 flex-wrap items-center gap-3 rounded-t-card bg-surface/70 px-4 py-3">
                   {isToolbarLoading ? (
-                    <AvailabilityToolbarStatus hasEpisodeControls={showLocalEpisodeControls} />
+                    <AvailabilityToolbarStatus />
                   ) : (
                     <>
-                      {showLocalEpisodeControls &&
-                        !animeSeasonSelector &&
-                        directSeasonNumbers.length > 0 && (
-                          <SeasonSelector
-                            seasons={directSeasons}
-                            selectedSeasonNumber={selectedDirectEpisode?.seasonNumber ?? null}
-                            onSeasonChange={selectSeason}
-                            variant="inline"
-                            compactDesktop
-                          />
-                        )}
-
-                      {showLocalEpisodeControls && (
-                        <EpisodeSelector
-                          episodes={directEpisodeOptions}
-                          selectedEpisodeNumber={
-                            selectedDirectEpisode
-                              ? (getDirectEpisodeDisplayNumber(selectedDirectEpisode) ?? null)
-                              : null
-                          }
-                          onEpisodeChange={selectEpisode}
-                          variant="inline"
-                          compactDesktop
-                        />
-                      )}
-
                       <div className="media-player-source-picker min-w-0">
                         <PlaybackSourcePicker
                           embedSources={currentEmbedSources}
                           directSources={currentDirectSources}
                           selectedSource={selectedSource}
-                          selectedDirectSource={selectedDirectSource}
-                          selectedTrackKey={selectedDirectTrackKey}
                           onTorrentOpenChange={setTorrentOpen}
                           torrentPanel={
                             SERVER_TORRENT_ENABLED
@@ -1126,16 +1066,10 @@ export function MediaView({
                             if (playbackMode !== 'embed') selectPlaybackMode('embed');
                             selectEmbedSource(sourceRef);
                           }}
-                          onDirectSelect={(trackKey) => {
+                          onDirectSelect={(provider) => {
                             if (activeTorrentId || torrentSelected) resetPlayer();
                             if (playbackMode !== 'direct') selectPlaybackMode('direct');
-                            selectTrack(trackKey);
-                          }}
-                          onQualitySelect={(sourceRef) => {
-                            if (activeTorrentId || torrentSelected) resetPlayer();
-                            selectDirectSource(
-                              currentDirectSources.find((source) => source.sourceRef === sourceRef),
-                            );
+                            selectDirectProvider(provider);
                           }}
                           isLoading={
                             sourcesPending && sourceSearchSettledMediaRef !== media.mediaRef
@@ -1151,9 +1085,14 @@ export function MediaView({
               <MediaPlayer
                 key={accountKey}
                 preferences={preferences}
+                navigation={playerNavigation}
                 mediaTitle={media.title}
                 backdrop={media.backdrop}
-                source={selectedSource?.url ? selectedSource : undefined}
+                source={
+                  selectedSource?.url && (!isPlayerStarted || !directSourceUnconfirmed)
+                    ? selectedSource
+                    : undefined
+                }
                 isStarted={isPlayerStarted}
                 shouldAutoPlay={mediaSession?.state === 'playing'}
                 initialPositionSeconds={mediaSession?.positionSeconds ?? 0}
@@ -1162,7 +1101,11 @@ export function MediaView({
                     ? 'error'
                     : activeTorrentId && !torrentPlayback
                       ? 'loading'
-                      : playerStatus
+                      : directSourceUnconfirmed && isPlayerStarted
+                        ? episodeAvailabilityPending
+                          ? 'loading'
+                          : 'error'
+                        : playerStatus
                 }
                 onStart={torrentSelected ? requestTorrentPlayback : loadPlayer}
                 onReady={handlePlayerReady}
@@ -1181,10 +1124,17 @@ export function MediaView({
                     ? requestTorrentPlayback
                     : activeTorrentId
                       ? () => void torrentQuery.refetch()
-                      : loadPlayer
+                      : directSourceUnconfirmed
+                        ? () => void retryEpisodeAvailability()
+                        : loadPlayer
                 }
                 errorDescription={
-                  torrentLaunchError ?? (activeTorrentId ? torrentErrorDescription : undefined)
+                  torrentLaunchError ??
+                  (activeTorrentId
+                    ? torrentErrorDescription
+                    : directSourceUnconfirmed
+                      ? 'Не удалось подготовить выбранный источник. Повторите поиск или выберите другой.'
+                      : undefined)
                 }
                 emptyState={playerEmptyState}
                 embedded
@@ -1231,7 +1181,6 @@ export function MediaView({
                             intent,
                           );
                         },
-                        onNextEpisode: nextDirectEpisode ? selectNextEpisode : undefined,
                       }
                     : undefined
                 }
