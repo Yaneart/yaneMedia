@@ -179,7 +179,7 @@ export function PlaybackSourcePicker({
             </div>
           )}
 
-          {isLoading && (
+          {isLoading && visiblePanel !== 'torrent' && (
             <div
               role="status"
               aria-live="polite"

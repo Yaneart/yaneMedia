@@ -6,13 +6,14 @@ import {
 import { preferredTorrentAudio } from './torrentAudioPreference';
 import { torrentAccountSignal } from './torrentClientScope';
 import { replaceTorrentPlayback } from './replaceTorrentPlayback';
-import type { TorrentSession } from './torrentSession';
+import type { TorrentSession, TorrentSessionState } from './torrentSession';
 
 export async function switchTorrentFile(
   initial: TorrentSession,
   fileRef: string,
   position: number,
   caller: AbortSignal,
+  onProgress?: (state: TorrentSessionState) => void,
 ): Promise<TorrentSession> {
   const signal = AbortSignal.any([caller, torrentAccountSignal(), AbortSignal.timeout(110_000)]);
   let current = initial;
@@ -20,6 +21,7 @@ export async function switchTorrentFile(
   let polls = 0;
   while (true) {
     signal.throwIfAborted();
+    if (current.state !== 'ready') onProgress?.(current.state);
     if (current.state === 'failed') throw new Error('Не удалось подготовить файл');
     if (
       current.selectedFileRef === fileRef &&
@@ -33,6 +35,7 @@ export async function switchTorrentFile(
         signal,
         audio?.ref,
         false,
+        onProgress,
       );
     }
     if (['awaiting_file', 'awaiting_playback', 'ready'].includes(current.state)) {

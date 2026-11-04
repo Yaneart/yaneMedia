@@ -50,6 +50,7 @@ export type MediaPlayerProps = {
   preferences?: PreferencesAdapter;
   navigation?: PlayerNavigation;
   selection?: ReactNode;
+  loading?: ReactNode;
 };
 
 type PlaybackIssueContent = {
@@ -124,6 +125,7 @@ export function MediaPlayer({
   preferences,
   navigation,
   selection,
+  loading,
 }: MediaPlayerProps) {
   const sectionRef = useRef<HTMLElement>(null);
   const [theater, setTheater] = useState(false);
@@ -291,13 +293,16 @@ export function MediaPlayer({
                 </div>
               )}
 
-              {isStarted && status === 'loading' && (!source || !sourceIssue) && (
-                <Spinner
-                  size="large"
-                  label={source ? `Загрузка плеера ${source.label}` : 'Подготовка видео'}
-                  className="[&>span:first-child]:text-white [&>span:first-child>span:last-child]:text-white/60"
-                />
-              )}
+              {isStarted &&
+                status === 'loading' &&
+                (!source || !sourceIssue) &&
+                (loading ?? (
+                  <Spinner
+                    size="large"
+                    label={source ? `Загрузка плеера ${source.label}` : 'Подготовка видео'}
+                    className="[&>span:first-child]:text-white [&>span:first-child>span:last-child]:text-white/60"
+                  />
+                ))}
 
               {source && isStarted && !sourceIssue && status === 'ready' && !activeSource && (
                 <div role="status">

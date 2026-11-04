@@ -20,6 +20,7 @@ import {
   torrentSessionQueryKeys,
   TorrentRequestError,
   type TorrentSession,
+  type TorrentSessionState,
   type TorrentCandidate,
 } from '@/entities/torrent-session';
 import { ResendVerification } from '@/features/auth-form';
@@ -203,6 +204,7 @@ export function TorrentLaunch({
   onSourceSelect,
   playRequest = 0,
   onPlaybackError,
+  onPreparationChange,
   selected = false,
   media,
   animeRelease,
@@ -224,6 +226,7 @@ export function TorrentLaunch({
   onSourceSelect?: () => void;
   playRequest?: number;
   onPlaybackError?: (message: string) => void;
+  onPreparationChange?: (state: TorrentSessionState) => void;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   mediaRef: string;
@@ -521,6 +524,7 @@ export function TorrentLaunch({
         target.file.ref,
         startPositionSeconds,
         controller.signal,
+        onPreparationChange,
       );
       if (controller.signal.aborted) return;
       await queryClient.cancelQueries({
@@ -663,7 +667,10 @@ export function TorrentLaunch({
                   </Button>
                 </div>
                 {discoveryQuery.isPending || (discoveryQuery.isFetching && !discoveryQuery.data) ? (
-                  <Spinner size="small" label="Ищем раздачи" />
+                  <div className="flex min-h-36 flex-col items-center justify-center gap-3 py-6">
+                    <Spinner size="large" label="Ищем раздачи" />
+                    <p className="text-sm text-text-secondary">Ищем раздачи…</p>
+                  </div>
                 ) : discoveryQuery.isError ? (
                   <p role="alert" className="text-sm text-error">
                     Поиск сейчас недоступен. Повторите попытку или добавьте торрент вручную.

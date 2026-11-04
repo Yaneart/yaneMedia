@@ -22,6 +22,7 @@ import {
   torrentSessionQueryOptions,
   torrentSessionQueryKeys,
   type TorrentSession,
+  type TorrentSessionState,
   TorrentRequestError,
 } from '@/entities/torrent-session';
 import { FavoriteButton, useFavorites } from '@/features/favorite';
@@ -32,6 +33,7 @@ import { SeasonSelector } from '@/features/season-selection';
 import {
   TorrentLaunch,
   TorrentFilePicker,
+  TorrentPreparation,
   torrentEpisodes,
   type TorrentEpisode,
 } from '@/features/torrent-launch';
@@ -283,6 +285,8 @@ export function MediaView({
   const [torrentSelected, setTorrentSelected] = useState(false);
   const [torrentPlayRequest, setTorrentPlayRequest] = useState(0);
   const [torrentStarting, setTorrentStarting] = useState(false);
+  const [torrentPreparationState, setTorrentPreparationState] =
+    useState<TorrentSessionState | null>(null);
   const [torrentLaunchError, setTorrentLaunchError] = useState<string | null>(null);
   const [torrentNeedsFile, setTorrentNeedsFile] = useState(false);
   const [torrentRequestedFileRef, setTorrentRequestedFileRef] = useState<string | null>(null);
@@ -777,6 +781,7 @@ export function MediaView({
       paused: mediaSession?.state === 'paused',
     };
     setTorrentStarting(true);
+    setTorrentPreparationState('created');
     setTorrentLaunchError(null);
     setPlayerStatus('loading');
     setTorrentPlayRequest((request) => request + 1);
@@ -1197,6 +1202,7 @@ export function MediaView({
                                       setTorrentNeedsFile(false);
                                       if (mediaSession) endSession();
                                       setTorrentStarting(true);
+                                      setTorrentPreparationState(null);
                                       setTorrentLaunchError(null);
                                       setPlayerStatus('loading');
                                       setTorrentPlayRequest((request) => request + 1);
@@ -1205,6 +1211,7 @@ export function MediaView({
                                       close();
                                     }}
                                     onPlaybackError={handleTorrentPlaybackError}
+                                    onPreparationChange={setTorrentPreparationState}
                                     onPlaybackReady={handleTorrentReady}
                                     onSessionChange={handleTorrentSessionChange}
                                   />
@@ -1237,6 +1244,14 @@ export function MediaView({
                 key={accountKey}
                 preferences={preferences}
                 navigation={playerNavigation}
+                loading={
+                  torrentSelected || activeTorrentId ? (
+                    <TorrentPreparation
+                      key={torrentPlayRequest}
+                      state={torrentPreparationState ?? torrentSession?.state}
+                    />
+                  ) : undefined
+                }
                 selection={
                   torrentNeedsFile ? (
                     <TorrentFilePicker

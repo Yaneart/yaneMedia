@@ -22,9 +22,11 @@ const noop = () => {};
 let launch: any;
 const episodeModel = await import('../src/features/torrent-launch/model/torrentEpisodes');
 const { TorrentFilePicker } = await import('../src/features/torrent-launch/ui/TorrentFilePicker');
+const { TorrentPreparation } = await import('../src/features/torrent-launch/ui/TorrentPreparation');
 mock.module('@/features/torrent-launch', () => ({
   ...episodeModel,
   TorrentFilePicker,
+  TorrentPreparation,
   TorrentLaunch: (props: any) => {
     launch = props;
     return null;

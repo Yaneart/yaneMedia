@@ -4,7 +4,7 @@ import {
   startTorrentPlayback,
   TorrentRequestError,
 } from '../api/torrentSessionApi';
-import type { TorrentSession } from './torrentSession';
+import type { TorrentSession, TorrentSessionState } from './torrentSession';
 import { torrentAccountSignal } from './torrentClientScope';
 import { torrentOutputProfile } from './torrentOutputProfile';
 
@@ -16,6 +16,7 @@ export async function replaceTorrentPlayback(
   signal: AbortSignal,
   audioTrackRef = initial.playback?.selectedAudioTrackRef,
   retryUnavailable = true,
+  onProgress?: (state: TorrentSessionState) => void,
 ): Promise<TorrentSession> {
   signal.throwIfAborted();
   const deadline = AbortSignal.any([AbortSignal.timeout(110_000), torrentAccountSignal()]);
@@ -59,6 +60,7 @@ export async function replaceTorrentPlayback(
       }
       signal.throwIfAborted();
     }
+    if (current.state !== 'ready') onProgress?.(current.state);
     if (admittedVersion !== null && current.state === 'ready') {
       if (
         current.version < admittedVersion ||
@@ -70,6 +72,7 @@ export async function replaceTorrentPlayback(
       )
         throw new Error('Playback generation replaced');
       signal.throwIfAborted();
+      onProgress?.('ready');
       return current;
     }
     if (

@@ -65,6 +65,7 @@ afterEach(() => {
 
 test('ready file switch waits for probing and playback, uses fresh refs and resets the episode position', async () => {
   const calls: { method: string; body: any }[] = [];
+  const progress: string[] = [];
   let gets = 0;
   rememberTorrentAudio({
     ref: 'old-audio',
@@ -86,7 +87,9 @@ test('ready file switch waits for probing and playback, uses fresh refs and rese
     'new-file',
     0,
     new AbortController().signal,
+    (state) => progress.push(state),
   );
+  expect(progress).toEqual(['probing', 'awaiting_playback', 'preparing', 'ready']);
   expect(result.playback?.generation).toBe(3);
   expect(calls.filter((call) => call.method === 'PUT').map((call) => call.body)).toEqual([
     { fileRef: 'new-file', expectedVersion: 5 },
@@ -136,6 +139,7 @@ test('a rapid successor waits for an earlier probe then selects its own file wit
 
 test('cancellation after file admission never starts playback or returns the old episode', async () => {
   const controller = new AbortController();
+  const progress = mock(() => {});
   let calls = 0;
   globalThis.fetch = mock(async () => {
     calls++;
@@ -143,9 +147,10 @@ test('cancellation after file admission never starts playback or returns the old
     return response({ ...probe, state: 'probing' });
   });
   await expect(
-    switchTorrentFile(mapTorrentSession(base), 'new-file', 0, controller.signal),
+    switchTorrentFile(mapTorrentSession(base), 'new-file', 0, controller.signal, progress),
   ).rejects.toMatchObject({ name: 'AbortError' });
   expect(calls).toBe(1);
+  expect(progress).not.toHaveBeenCalled();
 });
 
 test('service failure remains an explicit retry and does not produce hidden playback mutations', async () => {
