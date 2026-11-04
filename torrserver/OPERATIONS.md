@@ -25,14 +25,17 @@ standalone default `false`. Значения `environment` в Compose имеют
 | `TORRSERVER_CONNECT_TIMEOUT_MS`                               | 3000 ms                                                                |
 | `TORRSERVER_HEADERS_TIMEOUT_MS`, `TORRSERVER_BODY_TIMEOUT_MS` | По 30000 ms                                                            |
 | `TORRSERVER_METADATA_TIMEOUT_MS`                              | 120000 ms; отдельный probe ограничен 30 s                              |
-| `JACRED_BASE_URL`                                             | Адрес Jacred v1 API из `backend/.env`; пустое значение отключает поиск |
+| `JACRED_BASE_URL`                                             | Основной JacRed v1 origin из `backend/.env` |
+| `JACRED_FALLBACK_URLS`                                        | До двух резервных JacRed origins через запятую |
+| `KNABEN_BASE_URL`                                            | Независимый Knaben v2 origin, например `https://api.knaben.org` |
 
 Отдельных runtime flags ручного ввода и discovery, admin-only режима и allowlist
 сейчас нет. API требует подтверждённый аккаунт; ownership, CSRF и origin checks
 действуют дополнительно. Общий флаг не скрывает панель frontend и не является
 сетевой блокировкой всего discovery API. Для отключения поиска задайте
-`JACRED_BASE_URL=` в `backend/.env` и пересоздайте backend. Ручной ввод остаётся
-доступным при включённом общем флаге. Поиск использует только API Jacred.
+пустые `JACRED_BASE_URL`, `JACRED_FALLBACK_URLS` и `KNABEN_BASE_URL` в `backend/.env`
+и пересоздайте backend. Ручной ввод остаётся доступным при включённом общем флаге.
+Поиск использует только JSON API.
 
 Создание отсутствующих engine secrets без перезаписи существующих:
 
@@ -46,8 +49,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\torrserver\init-secrets.ps
 Не менять idempotency key при обычном обновлении. Ограничить доступ к secret-файлам
 учётной записью оператора и Docker; Compose secrets здесь являются файлами хоста.
 
-Поиск не требует локальных индексаторов и ключа API: достаточно `JACRED_BASE_URL`.
-Поддержаны Kinozal, RuTracker и NoNaMe Club через Jacred. Подробности — в
+Поиск не требует локальных индексаторов и ключа API: JacRed и Knaben запрашиваются
+параллельно, резервные JacRed origins подхватывают отказ основного.
+Поддержан полный известный каталог трекеров JacRed и источники Knaben. Подробности — в
 [discovery](DISCOVERY.md). Доступность каталога и peers меняется;
 успешный поиск не доказывает playback.
 
@@ -154,7 +158,7 @@ docker compose exec -T backend npm run probe:torrent-discovery -- --query Oppenh
 ```
 
 `--kind` допускает `movie|tv|anime`. Ненулевой exit при degraded не доказывает отказ
-ручного ввода. При пустом поиске проверить `JACRED_BASE_URL` и доступность API
+ручного ввода. При пустом поиске проверить настройки JacRed/Knaben и доступность API
 каталога; при no-peers timeout не увеличивать лимиты бесконечно. Ошибки metadata/probe
 связаны также с peers, transcode — с media/ресурсами, 429 — с budget (`Retry-After`).
 Не повторять create автоматически: общий бюджет 20 новых попыток / 10 min и

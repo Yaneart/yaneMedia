@@ -23,7 +23,7 @@ if ($Mode -eq 'Public') {
     if ($resolved.services.torrserver) {
         throw 'Public mode must not enable home-torrent. Check COMPOSE_PROFILES.'
     }
-    foreach ($key in @('TORRSERVER_BASE_URL', 'TORRSERVER_USERNAME_FILE', 'TORRSERVER_PASSWORD_FILE', 'TORRENT_IDEMPOTENCY_SECRET_FILE', 'JACRED_BASE_URL')) {
+    foreach ($key in @('TORRSERVER_BASE_URL', 'TORRSERVER_USERNAME_FILE', 'TORRSERVER_PASSWORD_FILE', 'TORRENT_IDEMPOTENCY_SECRET_FILE', 'JACRED_BASE_URL', 'JACRED_FALLBACK_URLS', 'KNABEN_BASE_URL')) {
         if ($resolved.services.backend.environment.$key) {
             throw "Public mode inherited $key from the host environment. Unset it before starting."
         }

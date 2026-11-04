@@ -86,6 +86,27 @@ describe('torrent discovery', () => {
     expect(result.candidates.at(-1)?.title).toContain('49');
   });
 
+  it('also searches the localized title when the original already found many releases', async () => {
+    discovery.search
+      .mockResolvedValueOnce({
+        releases: Array.from({ length: 15 }, (_, index) => ({
+          ...release,
+          guid: `english-${index}`,
+          infoHash: null,
+          tracker: 'YTS',
+        })),
+        degraded: false,
+      })
+      .mockResolvedValueOnce({
+        releases: [{ ...release, tracker: 'Rutor' }],
+        degraded: false,
+      });
+    const result = await service.search('owner-localized', mediaRef);
+    expect(discovery.search).toHaveBeenCalledTimes(2);
+    expect(discovery.search.mock.calls[1][0].title).toBe('Интерстеллар');
+    expect(result.candidates.some((candidate) => candidate.tracker === 'Rutor')).toBe(true);
+  });
+
   it('preserves every source after final ranking, including identical hashes from different sources', async () => {
     discovery.search.mockResolvedValue({
       releases: [

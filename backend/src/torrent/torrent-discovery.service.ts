@@ -90,7 +90,6 @@ export class TorrentDiscoveryService {
         } catch {
           failed++;
         }
-        if (dedupeReleases(results.flat()).length >= 15) break;
       }
       if (!results.length && failed) throw error(503, 'TORRENT_DISCOVERY_UNAVAILABLE');
       const releases = dedupeReleases(results.flat()).filter((release) =>

@@ -23,7 +23,7 @@ if [ "$mode" = Public ]; then
     exit 2
   fi
   unset TORRSERVER_BASE_URL TORRSERVER_USERNAME_FILE TORRSERVER_PASSWORD_FILE
-  unset TORRENT_IDEMPOTENCY_SECRET_FILE JACRED_BASE_URL
+  unset TORRENT_IDEMPOTENCY_SECRET_FILE JACRED_BASE_URL JACRED_FALLBACK_URLS KNABEN_BASE_URL
   set -- "$@" -f "$project_root/compose.public.yaml"
 fi
 "$@" config --quiet

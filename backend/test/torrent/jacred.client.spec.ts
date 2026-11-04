@@ -75,6 +75,95 @@ describe('JacRed discovery boundary', () => {
     ]);
   });
 
+  it.each([
+    ['rutor', 'http://rutor.info/torrent/954897/movie', 'Rutor'],
+    ['megapeer', 'http://megapeer.vip/torrent/209953', 'MegaPeer'],
+    ['bitru', 'https://bitru.org/details.php?id=569708', 'BitRu'],
+    ['toloka', 'https://toloka.to/t674675', 'Toloka'],
+    ['torrentby', 'https://torrent.by/12345/movie', 'Torrent.by'],
+    ['mazepa', 'https://mazepa.to/viewtopic.php?t=123', 'Mazepa'],
+    ['lostfilm', 'https://www.lostfilm.tv/series/Example/season_1/episode_1/#1080', 'LostFilm'],
+    ['selezen', 'https://use.selezen.club/123-movie.html', 'Selezen'],
+    ['animelayer', 'https://animelayer.ru/torrent/abc123/', 'AnimeLayer'],
+    ['anidub', 'https://tr.anidub.com/anime_tv/123-example.html', 'AniDub'],
+    ['anistar', 'https://anistar.org/123-example.html?e=1&id=456', 'AniStar'],
+    ['anibelka', 'https://anibelka.com/torrent/123/example', 'AniBelka'],
+    ['aniliberty', 'https://aniliberty.top/anime/releases/release/example?hash=abc', 'AniLiberty'],
+    ['anifilm', 'https://anifilm.pro/123-example.html', 'AniFilm'],
+    ['leproduction', 'https://www.le-production.online/123-example.html', 'LE-Production'],
+    ['viruseproject', 'https://viruseproject.tv/123-example.html', 'ViruseProject'],
+    ['korsars', 'https://korsars.pro/viewtopic.php?t=123', 'Korsars'],
+    ['ultradox', 'https://ultradox.vip/details.php?id=123#h=abc', 'Ultradox'],
+    ['baibako', 'http://baibako.tv/details.php?id=123', 'BaibaKo'],
+    ['rudub', 'https://r4.rudub.world/details.php?id=123', 'RuDub'],
+    ['subsplease', 'https://subsplease.org/shows/example/?ep=1&res=1080', 'SubsPlease'],
+    ['knaben', 'https://1337x.to/torrent/123/example/', '1337x'],
+    ['knaben', 'https://knaben.xyz/?id=abc123', 'Knaben'],
+    ['piratebay', 'https://thepiratebay.org/description.php?id=123', 'The Pirate Bay'],
+    ['yts', 'https://yts.gg/movies/example-2023#1080p', 'YTS'],
+  ])('accepts the additional %s source with a validated magnet', async (tracker, url, name) => {
+    jest.spyOn(global, 'fetch').mockResolvedValue(response([{ ...row, tracker, url }]));
+    const result = await client().search(input, AbortSignal.timeout(1000));
+    expect(result.releases).toHaveLength(1);
+    expect(result.releases[0]).toMatchObject({ tracker: name, catalog: 'JacRed' });
+  });
+
+  it('attributes merged tracker rows to their actual topic host and rejects false claims', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValue(
+      response([
+        { ...row, tracker: 'rutor, kinozal, bitru', url: 'https://rutor.info/torrent/123/movie' },
+        { ...row, tracker: 'bitru', url: 'https://rutor.info/torrent/123/movie' },
+        { ...row, tracker: 'rutor', url: 'https://rutor.info.evil.example/torrent/123/movie' },
+        { ...row, tracker: 'rutor', url: 'https://user:pass@rutor.info/torrent/123/movie' },
+        { ...row, tracker: 'rutor', url: 'https://rutor.info:8443/torrent/123/movie' },
+      ]),
+    );
+    const result = await client().search(input, AbortSignal.timeout(1000));
+    expect(result.releases.map((release) => release.tracker)).toEqual(['Rutor']);
+  });
+
+  it('uses a configured API fallback and temporarily skips the failed origin', async () => {
+    const config = {
+      JACRED_BASE_URL: 'https://primary.example',
+      JACRED_FALLBACK_URLS: 'https://backup.example',
+    };
+    const discovery = new JacredClient({
+      get: (key: keyof typeof config) => config[key],
+    } as unknown as ConfigService);
+    const fetchSpy = jest
+      .spyOn(global, 'fetch')
+      .mockRejectedValueOnce(new Error('timeout'))
+      .mockImplementation(async () => response([row]));
+    await expect(discovery.search(input, AbortSignal.timeout(1000))).resolves.toMatchObject({
+      degraded: true,
+      releases: [expect.objectContaining({ tracker: 'Kinozal' })],
+    });
+    await discovery.search(input, AbortSignal.timeout(1000));
+    expect(fetchSpy.mock.calls.map(([url]) => (url as URL).origin)).toEqual([
+      'https://primary.example',
+      'https://backup.example',
+      'https://backup.example',
+    ]);
+    jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 60_001);
+    await discovery.search(input, AbortSignal.timeout(1000));
+    expect((fetchSpy.mock.calls[3][0] as URL).origin).toBe('https://primary.example');
+  });
+
+  it('does not retry a healthy empty catalog or continue after caller cancellation', async () => {
+    const config = {
+      JACRED_BASE_URL: 'https://primary.example',
+      JACRED_FALLBACK_URLS: 'https://backup.example',
+    };
+    const discovery = new JacredClient({
+      get: (key: keyof typeof config) => config[key],
+    } as unknown as ConfigService);
+    const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue(response([]));
+    await discovery.search(input, AbortSignal.timeout(1000));
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    await expect(discovery.search(input, AbortSignal.abort())).rejects.toThrow();
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
   it('rejects redirects, HTML, oversized bodies and invalid shapes', async () => {
     const fetchSpy = jest.spyOn(global, 'fetch');
     for (const value of [
@@ -150,5 +239,26 @@ describe('JacRed discovery boundary', () => {
       expect(
         appConfigValidationSchema.validate({ ...base, JACRED_BASE_URL: url }).error,
       ).toBeDefined();
+    for (const value of ['', 'https://one.example', 'https://one.example, https://two.example'])
+      expect(
+        appConfigValidationSchema.validate({ ...base, JACRED_FALLBACK_URLS: value }).error,
+      ).toBeUndefined();
+    for (const value of [
+      'https://user:pass@one.example',
+      'https://one.example/api',
+      'https://one.example,',
+      'https://one.example,https://two.example,https://three.example',
+    ])
+      expect(
+        appConfigValidationSchema.validate({ ...base, JACRED_FALLBACK_URLS: value }).error,
+      ).toBeDefined();
+    expect(
+      appConfigValidationSchema.validate({ ...base, KNABEN_BASE_URL: 'https://api.knaben.org' })
+        .error,
+    ).toBeUndefined();
+    expect(
+      appConfigValidationSchema.validate({ ...base, KNABEN_BASE_URL: 'https://api.knaben.org/v2' })
+        .error,
+    ).toBeDefined();
   });
 });

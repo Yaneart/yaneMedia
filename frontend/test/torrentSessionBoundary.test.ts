@@ -55,66 +55,69 @@ afterEach(() => {
 });
 
 describe('torrent API boundary', () => {
-  test('searches by canonical media and episode, then creates a session from an opaque candidate', async () => {
-    const calls: Array<[string, RequestInit]> = [];
-    const mediaRef = 'work_0b02a880-8fdd-43b6-92f2-7a093d9eab60';
-    const candidateRef = 'candidate_abcdefghijklmnopqrstuvwx';
-    const candidate = {
-      candidateRef,
-      title: 'Example S01E02 1080p',
-      tracker: 'Indexer',
-      stale: false,
-      catalog: 'JacRed',
-      size: 1234,
-      seeders: 8,
-      publishedAt: null,
-      score: 90,
-      reasons: ['episode_match'],
-      quality: 'WEB-DL',
-      resolution: '1080p',
-      voice: null,
-      studio: null,
-      russianSubtitles: false,
-      season: 1,
-      episode: 2,
-      ageDays: null,
-    };
-    globalThis.fetch = mock(async (url: string, init: RequestInit) => {
-      calls.push([url, init]);
-      return Response.json(
-        {
-          data:
-            init.method === 'POST'
-              ? { ...wire, mediaRef }
-              : {
-                  mediaRef,
-                  candidates: [candidate],
-                  degraded: false,
-                  expiresInSeconds: 600,
-                },
-        },
-        { status: init.method === 'POST' ? 202 : 200 },
-      );
-    }) as typeof fetch;
-    const results = await getTorrentCandidates(mediaRef, 1, 2, new AbortController().signal);
-    expect(results.candidates[0].candidateRef).toBe(candidateRef);
-    expect(results.candidates[0].stale).toBe(false);
-    expect(results.candidates[0].catalog).toBe('JacRed');
-    expect(results.expiresAt).toBeGreaterThan(Date.now());
-    expect(calls[0][0]).toContain(`season=1&episode=2`);
-    expect(
-      await createCandidateSession(
+  test.each(['JacRed', 'Knaben'])(
+    'searches %s by canonical media and episode, then creates a session from an opaque candidate',
+    async (catalog) => {
+      const calls: Array<[string, RequestInit]> = [];
+      const mediaRef = 'work_0b02a880-8fdd-43b6-92f2-7a093d9eab60';
+      const candidateRef = 'candidate_abcdefghijklmnopqrstuvwx';
+      const candidate = {
         candidateRef,
-        'candidate-request-key',
-        new AbortController().signal,
-      ),
-    ).toMatchObject({ id, mediaRef });
-    expect(JSON.parse(calls[1][1].body as string)).toEqual({ candidateRef });
-    expect(calls[1][1].headers).toMatchObject({
-      'X-YaneMedia-CSRF': '1',
-      'Idempotency-Key': 'candidate-request-key',
-    });
-  });
+        title: 'Example S01E02 1080p',
+        tracker: 'Indexer',
+        stale: false,
+        catalog,
+        size: 1234,
+        seeders: 8,
+        publishedAt: null,
+        score: 90,
+        reasons: ['episode_match'],
+        quality: 'WEB-DL',
+        resolution: '1080p',
+        voice: null,
+        studio: null,
+        russianSubtitles: false,
+        season: 1,
+        episode: 2,
+        ageDays: null,
+      };
+      globalThis.fetch = mock(async (url: string, init: RequestInit) => {
+        calls.push([url, init]);
+        return Response.json(
+          {
+            data:
+              init.method === 'POST'
+                ? { ...wire, mediaRef }
+                : {
+                    mediaRef,
+                    candidates: [candidate],
+                    degraded: false,
+                    expiresInSeconds: 600,
+                  },
+          },
+          { status: init.method === 'POST' ? 202 : 200 },
+        );
+      }) as typeof fetch;
+      const results = await getTorrentCandidates(mediaRef, 1, 2, new AbortController().signal);
+      expect(results.candidates[0].candidateRef).toBe(candidateRef);
+      expect(results.candidates[0].stale).toBe(false);
+      expect(results.candidates[0].catalog).toBe(catalog);
+      expect(results.expiresAt).toBeGreaterThan(Date.now());
+      expect(calls[0][0]).toContain(`season=1&episode=2`);
+      expect(
+        await createCandidateSession(
+          candidateRef,
+          'candidate-request-key',
+          new AbortController().signal,
+        ),
+      ).toMatchObject({ id, mediaRef });
+      expect(JSON.parse(calls[1][1].body as string)).toEqual({ candidateRef });
+      expect(calls[1][1].headers).toMatchObject({
+        'X-YaneMedia-CSRF': '1',
+        'Idempotency-Key': 'candidate-request-key',
+      });
+    },
+  );
 
   test('rejects malformed discovery results', async () => {
     globalThis.fetch = mock(async () =>

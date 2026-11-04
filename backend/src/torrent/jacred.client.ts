@@ -2,6 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { validateMagnet } from './torrent-input.validation';
 import { limitByTracker } from './torrent-candidate-ranking';
+import { catalogSearchTitle, fetchCatalogJson } from './torrent-catalog-http';
+import { jacredTrackerName } from './torrent-tracker-sources';
 import type {
   DiscoveryRelease,
   DiscoverySearch,
@@ -9,83 +11,65 @@ import type {
   TorrentDiscoveryPort,
 } from './torrent-discovery.port';
 
-const SOURCES = {
-  kinozal: { name: 'Kinozal', hosts: ['kinozal.me', 'kinozal.guru', 'kinozal.tv'] },
-  rutracker: { name: 'RuTracker.org', hosts: ['rutracker.org', 'rutracker.net', 'rutracker.nl'] },
-  nnmclub: { name: 'NoNaMe Club', hosts: ['nnmclub.to', 'nnm-club.name', 'nnm-club.me'] },
-} as const;
-const MAX_BYTES = 2 * 1024 * 1024;
-
 @Injectable()
 export class JacredClient implements TorrentDiscoveryPort {
-  private readonly baseUrl: string | undefined;
+  private readonly baseUrls: string[];
+  private readonly unavailableUntil = new Map<string, number>();
+
+  get enabled() {
+    return this.baseUrls.length > 0;
+  }
 
   constructor(config: ConfigService) {
-    this.baseUrl = config.get<string>('JACRED_BASE_URL') || undefined;
+    this.baseUrls = [
+      ...new Set(
+        [
+          config.get<string>('JACRED_BASE_URL'),
+          ...(config.get<string>('JACRED_FALLBACK_URLS') ?? '').split(','),
+        ]
+          .map((url) => url?.trim())
+          .filter((url): url is string => Boolean(url)),
+      ),
+    ];
   }
 
   async search(input: DiscoverySearch, signal: AbortSignal): Promise<DiscoverySearchResult> {
-    if (!this.baseUrl) return { releases: [], degraded: false };
-    const title = input.title ?? input.query;
-    if (
-      typeof input.query !== 'string' ||
-      input.query.trim().length < 2 ||
-      input.query.length > 160 ||
-      typeof title !== 'string' ||
-      title.trim().length < 2 ||
-      title.length > 160 ||
-      !Number.isInteger(input.limit) ||
-      input.limit < 1 ||
-      input.limit > 100 ||
-      input.offset !== 0 ||
-      !['movie', 'tv', 'anime'].includes(input.kind) ||
-      [...input.query, ...title].some((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127)
-    )
-      throw new Error('Invalid discovery search');
-    const url = new URL('/api/v1.0/torrents', this.baseUrl);
-    const search = title.trim().normalize('NFKD').replace(/\p{M}/gu, '');
-    url.search = new URLSearchParams({ search, sort: 'sid' }).toString();
-    const response = await fetch(url, {
-      headers: { Accept: 'application/json' },
-      redirect: 'manual',
-      signal: AbortSignal.any([signal, AbortSignal.timeout(8_000)]),
-    });
-    if (
-      !response.ok ||
-      !response.headers.get('content-type')?.includes('application/json') ||
-      Number(response.headers.get('content-length')) > MAX_BYTES
-    ) {
-      await response.body?.cancel().catch(() => undefined);
-      throw new Error('Catalog unavailable');
-    }
-    const reader = response.body?.getReader();
-    if (!reader) throw new Error('Catalog unavailable');
-    const parts: Uint8Array[] = [];
-    let bytes = 0;
-    let raw: unknown;
-    try {
-      while (true) {
-        const part = await reader.read();
-        if (part.done) break;
-        bytes += part.value.byteLength;
-        if (bytes > MAX_BYTES) throw new Error('Catalog response too large');
-        parts.push(part.value);
+    if (!this.enabled) return { releases: [], degraded: false };
+    const search = catalogSearchTitle(input);
+    let degraded = false;
+    for (const baseUrl of this.baseUrls) {
+      signal.throwIfAborted();
+      if ((this.unavailableUntil.get(baseUrl) ?? 0) > Date.now()) {
+        degraded = true;
+        continue;
       }
-      raw = JSON.parse(Buffer.concat(parts).toString('utf8')) as unknown;
-    } finally {
-      await reader.cancel().catch(() => undefined);
-      reader.releaseLock();
+      try {
+        const releases = await this.searchAt(baseUrl, search, input.limit, signal);
+        this.unavailableUntil.delete(baseUrl);
+        return { releases, degraded };
+      } catch {
+        signal.throwIfAborted();
+        this.unavailableUntil.set(baseUrl, Date.now() + 60_000);
+        degraded = true;
+      }
     }
+    throw new Error('Catalog unavailable');
+  }
+
+  private async searchAt(baseUrl: string, search: string, limit: number, signal: AbortSignal) {
+    const url = new URL('/api/v1.0/torrents', baseUrl);
+    url.search = new URLSearchParams({ search, sort: 'sid' }).toString();
+    const raw = await fetchCatalogJson(url, signal);
     // Compatible v1 catalogs encode an empty result as {} rather than [].
     if (raw && typeof raw === 'object' && !Array.isArray(raw) && !Object.keys(raw).length)
-      return { releases: [], degraded: false };
+      return [];
     if (!Array.isArray(raw)) throw new Error('Invalid catalog response');
     const releases = raw.flatMap((item: unknown): DiscoveryRelease[] => {
       if (!item || typeof item !== 'object') return [];
       const x = item as Record<string, unknown>;
       if (
         typeof x.tracker !== 'string' ||
-        !Object.hasOwn(SOURCES, x.tracker) ||
+        x.tracker.length > 256 ||
         typeof x.title !== 'string' ||
         !x.title.trim() ||
         x.title.length > 1024 ||
@@ -98,24 +82,8 @@ export class JacredClient implements TorrentDiscoveryPort {
       )
         return [];
       try {
-        const source = SOURCES[x.tracker as keyof typeof SOURCES];
-        const origin = new URL(x.url);
-        const topicKey = x.tracker === 'kinozal' ? 'id' : 't';
-        if (
-          !source.hosts.some((host) => host === origin.hostname) ||
-          !['http:', 'https:'].includes(origin.protocol) ||
-          origin.username ||
-          origin.password ||
-          origin.port ||
-          origin.hash
-        )
-          return [];
-        if (
-          origin.pathname !== (x.tracker === 'kinozal' ? '/details.php' : '/forum/viewtopic.php') ||
-          !/^\d{1,10}$/.test(origin.searchParams.get(topicKey) ?? '') ||
-          [...origin.searchParams.keys()].some((key) => key !== topicKey)
-        )
-          return [];
+        const tracker = jacredTrackerName(x.tracker, x.url);
+        if (!tracker) return [];
         const magnet = validateMagnet(x.magnet);
         const hash = new URL(magnet).searchParams.get('xt')!.slice(9);
         if (!/^[a-f0-9]{40}$/i.test(hash)) return [];
@@ -123,7 +91,7 @@ export class JacredClient implements TorrentDiscoveryPort {
           {
             guid: x.url,
             title: x.title.trim().slice(0, 512),
-            tracker: source.name,
+            tracker,
             size: x.size as number,
             seeders: (x.sid as number | null | undefined) ?? null,
             publishedAt:
@@ -139,6 +107,6 @@ export class JacredClient implements TorrentDiscoveryPort {
         return [];
       }
     });
-    return { releases: limitByTracker(releases, input.limit, (x) => x.tracker), degraded: false };
+    return limitByTracker(releases, limit, (x) => x.tracker);
   }
 }

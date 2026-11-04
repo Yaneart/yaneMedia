@@ -22,6 +22,8 @@ import { TorrentSessionRepository } from './torrent-session.repository';
 import { TORRSERVER_CONFIG, createTorrServerConfig } from './torrserver.config';
 import { TorrServerClient } from './torrserver.client';
 import { JacredClient } from './jacred.client';
+import { KnabenClient } from './knaben.client';
+import { TorrentCatalogsService } from './torrent-catalogs.service';
 import { TORRENT_DISCOVERY_PORT } from './torrent-discovery.port';
 import { TorrentDiscoveryController } from './torrent-discovery.controller';
 import { TorrentDiscoveryService } from './torrent-discovery.service';
@@ -46,7 +48,9 @@ import { TorrentSubtitleController } from './torrent-subtitle.controller';
     },
     TorrServerClient,
     JacredClient,
-    { provide: TORRENT_DISCOVERY_PORT, useExisting: JacredClient },
+    KnabenClient,
+    TorrentCatalogsService,
+    { provide: TORRENT_DISCOVERY_PORT, useExisting: TorrentCatalogsService },
     TorrentDiscoveryService,
     TorrentSessionRepository,
     TorrentSessionReconciler,

@@ -1,6 +1,6 @@
 # Первый запуск Home
 
-Home ищет раздачи через API Jacred и скачивает их через TorrServer на вашем сервере.
+Home ищет раздачи через API JacRed/Knaben и скачивает их через TorrServer на вашем сервере.
 Нужен Docker с Compose 2.24.4 или новее. Все команды выполняйте из корня проекта — папки с `compose.yaml`.
 
 ## 1. Подготовьте настройки
@@ -12,9 +12,11 @@ Home ищет раздачи через API Jacred и скачивает их ч
 cp backend/.env.example backend/.env
 ```
 
-В `backend/.env` заполните `TMDB_API_KEY` для каталога. Адрес API поиска уже указан: `JACRED_BASE_URL=https://jacred.su`.
-Можно использовать свой совместимый Jacred v1 API. Ключ и настройка индексаторов не требуются.
-Пустой `JACRED_BASE_URL` отключает поиск; ручной ввод magnet/`.torrent` остаётся доступным.
+В `backend/.env` заполните `TMDB_API_KEY` для каталога. В примере уже указаны
+`JACRED_BASE_URL=https://jacred.su`, резерв `JACRED_FALLBACK_URLS=https://jac.black`
+и независимый `KNABEN_BASE_URL=https://api.knaben.org`. Ключ и настройка индексаторов
+не требуются. Можно использовать свой совместимый JacRed v1 API.
+Очистка всех трёх значений отключает поиск; ручной ввод magnet/`.torrent` остаётся доступным.
 
 Почта необязательна для гостевого запуска. Для регистрации и подтверждения аккаунта нужны `RESEND_API_KEY` и `MAIL_FROM`.
 Просмотр torrent требует подтверждённого аккаунта.

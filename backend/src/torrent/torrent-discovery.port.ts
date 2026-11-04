@@ -19,7 +19,7 @@ export interface DiscoveryRelease {
   downloadUrl: string;
   infoHash: string | null;
   stale?: boolean;
-  catalog?: 'JacRed';
+  catalog?: 'JacRed' | 'Knaben';
 }
 
 export interface DiscoverySearchResult {

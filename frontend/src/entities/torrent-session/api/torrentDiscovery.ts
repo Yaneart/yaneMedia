@@ -9,7 +9,7 @@ export type TorrentCandidate = {
   title: string;
   tracker: string;
   stale: boolean;
-  catalog?: 'JacRed';
+  catalog?: 'JacRed' | 'Knaben';
   size: number;
   seeders: number | null;
   publishedAt: string | null;
@@ -62,7 +62,7 @@ function mapCandidates(value: unknown, mediaRef: string): TorrentCandidates {
         typeof item.title === 'string' &&
         typeof item.tracker === 'string' &&
         typeof item.stale === 'boolean' &&
-        (item.catalog === undefined || item.catalog === 'JacRed') &&
+        (item.catalog === undefined || item.catalog === 'JacRed' || item.catalog === 'Knaben') &&
         typeof item.size === 'number' &&
         Number.isSafeInteger(item.size) &&
         item.size >= 0 &&

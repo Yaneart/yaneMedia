@@ -67,6 +67,16 @@ export const appConfigValidationSchema = Joi.object({
   TORRSERVER_BODY_TIMEOUT_MS: Joi.number().integer().min(100).max(120_000).default(30_000),
   TORRSERVER_METADATA_TIMEOUT_MS: Joi.number().integer().min(1_000).max(180_000).default(120_000),
   JACRED_BASE_URL: torrServerOriginSchema.allow('').optional(),
+  JACRED_FALLBACK_URLS: Joi.string()
+    .allow('')
+    .custom((value: string, helpers) => {
+      const urls = value.split(',').map((url) => url.trim());
+      if (urls.length > 2 || urls.some((url) => torrServerOriginSchema.validate(url).error))
+        return helpers.error('any.invalid');
+      return value;
+    })
+    .optional(),
+  KNABEN_BASE_URL: torrServerOriginSchema.allow('').optional(),
 });
 
 @Module({
