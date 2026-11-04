@@ -56,7 +56,7 @@ describe('anime season navigation', () => {
     expect(createAnimeSeasonSelectorState(chain, 'shikimori:63816')).toBeNull();
   });
 
-  test('deduplicates split releases and navigates a canonical episode to its segment', () => {
+  test('keeps both parts selectable within the same season and routes each exact release', () => {
     const splitChain = [
       ...chain,
       {
@@ -72,8 +72,15 @@ describe('anime season navigation', () => {
 
     expect(createAnimeSeasonSelectorState(splitChain, 'shikimori:60000')?.options).toEqual([
       { number: 1, label: '1 сезон' },
-      { number: 2, label: '2 сезон' },
+      { number: 2, label: '2 сезон · 1 часть' },
+      { number: 3, label: '2 сезон · 2 часть' },
     ]);
+    expect(
+      createAnimeSeasonSelectorState(splitChain, 'shikimori:60000')?.selectedSeasonNumber,
+    ).toBe(3);
+    expect(getAnimeSeasonNavigationTarget(splitChain, 3, 'shikimori:59978')).toBe(
+      'shikimori:60000',
+    );
     expect(createCanonicalAnimeEpisodeOptions(splitChain, 'shikimori:59978')).toHaveLength(22);
     expect(getAnimeEpisodeNavigationTarget(splitChain, 2, 11, 'shikimori:59978')).toBe(
       'shikimori:60000',

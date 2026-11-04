@@ -156,6 +156,7 @@ function mount(kind: 'mp4' | 'embed' = 'mp4', anime = false, started = true, con
   const chain = anime
     ? [1, 2].map((number) => ({
         number,
+        releaseIndex: number - 1,
         mediaRef: number === 1 ? mediaRef : 'shikimori:2',
         slug: `anime-${number}`,
         title: `Anime ${number}`,

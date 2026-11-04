@@ -1,6 +1,8 @@
 import type { MediaEngine as MediaEngineInstance, StreamingProvider } from '@media-engine/core';
 import { createMediaEngineCache } from './media-engine-cache';
 import { countProviderResults } from './media-provider-diagnostics';
+import { withAnimeStreamingTitles } from './anime-streaming-titles';
+import { withAnimeStreamingReleases } from './anime-streaming-releases';
 
 export interface MediaEngineEnvironment {
   TMDB_API_KEY?: string;
@@ -68,12 +70,14 @@ export async function createMediaEngine(
     initemStreamingProvider(),
     kinobdStreamingProvider({ playerValidationLimit: 0 }),
     ddbbStreamingProvider(),
-    aniLibertyStreamingProvider(),
+    withAnimeStreamingTitles(aniLibertyStreamingProvider(), (ids, signal) =>
+      engine.getDetails({ ids, type: 'anime', language: 'ru' }, { signal }),
+    ),
     veoVeoStreamingProvider(),
-    videoHubStreamingProvider(),
+    withAnimeStreamingReleases(videoHubStreamingProvider()),
   ];
 
-  return new MediaEngine({
+  const engine = new MediaEngine({
     debug: true,
     timeoutMs: Math.max(
       CINEMETA_TIMEOUT_MS,
@@ -132,6 +136,7 @@ export async function createMediaEngine(
     ].map(countProviderResults),
     streamingProviders,
   });
+  return engine;
 }
 
 function readOptionalValue(value: string | undefined): string | undefined {

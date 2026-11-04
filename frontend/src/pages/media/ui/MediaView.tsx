@@ -71,6 +71,7 @@ import { torrentEpisodeNavigation } from '../model/torrentEpisodeNavigation';
 import {
   createAnimePlaybackEpisodes,
   getAvailabilityEpisode,
+  restoreAnimeEpisodeCoordinates,
   usesEpisodePlayback,
 } from '../model/animeEpisodeAvailability';
 import { resolveAvailablePlaybackMode } from '../model/playbackModeResolution';
@@ -263,8 +264,17 @@ export function MediaView({
   const mediaSession = session?.mediaRef === media.mediaRef ? session : null;
   const playbackIntentRef = useRef(mediaSession?.state);
   playbackIntentRef.current = mediaSession?.state;
-  const savedProgress =
+  const storedProgress =
     mediaSession ?? continueWatchingEntries.find((entry) => entry.mediaRef === media.mediaRef);
+  const currentAnimeSeason = animeSeasonChain.find((season) => season.mediaRef === media.mediaRef);
+  const savedEpisode =
+    media.type === 'anime'
+      ? restoreAnimeEpisodeCoordinates(storedProgress?.episode ?? null, currentAnimeSeason)
+      : storedProgress?.episode;
+  const savedProgress =
+    storedProgress && savedEpisode !== storedProgress.episode
+      ? { ...storedProgress, episode: savedEpisode ?? null }
+      : storedProgress;
   const preferences = usePlayerPreferences();
   const { state: authState } = useAuth();
   const accountKey = authState.status === 'authenticated' ? authState.user.email : 'inactive';
@@ -391,7 +401,6 @@ export function MediaView({
     availability ?? emptyAvailability,
     !usesEpisodePlayback(media),
   );
-  const currentAnimeSeason = animeSeasonChain.find((season) => season.mediaRef === media.mediaRef);
   const animeReleaseCoordinates =
     media.type === 'anime'
       ? (currentAnimeSeason ?? {

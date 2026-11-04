@@ -69,4 +69,29 @@ describe('createAnimeReleaseEpisodeSelection', () => {
       ),
     ).toBeUndefined();
   });
+
+  it('supports release-local lookup without a generic TV season catalog', () => {
+    expect(
+      createAnimeReleaseEpisodeSelection(
+        chain.map((entry) => ({ ...entry, canonicalMappingVerified: false })),
+        'work_s2p2',
+        { seasonNumber: 2, episodeNumber: 14, absoluteEpisodeNumber: 39 },
+      ),
+    ).toEqual({ releaseIndex: 2, releaseEpisodeNumber: 1, releaseEpisodeCounts: [25, 13, 12] });
+  });
+
+  it('rejects reordered and inconsistent release evidence', () => {
+    for (const entries of [
+      [chain[1], chain[0], chain[2]],
+      chain.map((entry, index) => (index === 1 ? { ...entry, absoluteEpisodeOffset: 26 } : entry)),
+    ]) {
+      expect(
+        createAnimeReleaseEpisodeSelection(entries, 'work_s2p2', {
+          seasonNumber: 2,
+          episodeNumber: 14,
+          absoluteEpisodeNumber: 39,
+        }),
+      ).toBeUndefined();
+    }
+  });
 });

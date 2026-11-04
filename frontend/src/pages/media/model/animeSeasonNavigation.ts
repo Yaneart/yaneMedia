@@ -9,20 +9,24 @@ export function createAnimeSeasonSelectorState(
   if (!selectedSeason || chain.length <= 1) return null;
 
   return {
-    selectedSeasonNumber: selectedSeason.number,
-    options: Array.from(new Set(chain.map(({ number }) => number))).map((number) => ({
-      number,
-      label: `${number} сезон`,
-    })),
+    selectedSeasonNumber: selectedSeason.releaseIndex + 1,
+    options: chain.map((release) => {
+      const parts = chain.filter(({ number }) => number === release.number);
+      const part = parts.findIndex(({ mediaRef }) => mediaRef === release.mediaRef) + 1;
+      return {
+        number: release.releaseIndex + 1,
+        label: `${release.number} сезон${parts.length > 1 ? ` · ${part} часть` : ''}`,
+      };
+    }),
   };
 }
 
 export function getAnimeSeasonNavigationTarget(
   chain: readonly AnimeSeasonChainEntry[],
-  seasonNumber: number,
+  selectionNumber: number,
   currentMediaRef: MediaRef,
 ): string | null {
-  const target = chain.find((season) => season.number === seasonNumber);
+  const target = chain.find((season) => season.releaseIndex + 1 === selectionNumber);
 
   return target && target.mediaRef !== currentMediaRef ? target.slug || target.mediaRef : null;
 }

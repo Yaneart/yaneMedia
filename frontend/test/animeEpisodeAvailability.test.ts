@@ -3,10 +3,34 @@ import type { DirectEpisodeOption } from '../src/features/source-selection';
 import {
   createAnimePlaybackEpisodes,
   getAvailabilityEpisode,
+  restoreAnimeEpisodeCoordinates,
   usesEpisodePlayback,
 } from '../src/pages/media/model/animeEpisodeAvailability';
 
 describe('episodic anime availability selection', () => {
+  it('preserves the exact saved local episode when old history called part 2 a new season', () => {
+    const part = {
+      number: 1,
+      releaseIndex: 1,
+      episodesCount: 13,
+      seasonEpisodeOffset: 12,
+      absoluteEpisodeOffset: 12,
+    } as any;
+    expect(
+      restoreAnimeEpisodeCoordinates(
+        { seasonNumber: 2, episodeNumber: 3, absoluteEpisodeNumber: 15 },
+        part,
+      ),
+    ).toEqual({
+      seasonNumber: 1,
+      episodeNumber: 15,
+      absoluteEpisodeNumber: 15,
+    });
+    const current = { seasonNumber: 1, episodeNumber: 15, absoluteEpisodeNumber: 15 };
+    expect(restoreAnimeEpisodeCoordinates(current, part)).toBe(current);
+    const outside = { seasonNumber: 2, episodeNumber: 14 };
+    expect(restoreAnimeEpisodeCoordinates(outside, part)).toBe(outside);
+  });
   const media = {
     type: 'anime',
     episodes: [{ episodeNumber: 2, absoluteEpisodeNumber: 2 }],

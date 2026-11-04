@@ -37,6 +37,144 @@ const currentDetails = {
 } as MediaDetails;
 
 describe('buildAnimeSeasonChain', () => {
+  it('does not collapse explicitly numbered anime seasons into one generic TV season', async () => {
+    const items = [
+      anime('1', { title: 'Re:Zero', episodesCount: 25 }),
+      anime('2', { title: 'Re:Zero 2nd Season', episodesCount: 13 }),
+      anime('3', { title: 'Re:Zero 2nd Season Part 2', episodesCount: 12 }),
+      anime('4', { title: 'Re:Zero 3rd Season', episodesCount: 16 }),
+      anime('5', { title: 'Re:Zero 4th Season', episodesCount: 19 }),
+    ];
+    const loadRelated = (ids: { shikimori?: string }) => {
+      const index = Number(ids.shikimori) - 1;
+      return Promise.resolve(
+        response([
+          ...(index > 0 ? [{ kind: 'prequel' as const, item: items[index - 1], sources: [] }] : []),
+          ...(index < 4 ? [{ kind: 'sequel' as const, item: items[index + 1], sources: [] }] : []),
+        ]),
+      );
+    };
+    const chain = await buildAnimeSeasonChain(
+      'shikimori:1',
+      {
+        ...items[0],
+        canonicalSeasons: [{ number: 1, episodesCount: 85 }],
+      },
+      loadRelated,
+    );
+    expect(chain.map(({ number }) => number)).toEqual([1, 2, 2, 3, 4]);
+  });
+
+  it('connects TV seasons across a reciprocal story special without counting its episodes', async () => {
+    const items = [
+      anime('1', { title: 'Dr. Stone', episodesCount: 24 }),
+      anime('2', { title: 'Dr. Stone: Stone Wars', episodesCount: 11 }),
+      anime('3', { title: 'Dr. Stone: Ryusui', animeKind: 'special', episodesCount: 1 }),
+      anime('4', { title: 'Dr. Stone: New World', episodesCount: 11 }),
+      anime('5', { title: 'Dr. Stone: New World Part 2', episodesCount: 11 }),
+    ];
+    const loadRelated = (ids: { shikimori?: string }) => {
+      const index = Number(ids.shikimori) - 1;
+      return Promise.resolve(
+        response([
+          ...(index > 0 ? [{ kind: 'prequel' as const, item: items[index - 1], sources: [] }] : []),
+          ...(index < items.length - 1
+            ? [{ kind: 'sequel' as const, item: items[index + 1], sources: [] }]
+            : []),
+        ]),
+      );
+    };
+    for (const current of [0, 4]) {
+      const chain = await buildAnimeSeasonChain(
+        `shikimori:${current + 1}`,
+        items[current],
+        loadRelated,
+      );
+      expect(
+        chain.map(({ number, episodesCount, absoluteEpisodeOffset }) => ({
+          number,
+          episodesCount,
+          absoluteEpisodeOffset,
+        })),
+      ).toEqual([
+        { number: 1, episodesCount: 24, absoluteEpisodeOffset: 0 },
+        { number: 2, episodesCount: 11, absoluteEpisodeOffset: 24 },
+        { number: 3, episodesCount: 11, absoluteEpisodeOffset: 35 },
+        { number: 3, episodesCount: 11, absoluteEpisodeOffset: 46 },
+      ]);
+    }
+  });
+
+  it('groups parts without generic TV metadata and normalizes counts from exact release details', async () => {
+    const releases = [
+      anime('1', { title: 'Mushoku Tensei', episodesCount: 11 }),
+      anime('2', { title: 'Mushoku Tensei Part 2', episodesCount: 12 }),
+      anime('3', { title: 'Mushoku Tensei II', episodesCount: 12 }),
+      anime('4', { title: 'Mushoku Tensei II Part 2', episodesCount: 12 }),
+    ];
+    const loadRelated = (ids: { shikimori?: string }) => {
+      const index = Number(ids.shikimori) - 1;
+      return Promise.resolve(
+        response([
+          ...(index > 0
+            ? [{ kind: 'prequel' as const, item: releases[index - 1], sources: [] }]
+            : []),
+          ...(index < 3
+            ? [
+                {
+                  kind: 'sequel' as const,
+                  item: {
+                    ...releases[index + 1],
+                    episodesCount: index === 1 ? 13 : releases[index + 1].episodesCount,
+                  },
+                  sources: [],
+                },
+              ]
+            : []),
+        ]),
+      );
+    };
+    const loadDetails = jest.fn((ids: { shikimori?: string }) =>
+      Promise.resolve(releases[Number(ids.shikimori) - 1] as MediaDetails),
+    );
+    for (const current of [0, 3]) {
+      const chain = await buildAnimeSeasonChain(
+        `shikimori:${current + 1}`,
+        releases[current],
+        loadRelated,
+        loadDetails,
+      );
+      expect(
+        chain.map(({ number, episodesCount, seasonEpisodeOffset, absoluteEpisodeOffset }) => ({
+          number,
+          episodesCount,
+          seasonEpisodeOffset,
+          absoluteEpisodeOffset,
+        })),
+      ).toEqual([
+        { number: 1, episodesCount: 11, seasonEpisodeOffset: 0, absoluteEpisodeOffset: 0 },
+        { number: 1, episodesCount: 12, seasonEpisodeOffset: 11, absoluteEpisodeOffset: 11 },
+        { number: 2, episodesCount: 12, seasonEpisodeOffset: 0, absoluteEpisodeOffset: 23 },
+        { number: 2, episodesCount: 12, seasonEpisodeOffset: 12, absoluteEpisodeOffset: 35 },
+      ]);
+    }
+  });
+
+  it('ignores special season 0 when validating a generic season catalog', async () => {
+    const chain = await buildAnimeSeasonChain(
+      'shikimori:1',
+      {
+        ...anime('1'),
+        canonicalSeasons: [
+          { number: 0, episodesCount: 5 },
+          { number: 1, episodesCount: 12 },
+        ],
+      },
+      () => Promise.resolve(response([])),
+    );
+    expect(chain[0].canonicalMappingVerified).toBe(true);
+  });
+
   it('builds a Frieren-shaped chain from the root and numbers only playable TV entries', async () => {
     const loadRelated = jest.fn((ids: { shikimori?: string }) => {
       switch (ids.shikimori) {

@@ -51,11 +51,13 @@ const ANIME_WORK_ID_SOURCES = [
   'shikimori',
 ] as const satisfies readonly (keyof ExternalIds)[];
 const ANIME_SEASON_CHAIN_CACHE_TTL_MS = 15 * 60_000;
+const ANIME_SEASON_CHAIN_RECOVERY_TTL_MS = 15_000;
 const ANIME_SEASON_CHAIN_CACHE_MAX_ENTRIES = 500;
 
 interface AnimeSeasonChainCacheEntry {
   expiresAt: number;
   value: Promise<CanonicalAnimeSeasonChainEntry[]>;
+  length?: number;
 }
 
 type CanonicalAnimeSeasonChainEntry = Omit<AnimeSeasonChainEntry, 'ids' | 'slug'> & {
@@ -207,18 +209,40 @@ export class MediaService {
 
     if (cached) this.animeSeasonChainCache.delete(mediaRef);
 
+    let recoverable = false;
     const value = buildAnimeSeasonChain(
       mediaRef,
       { ...details, ids: { ...details.ids, ...resolvedIds } },
-      (relatedIds) =>
-        this.runMediaEngine('related', () =>
+      async (relatedIds) => {
+        const response = await this.runMediaEngine('related', () =>
           this.mediaEngine.getRelatedMedia({
             ids: relatedIds,
             type: 'anime',
             language: 'ru',
             limit: 100,
           }),
-        ),
+        );
+        recoverable ||= response.meta.stale === true || response.meta.providers.failed.length > 0;
+        return response;
+      },
+      async (ids) => {
+        try {
+          const response = await this.runMediaEngine('details', () =>
+            this.mediaEngine.getDetails({
+              ids: this.toEngineInputIds({ ids }),
+              type: 'anime',
+              language: 'ru',
+            }),
+          );
+          return response.details;
+        } catch (error) {
+          if (error instanceof ServiceUnavailableException) {
+            recoverable = true;
+            return null;
+          }
+          throw error;
+        }
+      },
     )
       .then((entries) =>
         Promise.all(
@@ -237,8 +261,38 @@ export class MediaService {
           }),
         ),
       )
+      .then((entries) => {
+        const known = this.animeSeasonChainCache.get(mediaRef);
+        if (known?.length && known.length > entries.length && known.expiresAt > Date.now()) {
+          return known.value;
+        }
+        const cacheEntry = {
+          value: Promise.resolve(entries),
+          length: entries.length,
+          expiresAt:
+            Date.now() +
+            (recoverable || entries.length < 2
+              ? ANIME_SEASON_CHAIN_RECOVERY_TTL_MS
+              : ANIME_SEASON_CHAIN_CACHE_TTL_MS),
+        };
+        // Opening another part must use the same release counts and offsets.
+        for (const entry of entries) {
+          const existing = this.animeSeasonChainCache.get(entry.mediaRef);
+          if (
+            !existing?.length ||
+            existing.length <= entries.length ||
+            existing.expiresAt <= Date.now()
+          ) {
+            this.cacheAnimeSeasonChain(entry.mediaRef, cacheEntry);
+          }
+        }
+        if (entries.length === 0) this.animeSeasonChainCache.delete(mediaRef);
+        return entries;
+      })
       .catch((error: unknown) => {
-        this.animeSeasonChainCache.delete(mediaRef);
+        if (this.animeSeasonChainCache.get(mediaRef)?.value === value) {
+          this.animeSeasonChainCache.delete(mediaRef);
+        }
 
         if (
           error instanceof ServiceUnavailableException ||
@@ -250,19 +304,21 @@ export class MediaService {
         throw error;
       });
 
-    this.animeSeasonChainCache.set(mediaRef, {
+    this.cacheAnimeSeasonChain(mediaRef, {
       expiresAt: now + ANIME_SEASON_CHAIN_CACHE_TTL_MS,
       value,
     });
 
-    while (this.animeSeasonChainCache.size > ANIME_SEASON_CHAIN_CACHE_MAX_ENTRIES) {
-      const oldestKey = [...this.animeSeasonChainCache.keys()][0];
-
-      if (oldestKey === undefined) break;
-      this.animeSeasonChainCache.delete(oldestKey);
-    }
-
     return value;
+  }
+
+  private cacheAnimeSeasonChain(mediaRef: string, entry: AnimeSeasonChainCacheEntry): void {
+    this.animeSeasonChainCache.set(mediaRef, entry);
+    while (this.animeSeasonChainCache.size > ANIME_SEASON_CHAIN_CACHE_MAX_ENTRIES) {
+      const oldest = [...this.animeSeasonChainCache.keys()][0];
+      if (oldest === undefined) break;
+      this.animeSeasonChainCache.delete(oldest);
+    }
   }
 
   async getAvailabilityByRef(
@@ -348,14 +404,32 @@ export class MediaService {
       ? { ...(trustedDetails.ids ?? {}), ...engineIds }
       : engineIds;
     const mediaType = catalogItem?.type ?? details!.type;
+    if (mediaType === 'anime' && availabilityIds.shikimori && availabilityIds.myAnimeList) {
+      // A franchise's cinema page may point to its first MAL release. Do not
+      // reintroduce the redundant MAL anchor removed by toEngineInputIds.
+      delete availabilityIds.myAnimeList;
+    }
     const titleSource = catalogItem ?? details!;
     const currentMediaRef = resolved.identity
       ? this.toPublicRoute(resolved.identity).mediaRef
-      : mediaRef;
+      : trustedDetails
+        ? (await this.registerIdentity(trustedDetails, engineIds)).mediaRef
+        : mediaRef;
     const animeSeasonChain =
       mediaType === 'anime' && trustedDetails?.type === 'anime'
         ? await this.getAnimeSeasonChain(currentMediaRef, trustedDetails, engineIds)
         : [];
+    if (
+      mediaType === 'anime' &&
+      trustedDetails?.type === 'anime' &&
+      trustedDetails.animeKind === 'tv' &&
+      (trustedDetails.episodesCount ?? 0) > 0 &&
+      ['released', 'ended', 'ongoing'].includes(trustedDetails.status ?? '') &&
+      animeSeasonChain.length === 0 &&
+      Object.values(episodeSelection).some((value) => value !== undefined)
+    ) {
+      throw new ServiceUnavailableException('Anime episode mapping is temporarily unavailable');
+    }
     const animeReleaseEpisode = createAnimeReleaseEpisodeSelection(
       animeSeasonChain,
       currentMediaRef,

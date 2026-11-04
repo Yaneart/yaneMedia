@@ -10,7 +10,7 @@ export function createAnimeReleaseEpisodeSelection(
   const release = chain.find(({ mediaRef }) => mediaRef === currentMediaRef);
 
   if (
-    !release?.canonicalMappingVerified ||
+    !release ||
     episode.seasonNumber !== release.number ||
     episode.episodeNumber === undefined ||
     episode.absoluteEpisodeNumber === undefined
@@ -28,12 +28,20 @@ export function createAnimeReleaseEpisodeSelection(
     return undefined;
   }
 
-  const verifiedReleaseCount = chain.findIndex(({ canonicalMappingVerified }) => {
-    return !canonicalMappingVerified;
-  });
-  const releaseEpisodeCounts = chain
-    .slice(0, verifiedReleaseCount < 0 ? chain.length : verifiedReleaseCount)
-    .map(({ episodesCount }) => episodesCount);
+  // Release-local evidence comes from the reciprocal anime chain. It does not
+  // require a generic TV catalog to agree on the franchise's season numbering.
+  let absoluteOffset = 0;
+  for (const [index, entry] of chain.entries()) {
+    if (
+      entry.releaseIndex !== index ||
+      entry.absoluteEpisodeOffset !== absoluteOffset ||
+      !Number.isSafeInteger(entry.episodesCount) ||
+      entry.episodesCount < 1
+    )
+      return undefined;
+    absoluteOffset += entry.episodesCount;
+  }
+  const releaseEpisodeCounts = chain.map(({ episodesCount }) => episodesCount);
 
   if (release.releaseIndex >= releaseEpisodeCounts.length) return undefined;
 

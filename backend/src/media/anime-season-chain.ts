@@ -6,6 +6,7 @@ import type {
   RelatedMediaResponse,
 } from '@media-engine/core';
 import { createMediaRef } from './media-ref';
+import { groupAnimeReleases } from './anime-release-grouping';
 
 export const MAX_ANIME_SEASON_CHAIN_LENGTH = 12;
 
@@ -26,9 +27,28 @@ export interface AnimeSeasonChainEntry {
 interface AnimeSeasonNode extends AnimeSeasonChainEntry {
   ids: ExternalIds;
   identityRef: string;
+  titles: string[];
+  declaredSeason?: number;
 }
 
 type LoadRelatedMedia = (ids: ExternalIds) => Promise<RelatedMediaResponse>;
+type LoadReleaseDetails = (ids: ExternalIds) => Promise<MediaDetails | null>;
+
+function releaseTitles(item: RelatedMediaItem): string[] {
+  return [...new Set([item.title, item.originalTitle, ...(item.alternativeTitles ?? [])])].filter(
+    (title): title is string => Boolean(title?.trim()),
+  );
+}
+
+function declaredSeason(item: RelatedMediaItem): number | undefined {
+  for (const title of [item.originalTitle, item.title]) {
+    const match = /\b(?:season\s*([1-9]\d?)|([1-9]\d?)(?:st|nd|rd|th)?\s*season)\b/iu.exec(
+      title ?? '',
+    );
+    if (match) return Number(match[1] ?? match[2]);
+  }
+  return undefined;
+}
 
 function createAnimeIdentityRef(ids: ExternalIds): string | undefined {
   const myAnimeList = ids.myAnimeList?.trim() || ids.shikimori?.trim();
@@ -40,17 +60,20 @@ function createAnimeIdentityRef(ids: ExternalIds): string | undefined {
   return createMediaRef(ids, 'anime');
 }
 
-function isPlayableTvAnime(item: RelatedMediaItem): boolean {
+function isPlayableTvAnime(item: RelatedMediaItem, bridge = false): boolean {
   const isReleased =
     item.status === 'released' || item.status === 'ended' || item.status === 'ongoing';
 
   return (
-    item.type === 'anime' && item.animeKind === 'tv' && isReleased && (item.episodesCount ?? 0) > 0
+    item.type === 'anime' &&
+    (bridge ? item.animeKind === 'special' || item.animeKind === 'ova' : item.animeKind === 'tv') &&
+    isReleased &&
+    (item.episodesCount ?? 0) > 0
   );
 }
 
-function toRelatedNode(relation: MediaRelation): AnimeSeasonNode | undefined {
-  if (!isPlayableTvAnime(relation.item) || !relation.item.ids) return undefined;
+function toRelatedNode(relation: MediaRelation, bridge: boolean): AnimeSeasonNode | undefined {
+  if (!isPlayableTvAnime(relation.item, bridge) || !relation.item.ids) return undefined;
 
   const mediaRef = createMediaRef(relation.item.ids, 'anime');
   const identityRef = createAnimeIdentityRef(relation.item.ids);
@@ -64,6 +87,8 @@ function toRelatedNode(relation: MediaRelation): AnimeSeasonNode | undefined {
     identityRef,
     ids: relation.item.ids,
     title: relation.item.title,
+    titles: releaseTitles(relation.item),
+    declaredSeason: declaredSeason(relation.item),
     year: relation.item.year,
     episodesCount: relation.item.episodesCount!,
     seasonEpisodeOffset: 0,
@@ -75,13 +100,14 @@ function toRelatedNode(relation: MediaRelation): AnimeSeasonNode | undefined {
 function selectRelation(
   relations: readonly MediaRelation[],
   kind: 'prequel' | 'sequel',
+  bridge = false,
 ): { candidate?: AnimeSeasonNode; ambiguous: boolean } {
   const candidates = new Map<string, AnimeSeasonNode>();
 
   for (const relation of relations) {
     if (relation.kind !== kind) continue;
 
-    const candidate = toRelatedNode(relation);
+    const candidate = toRelatedNode(relation, bridge);
 
     if (!candidate) continue;
 
@@ -97,6 +123,7 @@ function selectRelation(
       ...candidate,
       ...existing,
       ids,
+      titles: [...new Set([...existing.titles, ...candidate.titles])],
       mediaRef: createMediaRef(ids, 'anime') ?? existing.mediaRef,
     });
   }
@@ -128,6 +155,8 @@ function toInitialNode(mediaRef: string, details: MediaDetails): AnimeSeasonNode
     identityRef: createAnimeIdentityRef(details.ids) ?? mediaRef,
     ids: details.ids,
     title: details.title,
+    titles: releaseTitles(details),
+    declaredSeason: declaredSeason(details),
     year: details.year,
     episodesCount,
     seasonEpisodeOffset: 0,
@@ -139,9 +168,9 @@ function toInitialNode(mediaRef: string, details: MediaDetails): AnimeSeasonNode
 function getCanonicalSeasonEpisodeCounts(details: MediaDetails): number[] | undefined {
   if (details.type !== 'anime' || !details.canonicalSeasons?.length) return undefined;
 
-  const seasons = [...details.canonicalSeasons].sort(
-    (first, second) => first.number - second.number,
-  );
+  const seasons = details.canonicalSeasons
+    .filter(({ number }) => number > 0)
+    .sort((first, second) => first.number - second.number);
 
   if (!seasons.every((season, index) => season.number === index + 1)) return undefined;
 
@@ -153,6 +182,7 @@ export async function buildAnimeSeasonChain(
   mediaRef: string,
   details: MediaDetails,
   loadRelatedMedia: LoadRelatedMedia,
+  loadReleaseDetails?: LoadReleaseDetails,
 ): Promise<AnimeSeasonChainEntry[]> {
   const initialNode = toInitialNode(mediaRef, details);
 
@@ -168,13 +198,28 @@ export async function buildAnimeSeasonChain(
     responseCache.set(node.identityRef, response);
     return response;
   };
+  const continuation = async (node: AnimeSeasonNode, kind: 'prequel' | 'sequel') => {
+    const bridgeIds = new Set([node.identityRef]);
+    for (let hop = 0; hop <= 3; hop += 1) {
+      const response = await loadRelations(node);
+      const next = selectRelation(response.relations, kind);
+      if (next.candidate || next.ambiguous) return next;
+      // A story special may connect two TV seasons (e.g. Dr. Stone: Ryusui).
+      // Follow only unambiguous prequel/sequel edges; never number the special.
+      const bridge = selectRelation(response.relations, kind, true);
+      if (bridge.ambiguous) return bridge;
+      if (!bridge.candidate || bridgeIds.has(bridge.candidate.identityRef)) break;
+      bridgeIds.add(bridge.candidate.identityRef);
+      node = bridge.candidate;
+    }
+    return { candidate: undefined, ambiguous: false };
+  };
   const visited = new Set([initialNode.identityRef]);
   const chain: AnimeSeasonNode[] = [initialNode];
   let cursor = initialNode;
 
   while (chain.length < MAX_ANIME_SEASON_CHAIN_LENGTH) {
-    const response = await loadRelations(cursor);
-    const { candidate: prequel, ambiguous } = selectRelation(response.relations, 'prequel');
+    const { candidate: prequel, ambiguous } = await continuation(cursor, 'prequel');
 
     if (ambiguous) return [];
     if (!prequel || visited.has(prequel.identityRef)) break;
@@ -187,8 +232,7 @@ export async function buildAnimeSeasonChain(
   for (let index = 0; index < chain.length - 1; index += 1) {
     const parent = chain[index];
     const child = chain[index + 1];
-    const response = await loadRelations(parent);
-    const { candidate: sequel, ambiguous } = selectRelation(response.relations, 'sequel');
+    const { candidate: sequel, ambiguous } = await continuation(parent, 'sequel');
 
     if (ambiguous || sequel?.identityRef !== child.identityRef) return [];
   }
@@ -196,14 +240,12 @@ export async function buildAnimeSeasonChain(
   cursor = initialNode;
 
   while (chain.length < MAX_ANIME_SEASON_CHAIN_LENGTH) {
-    const response = await loadRelations(cursor);
-    const { candidate: sequel, ambiguous } = selectRelation(response.relations, 'sequel');
+    const { candidate: sequel, ambiguous } = await continuation(cursor, 'sequel');
 
     if (ambiguous || !sequel || visited.has(sequel.identityRef)) break;
 
-    const sequelResponse = await loadRelations(sequel);
-    const { candidate: reciprocalPrequel, ambiguous: ambiguousPrequel } = selectRelation(
-      sequelResponse.relations,
+    const { candidate: reciprocalPrequel, ambiguous: ambiguousPrequel } = await continuation(
+      sequel,
       'prequel',
     );
 
@@ -214,7 +256,29 @@ export async function buildAnimeSeasonChain(
     cursor = sequel;
   }
 
+  if (loadReleaseDetails) {
+    await Promise.all(
+      chain.map(async (node) => {
+        const release = await loadReleaseDetails(node.ids);
+        if (
+          !release ||
+          release.type !== 'anime' ||
+          release.animeKind !== 'tv' ||
+          !release.ids ||
+          createAnimeIdentityRef(release.ids) !== node.identityRef
+        )
+          return;
+        node.titles = [...new Set([...node.titles, ...releaseTitles(release)])];
+        node.declaredSeason = declaredSeason(release) ?? node.declaredSeason;
+        // Use the same release metadata regardless of which part opened the page.
+        // AniList can include episode 0 in its count while Shikimori excludes it.
+        if ((release.episodesCount ?? 0) > 0) node.episodesCount = release.episodesCount!;
+      }),
+    );
+  }
+
   const releaseEpisodeCounts = chain.map(({ episodesCount }) => episodesCount);
+  const releaseGroups = groupAnimeReleases(chain);
   const canonicalSeasonEpisodeCounts = getCanonicalSeasonEpisodeCounts(details);
   const mapCanonicalSeasons = canonicalSeasonEpisodeCounts
     ? (await import('@media-engine/core')).mapAnimeReleasesToCanonicalSeasons
@@ -223,15 +287,26 @@ export async function buildAnimeSeasonChain(
 
   if (mapCanonicalSeasons && canonicalSeasonEpisodeCounts) {
     for (let length = releaseEpisodeCounts.length; length > 0 && !canonicalMapping; length -= 1) {
-      canonicalMapping = mapCanonicalSeasons(
+      const candidate = mapCanonicalSeasons(
         releaseEpisodeCounts.slice(0, length),
         canonicalSeasonEpisodeCounts,
       );
+      // Generic TV databases may put every Re:Zero season in one continuous
+      // season. Counts alone must not override the anime's declared seasons.
+      if (
+        candidate?.every(
+          (mapping, index) =>
+            chain[index].declaredSeason === undefined ||
+            chain[index].declaredSeason === mapping.canonicalSeasonNumber,
+        )
+      )
+        canonicalMapping = candidate;
     }
   }
 
   const mappedReleaseCount = canonicalMapping?.length ?? 0;
   const lastMappedSeasonNumber = canonicalMapping?.at(-1)?.canonicalSeasonNumber ?? 0;
+  const mappedGroupNumber = releaseGroups[mappedReleaseCount - 1]?.number ?? 0;
   let fallbackAbsoluteOffset = 0;
 
   return chain.map(({ mediaRef: nodeMediaRef, title, year, episodesCount, ids }, releaseIndex) => {
@@ -240,14 +315,15 @@ export async function buildAnimeSeasonChain(
       number:
         mapping?.canonicalSeasonNumber ??
         (mappedReleaseCount > 0
-          ? lastMappedSeasonNumber + releaseIndex - mappedReleaseCount + 1
-          : releaseIndex + 1),
+          ? lastMappedSeasonNumber + releaseGroups[releaseIndex].number - mappedGroupNumber
+          : releaseGroups[releaseIndex].number),
       releaseIndex,
       mediaRef: nodeMediaRef,
       title,
       year,
       episodesCount,
-      seasonEpisodeOffset: mapping?.canonicalSeasonEpisodeOffset ?? 0,
+      seasonEpisodeOffset:
+        mapping?.canonicalSeasonEpisodeOffset ?? releaseGroups[releaseIndex].seasonEpisodeOffset,
       absoluteEpisodeOffset: mapping?.canonicalAbsoluteEpisodeOffset ?? fallbackAbsoluteOffset,
       canonicalMappingVerified: mapping !== undefined,
       ids,

@@ -1,6 +1,29 @@
 import type { AnimeSeasonChainEntry, MediaDetails, MediaEpisode } from '../../../entities/media';
 import type { MediaSourceEpisodeRef } from '../../../entities/media-source';
+import type { PlaybackEpisodeSelection } from '../../../entities/playback';
 import type { DirectEpisodeOption } from '../../../features/source-selection';
+
+export function restoreAnimeEpisodeCoordinates(
+  episode: PlaybackEpisodeSelection | null,
+  release: AnimeSeasonChainEntry | undefined,
+): PlaybackEpisodeSelection | null {
+  if (
+    !episode ||
+    !release ||
+    episode.seasonNumber !== release.releaseIndex + 1 ||
+    episode.episodeNumber < 1 ||
+    episode.episodeNumber > release.episodesCount ||
+    (release.number === release.releaseIndex + 1 && release.seasonEpisodeOffset === 0)
+  )
+    return episode;
+  // Old history numbered every release as a season. The page's exact mediaRef
+  // identifies the part, so its saved local episode can keep its resume position.
+  return {
+    seasonNumber: release.number,
+    episodeNumber: release.seasonEpisodeOffset + episode.episodeNumber,
+    absoluteEpisodeNumber: release.absoluteEpisodeOffset + episode.episodeNumber,
+  };
+}
 
 export function usesEpisodePlayback(media: MediaDetails) {
   return media.type === 'series' || (media.type === 'anime' && media.animeKind !== 'movie');

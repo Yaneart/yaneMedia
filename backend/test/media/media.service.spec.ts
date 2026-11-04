@@ -6,6 +6,48 @@ import type { EditorialCatalogRepository } from '../../src/media/catalog/editori
 import { canonicalMediaRef, createMediaRegistryStub } from './media-registry.stub';
 
 describe('MediaService', () => {
+  it('retries failed anime relations and never launches an episode using an unknown release mapping', async () => {
+    const details = {
+      type: 'anime',
+      animeKind: 'tv',
+      status: 'released',
+      title: 'Anime',
+      ids: { shikimori: '123' },
+      episodesCount: 12,
+    };
+    const getDetails = jest.fn().mockResolvedValue({ details });
+    const getRelatedMedia = jest
+      .fn()
+      .mockRejectedValueOnce(new ServiceUnavailableException())
+      .mockResolvedValue({
+        relations: [],
+        meta: { providers: { requested: [], successful: [], failed: [] } },
+      });
+    const getAvailability = jest
+      .fn()
+      .mockResolvedValue({ options: [], checkedAt: '2026-11-04T00:00:00Z' });
+    const service = new MediaService(
+      { getDetails, getRelatedMedia, getAvailability } as unknown as MediaEngine,
+      createMediaRegistryStub(),
+    );
+    const episode = { seasonNumber: 1, episodeNumber: 1, absoluteEpisodeNumber: 1 };
+    await expect(
+      service.getAvailabilityByRef('shikimori:123', undefined, episode),
+    ).rejects.toBeInstanceOf(ServiceUnavailableException);
+    expect(getAvailability).not.toHaveBeenCalled();
+    await service.getAvailabilityByRef('shikimori:123', undefined, episode);
+    expect(getAvailability).toHaveBeenCalledWith(
+      expect.objectContaining({
+        animeReleaseEpisode: {
+          releaseIndex: 0,
+          releaseEpisodeNumber: 1,
+          releaseEpisodeCounts: [12],
+        },
+      }),
+      { playbackUserAgent: undefined },
+    );
+  });
+
   const createProviderFailure = () =>
     Object.assign(new Error('All providers failed'), {
       name: 'MediaEngineError',
@@ -448,6 +490,10 @@ describe('MediaService', () => {
       expect(entry.mediaRef).toMatch(/^work_/);
     }
     expect(second.animeSeasonChain).toEqual(first.animeSeasonChain);
+    expect(getRelatedMedia).toHaveBeenCalledTimes(2);
+    // The exact same chain is available when another release is opened.
+    const sibling = await service.getDetailsByRef('shikimori:52991');
+    expect(sibling.animeSeasonChain).toEqual(first.animeSeasonChain);
     expect(getRelatedMedia).toHaveBeenCalledTimes(2);
   });
 
@@ -1050,7 +1096,6 @@ describe('MediaService', () => {
         ids: {
           aniList: '154587',
           shikimori: '52991',
-          myAnimeList: '52991',
         },
         absoluteEpisodeNumber: 1,
       }),
