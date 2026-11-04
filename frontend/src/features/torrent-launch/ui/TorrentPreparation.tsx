@@ -34,23 +34,21 @@ export function TorrentPreparation({ state = 'created' }: { state?: TorrentSessi
   const percent = state === 'ready' ? 100 : Math.min(95, Math.floor(progress));
 
   return (
-    <div className="flex flex-col items-center gap-4 px-4 text-center">
+    <div className="flex flex-col items-center justify-center gap-4 px-4 text-center">
       <Spinner
         size="large"
         progress={percent}
         label="Подготовка торрента"
+        aria-valuetext={`${percent}%. Примерная готовность к просмотру`}
         aria-live="off"
-        className="[&>span:first-child]:text-white"
+        className="text-[3rem] sm:text-[3.75rem] [&>span:first-child]:text-white"
       />
-      <div>
-        <p aria-hidden="true" className="text-lg font-semibold text-white tabular-nums">
-          {percent}%
-        </p>
-        <p role="status" className="mt-1 text-caption text-white/70">
-          {stage.label}
-        </p>
-        <p className="mt-1 text-xs text-white/40">Примерная готовность к просмотру</p>
-      </div>
+      <p aria-hidden="true" className="text-2xl font-semibold text-white tabular-nums sm:text-3xl">
+        {percent}%
+      </p>
+      <span role="status" className="sr-only">
+        {stage.label}
+      </span>
     </div>
   );
 }
