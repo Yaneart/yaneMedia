@@ -196,7 +196,7 @@ export function UserRating({
       (
         fieldset?.querySelector<HTMLInputElement>('input:checked') ??
         fieldset?.querySelector<HTMLInputElement>('input')
-      )?.focus();
+      )?.focus({ preventScroll: true });
     });
     return () => cancelAnimationFrame(frame);
   }, [compact, isOpen, ownRatingQuery.isPending]);

@@ -164,7 +164,7 @@ export function PlaybackSourcePicker({
                             ? tabs.length - 1
                             : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) %
                               tabs.length;
-                      tabs[next]?.focus();
+                      tabs[next]?.focus({ preventScroll: true });
                       tabs[next]?.click();
                     }}
                   >
