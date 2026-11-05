@@ -12,10 +12,11 @@ import { WatchDock } from '@/widgets/watch-dock';
 import { mediaCatalogQueryOptions } from '@/widgets/media-catalog';
 import { useQueryClient } from '@tanstack/react-query';
 import { useMediaSummaryResolution, type MediaType } from '@/entities/media';
-import { mainContentId } from '@/shared';
+import { Button, DeviceIcon, mainContentId } from '@/shared';
 import { claimIntentPrefetch } from '@/shared/lib/intentPrefetch';
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { isActivePlaybackMediaRoute } from './watchDockVisibility';
+import { CompanionDialog, useCompanionConnection } from '@/features/companion';
 
 const catalogTypeByPath: Partial<Record<string, MediaType>> = {
   [routePaths.movies]: 'movie',
@@ -34,6 +35,8 @@ export function AppShell() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const prefetchedCatalogPathsRef = useRef(new Set<string>());
+  const companion = useCompanionConnection();
+  const [companionOpen, setCompanionOpen] = useState(false);
 
   const { session, endSession } = usePlaybackSession();
   const { cancelPendingRestoration, contentRef, mainRef, rowScrollRestoration, saveMainPosition } =
@@ -72,6 +75,11 @@ export function AppShell() {
 
   return (
     <div className="relative isolate flex h-dvh overflow-hidden bg-background">
+      <CompanionDialog
+        connection={companion}
+        open={companionOpen}
+        onClose={() => setCompanionOpen(false)}
+      />
       <div className="relative z-20 hidden lg:block">
         <AppShellWatermarks />
         <div className="relative z-10">
@@ -81,6 +89,12 @@ export function AppShell() {
             primaryItems={primaryNavigationItems}
             secondaryItems={secondaryNavigationItems}
             onItemIntent={prefetchCatalog}
+            companionControl={
+              <Button variant="ghost" size="small" onClick={() => setCompanionOpen(true)}>
+                <DeviceIcon className="size-5 shrink-0" />
+                Локальный помощник
+              </Button>
+            }
             playbackDock={
               showWatchDock ? (
                 <WatchDock
@@ -104,6 +118,7 @@ export function AppShell() {
             favoritesPath={routePaths.favorites}
             historyPath={routePaths.history}
             profilePath={routePaths.profile}
+            onCompanionClick={() => setCompanionOpen(true)}
           />
         </div>
         <main

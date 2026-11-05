@@ -8,6 +8,8 @@ import {
   Logo,
   MoreIcon,
   Popover,
+  DeviceIcon,
+  IconButton,
 } from '@/shared';
 import { NavLink, useLocation } from 'react-router';
 
@@ -16,6 +18,7 @@ type MobileHeaderProps = {
   favoritesPath: string;
   historyPath: string;
   profilePath: string;
+  onCompanionClick?: () => void;
 };
 
 export function MobileHeader({
@@ -23,6 +26,7 @@ export function MobileHeader({
   favoritesPath,
   historyPath,
   profilePath,
+  onCompanionClick,
 }: MobileHeaderProps) {
   const { pathname } = useLocation();
   const isLibraryRoute = pathname === favoritesPath || pathname === historyPath;
@@ -65,6 +69,18 @@ export function MobileHeader({
           >
             {(closePopover) => (
               <nav aria-label="Разделы пользователя" className="flex items-center gap-2">
+                {onCompanionClick && (
+                  <IconButton
+                    aria-label="Локальный помощник"
+                    title="Локальный помощник"
+                    onClick={() => {
+                      closePopover();
+                      onCompanionClick();
+                    }}
+                  >
+                    <DeviceIcon className="size-5" />
+                  </IconButton>
+                )}
                 <NavLink
                   to={favoritesPath}
                   aria-label="Открыть избранное"
