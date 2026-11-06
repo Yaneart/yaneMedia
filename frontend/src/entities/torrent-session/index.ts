@@ -27,7 +27,11 @@ export { switchTorrentFile } from './model/switchTorrentFile';
 export type { TorrentOutput } from './model/torrentOutput';
 export { preferredTorrentAudio, rememberTorrentAudio } from './model/torrentAudioPreference';
 export { isTorrentPlaybackSourceRef, torrentPlaybackSourceRef } from './model/torrentSession';
-export { createCandidateSession, getTorrentCandidates } from './api/torrentDiscovery';
+export {
+  createCandidateSession,
+  getTorrentCandidates,
+  resolveTorrentCandidate,
+} from './api/torrentDiscovery';
 export type { TorrentCandidate, TorrentCandidates } from './api/torrentDiscovery';
 export type {
   TorrentSession,

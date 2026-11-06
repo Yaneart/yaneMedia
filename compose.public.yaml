@@ -10,9 +10,6 @@ services:
       TORRSERVER_USERNAME_FILE: null
       TORRSERVER_PASSWORD_FILE: null
       TORRENT_IDEMPOTENCY_SECRET_FILE: null
-      JACRED_BASE_URL: null
-      JACRED_FALLBACK_URLS: null
-      KNABEN_BASE_URL: null
     depends_on: !override
       postgres:
         condition: service_healthy

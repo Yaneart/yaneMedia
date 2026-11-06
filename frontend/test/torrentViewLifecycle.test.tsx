@@ -24,6 +24,7 @@ const episodeModel = await import('../src/features/torrent-launch/model/torrentE
 const { TorrentFilePicker } = await import('../src/features/torrent-launch/ui/TorrentFilePicker');
 const { TorrentPreparation } = await import('../src/features/torrent-launch/ui/TorrentPreparation');
 mock.module('@/features/torrent-launch', () => ({
+  LocalTorrentLaunch: () => null,
   ...episodeModel,
   TorrentFilePicker,
   TorrentPreparation,

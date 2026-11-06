@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import { Button, CloseIcon, IconButton } from '@/shared';
 import { CheckIcon } from '@/shared/ui/Icons';
 import type { CompanionConnection } from '../model/useCompanionConnection';
@@ -13,6 +13,7 @@ export function CompanionDialog({
   onClose: () => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
   useEffect(() => {
     if (open) dialog.current?.showModal();
     else dialog.current?.close();
@@ -26,13 +27,13 @@ export function CompanionDialog({
   return (
     <dialog
       ref={dialog}
-      aria-labelledby="companion-title"
+      aria-labelledby={titleId}
       onClose={close}
       className="m-auto w-96 max-w-[calc(100vw-2rem)] rounded-overlay border border-border bg-popover p-5 text-text-primary shadow-overlay backdrop:bg-black/50"
     >
       <section aria-label="Подключение yaneCompanion" className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-3">
-          <h2 id="companion-title" className="text-body font-semibold">
+          <h2 id={titleId} className="text-body font-semibold">
             Локальный помощник
           </h2>
           <IconButton aria-label="Закрыть окно помощника" size="small" onClick={close}>

@@ -32,6 +32,7 @@ import { UserRating } from '@/features/user-rating';
 import { SeasonSelector } from '@/features/season-selection';
 import {
   TorrentLaunch,
+  LocalTorrentLaunch,
   TorrentFilePicker,
   TorrentPreparation,
   torrentEpisodes,
@@ -1216,7 +1217,23 @@ export function MediaView({
                                     onSessionChange={handleTorrentSessionChange}
                                   />
                                 )
-                              : undefined
+                              : () => (
+                                  <LocalTorrentLaunch
+                                    key={`${media.mediaRef}:${selectedDirectEpisode?.seasonNumber}:${selectedDirectEpisode?.episodeNumber}`}
+                                    mediaRef={media.mediaRef}
+                                    season={
+                                      usesEpisodePlayback(media)
+                                        ? selectedDirectEpisode?.seasonNumber
+                                        : undefined
+                                    }
+                                    episode={
+                                      usesEpisodePlayback(media) &&
+                                      selectedDirectEpisode?.seasonNumber !== undefined
+                                        ? selectedDirectEpisode.episodeNumber
+                                        : undefined
+                                    }
+                                  />
+                                )
                           }
                           torrentOpen={torrentOpen}
                           onEmbedSelect={(sourceRef) => {

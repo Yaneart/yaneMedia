@@ -12,6 +12,10 @@ import { Reflector } from '@nestjs/core';
 import type { Response } from 'express';
 import { defer, filter, finalize, fromEvent, map, takeUntil } from 'rxjs';
 import type { AuthRequest } from '../auth/auth-request';
+import type { DiscoveryRequest } from './torrent-discovery-owner.guard';
+
+const requestOwner = (request: AuthRequest) =>
+  (request as DiscoveryRequest).discoveryOwner ?? request.user!.id;
 
 // Per-process budgets: run one backend replica; session admission is also locked in PostgreSQL.
 export const TORRENT_LIMITS = {
@@ -127,7 +131,7 @@ export class TorrentRateGuard implements CanActivate {
     const policy = TORRENT_LIMITS[operation];
     this.budgets.rate(
       [
-        [`${operation}:user:${request.user!.id}`, policy.user],
+        [`${operation}:user:${requestOwner(request)}`, policy.user],
         [`${operation}:global`, policy.global],
       ],
       context.switchToHttp().getResponse<Response>(),
@@ -150,7 +154,7 @@ export class TorrentAdmissionInterceptor implements NestInterceptor {
     return defer(() => {
       const release = this.budgets.acquire(
         [
-          [`${operation}:user:${request.user!.id}`, policy.concurrentUser],
+          [`${operation}:user:${requestOwner(request)}`, policy.concurrentUser],
           [`${operation}:global`, policy.concurrentGlobal],
         ],
         context.switchToHttp().getResponse<Response>(),

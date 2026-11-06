@@ -2,19 +2,16 @@ import {
   Body,
   Controller,
   Get,
-  Headers,
   HttpCode,
   HttpException,
   Post,
   Query,
+  Req,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import type { AuthenticatedUser } from '../auth/auth-request';
 import { CsrfGuard } from '../auth/guards/csrf.guard';
 import { NoStore } from '../platform/http/cache-policy';
-import { TorrentAuthGuard } from './torrent-auth.guard';
 import {
   TorrentOriginGuard,
   TorrentRateGuard,
@@ -22,9 +19,10 @@ import {
   TorrentLimit,
 } from './torrent-security';
 import { TorrentDiscoveryService } from './torrent-discovery.service';
+import { TorrentDiscoveryOwnerGuard, type DiscoveryRequest } from './torrent-discovery-owner.guard';
 
 @Controller('torrent-discovery')
-@UseGuards(TorrentOriginGuard, TorrentAuthGuard, CsrfGuard, TorrentRateGuard)
+@UseGuards(TorrentOriginGuard, TorrentDiscoveryOwnerGuard, CsrfGuard, TorrentRateGuard)
 @UseInterceptors(TorrentAdmissionInterceptor)
 export class TorrentDiscoveryController {
   constructor(private readonly discovery: TorrentDiscoveryService) {}
@@ -32,14 +30,14 @@ export class TorrentDiscoveryController {
   @TorrentLimit('discovery')
   @Get('candidates')
   @NoStore()
-  search(@CurrentUser() user: AuthenticatedUser, @Query() query: Record<string, unknown>) {
+  search(@Req() request: DiscoveryRequest, @Query() query: Record<string, unknown>) {
     if (
       Object.keys(query).some((key) => !['mediaRef', 'season', 'episode'].includes(key)) ||
       typeof query.mediaRef !== 'string'
     )
       throw new HttpException({ code: 'VALIDATION_FAILED', message: 'VALIDATION_FAILED' }, 400);
     return this.discovery.search(
-      user.id,
+      request.discoveryOwner,
       query.mediaRef,
       parseNumber(query.season),
       parseNumber(query.episode),
@@ -47,24 +45,24 @@ export class TorrentDiscoveryController {
   }
 
   @TorrentLimit('create')
-  @Post('from-candidate')
-  @HttpCode(202)
+  @Post('resolve')
+  @HttpCode(200)
   @NoStore()
-  create(
-    @CurrentUser() user: AuthenticatedUser,
-    @Headers('idempotency-key') key: string,
-    @Body() body: unknown,
-  ) {
-    if (
-      !body ||
-      typeof body !== 'object' ||
-      Array.isArray(body) ||
-      Object.keys(body).length !== 1 ||
-      typeof (body as Record<string, unknown>).candidateRef !== 'string'
-    )
-      throw new HttpException({ code: 'VALIDATION_FAILED', message: 'VALIDATION_FAILED' }, 400);
-    return this.discovery.create(user.id, (body as { candidateRef: string }).candidateRef, key);
+  resolve(@Req() request: DiscoveryRequest, @Body() body: unknown) {
+    return this.discovery.resolve(request.discoveryOwner, candidateRef(body));
   }
+}
+
+export function candidateRef(body: unknown): string {
+  if (
+    !body ||
+    typeof body !== 'object' ||
+    Array.isArray(body) ||
+    Object.keys(body).length !== 1 ||
+    typeof (body as Record<string, unknown>).candidateRef !== 'string'
+  )
+    throw new HttpException({ code: 'VALIDATION_FAILED', message: 'VALIDATION_FAILED' }, 400);
+  return (body as { candidateRef: string }).candidateRef;
 }
 
 function parseNumber(value: unknown): number | undefined {

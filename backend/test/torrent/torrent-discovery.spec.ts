@@ -1,9 +1,11 @@
 import { TorrentDiscoveryService } from '../../src/torrent/torrent-discovery.service';
 import { dedupeReleases, rankRelease } from '../../src/torrent/torrent-candidate-ranking';
-import type { DiscoveryRelease } from '../../src/torrent/torrent-discovery.port';
+import type {
+  DiscoveryRelease,
+  TorrentDiscoveryPort,
+} from '../../src/torrent/torrent-discovery.port';
 import type { MediaRegistryService } from '../../src/media/registry/media-registry.service';
 import type { MediaService } from '../../src/media/media.service';
-import type { TorrentInputService } from '../../src/torrent/torrent-input.service';
 
 const mediaRef = 'work_123e4567-e89b-42d3-a456-426614174000';
 const release: DiscoveryRelease = {
@@ -26,7 +28,11 @@ describe('torrent discovery', () => {
     expect(rank.reasons).toContain('title_match');
     expect(rank.reasons).not.toContain('title_mismatch');
   });
-  const discovery = { search: jest.fn().mockResolvedValue(found) };
+  const discovery = {
+    search: jest
+      .fn<ReturnType<TorrentDiscoveryPort['search']>, Parameters<TorrentDiscoveryPort['search']>>()
+      .mockResolvedValue(found),
+  };
   const registry = { resolve: jest.fn().mockResolvedValue({ mediaRef, type: 'series' }) };
   const media = {
     getSummaryByRef: jest.fn().mockResolvedValue({
@@ -38,12 +44,10 @@ describe('torrent discovery', () => {
       },
     }),
   };
-  const input = { create: jest.fn().mockResolvedValue({ sessionId: 'session' }) };
   const service = new TorrentDiscoveryService(
     discovery,
     registry as unknown as MediaRegistryService,
     media as unknown as MediaService,
-    input as unknown as TorrentInputService,
   );
 
   beforeEach(() => {
@@ -136,20 +140,16 @@ describe('torrent discovery', () => {
     expect(JSON.stringify(result)).not.toContain('magnet:');
   });
 
-  it('binds candidates to the owner and uses validated input', async () => {
+  it('binds candidates to the owner and resolves metadata without session admission', async () => {
     const { candidates } = await service.search('owner-2', mediaRef);
-    await expect(
-      service.create('other', candidates[0].candidateRef, 'x'.repeat(16)),
-    ).rejects.toMatchObject({ status: 404 });
-    await service.create('owner-2', candidates[0].candidateRef, 'x'.repeat(16));
-    expect(input.create).toHaveBeenCalledWith(
-      'owner-2',
-      'magnet',
-      expect.stringContaining('xt='),
-      mediaRef,
-      'x'.repeat(16),
-      release.downloadUrl,
-    );
+    expect(() => service.resolve('other', candidates[0].candidateRef)).toThrow();
+    const result = service.resolve('owner-2', candidates[0].candidateRef);
+    expect(result.locator.kind).toBe('magnet');
+    expect(result.locator.value).toContain('xt=');
+    expect(Date.parse(result.expiresAt) - Date.now()).toBeLessThanOrEqual(120_000);
+    const home = service.homeCandidate('owner-2', candidates[0].candidateRef);
+    expect(home.mediaRef).toBe(mediaRef);
+    expect(home.input).toContain('xt=');
   });
 
   it('rejects arbitrary query coordinates and unsafe download origins', async () => {
@@ -206,22 +206,17 @@ describe('torrent discovery', () => {
     });
     expect((await service.search('owner-unsafe', mediaRef)).candidates).toHaveLength(0);
     expect(fetchSpy).not.toHaveBeenCalled();
-    expect(input.create).not.toHaveBeenCalled();
   });
 
   it('reports total catalog failure as unavailable', async () => {
     discovery.search.mockRejectedValue(new Error('catalog offline'));
     await expect(service.search('owner-offline', mediaRef)).rejects.toMatchObject({ status: 503 });
-    expect(input.create).not.toHaveBeenCalled();
   });
 
   it('expires owner candidates before creating a session', async () => {
     const { candidates } = await service.search('owner-expired', mediaRef);
     jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 10 * 60_000 + 1);
-    await expect(
-      service.create('owner-expired', candidates[0].candidateRef, 'x'.repeat(16)),
-    ).rejects.toMatchObject({ status: 404 });
-    expect(input.create).not.toHaveBeenCalled();
+    expect(() => service.resolve('owner-expired', candidates[0].candidateRef)).toThrow();
   });
 
   it('deduplicates by hash and fallback attributes and penalizes mismatches', () => {

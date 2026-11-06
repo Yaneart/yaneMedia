@@ -2,7 +2,6 @@ import { randomBytes } from 'node:crypto';
 import { Inject, Injectable, HttpException } from '@nestjs/common';
 import { MediaRegistryService } from '../media/registry/media-registry.service';
 import { MediaService } from '../media/media.service';
-import { TorrentInputService } from './torrent-input.service';
 import { TorrentInputError, validateMagnet } from './torrent-input.validation';
 import {
   TORRENT_DISCOVERY_PORT,
@@ -41,7 +40,6 @@ export class TorrentDiscoveryService {
     @Inject(TORRENT_DISCOVERY_PORT) private readonly discovery: TorrentDiscoveryPort,
     private readonly registry: MediaRegistryService,
     private readonly media: MediaService,
-    private readonly input: TorrentInputService,
   ) {}
 
   async search(ownerId: string, mediaRef: string, season?: number, episode?: number) {
@@ -135,27 +133,32 @@ export class TorrentDiscoveryService {
     }
   }
 
-  async create(ownerId: string, candidateRef: string, key: string) {
-    if (!/^[\x21-\x7e]{16,128}$/.test(key)) throw error(400, 'VALIDATION_FAILED');
+  resolve(ownerId: string, candidateRef: string) {
     if (!/^candidate_[A-Za-z0-9_-]{24}$/.test(candidateRef))
       throw error(404, 'TORRENT_CANDIDATE_NOT_FOUND');
     const candidate = this.candidates.get(candidateRef);
     if (!candidate || candidate.ownerId !== ownerId || candidate.expiresAt <= Date.now())
       throw error(404, 'TORRENT_CANDIDATE_NOT_FOUND');
-    const { release, mediaRef } = candidate;
     try {
-      return await this.input.create(
-        ownerId,
-        'magnet',
-        validateMagnet(release.downloadUrl),
-        mediaRef,
-        key,
-        release.downloadUrl,
-      );
+      const value = publicMagnet(candidate.release.downloadUrl);
+      return {
+        locator: { kind: 'magnet' as const, value },
+        expiresAt: new Date(Math.min(candidate.expiresAt, Date.now() + 120_000)).toISOString(),
+      };
     } catch (cause) {
       if (cause instanceof TorrentInputError) throw error(422, 'TORRENT_CANDIDATE_UNSAFE');
       throw cause;
     }
+  }
+
+  homeCandidate(ownerId: string, candidateRef: string) {
+    this.resolve(ownerId, candidateRef);
+    const candidate = this.candidates.get(candidateRef)!;
+    return {
+      mediaRef: candidate.mediaRef,
+      input: validateMagnet(candidate.release.downloadUrl),
+      source: candidate.release.downloadUrl,
+    };
   }
 
   private admit(ownerId: string) {
@@ -171,7 +174,7 @@ export class TorrentDiscoveryService {
 
   private usable(downloadUrl: string): boolean {
     try {
-      validateMagnet(downloadUrl);
+      publicMagnet(downloadUrl);
       return true;
     } catch {
       return false;
@@ -189,6 +192,22 @@ export class TorrentDiscoveryService {
       }
     }
   }
+}
+
+// Catalog locators must never export tracker passkeys. Keep only anonymous
+// announce URLs; private user metainfo goes directly to the local helper.
+function publicMagnet(value: string) {
+  const url = new URL(validateMagnet(value));
+  const trackers = url.searchParams.getAll('tr');
+  for (const raw of trackers) {
+    const tracker = new URL(raw);
+    if (
+      tracker.search ||
+      !/^\/(?:announce(?:\.php)?|ann|tracker\/announce(?:\.php)?)\/?$/.test(tracker.pathname)
+    )
+      throw new TorrentInputError('TORRENT_CANDIDATE_UNSAFE');
+  }
+  return url.toString();
 }
 
 function validNumber(value: number | undefined, min: number, max: number) {

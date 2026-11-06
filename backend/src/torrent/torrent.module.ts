@@ -5,12 +5,6 @@ import { DatabaseModule } from '../database/database.module';
 import { AuthModule } from '../auth/auth.module';
 import { MediaModule } from '../media/media.module';
 import { TorrentAuthGuard } from './torrent-auth.guard';
-import {
-  TorrentBudgets,
-  TorrentOriginGuard,
-  TorrentRateGuard,
-  TorrentAdmissionInterceptor,
-} from './torrent-security';
 import { TorrentInputController } from './torrent-input.controller';
 import { TorrentInputService } from './torrent-input.service';
 import { TorrentPlaybackService } from './torrent-playback.service';
@@ -21,22 +15,18 @@ import { TorrentSessionReconciler } from './torrent-session-reconciler';
 import { TorrentSessionRepository } from './torrent-session.repository';
 import { TORRSERVER_CONFIG, createTorrServerConfig } from './torrserver.config';
 import { TorrServerClient } from './torrserver.client';
-import { JacredClient } from './jacred.client';
-import { KnabenClient } from './knaben.client';
-import { TorrentCatalogsService } from './torrent-catalogs.service';
-import { TORRENT_DISCOVERY_PORT } from './torrent-discovery.port';
-import { TorrentDiscoveryController } from './torrent-discovery.controller';
-import { TorrentDiscoveryService } from './torrent-discovery.service';
+import { HomeTorrentDiscoveryController } from './home-torrent-discovery.controller';
+import { TorrentDiscoveryModule } from './torrent-discovery.module';
 import { TorrentMetrics } from './torrent-metrics';
 import { TorrentSubtitleService } from './torrent-subtitle.service';
 import { TorrentSubtitleController } from './torrent-subtitle.controller';
 
 @Module({
-  imports: [AppConfigModule, DatabaseModule, AuthModule, MediaModule],
+  imports: [AppConfigModule, DatabaseModule, AuthModule, MediaModule, TorrentDiscoveryModule],
   controllers: [
     TorrentInputController,
     TorrentHlsController,
-    TorrentDiscoveryController,
+    HomeTorrentDiscoveryController,
     TorrentSubtitleController,
   ],
   providers: [
@@ -47,18 +37,9 @@ import { TorrentSubtitleController } from './torrent-subtitle.controller';
       useFactory: createTorrServerConfig,
     },
     TorrServerClient,
-    JacredClient,
-    KnabenClient,
-    TorrentCatalogsService,
-    { provide: TORRENT_DISCOVERY_PORT, useExisting: TorrentCatalogsService },
-    TorrentDiscoveryService,
     TorrentSessionRepository,
     TorrentSessionReconciler,
     TorrentAuthGuard,
-    TorrentBudgets,
-    TorrentOriginGuard,
-    TorrentRateGuard,
-    TorrentAdmissionInterceptor,
     TorrentInputService,
     TorrentPlaybackService,
     TorrentStreamGateway,
@@ -69,7 +50,7 @@ import { TorrentSubtitleController } from './torrent-subtitle.controller';
     TorrentMetrics,
     TORRSERVER_CONFIG,
     TorrServerClient,
-    TORRENT_DISCOVERY_PORT,
+    TorrentDiscoveryModule,
     TorrentSessionRepository,
     TorrentStreamGateway,
   ],

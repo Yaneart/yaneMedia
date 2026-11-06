@@ -137,3 +137,32 @@ export async function createCandidateSession(
     throw toTorrentRequestError(error);
   }
 }
+
+export async function resolveTorrentCandidate(
+  candidateRef: string,
+  signal: AbortSignal,
+): Promise<{ kind: 'magnet'; value: string }> {
+  const combined = AbortSignal.any([signal, torrentAccountSignal()]);
+  const result = await apiRequest<unknown>('/torrent-discovery/resolve', {
+    method: 'POST',
+    credentials: 'include',
+    signal: combined,
+    headers: { 'X-YaneMedia-CSRF': '1', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ candidateRef }),
+  });
+  combined.throwIfAborted();
+  if (
+    !record(result) ||
+    !record(result.locator) ||
+    result.locator.kind !== 'magnet' ||
+    typeof result.locator.value !== 'string' ||
+    !result.locator.value.startsWith('magnet:?') ||
+    new TextEncoder().encode(result.locator.value).length > 4096 ||
+    typeof result.expiresAt !== 'string' ||
+    !Number.isFinite(Date.parse(result.expiresAt)) ||
+    Date.parse(result.expiresAt) <= Date.now() ||
+    Date.parse(result.expiresAt) > Date.now() + 125_000
+  )
+    return invalid();
+  return { kind: 'magnet', value: result.locator.value };
+}

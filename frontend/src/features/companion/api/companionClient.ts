@@ -44,21 +44,29 @@ async function permissionDenied() {
   }
 }
 
-async function request(path: string, method: string, signal: AbortSignal, token?: string) {
+export async function companionRequest(
+  path: string,
+  method: string,
+  signal: AbortSignal,
+  token?: string,
+  body?: unknown,
+  key?: string,
+) {
   const headers: Record<string, string> = {};
   if (token) headers.Authorization = `Bearer ${token}`;
   if (method === 'POST') headers['Content-Type'] = 'application/json';
+  if (key) headers['Idempotency-Key'] = key;
   const options: RequestInit & { targetAddressSpace: 'loopback' } = {
     method,
     headers,
-    signal: AbortSignal.any([signal, AbortSignal.timeout(5_000)]),
+    signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
     credentials: 'omit',
     redirect: 'error',
     cache: 'no-store',
     mode: 'cors',
     referrerPolicy: 'no-referrer',
     targetAddressSpace: 'loopback',
-    ...(method === 'POST' ? { body: '{}' } : {}),
+    ...(method === 'POST' ? { body: JSON.stringify(body ?? {}) } : {}),
   };
   let response: Response;
   try {
@@ -78,6 +86,8 @@ async function request(path: string, method: string, signal: AbortSignal, token?
     throw new CompanionError('INVALID_RESPONSE');
   }
 }
+
+const request = companionRequest;
 
 export async function hello(signal: AbortSignal): Promise<CompanionHello> {
   const result = await request('/hello', 'GET', signal);

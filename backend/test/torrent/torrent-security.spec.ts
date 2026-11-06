@@ -13,6 +13,8 @@ import { TorrentInputService } from '../../src/torrent/torrent-input.service';
 import { TorrentPlaybackService } from '../../src/torrent/torrent-playback.service';
 import { TorrentSessionReconciler } from '../../src/torrent/torrent-session-reconciler';
 import { TorrentDiscoveryController } from '../../src/torrent/torrent-discovery.controller';
+import { HomeTorrentDiscoveryController } from '../../src/torrent/home-torrent-discovery.controller';
+import { SessionGuard } from '../../src/auth/guards/session.guard';
 import { TorrentDiscoveryService } from '../../src/torrent/torrent-discovery.service';
 import { TorrentHlsController } from '../../src/torrent/torrent-hls.controller';
 import { TorrentHlsService } from '../../src/torrent/torrent-hls.service';
@@ -59,10 +61,16 @@ describe('torrent HTTP security boundary', () => {
       return Promise.resolve();
     });
     const module = await Test.createTestingModule({
-      controllers: [TorrentInputController, TorrentDiscoveryController, TorrentHlsController],
+      controllers: [
+        TorrentInputController,
+        TorrentDiscoveryController,
+        HomeTorrentDiscoveryController,
+        TorrentHlsController,
+      ],
       providers: [
         TorrentBudgets,
         CsrfGuard,
+        SessionGuard,
         { provide: ConfigService, useValue: new ConfigService({ FRONTEND_ORIGIN: origin }) },
         { provide: AuthRepository, useValue: { findUserBySessionHash: auth } },
         { provide: TorrentInputService, useValue: { create } },

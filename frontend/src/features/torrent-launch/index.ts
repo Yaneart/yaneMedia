@@ -1,4 +1,5 @@
 export { TorrentLaunch } from './ui/TorrentLaunch';
+export { LocalTorrentLaunch } from './ui/LocalTorrentLaunch';
 export { TorrentFilePicker } from './ui/TorrentFilePicker';
 export { TorrentPreparation } from './ui/TorrentPreparation';
 export {
