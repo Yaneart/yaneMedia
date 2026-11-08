@@ -57,6 +57,7 @@ const PROVIDERS = new Set([
   'initem-streaming',
   'rutube-streaming',
   'kodik-streaming',
+  'filmix-streaming',
 ]);
 const FAILURE_CODES = new Set([
   'PROVIDER_ERROR',

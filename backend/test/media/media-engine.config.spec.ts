@@ -23,11 +23,13 @@ describe('Media Engine configuration', () => {
     ).toEqual([false, false]);
   });
 
-  it('enables configured primaries and optional direct Kodik without exposing secrets', async () => {
+  it('enables configured primaries and token-backed streaming without exposing secrets', async () => {
     const engine = await createMediaEngine({
       TMDB_API_KEY: ' tmdb-server-secret ',
       MEDIA_ENGINE_SHIKIMORI_USER_AGENT: ' yaneMedia/1.0 ',
       KODIK_API_KEY: ' kodik-server-secret ',
+      VEOVEO_API_KEY: ' veoveo-server-secret ',
+      FILMIX_API_KEY: ' filmix-server-secret ',
     });
 
     expect(
@@ -38,6 +40,7 @@ describe('Media Engine configuration', () => {
     ).toEqual([true, true]);
     expect(engine.getStreamingProviders().map(({ name }) => name)).toEqual([
       'kodik-streaming',
+      'filmix-streaming',
       'rutube-streaming',
       'aderom-streaming',
       'initem-streaming',
@@ -54,12 +57,32 @@ describe('Media Engine configuration', () => {
     ]);
     expect(serialized).not.toContain('tmdb-server-secret');
     expect(serialized).not.toContain('kodik-server-secret');
+    expect(serialized).not.toContain('veoveo-server-secret');
+    expect(serialized).not.toContain('filmix-server-secret');
   });
 
-  it('does not construct direct Kodik for blank configuration', async () => {
-    const engine = await createMediaEngine({ KODIK_API_KEY: '   ' });
+  it('does not construct token-backed streaming for missing or blank configuration', async () => {
+    for (const env of [
+      {},
+      { KODIK_API_KEY: '   ', VEOVEO_API_KEY: '   ', FILMIX_API_KEY: '   ' },
+    ]) {
+      const engine = await createMediaEngine(env);
 
-    expect(engine.getStreamingProviders().map(({ name }) => name)).not.toContain('kodik-streaming');
+      const names = engine.getStreamingProviders().map(({ name }) => name);
+      for (const name of ['kodik-streaming', 'veoveo-streaming', 'filmix-streaming']) {
+        expect(names).not.toContain(name);
+      }
+    }
+  });
+
+  it('supports the operator-approved Filmix HTTP API and HTTPS overrides', async () => {
+    for (const baseUrl of ['http://filmix-api.test/api/v2', 'https://filmix-api.test/api/v2']) {
+      const engine = await createMediaEngine({
+        FILMIX_API_KEY: 'filmix-server-secret',
+        FILMIX_API_BASE_URL: baseUrl,
+      });
+      expect(engine.getStreamingProviders().map(({ name }) => name)).toContain('filmix-streaming');
+    }
   });
 
   it('enables token-free Rutube for movies', async () => {

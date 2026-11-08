@@ -31,6 +31,13 @@ export const appConfigValidationSchema = Joi.object({
   TMDB_API_KEY: Joi.string().trim().max(4096).allow('').optional(),
   MEDIA_ENGINE_SHIKIMORI_USER_AGENT: Joi.string().trim().max(512).allow('').optional(),
   KODIK_API_KEY: Joi.string().trim().max(4096).allow('').optional(),
+  VEOVEO_API_KEY: Joi.string().trim().max(4096).allow('').optional(),
+  FILMIX_API_KEY: Joi.string().trim().max(512).pattern(/^\S*$/).allow('').optional(),
+  FILMIX_API_BASE_URL: Joi.string()
+    .trim()
+    .uri({ scheme: ['http', 'https'] })
+    .allow('')
+    .optional(),
   FRONTEND_ORIGIN: Joi.string()
     .uri({ scheme: ['http', 'https'] })
     .custom((value: string, helpers) => {

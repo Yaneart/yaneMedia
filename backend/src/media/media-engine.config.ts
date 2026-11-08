@@ -8,6 +8,9 @@ export interface MediaEngineEnvironment {
   TMDB_API_KEY?: string;
   MEDIA_ENGINE_SHIKIMORI_USER_AGENT?: string;
   KODIK_API_KEY?: string;
+  VEOVEO_API_KEY?: string;
+  FILMIX_API_KEY?: string;
+  FILMIX_API_BASE_URL?: string;
 }
 
 const PROVIDER_TIMEOUT_MS = 5_000;
@@ -36,6 +39,7 @@ export async function createMediaEngine(
       aniListProvider,
       cinemetaProvider,
       ddbbStreamingProvider,
+      filmixStreamingProvider,
       initemStreamingProvider,
       kinobdProvider,
       kinobdStreamingProvider,
@@ -63,8 +67,20 @@ export async function createMediaEngine(
     }),
   );
   const kodikApiKey = readOptionalValue(env.KODIK_API_KEY);
+  const veoVeoApiKey = readOptionalValue(env.VEOVEO_API_KEY);
+  const filmixToken = readOptionalValue(env.FILMIX_API_KEY);
   const streamingProviders: StreamingProvider[] = [
     ...(kodikApiKey ? [kodikStreamingProvider({ apiKey: kodikApiKey })] : []),
+    ...(filmixToken
+      ? [
+          filmixStreamingProvider({
+            token: filmixToken,
+            baseUrl: readOptionalValue(env.FILMIX_API_BASE_URL) ?? 'http://filmixapp.cyou/api/v2',
+            // The operator explicitly permits HTTP token authentication for Filmix in this app.
+            allowInsecureHttpToken: true,
+          }),
+        ]
+      : []),
     rutubeStreamingProvider(),
     aderomStreamingProvider(),
     initemStreamingProvider(),
@@ -73,7 +89,7 @@ export async function createMediaEngine(
     withAnimeStreamingTitles(aniLibertyStreamingProvider(), (ids, signal) =>
       engine.getDetails({ ids, type: 'anime', language: 'ru' }, { signal }),
     ),
-    veoVeoStreamingProvider(),
+    ...(veoVeoApiKey ? [veoVeoStreamingProvider({ apiKey: veoVeoApiKey })] : []),
     withAnimeStreamingReleases(videoHubStreamingProvider()),
   ];
 
@@ -97,6 +113,7 @@ export async function createMediaEngine(
       tvmaze: PROVIDER_TIMEOUT_MS,
       wikidata: PROVIDER_TIMEOUT_MS,
       'kodik-streaming': STREAMING_PROVIDER_TIMEOUT_MS,
+      'filmix-streaming': STREAMING_PROVIDER_TIMEOUT_MS,
       'rutube-streaming': RUTUBE_STREAMING_PROVIDER_TIMEOUT_MS,
       'kinobd-streaming': STREAMING_PROVIDER_TIMEOUT_MS,
       'ddbb-streaming': STREAMING_PROVIDER_TIMEOUT_MS,

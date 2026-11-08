@@ -38,8 +38,14 @@ const meta: ResponseMeta = {
 };
 
 describe('provider diagnostics', () => {
-  it('includes current primary metadata providers and direct Kodik', () => {
-    const providers = ['tmdb-official', 'shikimori-graphql', 'kodik-streaming'];
+  it('includes current primary metadata providers and direct token-backed streaming', () => {
+    const providers = [
+      'tmdb-official',
+      'shikimori-graphql',
+      'kodik-streaming',
+      'veoveo-streaming',
+      'filmix-streaming',
+    ];
     const events = providerDiagnostics('details', {
       providers: {
         requested: [...providers, 'untrusted-provider'],
