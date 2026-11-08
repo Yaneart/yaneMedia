@@ -37,6 +37,51 @@ const currentDetails = {
 } as MediaDetails;
 
 describe('buildAnimeSeasonChain', () => {
+  it.each(['ona', 'tv'] as const)(
+    'connects %s seasons with ONA releases from either end and refreshes their counts',
+    async (firstKind) => {
+      const releases = [
+        anime('42310', { animeKind: firstKind, episodesCount: 10 }),
+        anime('61990', { animeKind: 'ona', episodesCount: 10 }),
+      ];
+      const loadRelated = (ids: { shikimori?: string }) =>
+        Promise.resolve(
+          response([
+            ids.shikimori === '42310'
+              ? { kind: 'sequel', item: { ...releases[1], episodesCount: 11 }, sources: [] }
+              : { kind: 'prequel', item: releases[0], sources: [] },
+          ]),
+        );
+      const loadDetails = (ids: { shikimori?: string }) =>
+        Promise.resolve(releases.find((release) => release.ids?.shikimori === ids.shikimori)!);
+
+      for (const current of releases) {
+        const chain = await buildAnimeSeasonChain(
+          `shikimori:${current.ids!.shikimori}`,
+          current,
+          loadRelated,
+          loadDetails,
+        );
+        expect(chain).toEqual([
+          expect.objectContaining({ number: 1, episodesCount: 10, absoluteEpisodeOffset: 0 }),
+          expect.objectContaining({ number: 2, episodesCount: 10, absoluteEpisodeOffset: 10 }),
+        ]);
+      }
+    },
+  );
+
+  it('keeps a standalone ONA release available for exact episode mapping', async () => {
+    await expect(
+      buildAnimeSeasonChain(
+        'shikimori:42310',
+        anime('42310', { animeKind: 'ona', episodesCount: 10 }),
+        () => Promise.resolve(response([])),
+      ),
+    ).resolves.toEqual([
+      expect.objectContaining({ number: 1, episodesCount: 10, releaseIndex: 0 }),
+    ]);
+  });
+
   it('does not collapse explicitly numbered anime seasons into one generic TV season', async () => {
     const items = [
       anime('1', { title: 'Re:Zero', episodesCount: 25 }),

@@ -7,6 +7,7 @@ import type {
 } from '@media-engine/core';
 import { createMediaRef } from './media-ref';
 import { groupAnimeReleases } from './anime-release-grouping';
+import { isAnimeSeasonKind } from './anime-season-kind';
 
 export const MAX_ANIME_SEASON_CHAIN_LENGTH = 12;
 
@@ -60,20 +61,22 @@ function createAnimeIdentityRef(ids: ExternalIds): string | undefined {
   return createMediaRef(ids, 'anime');
 }
 
-function isPlayableTvAnime(item: RelatedMediaItem, bridge = false): boolean {
+function isPlayableSeasonAnime(item: RelatedMediaItem, bridge = false): boolean {
   const isReleased =
     item.status === 'released' || item.status === 'ended' || item.status === 'ongoing';
 
   return (
     item.type === 'anime' &&
-    (bridge ? item.animeKind === 'special' || item.animeKind === 'ova' : item.animeKind === 'tv') &&
+    (bridge
+      ? item.animeKind === 'special' || item.animeKind === 'ova'
+      : isAnimeSeasonKind(item.animeKind)) &&
     isReleased &&
     (item.episodesCount ?? 0) > 0
   );
 }
 
 function toRelatedNode(relation: MediaRelation, bridge: boolean): AnimeSeasonNode | undefined {
-  if (!isPlayableTvAnime(relation.item, bridge) || !relation.item.ids) return undefined;
+  if (!isPlayableSeasonAnime(relation.item, bridge) || !relation.item.ids) return undefined;
 
   const mediaRef = createMediaRef(relation.item.ids, 'anime');
   const identityRef = createAnimeIdentityRef(relation.item.ids);
@@ -137,7 +140,7 @@ function selectRelation(
 function toInitialNode(mediaRef: string, details: MediaDetails): AnimeSeasonNode | undefined {
   if (
     details.type !== 'anime' ||
-    details.animeKind !== 'tv' ||
+    !isAnimeSeasonKind(details.animeKind) ||
     (details.status !== 'released' && details.status !== 'ended' && details.status !== 'ongoing') ||
     !details.ids
   ) {
@@ -263,7 +266,7 @@ export async function buildAnimeSeasonChain(
         if (
           !release ||
           release.type !== 'anime' ||
-          release.animeKind !== 'tv' ||
+          !isAnimeSeasonKind(release.animeKind) ||
           !release.ids ||
           createAnimeIdentityRef(release.ids) !== node.identityRef
         )

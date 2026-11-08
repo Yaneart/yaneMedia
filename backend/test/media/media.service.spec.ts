@@ -6,45 +6,91 @@ import type { EditorialCatalogRepository } from '../../src/media/catalog/editori
 import { canonicalMediaRef, createMediaRegistryStub } from './media-registry.stub';
 
 describe('MediaService', () => {
-  it('retries failed anime relations and never launches an episode using an unknown release mapping', async () => {
+  it.each(['tv', 'ona'])(
+    'retries failed %s relations and never launches an episode using an unknown release mapping',
+    async (animeKind) => {
+      const details = {
+        type: 'anime',
+        animeKind,
+        status: 'released',
+        title: 'Anime',
+        ids: { shikimori: '123' },
+        episodesCount: 12,
+      };
+      const getDetails = jest.fn().mockResolvedValue({ details });
+      const getRelatedMedia = jest
+        .fn()
+        .mockRejectedValueOnce(new ServiceUnavailableException())
+        .mockResolvedValue({
+          relations: [],
+          meta: { providers: { requested: [], successful: [], failed: [] } },
+        });
+      const getAvailability = jest
+        .fn()
+        .mockResolvedValue({ options: [], checkedAt: '2026-11-04T00:00:00Z' });
+      const service = new MediaService(
+        { getDetails, getRelatedMedia, getAvailability } as unknown as MediaEngine,
+        createMediaRegistryStub(),
+      );
+      const episode = { seasonNumber: 1, episodeNumber: 1, absoluteEpisodeNumber: 1 };
+      await expect(
+        service.getAvailabilityByRef('shikimori:123', undefined, episode),
+      ).rejects.toBeInstanceOf(ServiceUnavailableException);
+      expect(getAvailability).not.toHaveBeenCalled();
+      await service.getAvailabilityByRef('shikimori:123', undefined, episode);
+      expect(getAvailability).toHaveBeenCalledWith(
+        expect.objectContaining({
+          animeKind: 'tv',
+          animeReleaseEpisode: {
+            releaseIndex: 0,
+            releaseEpisodeNumber: 1,
+            releaseEpisodeCounts: [12],
+          },
+        }),
+        { playbackUserAgent: undefined },
+      );
+    },
+  );
+
+  it('preserves ONA metadata while routing its episode queries to TV-compatible adapters', async () => {
     const details = {
       type: 'anime',
-      animeKind: 'tv',
+      animeKind: 'ona',
+      title: 'Cyberpunk: Edgerunners',
+      year: 2022,
       status: 'released',
-      title: 'Anime',
-      ids: { shikimori: '123' },
-      episodesCount: 12,
+      ids: { shikimori: '42310' },
+      episodesCount: 10,
     };
-    const getDetails = jest.fn().mockResolvedValue({ details });
-    const getRelatedMedia = jest
-      .fn()
-      .mockRejectedValueOnce(new ServiceUnavailableException())
-      .mockResolvedValue({
-        relations: [],
-        meta: { providers: { requested: [], successful: [], failed: [] } },
-      });
-    const getAvailability = jest
-      .fn()
-      .mockResolvedValue({ options: [], checkedAt: '2026-11-04T00:00:00Z' });
+    const getAvailability = jest.fn().mockResolvedValue({ options: [] });
     const service = new MediaService(
-      { getDetails, getRelatedMedia, getAvailability } as unknown as MediaEngine,
+      {
+        getDetails: jest.fn().mockResolvedValue({ details }),
+        getRelatedMedia: jest.fn().mockResolvedValue({
+          relations: [],
+          meta: { providers: { failed: [] } },
+        }),
+        getAvailability,
+      } as unknown as MediaEngine,
       createMediaRegistryStub(),
     );
-    const episode = { seasonNumber: 1, episodeNumber: 1, absoluteEpisodeNumber: 1 };
-    await expect(
-      service.getAvailabilityByRef('shikimori:123', undefined, episode),
-    ).rejects.toBeInstanceOf(ServiceUnavailableException);
-    expect(getAvailability).not.toHaveBeenCalled();
-    await service.getAvailabilityByRef('shikimori:123', undefined, episode);
+    const page = await service.getDetailsByRef('shikimori:42310');
+    expect(page.details).toMatchObject({ animeKind: 'ona', episodesCount: 10 });
+    await service.getAvailabilityByRef('shikimori:42310', undefined, {
+      seasonNumber: 1,
+      episodeNumber: 1,
+      absoluteEpisodeNumber: 1,
+    });
     expect(getAvailability).toHaveBeenCalledWith(
       expect.objectContaining({
+        animeKind: 'tv',
         animeReleaseEpisode: {
           releaseIndex: 0,
           releaseEpisodeNumber: 1,
-          releaseEpisodeCounts: [12],
+          releaseEpisodeCounts: [10],
         },
       }),
-      { playbackUserAgent: undefined },
+      expect.anything(),
     );
   });
 
