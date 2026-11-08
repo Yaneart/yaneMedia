@@ -4,6 +4,7 @@ import type {
   MediaSourceEpisodeRef,
   MediaSourceOption,
 } from '@/entities/media-source';
+import { getMediaSourcePlaybackIssue } from '@/entities/media-source';
 
 export type PlaybackMode = 'embed' | 'direct';
 export type PlaybackSourcePanel = 'players' | 'direct';
@@ -107,6 +108,7 @@ export function createPlaybackSourceCatalog(
 export function getPreferredSource(sources: readonly MediaSourceOption[]) {
   return (
     sources.find((source) => source.availability === 'available' && source.browserSupported) ??
+    sources.find((source) => !getMediaSourcePlaybackIssue(source)) ??
     sources[0]
   );
 }
@@ -118,10 +120,7 @@ export function getAvailableDirectSourceForTrack(
   if (!trackKey) return undefined;
 
   return sources.find(
-    (source) =>
-      getDirectTrackKey(source) === trackKey &&
-      source.availability === 'available' &&
-      source.browserSupported,
+    (source) => getDirectTrackKey(source) === trackKey && !getMediaSourcePlaybackIssue(source),
   );
 }
 
@@ -133,10 +132,7 @@ export function getAvailableDirectSourceForPlaybackPreference(
   if (!trackKey) return undefined;
 
   const trackSources = sources.filter(
-    (source) =>
-      getDirectTrackKey(source) === trackKey &&
-      source.availability === 'available' &&
-      source.browserSupported,
+    (source) => getDirectTrackKey(source) === trackKey && !getMediaSourcePlaybackIssue(source),
   );
 
   if (qualityKey) {

@@ -1,8 +1,7 @@
 import type { MediaAvailability, StreamingProvider } from '@media-engine/core';
 
-// Some cinema IDs cover a later anime arc rather than the entire TV chain
-// (e.g. Bleach: TYBW). Keep the provider's exact episode-count verification,
-// testing bounded contiguous suffixes instead of assuming the first release.
+// Some cinema IDs cover a later anime arc rather than the entire TV chain.
+// Test bounded contiguous suffixes instead of assuming the first release.
 export function withAnimeStreamingReleases(provider: StreamingProvider): StreamingProvider {
   const getAvailability: StreamingProvider['getAvailability'] = async (query, context) => {
     const result = await provider.getAvailability(query, context);

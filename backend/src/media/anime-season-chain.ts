@@ -67,9 +67,7 @@ function isPlayableSeasonAnime(item: RelatedMediaItem, bridge = false): boolean 
 
   return (
     item.type === 'anime' &&
-    (bridge
-      ? item.animeKind === 'special' || item.animeKind === 'ova'
-      : isAnimeSeasonKind(item.animeKind)) &&
+    (bridge ? !isAnimeSeasonKind(item.animeKind) : isAnimeSeasonKind(item.animeKind)) &&
     isReleased &&
     (item.episodesCount ?? 0) > 0
   );
@@ -140,7 +138,7 @@ function selectRelation(
 function toInitialNode(mediaRef: string, details: MediaDetails): AnimeSeasonNode | undefined {
   if (
     details.type !== 'anime' ||
-    !isAnimeSeasonKind(details.animeKind) ||
+    details.animeKind === 'movie' ||
     (details.status !== 'released' && details.status !== 'ended' && details.status !== 'ongoing') ||
     !details.ids
   ) {
@@ -189,7 +187,26 @@ export async function buildAnimeSeasonChain(
 ): Promise<AnimeSeasonChainEntry[]> {
   const initialNode = toInitialNode(mediaRef, details);
 
-  if (!initialNode) return [];
+  if (!initialNode || details.type !== 'anime') return [];
+
+  // Other release formats keep their own episode catalog when opened directly.
+  // They can connect story links without adding a season to a TV/ONA chain.
+  if (!isAnimeSeasonKind(details.animeKind)) {
+    return [
+      {
+        number: 1,
+        releaseIndex: 0,
+        mediaRef,
+        title: initialNode.title,
+        year: initialNode.year,
+        episodesCount: initialNode.episodesCount,
+        seasonEpisodeOffset: 0,
+        absoluteEpisodeOffset: 0,
+        canonicalMappingVerified: false,
+        ids: initialNode.ids,
+      },
+    ];
+  }
 
   const responseCache = new Map<string, Promise<RelatedMediaResponse>>();
   const loadRelations = (node: AnimeSeasonNode) => {
@@ -207,8 +224,8 @@ export async function buildAnimeSeasonChain(
       const response = await loadRelations(node);
       const next = selectRelation(response.relations, kind);
       if (next.candidate || next.ambiguous) return next;
-      // A story special may connect two TV seasons (e.g. Dr. Stone: Ryusui).
-      // Follow only unambiguous prequel/sequel edges; never number the special.
+      // Follow story links regardless of the intermediate release's format.
+      // Films/specials connect seasons without becoming numbered TV seasons.
       const bridge = selectRelation(response.relations, kind, true);
       if (bridge.ambiguous) return bridge;
       if (!bridge.candidate || bridgeIds.has(bridge.candidate.identityRef)) break;

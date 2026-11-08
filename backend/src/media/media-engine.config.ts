@@ -89,7 +89,9 @@ export async function createMediaEngine(
     withAnimeStreamingTitles(aniLibertyStreamingProvider(), (ids, signal) =>
       engine.getDetails({ ids, type: 'anime', language: 'ru' }, { signal }),
     ),
-    ...(veoVeoApiKey ? [veoVeoStreamingProvider({ apiKey: veoVeoApiKey })] : []),
+    ...(veoVeoApiKey
+      ? [withAnimeStreamingReleases(veoVeoStreamingProvider({ apiKey: veoVeoApiKey }))]
+      : []),
     withAnimeStreamingReleases(videoHubStreamingProvider()),
   ];
 

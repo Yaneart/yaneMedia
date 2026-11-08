@@ -79,8 +79,7 @@ function mapSourceOptions(
 
     if (
       !existing ||
-      (!existing.browserSupported && mapped.source.browserSupported) ||
-      (option.discovery === 'direct' && existingDiscovery !== 'direct')
+      sourcePriority(mapped.source, option.discovery) > sourcePriority(existing, existingDiscovery)
     ) {
       sourcesByKey.set(key, mapped.source);
       discoveryByKey.set(key, option.discovery);
@@ -91,6 +90,15 @@ function mapSourceOptions(
     sources: [...sourcesByKey.values()],
     hasExpiredSources,
   };
+}
+
+function sourcePriority(
+  source: MediaSourceOptionDto,
+  discovery: StreamOption['discovery'],
+): number {
+  const availability =
+    source.availability === 'available' ? 2 : source.availability === 'unknown' ? 1 : 0;
+  return Number(source.browserSupported) * 10 + availability * 2 + Number(discovery === 'direct');
 }
 
 function mapSourceOption(
@@ -247,6 +255,16 @@ export function selectMediaAvailabilityEpisode(
   return {
     ...availability,
     episodes: availability.episodes.filter((episode) => {
+      if (
+        (['seasonNumber', 'episodeNumber', 'absoluteEpisodeNumber'] as const).some(
+          (key) =>
+            selection[key] !== undefined &&
+            episode[key] !== undefined &&
+            selection[key] !== episode[key],
+        )
+      )
+        return false;
+
       const matchesAbsoluteEpisode =
         hasAbsoluteEpisode && episode.absoluteEpisodeNumber === selection.absoluteEpisodeNumber;
 

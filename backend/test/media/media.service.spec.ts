@@ -40,7 +40,7 @@ describe('MediaService', () => {
       await service.getAvailabilityByRef('shikimori:123', undefined, episode);
       expect(getAvailability).toHaveBeenCalledWith(
         expect.objectContaining({
-          animeKind: 'tv',
+          animeKind,
           animeReleaseEpisode: {
             releaseIndex: 0,
             releaseEpisodeNumber: 1,
@@ -52,47 +52,50 @@ describe('MediaService', () => {
     },
   );
 
-  it('preserves ONA metadata while routing its episode queries to TV-compatible adapters', async () => {
-    const details = {
-      type: 'anime',
-      animeKind: 'ona',
-      title: 'Cyberpunk: Edgerunners',
-      year: 2022,
-      status: 'released',
-      ids: { shikimori: '42310' },
-      episodesCount: 10,
-    };
-    const getAvailability = jest.fn().mockResolvedValue({ options: [] });
-    const service = new MediaService(
-      {
-        getDetails: jest.fn().mockResolvedValue({ details }),
-        getRelatedMedia: jest.fn().mockResolvedValue({
-          relations: [],
-          meta: { providers: { failed: [] } },
+  it.each(['ona', 'ova', 'special', 'unknown', 'music', undefined])(
+    'preserves %s metadata and passes its original kind to episodic adapters',
+    async (animeKind) => {
+      const details = {
+        type: 'anime',
+        animeKind,
+        title: 'Cyberpunk: Edgerunners',
+        year: 2022,
+        status: 'released',
+        ids: { shikimori: '42310' },
+        episodesCount: 10,
+      };
+      const getAvailability = jest.fn().mockResolvedValue({ options: [] });
+      const service = new MediaService(
+        {
+          getDetails: jest.fn().mockResolvedValue({ details }),
+          getRelatedMedia: jest.fn().mockResolvedValue({
+            relations: [],
+            meta: { providers: { failed: [] } },
+          }),
+          getAvailability,
+        } as unknown as MediaEngine,
+        createMediaRegistryStub(),
+      );
+      const page = await service.getDetailsByRef('shikimori:42310');
+      expect(page.details).toMatchObject({ animeKind, episodesCount: 10 });
+      await service.getAvailabilityByRef('shikimori:42310', undefined, {
+        seasonNumber: 1,
+        episodeNumber: 1,
+        absoluteEpisodeNumber: 1,
+      });
+      expect(getAvailability).toHaveBeenCalledWith(
+        expect.objectContaining({
+          animeKind,
+          animeReleaseEpisode: {
+            releaseIndex: 0,
+            releaseEpisodeNumber: 1,
+            releaseEpisodeCounts: [10],
+          },
         }),
-        getAvailability,
-      } as unknown as MediaEngine,
-      createMediaRegistryStub(),
-    );
-    const page = await service.getDetailsByRef('shikimori:42310');
-    expect(page.details).toMatchObject({ animeKind: 'ona', episodesCount: 10 });
-    await service.getAvailabilityByRef('shikimori:42310', undefined, {
-      seasonNumber: 1,
-      episodeNumber: 1,
-      absoluteEpisodeNumber: 1,
-    });
-    expect(getAvailability).toHaveBeenCalledWith(
-      expect.objectContaining({
-        animeKind: 'tv',
-        animeReleaseEpisode: {
-          releaseIndex: 0,
-          releaseEpisodeNumber: 1,
-          releaseEpisodeCounts: [10],
-        },
-      }),
-      expect.anything(),
-    );
-  });
+        expect.anything(),
+      );
+    },
+  );
 
   const createProviderFailure = () =>
     Object.assign(new Error('All providers failed'), {

@@ -27,7 +27,7 @@ export function getMediaSourcePlaybackIssue(
     return 'account-required';
   }
 
-  if (source.availability === 'temporarily_unavailable' || source.availability === 'unknown') {
+  if (source.availability === 'temporarily_unavailable') {
     return 'temporarily-unavailable';
   }
 

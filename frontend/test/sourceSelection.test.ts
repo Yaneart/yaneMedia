@@ -10,6 +10,21 @@ import {
 } from '../src/features/source-selection/model/sourceSelection';
 
 describe('source-less episode catalogs', () => {
+  it('retains an unknown but browser-supported direct source for an explicit track selection', () => {
+    const source = {
+      sourceRef: 'unknown',
+      provider: 'fixture',
+      kind: 'hls' as const,
+      label: 'Fixture',
+      url: 'https://video.example/unknown.m3u8',
+      availability: 'unknown' as const,
+      browserSupported: true,
+    };
+    expect(
+      getAvailableDirectSourceForPlaybackPreference([source], getDirectTrackKey(source), null),
+    ).toBe(source);
+  });
+
   it('normalizes and orders quality tiers by their actual height', () => {
     const sources = [720, 144, 1440, 480, 2160, 1080, 360, 240].map((height) => ({
       sourceRef: `videohub:${height}`,

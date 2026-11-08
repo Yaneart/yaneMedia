@@ -353,6 +353,87 @@ test('anime exposes only the current work episodes and keeps work navigation in 
   expect(document.querySelector('.media-player-toolbar [aria-label="Выбор серии"]')).toBeNull();
 });
 
+test('episode-only Kodik appears and can launch when the root catalog is empty', async () => {
+  globalThis.fetch = mock(() => new Promise<Response>(() => {}));
+  const { view, tree, client, catalog } = mount('embed', false, false);
+  const scoped = { ...source(1, 1, 'embed'), provider: 'kodik-streaming', label: 'Kodik' };
+  catalog.sources = [];
+  catalog.episodes = [];
+  await act(async () => {
+    client.setQueryData(
+      mediaEpisodeAvailabilityQueryKey(mediaRef, { seasonNumber: 1, episodeNumber: 1 }),
+      { availability: availability([scoped]), settled: true },
+    );
+    view.rerender(tree());
+  });
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Запустить Kodik' })).toBeDefined(),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Запустить Kodik' }));
+  expect(start).toHaveBeenCalledWith(expect.objectContaining({ sourceRef: scoped.sourceRef }));
+  view.rerender(tree());
+  await waitFor(() => expect(document.querySelector('iframe')?.src).toBe(scoped.url));
+});
+
+test('a conflicting anime season cannot become an episode embed fallback', async () => {
+  globalThis.fetch = mock(() => new Promise<Response>(() => {}));
+  const { view, tree, client, catalog } = mount('embed', true, false);
+  const wrong = {
+    ...source(2, 1, 'embed'),
+    label: 'Wrong season',
+    episode: {
+      seasonNumber: 2,
+      episodeNumber: 1,
+      absoluteEpisodeNumber: 1,
+    },
+  };
+  catalog.sources = [];
+  catalog.episodes = [];
+  await act(async () => {
+    client.setQueryData(
+      mediaEpisodeAvailabilityQueryKey(mediaRef, {
+        seasonNumber: 1,
+        episodeNumber: 1,
+        absoluteEpisodeNumber: 1,
+      }),
+      { availability: availability([wrong]), settled: true },
+    );
+    view.rerender(tree());
+  });
+  expect(screen.queryByRole('button', { name: 'Запустить Wrong season' })).toBeNull();
+  expect(document.querySelector('iframe')).toBeNull();
+});
+
+test.each([false, true])(
+  'a playable episode embed replaces its unsupported generic counterpart (saved session=%s)',
+  async (started) => {
+    globalThis.fetch = mock(() => new Promise<Response>(() => {}));
+    const { view, tree, client, catalog } = mount('embed', false, started);
+    const scoped = { ...source(1, 1, 'embed'), sourceRef: 'scoped-kodik', label: 'Kodik' };
+    Object.assign(catalog.sources[0]!, { label: 'Kodik', browserSupported: false });
+    await act(async () => {
+      client.setQueryData(
+        mediaEpisodeAvailabilityQueryKey(mediaRef, { seasonNumber: 1, episodeNumber: 1 }),
+        { availability: availability([scoped]), settled: true },
+      );
+      view.rerender(tree());
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Запустить Kodik' }));
+    view.rerender(tree());
+    await waitFor(() => expect(document.querySelector('iframe')?.src).toBe(scoped.url));
+  },
+);
+
+test('unknown embed validation permits user-initiated iframe loading', async () => {
+  globalThis.fetch = mock(() => new Promise<Response>(() => {}));
+  const { view, tree, catalog } = mount('embed', false, false);
+  Object.assign(catalog.sources[0]!, { availability: 'unknown', label: 'Turbo' });
+  view.rerender(tree());
+  fireEvent.click(screen.getByRole('button', { name: 'Запустить Turbo' }));
+  view.rerender(tree());
+  await waitFor(() => expect(document.querySelector('iframe')?.src).toBe(catalog.sources[0]!.url));
+});
+
 test('generic Kodik remains the only embed and keeps navigation inside its own player', async () => {
   globalThis.fetch = mock(() => new Promise<Response>(() => {}));
   const { view, tree, client, catalog } = mount('embed');
@@ -536,7 +617,7 @@ test('before playback and after a fatal error no separate episode overlay appear
     original.dispatchEvent(
       new CustomEvent('yp-error', {
         detail: {
-          source: { revision: original.descriptor.revision },
+          source: { id: original.descriptor.id, revision: original.descriptor.revision },
           snapshot: { playback: 'error' },
         },
       }),

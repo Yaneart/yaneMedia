@@ -244,6 +244,41 @@ describe('mapMediaAvailability', () => {
     expect(sources[0].translation?.title).toBe('Direct voice one');
   });
 
+  it.each([false, true])(
+    'keeps a playable aggregate over an unsupported direct duplicate (reversed=%s)',
+    (reversed) => {
+      const supported = createOption({
+        id: 'supported',
+        discovery: 'aggregate',
+        player: { kind: 'embed', label: 'Kodik', provider: 'kodik' },
+      });
+      const unsupported = createOption({
+        id: 'unsupported',
+        discovery: 'direct',
+        player: { kind: 'embed', label: 'Kodik', provider: 'kodik' },
+        access: { url: 'https://kodik.example/direct', headers: { Authorization: 'secret' } },
+      });
+      const options = reversed ? [unsupported, supported] : [supported, unsupported];
+      expect(mapMediaAvailability(createAvailability({ options }), NOW).sources).toEqual([
+        expect.objectContaining({
+          sourceRef: 'stream:test-provider:supported',
+          browserSupported: true,
+        }),
+      ]);
+    },
+  );
+
+  it('prefers an available duplicate to an unknown or unavailable direct result', () => {
+    const options = [
+      createOption({ id: 'blocked', availability: 'temporarily_unavailable', discovery: 'direct' }),
+      createOption({ id: 'unknown', availability: 'unknown' }),
+      createOption({ id: 'available', availability: 'available' }),
+    ];
+    expect(mapMediaAvailability(createAvailability({ options }), NOW).sources[0]?.sourceRef).toBe(
+      'stream:test-provider:available',
+    );
+  });
+
   it('keeps the same URL for different episodes and attaches episode identity', () => {
     const availability = createAvailability({
       query: { type: 'series' },
@@ -393,5 +428,20 @@ describe('selectMediaAvailabilityEpisode', () => {
       { seasonNumber: 1, episodeNumber: 2, sources: [] },
       { absoluteEpisodeNumber: 2, sources: [] },
     ]);
+  });
+
+  it('rejects contradictory coordinates while accepting partial episode identities', () => {
+    const result = selectMediaAvailabilityEpisode(
+      {
+        ...availability,
+        episodes: [
+          { seasonNumber: 2, episodeNumber: 2, absoluteEpisodeNumber: 2, sources: [] },
+          { seasonNumber: 1, episodeNumber: 2, absoluteEpisodeNumber: 99, sources: [] },
+          { absoluteEpisodeNumber: 2, sources: [] },
+        ],
+      },
+      { seasonNumber: 1, episodeNumber: 2, absoluteEpisodeNumber: 2 },
+    );
+    expect(result.episodes).toEqual([{ absoluteEpisodeNumber: 2, sources: [] }]);
   });
 });

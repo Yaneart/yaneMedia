@@ -1,5 +1,4 @@
 import type { MediaAvailability, MediaAvailabilityEpisode, MediaSourceOption } from './mediaSource';
-import { getMediaAvailabilityExpirationDelay } from './mediaSourcePlayback';
 
 function mergeSources(current: readonly MediaSourceOption[], next: readonly MediaSourceOption[]) {
   const sources = new Map(current.map((source) => [source.sourceRef, source]));
@@ -57,28 +56,17 @@ export function mergeProgressiveAvailability(
   };
 }
 
-function countUniqueSources(availability: MediaAvailability) {
-  return new Set([
-    ...availability.sources.map((source) => source.sourceRef),
-    ...availability.episodes.flatMap((episode) =>
-      episode.sources.map((source) => source.sourceRef),
-    ),
-  ]).size;
-}
-
 export function selectSettledAvailability(
   current: MediaAvailability | null,
   next: MediaAvailability,
 ) {
-  if (!current || !next.degraded || getMediaAvailabilityExpirationDelay(current) === 0) {
+  if (!current || !next.degraded) {
     return next;
   }
-
-  if (!current.degraded || countUniqueSources(next) < countUniqueSources(current)) {
-    return current;
-  }
-
-  return next;
+  // A failed provider cannot revoke another provider's previous result. Keep
+  // unexpired sources for this query, accept fresh replacements, and retain the
+  // degraded flag so background retries continue even when old sources work.
+  return selectUsableAvailability(mergeProgressiveAvailability(current, next));
 }
 
 function isExpired(source: MediaSourceOption, now: number) {

@@ -167,6 +167,16 @@ function getPlaybackEpisode(
 }
 
 function matchesEpisode(episode: MediaSourceEpisodeRef, selection: MediaSourceEpisodeRef) {
+  if (
+    (['seasonNumber', 'episodeNumber', 'absoluteEpisodeNumber'] as const).some(
+      (key) =>
+        selection[key] !== undefined &&
+        episode[key] !== undefined &&
+        selection[key] !== episode[key],
+    )
+  )
+    return false;
+
   const matchesAbsoluteEpisode =
     selection.absoluteEpisodeNumber !== undefined &&
     episode.absoluteEpisodeNumber === selection.absoluteEpisodeNumber;
@@ -204,6 +214,32 @@ function mergeEpisodeSources(
       ].map((source) => [source.sourceRef, source]),
     ).values(),
   ];
+}
+
+function episodeEmbedSources(
+  generic: readonly MediaSourceOption[],
+  availability: MediaAvailability | null,
+  selection: MediaSourceEpisodeRef | null,
+) {
+  const playerKey = (source: MediaSourceOption) => source.label.trim().toLowerCase();
+  const genericPlayers = new Set(generic.map(playerKey));
+  const usablePlayers = new Set(
+    generic.filter((source) => !getMediaSourcePlaybackIssue(source)).map(playerKey),
+  );
+  const exact =
+    availability && selection
+      ? availability.episodes
+          .filter((episode) => matchesEpisode(episode, selection))
+          .flatMap((episode) => episode.sources)
+          .filter(
+            (source) =>
+              source.kind === 'embed' &&
+              (!genericPlayers.has(playerKey(source)) ||
+                (!usablePlayers.has(playerKey(source)) && !getMediaSourcePlaybackIssue(source))),
+          )
+      : [];
+  const replacements = new Set(exact.map(playerKey));
+  return [...generic.filter((source) => !replacements.has(playerKey(source))), ...exact];
 }
 
 function findEpisodeMetadata(media: MediaDetails, episode: DirectEpisodeOption | undefined) {
@@ -509,11 +545,14 @@ export function MediaView({
     isPending: episodeAvailabilityPending,
     retry: retryEpisodeAvailability,
   } = useMediaEpisodeAvailability(media.mediaRef, availabilityEpisode);
-  const currentEmbedSources = catalog.embedSources;
+  const currentEmbedSources = episodeEmbedSources(
+    catalog.embedSources,
+    episodeAvailability,
+    availabilityEpisode,
+  );
   const hasEmbedMode = currentEmbedSources.length > 0;
   const selectedEmbedSource =
     currentEmbedSources.find((source) => source.sourceRef === selectedEmbedSourceRef) ??
-    sessionEmbedSource ??
     getPreferredSource(currentEmbedSources);
   const currentDirectSources = usesDirectEpisodes
     ? mergeEpisodeSources(
@@ -1142,8 +1181,7 @@ export function MediaView({
       (selectedSource.kind === 'embed' ||
         selectedSource.kind === 'hls' ||
         selectedSource.kind === 'mp4') &&
-      selectedSource.browserSupported &&
-      selectedSource.availability === 'available';
+      !getMediaSourcePlaybackIssue(selectedSource);
 
     setPlayerStatus(canLoadSource ? 'loading' : 'ready');
   };

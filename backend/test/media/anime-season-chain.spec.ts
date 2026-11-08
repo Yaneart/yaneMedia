@@ -37,6 +37,30 @@ const currentDetails = {
 } as MediaDetails;
 
 describe('buildAnimeSeasonChain', () => {
+  it.each(['ova', 'special', 'unknown', 'music', undefined] as const)(
+    'maps an opened %s independently without numbering its TV relations',
+    async (animeKind) => {
+      const loadRelated = jest
+        .fn()
+        .mockResolvedValue(response([relation('prequel', '1'), relation('sequel', '2')]));
+      const chain = await buildAnimeSeasonChain(
+        'shikimori:777',
+        anime('777', { animeKind, episodesCount: 10 }),
+        loadRelated,
+      );
+      expect(chain).toEqual([
+        expect.objectContaining({
+          number: 1,
+          releaseIndex: 0,
+          mediaRef: 'shikimori:777',
+          episodesCount: 10,
+          absoluteEpisodeOffset: 0,
+        }),
+      ]);
+      expect(loadRelated).not.toHaveBeenCalled();
+    },
+  );
+
   it.each(['ona', 'tv'] as const)(
     'connects %s seasons with ONA releases from either end and refreshes their counts',
     async (firstKind) => {
@@ -110,45 +134,50 @@ describe('buildAnimeSeasonChain', () => {
     expect(chain.map(({ number }) => number)).toEqual([1, 2, 2, 3, 4]);
   });
 
-  it('connects TV seasons across a reciprocal story special without counting its episodes', async () => {
-    const items = [
-      anime('1', { title: 'Dr. Stone', episodesCount: 24 }),
-      anime('2', { title: 'Dr. Stone: Stone Wars', episodesCount: 11 }),
-      anime('3', { title: 'Dr. Stone: Ryusui', animeKind: 'special', episodesCount: 1 }),
-      anime('4', { title: 'Dr. Stone: New World', episodesCount: 11 }),
-      anime('5', { title: 'Dr. Stone: New World Part 2', episodesCount: 11 }),
-    ];
-    const loadRelated = (ids: { shikimori?: string }) => {
-      const index = Number(ids.shikimori) - 1;
-      return Promise.resolve(
-        response([
-          ...(index > 0 ? [{ kind: 'prequel' as const, item: items[index - 1], sources: [] }] : []),
-          ...(index < items.length - 1
-            ? [{ kind: 'sequel' as const, item: items[index + 1], sources: [] }]
-            : []),
-        ]),
-      );
-    };
-    for (const current of [0, 4]) {
-      const chain = await buildAnimeSeasonChain(
-        `shikimori:${current + 1}`,
-        items[current],
-        loadRelated,
-      );
-      expect(
-        chain.map(({ number, episodesCount, absoluteEpisodeOffset }) => ({
-          number,
-          episodesCount,
-          absoluteEpisodeOffset,
-        })),
-      ).toEqual([
-        { number: 1, episodesCount: 24, absoluteEpisodeOffset: 0 },
-        { number: 2, episodesCount: 11, absoluteEpisodeOffset: 24 },
-        { number: 3, episodesCount: 11, absoluteEpisodeOffset: 35 },
-        { number: 3, episodesCount: 11, absoluteEpisodeOffset: 46 },
-      ]);
-    }
-  });
+  it.each(['special', 'ova', 'movie', 'unknown'] as const)(
+    'connects seasons across a story %s without counting its episodes',
+    async (bridgeKind) => {
+      const items = [
+        anime('1', { title: 'Dr. Stone', episodesCount: 24 }),
+        anime('2', { title: 'Dr. Stone: Stone Wars', episodesCount: 11 }),
+        anime('3', { title: 'Story continuation', animeKind: bridgeKind, episodesCount: 1 }),
+        anime('4', { title: 'Dr. Stone: New World', episodesCount: 11 }),
+        anime('5', { title: 'Dr. Stone: New World Part 2', episodesCount: 11 }),
+      ];
+      const loadRelated = (ids: { shikimori?: string }) => {
+        const index = Number(ids.shikimori) - 1;
+        return Promise.resolve(
+          response([
+            ...(index > 0
+              ? [{ kind: 'prequel' as const, item: items[index - 1], sources: [] }]
+              : []),
+            ...(index < items.length - 1
+              ? [{ kind: 'sequel' as const, item: items[index + 1], sources: [] }]
+              : []),
+          ]),
+        );
+      };
+      for (const current of [0, 4]) {
+        const chain = await buildAnimeSeasonChain(
+          `shikimori:${current + 1}`,
+          items[current],
+          loadRelated,
+        );
+        expect(
+          chain.map(({ number, episodesCount, absoluteEpisodeOffset }) => ({
+            number,
+            episodesCount,
+            absoluteEpisodeOffset,
+          })),
+        ).toEqual([
+          { number: 1, episodesCount: 24, absoluteEpisodeOffset: 0 },
+          { number: 2, episodesCount: 11, absoluteEpisodeOffset: 24 },
+          { number: 3, episodesCount: 11, absoluteEpisodeOffset: 35 },
+          { number: 3, episodesCount: 11, absoluteEpisodeOffset: 46 },
+        ]);
+      }
+    },
+  );
 
   it('groups parts without generic TV metadata and normalizes counts from exact release details', async () => {
     const releases = [

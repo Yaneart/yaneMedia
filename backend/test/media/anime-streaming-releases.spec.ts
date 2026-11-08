@@ -37,6 +37,27 @@ function availability(id: string): MediaAvailability {
 }
 
 describe('anime streaming release windows', () => {
+  it('keeps a VeoVeo HLS URL while mapping an arc-local catalog to the requested episode', async () => {
+    const result = availability('veoveo-arc-1');
+    result.options[0] = {
+      ...result.options[0],
+      provider: 'veoveo-streaming',
+      player: { kind: 'hls', label: 'VeoVeo' },
+      access: { url: 'https://video.example/arc.m3u8' },
+    };
+    const provider = withAnimeStreamingReleases({
+      getAvailability: (candidate: StreamQuery) =>
+        Promise.resolve(candidate.absoluteEpisodeNumber === 1 ? result : null),
+    } as unknown as StreamingProvider);
+    const mapped = await provider.getAvailability(query, {});
+    expect(mapped?.options[0]).toMatchObject({
+      provider: 'veoveo-streaming',
+      player: { kind: 'hls' },
+      access: result.options[0].access,
+      episode: { seasonNumber: 2, episodeNumber: 1, absoluteEpisodeNumber: 367 },
+    });
+  });
+
   it('publishes the remapped arc through progressive lookup after an empty native catalog result', async () => {
     const getAvailability = jest.fn((candidate: StreamQuery) =>
       Promise.resolve(candidate.absoluteEpisodeNumber === 1 ? availability('arc-episode-1') : null),

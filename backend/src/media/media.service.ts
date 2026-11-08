@@ -32,7 +32,6 @@ import { mapMediaAvailability, selectMediaAvailabilityEpisode } from './media-av
 import { AppLogger } from '../platform/logging/app-logger';
 import { buildAnimeSeasonChain, type AnimeSeasonChainEntry } from './anime-season-chain';
 import { createAnimeReleaseEpisodeSelection } from './anime-release-episode';
-import { isAnimeSeasonKind } from './anime-season-kind';
 import { providerDiagnostics, withProviderCounts } from './media-provider-diagnostics';
 import { EditorialCatalogRepository } from './catalog/editorial-catalog.repository';
 import {
@@ -423,7 +422,7 @@ export class MediaService {
     if (
       mediaType === 'anime' &&
       trustedDetails?.type === 'anime' &&
-      isAnimeSeasonKind(trustedDetails.animeKind) &&
+      trustedDetails.animeKind !== 'movie' &&
       (trustedDetails.episodesCount ?? 0) > 0 &&
       ['released', 'ended', 'ongoing'].includes(trustedDetails.status ?? '') &&
       animeSeasonChain.length === 0 &&
@@ -440,16 +439,7 @@ export class MediaService {
     return {
       query: {
         type: mediaType,
-        ...(mediaType === 'anime' && trustedDetails?.type === 'anime' && trustedDetails.animeKind
-          ? {
-              // Media Engine 1.13.5 uses "tv" for episodic provider routing and
-              // verified cinema-ID mapping. ONA uses the same episode contract;
-              // keep its original kind in public metadata and season discovery.
-              animeKind: isAnimeSeasonKind(trustedDetails.animeKind)
-                ? 'tv'
-                : trustedDetails.animeKind,
-            }
-          : {}),
+        ...(trustedDetails?.type === 'anime' ? { animeKind: trustedDetails.animeKind } : {}),
         ids: availabilityIds,
         title:
           mediaType === 'movie'
