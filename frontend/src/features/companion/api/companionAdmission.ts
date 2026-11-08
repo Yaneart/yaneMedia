@@ -1,17 +1,42 @@
 import { CompanionError, companionRequest, hello, validPairingToken } from './companionClient';
 import { pairingStorage } from '../model/pairingStorage';
+import type { LocalAudio, LocalMediaSource } from '../model/localTracks';
 
 export type CompanionLocator =
   { kind: 'magnet'; value: string } | { kind: 'metainfo'; base64: string };
-export type LocalController = { token: string; bootId: string };
+export type LocalController = { token: string; bootId: string; capabilities?: string[] };
+export type LocalTarget = {
+  fileRef: string;
+  audioRef: string;
+  textRef: null;
+  positionSeconds: number;
+  output: string;
+};
 export type LocalSnapshot = {
   sessionId: string;
   revision: number;
-  state: 'metadata' | 'awaiting_file' | 'stopping' | 'stopped' | 'failed';
+  state:
+    | 'metadata'
+    | 'awaiting_file'
+    | 'probing'
+    | 'awaiting_target'
+    | 'preparing'
+    | 'ready'
+    | 'stopping'
+    | 'stopped'
+    | 'failed';
   files: { fileRef: string; name: string; size: number }[];
   selectedFileRef?: string;
   downloadedBytes: number;
   error?: string;
+  probe?: {
+    durationSeconds: number;
+    video: { contentType: string };
+    audioTracks: LocalAudio[];
+    outputs: string[];
+  };
+  target?: LocalTarget;
+  source?: LocalMediaSource;
 };
 const id = (value: unknown): value is string =>
   typeof value === 'string' && /^[a-f0-9]{32}$/.test(value);
@@ -31,7 +56,11 @@ export async function openLocalController(signal: AbortSignal): Promise<LocalCon
   if (!pairing) throw new CompanionError('PAIRING_REQUIRED');
   const result = await companionRequest('/v1/controllers', 'POST', signal, pairing);
   if (!id(result?.controllerId) || !validPairingToken(result?.controllerToken)) return invalid();
-  return { token: result.controllerToken, bootId: handshake.bootId };
+  return {
+    token: result.controllerToken,
+    bootId: handshake.bootId,
+    capabilities: handshake.capabilities,
+  };
 }
 
 export async function admitLocalTorrent(
@@ -61,7 +90,7 @@ export async function localOperation(
   controller: LocalController,
   key: string,
   signal: AbortSignal,
-): Promise<{ sessionId: string; state: string; error?: string }> {
+): Promise<{ sessionId: string; revision: number; state: string; error?: string }> {
   const result = await companionRequest(`/v1/operations/${key}`, 'GET', signal, controller.token);
   if (
     !id(result?.sessionId) ||
@@ -82,7 +111,17 @@ export async function localSnapshot(
     !id(value.sessionId) ||
     !Number.isSafeInteger(value.revision) ||
     value.revision < 1 ||
-    !['metadata', 'awaiting_file', 'stopping', 'stopped', 'failed'].includes(value.state) ||
+    ![
+      'metadata',
+      'awaiting_file',
+      'probing',
+      'awaiting_target',
+      'preparing',
+      'ready',
+      'stopping',
+      'stopped',
+      'failed',
+    ].includes(value.state) ||
     !Array.isArray(value.files) ||
     value.files.length > 500 ||
     !Number.isSafeInteger(value.downloadedBytes) ||

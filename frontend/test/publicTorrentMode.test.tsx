@@ -28,9 +28,13 @@ mock.module('@/widgets/media-info', () => ({
 }));
 const launch = mock(() => null);
 const episodeModel = await import('../src/features/torrent-launch/model/torrentEpisodes');
+const { useLocalTorrent } = await import('../src/features/torrent-launch/model/useLocalTorrent');
 mock.module('@/features/torrent-launch', () => ({
+  useLocalTorrent,
+  LocalTorrentLaunch: () => null,
   ...episodeModel,
   TorrentFilePicker: () => null,
+  TorrentPreparation: () => null,
   TorrentLaunch: launch,
 }));
 const { PlaybackSessionProvider } =

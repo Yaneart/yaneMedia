@@ -12,6 +12,7 @@ import {
 } from '@yaneart/yaneplayer';
 import '@yaneart/yaneplayer';
 import { createTorrentStream } from '../model/torrentStream';
+import { createLocalTrackStream, localTrackSource, type LocalPlayback } from '@/features/companion';
 
 export type MediaVideoDirectControls = {
   tracks: readonly (SelectOption & { language?: string })[];
@@ -101,6 +102,7 @@ type MediaVideoRendererProps = {
   initialPositionSeconds: number;
   directControls?: MediaVideoDirectControls;
   torrentTimeline?: TorrentVideoTimeline;
+  localPlayback?: LocalPlayback;
   preferences?: PreferencesAdapter;
   navigation?: PlayerNavigation;
   onReady: () => void;
@@ -128,6 +130,10 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
     text: PlayerEvent['snapshot']['textTracks'][number] | null;
   } | null>(null);
   const streamRef = useRef<ReturnType<typeof createTorrentStream> | null>(null);
+  const localStreamRef = useRef<ReturnType<typeof createLocalTrackStream> | null>(null);
+  const appliedLocalRef = useRef<LocalPlayback | null>(null);
+  const localCommandRef = useRef(false);
+  const loadedSourceIdRef = useRef<string | null>(null);
   const initializingRef = useRef<{ position: number } | null>(null);
   const settleSourceRef = useRef<() => void>(() => undefined);
 
@@ -140,6 +146,12 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
     elementRef.current = player;
     const stream = createTorrentStream(player);
     streamRef.current = stream;
+    const localStream = createLocalTrackStream(
+      player,
+      (source, position, signal) =>
+        propsRef.current.localPlayback?.report(source, position, signal) ?? Promise.resolve(),
+    );
+    localStreamRef.current = localStream;
     player.lang = 'ru';
     player.className = 'media-video-player';
     player.preferences = propsRef.current.preferences;
@@ -228,12 +240,13 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
       const { snapshot } = event;
       const captionsOnly =
         snapshot.pending?.type === 'text' ||
-        (propsRef.current.torrentTimeline &&
+        ((propsRef.current.torrentTimeline || propsRef.current.localPlayback) &&
           snapshot.captions?.status === 'loading' &&
           snapshot.playback === 'playing' &&
           snapshot.selection?.audioId === torrentAudioRef.current);
       if (
         initializingRef.current ||
+        propsRef.current.navigation?.pending ||
         snapshot.source?.revision !== loadedRevisionRef.current ||
         (snapshot.pending && !captionsOnly) ||
         snapshot.positionSeconds === null
@@ -251,9 +264,15 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
       );
     };
     const onState = ({ detail: event }: CustomEvent<PlayerEvent>) => {
-      if (disposed || event.source?.revision !== loadedRevisionRef.current) return;
+      if (
+        disposed ||
+        event.source?.id !== loadedSourceIdRef.current ||
+        event.source?.revision !== loadedRevisionRef.current
+      )
+        return;
       const { snapshot } = event;
       stream.update(snapshot);
+      localStream.update(snapshot);
       if (initializingRef.current) return;
       if (snapshot.playback === 'playing') playingAtEnd = true;
       if (
@@ -285,8 +304,14 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
         snapshot.playback !== previousPlayback ||
         (snapshot.playback === 'paused' && snapshot.intent !== previousIntent)
       ) {
-        if (snapshot.playback === 'playing') propsRef.current.onPlay();
-        if (snapshot.playback === 'paused' && ready && snapshot.intent === 'paused') {
+        if (snapshot.playback === 'playing' && !propsRef.current.navigation?.pending)
+          propsRef.current.onPlay();
+        if (
+          snapshot.playback === 'paused' &&
+          ready &&
+          snapshot.intent === 'paused' &&
+          !propsRef.current.navigation?.pending
+        ) {
           report(event, 'pause');
           propsRef.current.onPause();
         }
@@ -303,8 +328,14 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
         } as CustomEvent<PlayerEvent>);
     };
     const onPosition = ({ detail: event }: CustomEvent<PlayerEvent>) => {
-      if (disposed || event.source?.revision !== loadedRevisionRef.current) return;
+      if (
+        disposed ||
+        event.source?.id !== loadedSourceIdRef.current ||
+        event.source?.revision !== loadedRevisionRef.current
+      )
+        return;
       stream.update(event.snapshot);
+      localStream.update(event.snapshot);
       const windowEnded =
         event.snapshot.playback === 'ended' &&
         propsRef.current.torrentTimeline &&
@@ -322,11 +353,17 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
       if (!event.snapshot.pending) seeking = false;
     };
     const onError = ({ detail: event }: CustomEvent<PlayerEvent>) => {
-      if (disposed || event.source?.revision !== loadedRevisionRef.current) return;
+      if (
+        disposed ||
+        event.source?.id !== loadedSourceIdRef.current ||
+        event.source?.revision !== loadedRevisionRef.current
+      )
+        return;
       // Autoplay denial and command/platform errors keep explicit controls usable.
       if (
         event.snapshot.playback === 'error' &&
         !torrentCommandRef.current &&
+        !localCommandRef.current &&
         !propsRef.current.navigation?.pending
       )
         propsRef.current.onError();
@@ -334,6 +371,7 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
     const onEnded = ({ detail: event }: CustomEvent<PlayerEvent>) => {
       if (
         disposed ||
+        event.source?.id !== loadedSourceIdRef.current ||
         event.source?.revision !== loadedRevisionRef.current ||
         initializingRef.current ||
         event.snapshot.pending
@@ -342,7 +380,7 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
       continueTorrent(event.snapshot);
       const { snapshot } = event;
       if (
-        propsRef.current.torrentTimeline &&
+        (propsRef.current.torrentTimeline || propsRef.current.localPlayback) &&
         propsRef.current.navigation?.autoAdvance &&
         propsRef.current.navigation.next &&
         playingAtEnd &&
@@ -364,6 +402,27 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
     player.host = {
       execute(command, context) {
         const current = propsRef.current;
+        if (current.localPlayback) {
+          const binding = current.localPlayback;
+          localCommandRef.current = true;
+          return binding
+            .execute(command, context)
+            .then((result) => {
+              context.signal.throwIfAborted();
+              if (disposed || propsRef.current.localPlayback !== binding)
+                throw new DOMException('Source changed', 'AbortError');
+              if (!result.source) return { selection: { audioId: result.audioId } };
+              const descriptor = localTrackSource(result.source);
+              loadedRevisionRef.current = descriptor.revision;
+              loadedSourceIdRef.current = descriptor.id;
+              torrentAudioRef.current = result.audioId;
+              localStream.configure(result.source);
+              return { source: descriptor, selection: { audioId: result.audioId } };
+            })
+            .finally(() => {
+              localCommandRef.current = false;
+            });
+        }
         if (current.torrentTimeline) {
           if (command.type !== 'seek' && command.type !== 'audio')
             return Promise.reject(new Error('Unsupported torrent command'));
@@ -436,6 +495,8 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
       flush();
       window.removeEventListener('pagehide', flush);
       stream.dispose();
+      localStream.dispose();
+      localStreamRef.current = null;
       streamRef.current = null;
       player.removeEventListener('yp-statechange', onState);
       player.removeEventListener('yp-positionchange', onPosition);
@@ -446,56 +507,71 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
       elementRef.current = null;
       loadedRevisionRef.current = null;
       loadedMediaRef.current = null;
+      loadedSourceIdRef.current = null;
+      appliedLocalRef.current = null;
+      localCommandRef.current = false;
+      torrentCommandRef.current = null;
+      torrentAudioRef.current = null;
+      torrentTextRef.current = null;
     };
   }, []);
 
   useLayoutEffect(() => {
     const player = elementRef.current!;
     const { source, directControls: controls, torrentTimeline: timeline } = props;
-    const descriptor: PlayerSource = timeline
-      ? torrentDescriptor(source, props.mediaTitle, timeline)
-      : {
-          id: 'media',
-          revision: JSON.stringify([
-            source.sourceRef,
-            source.url,
-            controls?.tracks,
-            controls?.qualities,
-          ]),
-          kind: source.kind as 'mp4' | 'hls',
-          src: source.url,
-          ...(source.kind === 'hls' ? { hlsRedirects: 'follow' as const } : {}),
-          // VideoHUB serves native MP4 without CORS response headers.
-          ...(source.kind === 'mp4' && source.provider === 'videohub-streaming'
-            ? { crossOrigin: null }
-            : {}),
-          title: props.mediaTitle,
-          audioTracks: controls?.tracks.map(({ value, label, language }) => ({
-            id: value,
-            label,
-            language,
-          })),
-          qualities: controls?.qualities.map(({ value, label }) => ({ id: value, label })),
-          capabilities: {
-            audio: controls && controls.tracks.length > 1 ? 'host' : 'transport',
-            quality: controls && controls.qualities.length > 1 ? 'host' : 'transport',
-            autoQuality: false,
-          },
-        };
-    if (timeline && props.navigation?.pending && !torrentTextRef.current) {
+    const local = props.localPlayback;
+    const descriptor: PlayerSource = local
+      ? localTrackSource(local.source)
+      : timeline
+        ? torrentDescriptor(source, props.mediaTitle, timeline)
+        : {
+            id: 'media',
+            revision: JSON.stringify([
+              source.sourceRef,
+              source.url,
+              controls?.tracks,
+              controls?.qualities,
+            ]),
+            kind: source.kind as 'mp4' | 'hls',
+            src: source.url,
+            ...(source.kind === 'hls' ? { hlsRedirects: 'follow' as const } : {}),
+            // VideoHUB serves native MP4 without CORS response headers.
+            ...(source.kind === 'mp4' && source.provider === 'videohub-streaming'
+              ? { crossOrigin: null }
+              : {}),
+            title: props.mediaTitle,
+            audioTracks: controls?.tracks.map(({ value, label, language }) => ({
+              id: value,
+              label,
+              language,
+            })),
+            qualities: controls?.qualities.map(({ value, label }) => ({ id: value, label })),
+            capabilities: {
+              audio: controls && controls.tracks.length > 1 ? 'host' : 'transport',
+              quality: controls && controls.qualities.length > 1 ? 'host' : 'transport',
+              autoQuality: false,
+            },
+          };
+    if ((timeline || local) && props.navigation?.pending && !torrentTextRef.current) {
       const snapshot = player.runtime?.getSnapshot();
       torrentTextRef.current = {
         text: snapshot?.textTracks?.find((track) => track.id === snapshot.selection.textId) ?? null,
       };
     }
-    if (!props.navigation?.pending && loadedRevisionRef.current === descriptor.revision)
+    if (
+      !props.navigation?.pending &&
+      loadedSourceIdRef.current === descriptor.id &&
+      loadedRevisionRef.current === descriptor.revision
+    )
       torrentTextRef.current = null;
     player.label = `Плеер ${source.label}: ${props.mediaTitle}`;
     // A rolling HLS window emits media EOF before the episode finishes.
     // Only the confirmed absolute episode end may advance torrent files.
-    player.navigation = timeline
-      ? { ...props.navigation, autoAdvance: false }
-      : (props.navigation ?? {});
+    player.navigation =
+      timeline || local ? { ...props.navigation, autoAdvance: false } : (props.navigation ?? {});
+    const timeout = local ? 125_000 : 15_000;
+    if (player.commandTimeoutMs !== timeout) player.commandTimeoutMs = timeout;
+    if (local && appliedLocalRef.current === local) return;
     const command = torrentCommandRef.current;
     // Host commands own generation updates only within their torrent session.
     // A different release/provider must replace the source immediately, which
@@ -505,11 +581,13 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
         source.provider === 'torrent' &&
         command.sourceRef.split(':').slice(0, 2).join(':') ===
           source.sourceRef.split(':').slice(0, 2).join(':')) ||
-      loadedRevisionRef.current === descriptor.revision
+      (loadedSourceIdRef.current === descriptor.id &&
+        loadedRevisionRef.current === descriptor.revision)
     )
       return;
     const sameMedia =
       !timeline &&
+      !local &&
       loadedMediaRef.current?.sourceRef === source.sourceRef &&
       loadedMediaRef.current.url === source.url;
     const current = sameMedia ? player.runtime?.getSnapshot() : undefined;
@@ -517,7 +595,8 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
       ? ((!current?.pending ? current?.positionSeconds : null) ?? initializingRef.current?.position)
       : null;
     const torrentTracks =
-      timeline && loadedMediaRef.current?.sourceRef.startsWith('torrent:')
+      (timeline || local) &&
+      (loadedMediaRef.current?.sourceRef.startsWith('torrent:') || appliedLocalRef.current)
         ? player.runtime?.getSnapshot()
         : undefined;
     const previousText = torrentTextRef.current
@@ -526,9 +605,13 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
     torrentTextRef.current = null;
     torrentCommandRef.current = null;
     loadedRevisionRef.current = descriptor.revision;
+    loadedSourceIdRef.current = descriptor.id;
+    appliedLocalRef.current = local ?? null;
     loadedMediaRef.current = { sourceRef: source.sourceRef, url: source.url };
     if (timeline) streamRef.current?.configure(source.url, timeline, descriptor.revision);
     else streamRef.current?.dispose();
+    if (local) localStreamRef.current?.configure(local.source);
+    else localStreamRef.current?.dispose();
     if (pendingRef.current) {
       pendingRef.current({
         source: descriptor,
@@ -538,13 +621,15 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
         },
       });
     } else {
-      torrentAudioRef.current = timeline?.selectedAudioTrackRef ?? null;
+      torrentAudioRef.current = local?.audioId ?? timeline?.selectedAudioTrackRef ?? null;
       const initial = {
-        position: timeline
-          ? timeline.timeline.continuous
-            ? Math.max(timeline.startPositionSeconds, props.initialPositionSeconds)
-            : timeline.startPositionSeconds
-          : (retainedPosition ?? props.initialPositionSeconds),
+        position: local
+          ? local.position
+          : timeline
+            ? timeline.timeline.continuous
+              ? Math.max(timeline.startPositionSeconds, props.initialPositionSeconds)
+              : timeline.startPositionSeconds
+            : (retainedPosition ?? props.initialPositionSeconds),
       };
       initializingRef.current = initial;
       void player
@@ -554,8 +639,13 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
           ...(torrentTracks ? { trackPreferences: { text: null } } : {}),
         })
         .then(async () => {
-          if (loadedRevisionRef.current !== descriptor.revision) return;
+          if (
+            loadedSourceIdRef.current !== descriptor.id ||
+            loadedRevisionRef.current !== descriptor.revision
+          )
+            return;
           const selection = player.runtime?.getSnapshot().selection;
+          if (local && !selection?.audioId) await player.selectAudio(local.audioId);
           if (timeline && !selection?.audioId)
             await player.selectAudio(timeline.selectedAudioTrackRef);
           if (
@@ -566,7 +656,7 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
             await player.selectAudio(controls.selectedTrackKey);
           if (controls?.selectedQualityKey && descriptor.capabilities?.quality === 'host')
             await player.selectQuality(controls.selectedQualityKey);
-          if (timeline && previousText) {
+          if ((timeline || local) && previousText) {
             const target = player.runtime
               ?.getSnapshot()
               .textTracks.find(
@@ -577,7 +667,11 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
                   !!track.forced === !!previousText.forced &&
                   !!track.sdh === !!previousText.sdh,
               );
-            if (target && loadedRevisionRef.current === descriptor.revision)
+            if (
+              target &&
+              loadedSourceIdRef.current === descriptor.id &&
+              loadedRevisionRef.current === descriptor.revision
+            )
               await player.selectText(target.id);
           }
         })

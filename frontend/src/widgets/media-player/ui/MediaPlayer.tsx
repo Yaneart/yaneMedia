@@ -7,6 +7,7 @@ import {
 import { ErrorState, IconButton, PlayIcon, Spinner } from '@/shared';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { PlayerNavigation, PreferencesAdapter } from '@yaneart/yaneplayer';
+import type { LocalPlayback } from '@/features/companion';
 
 import {
   MediaVideoRenderer,
@@ -47,6 +48,7 @@ export type MediaPlayerProps = {
   embedded?: boolean;
   directControls?: MediaVideoDirectControls;
   torrentTimeline?: TorrentVideoTimeline;
+  localPlayback?: LocalPlayback;
   preferences?: PreferencesAdapter;
   navigation?: PlayerNavigation;
   selection?: ReactNode;
@@ -122,6 +124,7 @@ export function MediaPlayer({
   embedded = false,
   directControls,
   torrentTimeline,
+  localPlayback,
   preferences,
   navigation,
   selection,
@@ -229,6 +232,7 @@ export function MediaPlayer({
             initialPositionSeconds={initialPositionSeconds}
             directControls={directControls}
             torrentTimeline={torrentTimeline}
+            localPlayback={localPlayback}
             preferences={preferences}
             navigation={navigation}
             onReady={onReady}

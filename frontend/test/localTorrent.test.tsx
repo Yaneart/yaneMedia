@@ -39,7 +39,18 @@ beforeEach(() => {
         helperVersion: 'dev',
         api: { major: 1, minor: 0 },
         bootId: 'boot',
-        capabilities: ['pairing.v1', 'torrent-admission.v1', 'torrent-files.v1'],
+        capabilities: [
+          'pairing.v1',
+          'torrent-admission.v1',
+          'torrent-files.v1',
+          'sessions.v1',
+          'hls.mse',
+          'timeline.windowed-vod',
+          'video.original',
+          'audio.aac',
+          'audio.select',
+          'text.prepared',
+        ],
       });
     if (url.pathname === '/v1/controllers')
       return json({ controllerId: 'a'.repeat(32), controllerToken: token });
@@ -229,4 +240,30 @@ test('a failed metadata request clears the ended session so another torrent can 
   expect(result.current.snapshot).toBeNull();
   expect(result.current.pending).toBe(false);
   expect(result.current.error).toContain('Локальная загрузка прервалась');
+});
+
+test('losing access during media preparation releases pending so another torrent can be chosen', async () => {
+  const { result } = renderHook(() => useLocalTorrent());
+  act(() => {
+    void result.current.start(async () => locator);
+  });
+  await waitFor(() => expect(result.current.snapshot?.state).toBe('awaiting_file'));
+  const transport = globalThis.fetch;
+  globalThis.fetch = mock(async (input, init) => {
+    if (new URL(String(input)).pathname === `/v1/sessions/${session}`)
+      return json({ error: { code: 'CONTROLLER_REQUIRED' } }, 401);
+    return transport(input, init);
+  }) as typeof fetch;
+  await act(async () => {
+    await result.current.prepare(file).catch(() => {});
+  });
+  expect(result.current.snapshot).toBeNull();
+  expect(result.current.playback).toBeNull();
+  expect(result.current.pending).toBe(false);
+  expect(result.current.error).toContain('Доступ к локальной сессии истёк');
+  globalThis.fetch = transport;
+  act(() => {
+    void result.current.start(async () => locator);
+  });
+  await waitFor(() => expect(result.current.snapshot?.state).toBe('awaiting_file'));
 });

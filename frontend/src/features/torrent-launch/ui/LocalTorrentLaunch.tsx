@@ -16,10 +16,18 @@ export function LocalTorrentLaunch({
   mediaRef,
   season,
   episode,
+  local,
+  onStart,
+  onSelect,
+  onStop,
 }: {
   mediaRef: string;
   season?: number;
   episode?: number;
+  local: ReturnType<typeof useLocalTorrent>;
+  onStart: () => void;
+  onSelect: (fileRef: string) => void;
+  onStop: () => void;
 }) {
   const { state: auth } = useAuth();
   const owner = auth.status === 'authenticated' ? auth.user.email : 'guest';
@@ -28,7 +36,6 @@ export function LocalTorrentLaunch({
   const [sort, setSort] = useState<CandidateSort>('best');
   const [magnet, setMagnet] = useState('');
   const [inputError, setInputError] = useState<string | null>(null);
-  const local = useLocalTorrent();
   const search = useQuery({
     queryKey: ['local-torrent-candidates', owner, mediaRef, season, episode],
     queryFn: ({ signal }) => getTorrentCandidates(mediaRef, season, episode, signal),
@@ -48,6 +55,7 @@ export function LocalTorrentLaunch({
       setInputError('Введите magnet-ссылку размером до 4 Кб.');
       return;
     }
+    onStart();
     void local.start(async () => ({ kind: 'magnet', value: magnet }));
   }
   async function upload(file: File | undefined) {
@@ -61,6 +69,7 @@ export function LocalTorrentLaunch({
       setInputError('Выберите файл .torrent размером до 2 Мб.');
       return;
     }
+    onStart();
     await local.start(async (signal) => {
       const bytes = new Uint8Array(await file.arrayBuffer());
       signal.throwIfAborted();
@@ -73,12 +82,25 @@ export function LocalTorrentLaunch({
   return (
     <section className="space-y-4 p-3" aria-label="Локальная загрузка торрента">
       <p className="text-sm text-text-secondary">
-        Раздача загружается на этом компьютере через yaneCompanion. Подготовка видео к просмотру
-        пока недоступна.
+        Раздача загружается и воспроизводится на этом компьютере через yaneCompanion.
       </p>
       <Button variant="secondary" size="small" onClick={() => setConnectOpen(true)}>
         Подключить помощник
       </Button>
+      <p role="status" className="text-sm text-text-secondary">
+        {connection.state.status === 'paired'
+          ? connection.state.playbackReady
+            ? 'Помощник подключён. Локальный просмотр доступен.'
+            : 'Обновите помощник для локального просмотра.'
+          : connection.state.hasPairing
+            ? 'Доступ сохранён. Подключение проверяется при запуске.'
+            : 'Запустите и подключите yaneCompanion для просмотра.'}
+      </p>
+      {connection.state.message && (
+        <p role="alert" className="text-sm text-error">
+          {connection.state.message}
+        </p>
+      )}
       <CompanionDialog
         connection={connection}
         open={connectOpen}
@@ -129,9 +151,10 @@ export function LocalTorrentLaunch({
             key={candidate.candidateRef}
             candidate={candidate}
             pending={local.pending || !!local.snapshot}
-            onSelect={() =>
-              void local.start((signal) => resolveTorrentCandidate(candidate.candidateRef, signal))
-            }
+            onSelect={() => {
+              onStart();
+              void local.start((signal) => resolveTorrentCandidate(candidate.candidateRef, signal));
+            }}
           />
         ))}
       </div>
@@ -170,8 +193,8 @@ export function LocalTorrentLaunch({
       )}
       {local.pending && (
         <p role="status" className="text-sm text-text-secondary">
-          {local.snapshot?.state === 'awaiting_file'
-            ? 'Загружаем выбранный видеофайл…'
+          {local.snapshot && local.snapshot.state !== 'metadata'
+            ? 'Подготавливаем видео к просмотру…'
             : 'Получаем список файлов раздачи…'}
         </p>
       )}
@@ -185,8 +208,7 @@ export function LocalTorrentLaunch({
             <Button
               key={file.fileRef}
               variant="secondary"
-              disabled={local.pending}
-              onClick={() => void local.select(file.fileRef)}
+              onClick={() => onSelect(file.fileRef)}
               className="w-full overflow-hidden text-left"
             >
               <span className="min-w-0 break-words [overflow-wrap:anywhere]">
@@ -201,10 +223,12 @@ export function LocalTorrentLaunch({
               {local.snapshot.downloadedBytes.toLocaleString('ru-RU')} байт.
             </p>
           )}
-          <Button variant="secondary" onClick={local.stop}>
-            Остановить загрузку
-          </Button>
         </div>
+      )}
+      {(local.pending || local.snapshot) && (
+        <Button variant="secondary" onClick={onStop}>
+          Остановить загрузку
+        </Button>
       )}
     </section>
   );

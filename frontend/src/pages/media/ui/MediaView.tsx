@@ -33,9 +33,11 @@ import { SeasonSelector } from '@/features/season-selection';
 import {
   TorrentLaunch,
   LocalTorrentLaunch,
+  useLocalTorrent,
   TorrentFilePicker,
   TorrentPreparation,
   torrentEpisodes,
+  initialTorrentEpisode,
   type TorrentEpisode,
 } from '@/features/torrent-launch';
 import {
@@ -283,6 +285,11 @@ export function MediaView({
   const accountKey = authState.status === 'authenticated' ? authState.user.email : 'inactive';
   const queryClient = useQueryClient();
   const [torrentOpen, setTorrentOpen] = useState(false);
+  const local = useLocalTorrent();
+  const stopLocal = local.stop;
+  const [localSelected, setLocalSelected] = useState(false);
+  const [localPaused, setLocalPaused] = useState(false);
+  const localAutoSession = useRef<string | null>(null);
   const [torrentSelected, setTorrentSelected] = useState(false);
   const [torrentPlayRequest, setTorrentPlayRequest] = useState(0);
   const [torrentStarting, setTorrentStarting] = useState(false);
@@ -659,8 +666,24 @@ export function MediaView({
     selectedDirectTrackKey,
   ]);
 
-  const selectedSource =
-    activeTorrentId || torrentSelected
+  const localFiles = torrentEpisodes(
+    (local.snapshot?.files ?? [])
+      .filter((file) => /\.(mkv|mp4|m4v|avi|mov|ts|webm)$/i.test(file.name) && file.size > 0)
+      .map((file) => ({ ref: file.fileRef, name: file.name, sizeBytes: file.size })),
+    media,
+    currentAnimeSeason,
+  );
+  const selectedSource: MediaSourceOption | undefined = localSelected
+    ? {
+        sourceRef: `local:${local.playback?.source.id ?? 'selection'}`,
+        provider: 'torrent',
+        kind: 'hls',
+        label: 'Торрент · на устройстве',
+        url: local.playback?.source.url ?? '',
+        availability: 'available',
+        browserSupported: true,
+      }
+    : activeTorrentId || torrentSelected
       ? (torrentSource ?? {
           sourceRef: 'torrent:selection',
           provider: 'torrent',
@@ -698,7 +721,7 @@ export function MediaView({
       sessionCatalogSource !== undefined &&
       sessionCatalogSource.provider === selectedDirectSource?.provider);
   const isPlayerStarted =
-    activeTorrentId !== null || torrentStarting
+    localSelected || activeTorrentId !== null || torrentStarting
       ? true
       : sessionSourceMatches &&
         (!usesPlayerEpisodes || hasSameEpisode(sessionPlaybackEpisode, selectedPlaybackEpisode));
@@ -706,6 +729,7 @@ export function MediaView({
   // the playback URL, including progressive results from that lookup.
   const directSourceUnconfirmed =
     usesPlayerEpisodes &&
+    !localSelected &&
     !activeTorrentId &&
     !torrentSelected &&
     !mergeEpisodeSources([], episodeAvailability, availabilityEpisode).some(
@@ -812,6 +836,8 @@ export function MediaView({
   );
 
   const resetPlayer = useCallback(() => {
+    stopLocal();
+    setLocalSelected(false);
     episodeRequestRef.current?.abort();
     setTorrentSourceRevision((revision) => revision + 1);
     torrentSwitchRef.current?.abort();
@@ -834,7 +860,7 @@ export function MediaView({
     }
 
     setPlayerStatus('ready');
-  }, [accountKey, activeTorrentId, endSession, launchedTorrent, mediaSession]);
+  }, [accountKey, activeTorrentId, endSession, launchedTorrent, mediaSession, stopLocal]);
 
   useEffect(() => () => torrentSwitchRef.current?.abort(), [accountKey, media.mediaRef]);
 
@@ -1020,8 +1046,45 @@ export function MediaView({
     selectDirectSource(source);
   };
 
-  const playerNavigation =
-    (activeTorrentId || torrentSelected) && torrentFiles.length > 1
+  const selectLocalFile = async (fileRef: string, signal?: AbortSignal) => {
+    setPlayerStatus('loading');
+    try {
+      await local.prepare(fileRef, 0, signal);
+      if (!signal?.aborted) setTorrentOpen(false);
+    } catch {
+      // The hook publishes a friendly error only for the current selection.
+    }
+  };
+  useEffect(() => {
+    if (
+      !localSelected ||
+      !local.snapshot ||
+      local.snapshot.state !== 'awaiting_file' ||
+      local.pending ||
+      localAutoSession.current === local.snapshot.sessionId
+    )
+      return;
+    localAutoSession.current = local.snapshot.sessionId;
+    const row = initialTorrentEpisode(
+      localFiles,
+      selectedPlaybackEpisode,
+      media.type === 'movie' || (media.type === 'anime' && media.animeKind === 'movie'),
+    );
+    if (row) void selectLocalFile(row.file.ref);
+  });
+  const playerNavigation = localSelected
+    ? {
+        ...torrentEpisodeNavigation(
+          localFiles,
+          local.snapshot?.selectedFileRef ?? null,
+          media.type !== 'series',
+          async (row, signal) => {
+            await local.prepare(row.file.ref, 0, signal);
+          },
+        ),
+        pending: local.pending,
+      }
+    : (activeTorrentId || torrentSelected) && torrentFiles.length > 1
       ? {
           ...torrentEpisodeNavigation(
             torrentFiles,
@@ -1219,7 +1282,16 @@ export function MediaView({
                                 )
                               : () => (
                                   <LocalTorrentLaunch
-                                    key={`${media.mediaRef}:${selectedDirectEpisode?.seasonNumber}:${selectedDirectEpisode?.episodeNumber}`}
+                                    local={local}
+                                    onStart={() => {
+                                      episodeRequestRef.current?.abort();
+                                      endSession();
+                                      setLocalSelected(true);
+                                      setLocalPaused(false);
+                                      setPlayerStatus('loading');
+                                    }}
+                                    onSelect={(fileRef) => void selectLocalFile(fileRef)}
+                                    onStop={resetPlayer}
                                     mediaRef={media.mediaRef}
                                     season={
                                       usesEpisodePlayback(media)
@@ -1237,12 +1309,12 @@ export function MediaView({
                           }
                           torrentOpen={torrentOpen}
                           onEmbedSelect={(sourceRef) => {
-                            if (activeTorrentId || torrentSelected) resetPlayer();
+                            if (localSelected || activeTorrentId || torrentSelected) resetPlayer();
                             if (playbackMode !== 'embed') selectPlaybackMode('embed');
                             selectEmbedSource(sourceRef);
                           }}
                           onDirectSelect={(provider) => {
-                            if (activeTorrentId || torrentSelected) resetPlayer();
+                            if (localSelected || activeTorrentId || torrentSelected) resetPlayer();
                             if (playbackMode !== 'direct') selectPlaybackMode('direct');
                             selectDirectProvider(provider);
                           }}
@@ -1260,9 +1332,18 @@ export function MediaView({
               <MediaPlayer
                 key={accountKey}
                 preferences={preferences}
+                localPlayback={localSelected ? (local.playback ?? undefined) : undefined}
                 navigation={playerNavigation}
                 loading={
-                  torrentSelected || activeTorrentId ? (
+                  localSelected && !local.playback ? (
+                    <Spinner
+                      label={
+                        local.pending
+                          ? 'Подготавливаем локальное видео'
+                          : 'Выберите файл в меню источника'
+                      }
+                    />
+                  ) : torrentSelected || activeTorrentId ? (
                     <TorrentPreparation
                       key={torrentPlayRequest}
                       state={torrentPreparationState ?? torrentSession?.state}
@@ -1270,7 +1351,17 @@ export function MediaView({
                   ) : undefined
                 }
                 selection={
-                  torrentNeedsFile ? (
+                  localSelected &&
+                  local.snapshot &&
+                  !local.playback &&
+                  !local.pending &&
+                  !local.error ? (
+                    <TorrentFilePicker
+                      files={localFiles}
+                      missing={false}
+                      onSelect={(fileRef) => void selectLocalFile(fileRef)}
+                    />
+                  ) : torrentNeedsFile ? (
                     <TorrentFilePicker
                       files={torrentFiles}
                       missing={!!torrentResumeRef.current?.episode}
@@ -1290,40 +1381,66 @@ export function MediaView({
                     : undefined
                 }
                 isStarted={isPlayerStarted}
-                shouldAutoPlay={mediaSession?.state === 'playing'}
-                initialPositionSeconds={mediaSession?.positionSeconds ?? 0}
+                shouldAutoPlay={localSelected ? !localPaused : mediaSession?.state === 'playing'}
+                initialPositionSeconds={
+                  localSelected
+                    ? (local.playback?.position ?? 0)
+                    : (mediaSession?.positionSeconds ?? 0)
+                }
                 status={
-                  activeTorrentId && torrentUnavailable
-                    ? 'error'
-                    : activeTorrentId && !torrentPlayback
-                      ? 'loading'
-                      : directSourceUnconfirmed && isPlayerStarted
-                        ? episodeAvailabilityPending
-                          ? 'loading'
-                          : 'error'
+                  localSelected
+                    ? local.error
+                      ? 'error'
+                      : local.pending || !local.playback
+                        ? 'loading'
                         : playerStatus
+                    : activeTorrentId && torrentUnavailable
+                      ? 'error'
+                      : activeTorrentId && !torrentPlayback
+                        ? 'loading'
+                        : directSourceUnconfirmed && isPlayerStarted
+                          ? episodeAvailabilityPending
+                            ? 'loading'
+                            : 'error'
+                          : playerStatus
                 }
                 onStart={torrentSelected ? requestTorrentPlayback : loadPlayer}
                 onReady={handlePlayerReady}
                 onError={handlePlayerError}
                 onPlay={() => {
+                  if (localSelected) {
+                    setLocalPaused(false);
+                    return;
+                  }
                   if (mediaSession && !torrentSwitchRef.current) resumeSession(mediaSession);
                 }}
                 onPause={() => {
+                  if (localSelected) {
+                    if (!local.pending) setLocalPaused(true);
+                    return;
+                  }
                   if (mediaSession && !torrentSwitchRef.current) pauseSession(mediaSession);
                 }}
                 onProgress={(position, duration, reason) => {
+                  if (localSelected) return;
                   if (mediaSession && !torrentSwitchRef.current)
                     updateProgress(position, duration, reason, mediaSession);
                 }}
                 onRetry={
-                  torrentSelected || activeTorrentId
-                    ? requestTorrentPlayback
-                    : directSourceUnconfirmed
-                      ? () => void retryEpisodeAvailability()
-                      : loadPlayer
+                  localSelected
+                    ? () => {
+                        if (local.snapshot?.selectedFileRef)
+                          void selectLocalFile(local.snapshot.selectedFileRef);
+                        else setTorrentOpen(true);
+                      }
+                    : torrentSelected || activeTorrentId
+                      ? requestTorrentPlayback
+                      : directSourceUnconfirmed
+                        ? () => void retryEpisodeAvailability()
+                        : loadPlayer
                 }
                 errorDescription={
+                  (localSelected ? local.error : null) ??
                   torrentLaunchError ??
                   (activeTorrentId
                     ? torrentErrorDescription
@@ -1350,7 +1467,7 @@ export function MediaView({
                     : undefined
                 }
                 directControls={
-                  !activeTorrentId && selectedDirectSource
+                  !localSelected && !activeTorrentId && selectedDirectSource
                     ? {
                         tracks: directTracks.map((track) => ({
                           value: track.key,

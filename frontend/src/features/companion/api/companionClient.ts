@@ -51,8 +51,9 @@ export async function companionRequest(
   token?: string,
   body?: unknown,
   key?: string,
+  extraHeaders?: Record<string, string>,
 ) {
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = { ...extraHeaders };
   if (token) headers.Authorization = `Bearer ${token}`;
   if (method === 'POST') headers['Content-Type'] = 'application/json';
   if (key) headers['Idempotency-Key'] = key;
