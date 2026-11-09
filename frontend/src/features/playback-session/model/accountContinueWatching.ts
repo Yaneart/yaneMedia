@@ -1,5 +1,10 @@
 import { accountQueryKey } from '@/entities/auth';
-import type { ContinueWatchingProgressEntry, PlaybackSession } from '@/entities/playback';
+import {
+  isLocalPlaybackSourceRef,
+  type ContinueWatchingProgressEntry,
+  type PlaybackSession,
+} from '@/entities/playback';
+import { progressSourceRef } from './progressSource';
 
 import type { AccountContinueWatching } from '../api/continueWatchingApi';
 import { CONTINUE_WATCHING_ENTRY_LIMIT } from './continueWatchingStorage';
@@ -20,7 +25,7 @@ export function isPlaybackCompleted(
 export function toProgressEntry(session: PlaybackSession): ContinueWatchingProgressEntry {
   return {
     mediaRef: session.mediaRef,
-    sourceRef: session.sourceRef,
+    sourceRef: progressSourceRef(session.sourceRef),
     episode: session.episode,
     positionSeconds: session.positionSeconds,
     durationSeconds: session.durationSeconds,
@@ -47,7 +52,10 @@ export function mergeAccountAndGuestProgress(
 
   return [
     ...accountEntries,
-    ...guestEntries.filter(({ mediaRef }) => !accountMediaRefs.has(mediaRef)),
+    ...guestEntries.filter(
+      ({ mediaRef, sourceRef }) =>
+        !accountMediaRefs.has(mediaRef) && !isLocalPlaybackSourceRef(progressSourceRef(sourceRef)),
+    ),
   ]
     .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))
     .slice(0, CONTINUE_WATCHING_ENTRY_LIMIT);

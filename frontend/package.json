@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "test": "bun test",
     "test:companion": "bun test ./test/companionConnection.test.tsx && bun test ./test/localTorrent.test.tsx",
-    "test:local-playback": "bun test ./test/localPlayback.test.ts ./test/localTracks.test.ts && bun test ./test/localViewLifecycle.test.tsx",
+    "test:local-playback": "bun test ./test/localPlayback.test.ts ./test/localTracks.test.ts && bun test ./test/controllerCleanup.test.ts && bun test ./test/localProgressStorage.test.ts && bun test ./test/localViewLifecycle.test.tsx",
     "test:torrent": "bun test ./test/torrentSessionBoundary.test.ts ./test/torrentReplacement.test.ts ./test/torrentStream.test.ts ./test/torrentEpisodes.test.ts ./test/torrentFileSwitch.test.ts ./test/socialAccess.test.ts ./test/playbackModeResolution.test.ts ./test/candidateView.test.ts && bun test ./test/torrentLifecycle.test.tsx && bun test ./test/torrentViewLifecycle.test.tsx && bun test ./test/playbackContinuity.test.tsx",
     "lint": "oxlint",
     "format": "prettier --write .",

@@ -30,9 +30,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       cancelRequest();
 
       const previousAccountKey = authenticatedAccountKeyRef.current;
-      if (previousAccountKey && previousAccountKey !== user.email) {
+      if (previousAccountKey !== user.email) {
         resetTorrentClientScope();
-        clearAccountQueries(queryClient, previousAccountKey);
+        if (previousAccountKey) clearAccountQueries(queryClient, previousAccountKey);
       }
 
       authenticatedAccountKeyRef.current = user.email;

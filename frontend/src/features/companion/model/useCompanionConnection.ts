@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { resetTorrentClientScope } from '@/entities/torrent-session';
 import {
   cancelPairing,
   checkPairing,
@@ -183,6 +184,7 @@ export function useCompanionConnection() {
           if (!(error instanceof CompanionError) || error.code !== 'PAIRING_REQUIRED') throw error;
         }
       }
+      resetTorrentClientScope();
       await pairingStorage.clear();
       if (mounted.current) setState({ status: 'idle', hasPairing: false });
     } catch (error) {

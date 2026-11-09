@@ -67,6 +67,8 @@ export async function companionRequest(
     mode: 'cors',
     referrerPolicy: 'no-referrer',
     targetAddressSpace: 'loopback',
+    // Controller revocation must survive pagehide/refresh of its owning page.
+    ...(method === 'DELETE' && path === '/v1/controllers/current' ? { keepalive: true } : {}),
     ...(method === 'POST' ? { body: JSON.stringify(body ?? {}) } : {}),
   };
   let response: Response;

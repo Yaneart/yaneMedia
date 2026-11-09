@@ -6,13 +6,15 @@ import type { CanonicalMediaRef, MediaLocator } from '@/entities/media';
 import {
   isTorrentPlaybackSourceRef,
   registerTorrentPlayerStop,
+  resetTorrentClientScope,
   stopTorrentSession,
 } from '@/entities/torrent-session';
-import type {
-  ContinueWatchingEntry,
-  ContinueWatchingProgressEntry,
-  PlaybackMediaSnapshot,
-  PlaybackSession,
+import {
+  isLocalPlaybackSourceRef,
+  type ContinueWatchingEntry,
+  type ContinueWatchingProgressEntry,
+  type PlaybackMediaSnapshot,
+  type PlaybackSession,
 } from '@/entities/playback';
 import { ApiClientError } from '@/shared/api';
 import { SERVER_TORRENT_ENABLED } from '@/shared/config/serverTorrent';
@@ -142,12 +144,9 @@ async function executeAccountMutation(mutation: AccountMutation) {
 export function PlaybackSessionProvider({ children }: PlaybackSessionProviderProps) {
   const { state: authState, setGuest, refresh: refreshAuth } = useAuth();
   const queryClient = useQueryClient();
-  const [storedSession, setStoredSession] = useState<OwnedPlaybackSession | null>(() => {
-    const stored = loadPlaybackSession();
-    return stored && !SERVER_TORRENT_ENABLED && isTorrentPlaybackSourceRef(stored.session.sourceRef)
-      ? null
-      : stored;
-  });
+  const [storedSession, setStoredSession] = useState<OwnedPlaybackSession | null>(
+    loadPlaybackSession,
+  );
   const [guestEntries, setGuestEntries] = useState<ContinueWatchingEntry[]>(
     loadContinueWatchingEntries,
   );
@@ -167,6 +166,7 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
   const renderedUserIdRef = useRef(accountUserId);
   const resolvedOwnerIdRef = useRef(resolvedOwnerId);
   const mutationActiveRef = useRef(false);
+  const progressWaitersRef = useRef(new Set<() => void>());
   const mutationPausedRef = useRef(false);
   const mutationQueueRef = useRef<AccountMutation[]>([]);
   const failedMutationRef = useRef<AccountMutation | null>(null);
@@ -255,6 +255,7 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
     onSettled: (_result, error) => {
       mutationActiveRef.current = false;
       if (!error) runNextMutationRef.current();
+      for (const notify of progressWaitersRef.current) notify();
     },
   });
   const { isError: isMutationError, mutate, reset } = mutation;
@@ -442,6 +443,10 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
   useEffect(
     () =>
       registerTorrentPlayerStop(() => {
+        const current = sessionRef.current;
+        if (current && isLocalPlaybackSourceRef(current.sourceRef)) {
+          storeSession({ ...current, state: 'paused' });
+        }
         if (sessionRef.current && isTorrentPlaybackSourceRef(sessionRef.current.sourceRef)) {
           removePlaybackSession();
           storeSession(null);
@@ -513,12 +518,14 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
     const guestToMigrate = merged.filter((entry) => !accountMediaRefs.has(entry.mediaRef));
     const confirmedAccountMediaRefs = confirmedAccountMediaRefsRef.current.get(accountUserId);
 
-    setGuestEntries((current) =>
-      !confirmedAccountMediaRefs ||
-      current.every(({ mediaRef }) => !confirmedAccountMediaRefs.has(mediaRef))
-        ? current
-        : current.filter(({ mediaRef }) => !confirmedAccountMediaRefs.has(mediaRef)),
-    );
+    setGuestEntries((current) => {
+      if (!confirmedAccountMediaRefs) return current;
+      const remaining = current.filter(
+        ({ mediaRef, sourceRef }) =>
+          isLocalPlaybackSourceRef(sourceRef) || !confirmedAccountMediaRefs.has(mediaRef),
+      );
+      return remaining.length === current.length ? current : remaining;
+    });
 
     for (const entry of [...guestToMigrate].reverse()) {
       const migrationKey = `${accountUserId}:${entry.mediaRef}`;
@@ -587,6 +594,12 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
       const previous = sessionRef.current;
       if (
         previous &&
+        isLocalPlaybackSourceRef(previous.sourceRef) &&
+        previous.sourceRef !== input.sourceRef
+      )
+        resetTorrentClientScope();
+      if (
+        previous &&
         previous.sourceRef !== input.sourceRef &&
         isTorrentPlaybackSourceRef(previous.sourceRef)
       )
@@ -628,6 +641,12 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
       const previous = sessionRef.current;
       if (
         previous &&
+        isLocalPlaybackSourceRef(previous.sourceRef) &&
+        previous.sourceRef !== entry.sourceRef
+      )
+        resetTorrentClientScope();
+      if (
+        previous &&
         previous.sourceRef !== entry.sourceRef &&
         isTorrentPlaybackSourceRef(previous.sourceRef)
       )
@@ -639,7 +658,7 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
       const nextSession: PlaybackSession = {
         ...entry,
         mediaSnapshot,
-        state: 'playing',
+        state: isLocalPlaybackSourceRef(entry.sourceRef) ? 'paused' : 'playing',
         volume: sessionRef.current?.volume ?? 1,
         updatedAt: getUpdatedAt(),
       };
@@ -662,6 +681,7 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
       if (sessionRef.current?.mediaRef === mediaRef) {
         const current = sessionRef.current;
         storeSession(null);
+        if (isLocalPlaybackSourceRef(current.sourceRef)) resetTorrentClientScope();
         if (isTorrentPlaybackSourceRef(current.sourceRef))
           void stopTorrentSession(
             current.sourceRef.slice('torrent:'.length),
@@ -692,9 +712,11 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
       const current = sessionRef.current;
       if (!matchesSession(current, expected) || !current || current.state === 'paused') return;
 
-      storeSession({ ...current, state: 'paused', updatedAt: getUpdatedAt() });
+      const next = { ...current, state: 'paused' as const, updatedAt: getUpdatedAt() };
+      storeSession(next);
+      if (isLocalPlaybackSourceRef(current.sourceRef)) recordSession(next, true);
     },
-    [resolvedOwnerId, storeSession],
+    [recordSession, resolvedOwnerId, storeSession],
   );
 
   const resumeSession = useCallback(
@@ -780,6 +802,7 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
     const current = sessionRef.current;
     if (current && !isPlaybackCompleted(current)) recordSession(current, true);
     storeSession(null);
+    if (current && isLocalPlaybackSourceRef(current.sourceRef)) resetTorrentClientScope();
     if (current && isTorrentPlaybackSourceRef(current.sourceRef))
       void stopTorrentSession(
         current.sourceRef.slice('torrent:'.length),
@@ -811,6 +834,40 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
     if (accountUserId) void accountQuery.refetch();
   }, [accountQuery, accountUserId, authState.status, queryClient, refreshAuth]);
 
+  const prepareForLogout = useCallback(async () => {
+    const current = sessionRef.current;
+    if (current && isLocalPlaybackSourceRef(current.sourceRef)) {
+      recordSession(current, true);
+      resetTorrentClientScope();
+    } else if (trailingProgressRef.current) {
+      syncAccountProgress(trailingProgressRef.current, true);
+    }
+    const userId = currentUserIdRef.current;
+    if (!userId) return;
+    // Keep the account cookie until its queued confirmed progress has settled.
+    // An unavailable history service must not prevent logout indefinitely.
+    await new Promise<void>((resolve) => {
+      const finish = () => {
+        clearTimeout(timer);
+        progressWaitersRef.current.delete(check);
+        resolve();
+      };
+      const check = () => {
+        if (
+          currentUserIdRef.current !== userId ||
+          mutationPausedRef.current ||
+          (!mutationActiveRef.current &&
+            mutationQueueRef.current.length === 0 &&
+            !progressWaitingForQueryRef.current)
+        )
+          finish();
+      };
+      const timer = setTimeout(finish, 5_000);
+      progressWaitersRef.current.add(check);
+      check();
+    });
+  }, [recordSession, syncAccountProgress]);
+
   return (
     <PlaybackSessionContext
       value={{
@@ -829,6 +886,7 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
         updateProgress,
         setVolume,
         endSession,
+        prepareForLogout,
         retry,
       }}
     >

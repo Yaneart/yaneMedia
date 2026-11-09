@@ -143,7 +143,7 @@ afterEach(() => {
 });
 afterAll(() => GlobalRegistrator.unregister());
 
-test('Public hides the Home torrent UI and never mounts launch or polls an old server session', async () => {
+test('Public migrates the Home session to a local resume hint without mounting launch or polling its server session', async () => {
   mount(true);
   await act(async () => {});
   expect(screen.queryByRole('button', { name: 'Торрент', exact: true })).toBeNull();
@@ -151,16 +151,24 @@ test('Public hides the Home torrent UI and never mounts launch or polls an old s
   expect(launch).not.toHaveBeenCalled();
   expect(requests.some((url) => /torrent-sessions|torrent-candidates/.test(url))).toBe(false);
   expect(document.querySelector('yane-player')).toBeNull();
-  expect(playback.session).toBeNull();
+  expect(playback.session).toMatchObject({
+    sourceRef: 'local-torrent',
+    positionSeconds: 42,
+    state: 'paused',
+  });
   expect(playback.continueWatchingEntries[0]?.positionSeconds).toBe(42);
 });
 
-test('Public keeps saved progress but rejects server restore/start and allows ordinary direct playback', async () => {
+test('Public restores descriptive progress, rejects a raw server start and allows ordinary direct playback', async () => {
   mount();
   await act(async () => playback.restoreSession(mediaRef, old.mediaSnapshot));
-  expect(playback.session).toBeNull();
+  expect(playback.session).toMatchObject({
+    sourceRef: 'local-torrent',
+    positionSeconds: 42,
+    state: 'paused',
+  });
   await act(async () => playback.startSession(old));
-  expect(playback.session).toBeNull();
+  expect(playback.session?.sourceRef).toBe('local-torrent');
   await act(async () => playback.startSession({ ...old, sourceRef: 'direct' }));
   expect(playback.session).toMatchObject({ sourceRef: 'direct', positionSeconds: 42 });
   expect(requests).toHaveLength(0);

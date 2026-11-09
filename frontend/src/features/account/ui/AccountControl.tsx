@@ -10,6 +10,7 @@ import {
 } from '@/entities/torrent-session';
 import { SocialLoginLink } from '@/features/social-access';
 import { privateProfileQueryOptions } from '@/features/social-data';
+import { usePlaybackSession } from '@/features/playback-session';
 import { Button, ExitIcon, Popover, ProfileIcon } from '@/shared';
 import { ApiClientError } from '@/shared/api';
 
@@ -31,6 +32,7 @@ const triggerClassName = [
 export function AccountControl({ profilePath, placement = 'bottom' }: AccountControlProps) {
   const queryClient = useQueryClient();
   const { state, setGuest, refresh } = useAuth();
+  const { prepareForLogout } = usePlaybackSession();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
   const accountKey = state.status === 'authenticated' ? state.user.email : '';
@@ -50,6 +52,7 @@ export function AccountControl({ profilePath, placement = 'bottom' }: AccountCon
     setLogoutError(null);
 
     try {
+      await prepareForLogout();
       const knownSessions = queryClient.getQueriesData<TorrentSession | null>({
         queryKey: torrentSessionQueryKeys.root(accountKey),
       });

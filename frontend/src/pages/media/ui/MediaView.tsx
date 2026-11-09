@@ -10,7 +10,11 @@ import {
   type MediaSourceEpisodeRef,
   type MediaSourceOption,
 } from '@/entities/media-source';
-import type { PlaybackEpisodeSelection } from '@/entities/playback';
+import {
+  LOCAL_PLAYBACK_SOURCE_REF,
+  isLocalPlaybackSourceRef,
+  type PlaybackEpisodeSelection,
+} from '@/entities/playback';
 import {
   cacheTorrentSession,
   isTorrentPlaybackSourceRef,
@@ -64,7 +68,7 @@ import {
   type MediaPlayerEmptyState,
   type MediaPlayerStatus,
 } from '@/widgets/media-player';
-import { Spinner, YaneMark, YaneMarkField } from '@/shared';
+import { Button, Spinner, YaneMark, YaneMarkField } from '@/shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { MediaAvailabilityStatus } from '../model/useMediaAvailability';
@@ -318,14 +322,32 @@ export function MediaView({
       : storedProgress;
   const preferences = usePlayerPreferences();
   const { state: authState } = useAuth();
-  const accountKey = authState.status === 'authenticated' ? authState.user.email : 'inactive';
+  const accountKey = authState.status === 'authenticated' ? authState.user.email : authState.status;
   const queryClient = useQueryClient();
   const [torrentOpen, setTorrentOpen] = useState(false);
   const local = useLocalTorrent();
   const stopLocal = local.stop;
-  const [localSelected, setLocalSelected] = useState(false);
+  const [localSelected, setLocalSelected] = useState(
+    !SERVER_TORRENT_ENABLED && isLocalPlaybackSourceRef(savedProgress?.sourceRef ?? ''),
+  );
   const [localPaused, setLocalPaused] = useState(false);
   const localAutoSession = useRef<string | null>(null);
+  const localChoiceMade = useRef(false);
+  const localConfirmedBinding = useRef<typeof local.playback>(null);
+  const localBinding = useRef(local.playback);
+  localBinding.current = local.playback;
+  const localScope = `${accountKey}:${media.mediaRef}`;
+  const currentLocalScope = useRef(localScope);
+  currentLocalScope.current = localScope;
+  const currentMediaSession = useRef(mediaSession);
+  currentMediaSession.current = mediaSession;
+  useEffect(
+    () => () => {
+      const current = currentMediaSession.current;
+      if (current && isLocalPlaybackSourceRef(current.sourceRef)) pauseSession(current);
+    },
+    [localScope, pauseSession],
+  );
   const [torrentSelected, setTorrentSelected] = useState(false);
   const [torrentPlayRequest, setTorrentPlayRequest] = useState(0);
   const [torrentStarting, setTorrentStarting] = useState(false);
@@ -347,6 +369,12 @@ export function MediaView({
     const scope = `${accountKey}:${media.mediaRef}`;
     if (torrentScopeRef.current === scope) return;
     torrentScopeRef.current = scope;
+    stopLocal();
+    setLocalSelected(false);
+    setLocalPaused(false);
+    localChoiceMade.current = false;
+    localConfirmedBinding.current = null;
+    localAutoSession.current = null;
     torrentSwitchRef.current?.abort();
     torrentSwitchRef.current = null;
     torrentResumeRef.current = null;
@@ -355,7 +383,25 @@ export function MediaView({
     setTorrentRequestedFileRef(null);
     setTorrentSelected(false);
     setTorrentStarting(false);
-  }, [accountKey, media.mediaRef]);
+  }, [accountKey, media.mediaRef, stopLocal]);
+  useEffect(() => {
+    if (
+      !SERVER_TORRENT_ENABLED &&
+      !localChoiceMade.current &&
+      isLocalPlaybackSourceRef(savedProgress?.sourceRef ?? '')
+    )
+      setLocalSelected(true);
+  }, [localScope, savedProgress?.sourceRef]);
+  useEffect(() => {
+    if (
+      localSelected &&
+      !local.playback &&
+      !local.pending &&
+      mediaSession &&
+      isLocalPlaybackSourceRef(mediaSession.sourceRef)
+    )
+      pauseSession(mediaSession);
+  }, [localSelected, local.playback, local.pending, mediaSession, pauseSession]);
   const [launchedTorrent, setLaunchedTorrent] = useState<{
     accountKey: string;
     session: TorrentSession;
@@ -569,7 +615,7 @@ export function MediaView({
   const hasToolbarControls = hasPlaybackSources && (media.type === 'movie' || usesDirectEpisodes);
   const initialToolbarLoadComplete = hasToolbarControls || !sourcesPending;
   const isToolbarLoading =
-    toolbarResolvedMediaRef !== media.mediaRef && !initialToolbarLoadComplete;
+    !localSelected && toolbarResolvedMediaRef !== media.mediaRef && !initialToolbarLoadComplete;
   const playerEmptyState = getMediaPlayerEmptyState(
     availability,
     availabilityPending || directModePending,
@@ -875,6 +921,7 @@ export function MediaView({
   );
 
   const resetPlayer = useCallback(() => {
+    localChoiceMade.current = true;
     stopLocal();
     setLocalSelected(false);
     episodeRequestRef.current?.abort();
@@ -1087,8 +1134,17 @@ export function MediaView({
 
   const selectLocalFile = async (fileRef: string, signal?: AbortSignal) => {
     setPlayerStatus('loading');
+    const row = localFiles.find((row) => row.file.ref === fileRef);
+    const resume =
+      row &&
+      !row.ambiguous &&
+      !row.supplemental &&
+      savedProgress &&
+      (usesEpisodePlayback(media)
+        ? row.episode !== null && hasSameEpisode(row.episode, savedProgress.episode)
+        : true);
     try {
-      await local.prepare(fileRef, 0, signal);
+      await local.prepare(fileRef, resume ? savedProgress.positionSeconds : 0, signal);
       if (!signal?.aborted) setTorrentOpen(false);
     } catch {
       // The hook publishes a friendly error only for the current selection.
@@ -1100,13 +1156,14 @@ export function MediaView({
       !local.snapshot ||
       local.snapshot.state !== 'awaiting_file' ||
       local.pending ||
+      progressStatus === 'loading' ||
       localAutoSession.current === local.snapshot.sessionId
     )
       return;
     localAutoSession.current = local.snapshot.sessionId;
     const row = initialTorrentEpisode(
       localFiles,
-      selectedPlaybackEpisode,
+      savedProgress?.episode ?? selectedPlaybackEpisode,
       media.type === 'movie' || (media.type === 'anime' && media.animeKind === 'movie'),
     );
     if (row) void selectLocalFile(row.file.ref);
@@ -1146,6 +1203,7 @@ export function MediaView({
         : undefined;
 
   const loadPlayer = () => {
+    localChoiceMade.current = true;
     if (!selectedSource || getMediaSourcePlaybackIssue(selectedSource)) {
       return;
     }
@@ -1322,6 +1380,8 @@ export function MediaView({
                                   <LocalTorrentLaunch
                                     local={local}
                                     onStart={() => {
+                                      localChoiceMade.current = true;
+                                      localConfirmedBinding.current = null;
                                       episodeRequestRef.current?.abort();
                                       endSession();
                                       setLocalSelected(true);
@@ -1389,11 +1449,17 @@ export function MediaView({
                   ) : undefined
                 }
                 selection={
-                  localSelected &&
-                  local.snapshot &&
-                  !local.playback &&
-                  !local.pending &&
-                  !local.error ? (
+                  localSelected && !local.snapshot && !local.pending && !local.error ? (
+                    <div className="space-y-3 text-white" role="status">
+                      <p>Выберите раздачу для продолжения просмотра</p>
+                      <p className="text-caption text-white/70">Серия и позиция сохранены.</p>
+                      <Button onClick={() => setTorrentOpen(true)}>Выбрать раздачу</Button>
+                    </div>
+                  ) : localSelected &&
+                    local.snapshot &&
+                    !local.playback &&
+                    !local.pending &&
+                    !local.error ? (
                     <TorrentFilePicker
                       files={localFiles}
                       missing={false}
@@ -1448,19 +1514,64 @@ export function MediaView({
                 onPlay={() => {
                   if (localSelected) {
                     setLocalPaused(false);
+                    if (
+                      local.playback &&
+                      !local.playback.signal.aborted &&
+                      localConfirmedBinding.current === local.playback &&
+                      currentLocalScope.current === localScope
+                    )
+                      resumeSession();
                     return;
                   }
                   if (mediaSession && !torrentSwitchRef.current) resumeSession(mediaSession);
                 }}
                 onPause={() => {
                   if (localSelected) {
-                    if (!local.pending) setLocalPaused(true);
+                    if (!local.pending) {
+                      setLocalPaused(true);
+                      if (
+                        local.playback &&
+                        !local.playback.signal.aborted &&
+                        localConfirmedBinding.current === local.playback &&
+                        currentLocalScope.current === localScope
+                      )
+                        pauseSession();
+                    }
                     return;
                   }
                   if (mediaSession && !torrentSwitchRef.current) pauseSession(mediaSession);
                 }}
                 onProgress={(position, duration, reason) => {
-                  if (localSelected) return;
+                  if (localSelected) {
+                    const binding = local.playback;
+                    if (
+                      !binding ||
+                      binding.signal.aborted ||
+                      local.pending ||
+                      localBinding.current !== binding ||
+                      currentLocalScope.current !== localScope
+                    )
+                      return;
+                    if (localConfirmedBinding.current !== binding) {
+                      localConfirmedBinding.current = binding;
+                      const row = localFiles.find((row) => row.file.ref === binding.fileRef);
+                      startSession({
+                        mediaRef: media.mediaRef,
+                        mediaSnapshot: {
+                          title: media.title,
+                          slug: media.slug,
+                          artwork: media.poster,
+                        },
+                        sourceRef: LOCAL_PLAYBACK_SOURCE_REF,
+                        episode: row?.episode ?? null,
+                        positionSeconds: position,
+                        durationSeconds: duration,
+                      });
+                      if (localPaused) pauseSession();
+                    }
+                    updateProgress(position, duration, reason);
+                    return;
+                  }
                   if (mediaSession && !torrentSwitchRef.current)
                     updateProgress(position, duration, reason, mediaSession);
                 }}

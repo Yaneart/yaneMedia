@@ -9,6 +9,8 @@ import {
 import { localTrackSource, type LocalMediaSource } from './localTracks';
 
 export type LocalPlayback = {
+  signal: AbortSignal;
+  fileRef: string;
   source: LocalMediaSource;
   audioId: string;
   position: number;
@@ -225,6 +227,8 @@ export function createLocalPlayback(
           );
         const ready = await configure(probed, position, active, audio?.audioRef);
         const playback: LocalPlayback = {
+          signal: lifetime,
+          fileRef,
           source: ready.source,
           audioId: ready.target.audioRef,
           position: ready.target.positionSeconds,

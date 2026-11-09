@@ -1,6 +1,7 @@
 import { CompanionError, companionRequest, hello, validPairingToken } from './companionClient';
 import { pairingStorage } from '../model/pairingStorage';
 import type { LocalAudio, LocalMediaSource } from '../model/localTracks';
+import { closeController, closePendingControllers } from '../model/controllerCleanup';
 
 export type CompanionLocator =
   { kind: 'magnet'; value: string } | { kind: 'metainfo'; base64: string };
@@ -45,6 +46,7 @@ const invalid = (): never => {
 };
 
 export async function openLocalController(signal: AbortSignal): Promise<LocalController> {
+  await closePendingControllers(signal);
   const handshake = await hello(signal);
   if (
     !handshake.capabilities.includes('torrent-admission.v1') ||
@@ -172,9 +174,4 @@ export async function selectLocalFile(
 export const heartbeatLocalController = (controller: LocalController, signal: AbortSignal) =>
   companionRequest('/v1/controllers/current/heartbeat', 'POST', signal, controller.token);
 export const closeLocalController = (controller: LocalController) =>
-  companionRequest(
-    '/v1/controllers/current',
-    'DELETE',
-    AbortSignal.timeout(5000),
-    controller.token,
-  );
+  closeController(controller.token);

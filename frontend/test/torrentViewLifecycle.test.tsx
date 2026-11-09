@@ -106,109 +106,137 @@ afterAll(async () => {
   GlobalRegistrator.unregister();
 });
 
-test('owner preparing updates keep the mounted torrent player and its volume/mute', async () => {
-  const ready: TorrentSession = {
-    id,
-    mediaRef,
-    state: 'ready',
-    version: 5,
-    createdAt: new Date().toISOString(),
-    expiresAt: new Date(Date.now() + 3600000).toISOString(),
-    idleExpiresAt: new Date(Date.now() + 3600000).toISOString(),
-    progress: { basisPoints: null, speedBytesPerSecond: 0, peers: 0, downloadedBytes: 0 },
-    files: [],
-    selectedFileRef: 'file',
-    audioTracks: [
-      { ref: 'audio', label: 'Original', language: 'eng', channels: 2, isDefault: true },
-    ],
-    failure: null,
-    playback: {
-      hlsUrl: '/api/v1/torrent-sessions/' + id + '/hls/master.m3u8',
-      generation: 1,
-      startPositionSeconds: 42,
-      durationSeconds: 1200,
-      selectedAudioTrackRef: 'audio',
+test.each([`torrent:${id}`, 'local-torrent'])(
+  'Home resumes saved progress and retains its player during preparation (source=%s)',
+  async (sourceRef) => {
+    cleanup();
+    players.length = 0;
+    playback = {
+      ...playback,
+      session: { mediaRef, sourceRef, state: 'paused', positionSeconds: 42, episode: null },
+      startSession: (input: any) => {
+        playback = { ...playback, session: { ...input, state: 'playing' } };
+      },
+      endSession: () => {
+        playback = { ...playback, session: null };
+      },
+    };
+    const ready: TorrentSession = {
+      id,
+      mediaRef,
+      state: 'ready',
+      version: 5,
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 3600000).toISOString(),
+      idleExpiresAt: new Date(Date.now() + 3600000).toISOString(),
+      progress: { basisPoints: null, speedBytesPerSecond: 0, peers: 0, downloadedBytes: 0 },
+      files: [],
+      selectedFileRef: 'file',
       audioTracks: [
         { ref: 'audio', label: 'Original', language: 'eng', channels: 2, isDefault: true },
       ],
-      playbackRates: [0.5, 1, 2],
-      timeline: { absoluteAnchorSeconds: 40, mediaAnchorSeconds: 0.08, windowEndSeconds: 160 },
-    },
-  };
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  const key = torrentSessionQueryKeys.session(email, id);
-  client.setQueryData(key, ready);
-  globalThis.fetch = mock(() => new Promise<Response>(() => {}));
-  const view = render(
-    <QueryClientProvider client={client}>
-      <MemoryRouter>
-        <AuthContext
-          value={{
-            state: {
-              status: 'authenticated',
-              user: { email, displayName: 'Fixture', createdAt: new Date().toISOString() },
-            },
-            setAuthenticated: noop,
-            setGuest: noop,
-            refresh: async () => {},
-          }}
-        >
-          <MediaView
-            media={{
-              mediaRef: mediaRef as any,
-              type: 'movie',
-              slug: 'fixture',
-              title: 'Fixture',
-              genres: [],
-              countries: [],
-              languages: [],
-              persons: [{ name: 'Fallback actor', roles: ['actor'] }],
+      failure: null,
+      playback: {
+        hlsUrl: '/api/v1/torrent-sessions/' + id + '/hls/master.m3u8',
+        generation: 1,
+        startPositionSeconds: 42,
+        durationSeconds: 1200,
+        selectedAudioTrackRef: 'audio',
+        audioTracks: [
+          { ref: 'audio', label: 'Original', language: 'eng', channels: 2, isDefault: true },
+        ],
+        playbackRates: [0.5, 1, 2],
+        timeline: { absoluteAnchorSeconds: 40, mediaAnchorSeconds: 0.08, windowEndSeconds: 160 },
+      },
+    };
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const key = torrentSessionQueryKeys.session(email, id);
+    client.setQueryData(key, ready);
+    globalThis.fetch = mock(() => new Promise<Response>(() => {}));
+    const tree = () => (
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <AuthContext
+            value={{
+              state: {
+                status: 'authenticated',
+                user: { email, displayName: 'Fixture', createdAt: new Date().toISOString() },
+              },
+              setAuthenticated: noop,
+              setGuest: noop,
+              refresh: async () => {},
             }}
-            animeSeasonChain={[]}
-            onAnimeSeasonChange={noop}
-            availability={null}
-            availabilityPending={false}
-            availabilityStatus="ready"
-          />
-        </AuthContext>
-      </MemoryRouter>
-    </QueryClientProvider>,
-  );
-  await waitFor(() => expect(players).toHaveLength(1));
-  expect(screen.queryByRole('heading', { name: 'В ролях' })).toBeNull();
-  expect(screen.queryByText('Fallback actor')).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: 'Торрент', exact: true }));
-  fireEvent.click(screen.getByRole('tab', { name: 'Торренты' }));
-  await waitFor(() => expect(launch).toBeDefined());
-  const player = players[0];
-  player.volume = 0.17;
-  player.muted = true;
-  const preparing = { ...ready, state: 'preparing' as const, version: 6, playback: null };
-  await act(async () => {
-    client.setQueryData(key, preparing);
-    launch.onSessionChange(preparing);
-  });
-  expect(player.disconnected).toBe(false);
-  expect(document.querySelector('yane-player')).toBe(player);
-  expect(player.volume).toBe(0.17);
-  expect(player.muted).toBe(true);
-  const replacement = { ...ready, version: 7, playback: { ...ready.playback!, generation: 2 } };
-  await act(async () => {
-    client.setQueryData(key, replacement);
-    launch.onSessionChange(replacement);
-  });
-  expect(players).toHaveLength(1);
-  expect(player.volume).toBe(0.17);
-  expect(player.muted).toBe(true);
-  await act(async () => {
-    client.setQueryData(key, { ...preparing, selectedFileRef: 'other-file' });
-    launch.onSessionChange({ ...preparing, selectedFileRef: 'other-file' });
-  });
-  expect(player.disconnected).toBe(true);
-  expect(document.querySelector('yane-player')).toBeNull();
-  view.unmount();
-  client.clear();
-});
+          >
+            <MediaView
+              media={{
+                mediaRef: mediaRef as any,
+                type: 'movie',
+                slug: 'fixture',
+                title: 'Fixture',
+                genres: [],
+                countries: [],
+                languages: [],
+                persons: [{ name: 'Fallback actor', roles: ['actor'] }],
+              }}
+              animeSeasonChain={[]}
+              onAnimeSeasonChange={noop}
+              availability={null}
+              availabilityPending={false}
+              availabilityStatus="ready"
+            />
+          </AuthContext>
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+    const view = render(tree());
+    if (sourceRef === 'local-torrent') {
+      expect(screen.queryByText('Выберите раздачу для продолжения просмотра')).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Источник', exact: true }));
+      fireEvent.click(screen.getByRole('tab', { name: 'Торренты' }));
+      expect(launch.resumePositionSeconds).toBe(42);
+      await act(async () => {
+        launch.onSourceSelect();
+        launch.onPlaybackReady(ready);
+      });
+      view.rerender(tree());
+      expect(playback.session.sourceRef).toBe(`torrent:${id}`);
+    }
+    await waitFor(() => expect(players).toHaveLength(1));
+    expect(screen.queryByRole('heading', { name: 'В ролях' })).toBeNull();
+    expect(screen.queryByText('Fallback actor')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Торрент', exact: true }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Торренты' }));
+    await waitFor(() => expect(launch).toBeDefined());
+    const player = players[0];
+    player.volume = 0.17;
+    player.muted = true;
+    const preparing = { ...ready, state: 'preparing' as const, version: 6, playback: null };
+    await act(async () => {
+      client.setQueryData(key, preparing);
+      launch.onSessionChange(preparing);
+    });
+    expect(player.disconnected).toBe(false);
+    expect(document.querySelector('yane-player')).toBe(player);
+    expect(player.volume).toBe(0.17);
+    expect(player.muted).toBe(true);
+    const replacement = { ...ready, version: 7, playback: { ...ready.playback!, generation: 2 } };
+    await act(async () => {
+      client.setQueryData(key, replacement);
+      launch.onSessionChange(replacement);
+    });
+    expect(players).toHaveLength(1);
+    expect(player.volume).toBe(0.17);
+    expect(player.muted).toBe(true);
+    await act(async () => {
+      client.setQueryData(key, { ...preparing, selectedFileRef: 'other-file' });
+      launch.onSessionChange({ ...preparing, selectedFileRef: 'other-file' });
+    });
+    expect(player.disconnected).toBe(true);
+    expect(document.querySelector('yane-player')).toBeNull();
+    view.unmount();
+    client.clear();
+  },
+);
 
 test('torrent episode navigation switches real file refs, keeps the element and pause, and commits episode history only when ready', async () => {
   cleanup();

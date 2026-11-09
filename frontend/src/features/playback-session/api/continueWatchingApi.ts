@@ -1,6 +1,7 @@
 import { isCanonicalMediaRef, type CanonicalMediaRef, type MediaLocator } from '@/entities/media';
 import type { ContinueWatchingProgressEntry, PlaybackEpisodeSelection } from '@/entities/playback';
 import { ApiClientError, apiRequest } from '@/shared/api';
+import { progressSourceRef } from '../model/progressSource';
 
 export type AccountContinueWatching = {
   entries: ContinueWatchingProgressEntry[];
@@ -82,7 +83,7 @@ function parseAccountContinueWatching(value: unknown): CanonicalAccountContinueW
     seenMediaRefs.add(entry.mediaRef);
     entries.push({
       mediaRef: entry.mediaRef,
-      sourceRef: entry.sourceRef,
+      sourceRef: progressSourceRef(entry.sourceRef),
       episode: parseEpisode(entry.episode),
       positionSeconds: entry.positionSeconds,
       durationSeconds: entry.durationSeconds,
@@ -122,7 +123,12 @@ export async function saveAccountContinueWatching(
         'Content-Type': 'application/json',
         'X-YaneMedia-CSRF': '1',
       },
-      body: JSON.stringify(entry),
+      body: JSON.stringify({
+        sourceRef: progressSourceRef(entry.sourceRef),
+        episode: entry.episode,
+        positionSeconds: entry.positionSeconds,
+        durationSeconds: entry.durationSeconds,
+      }),
     }),
   );
 }

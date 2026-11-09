@@ -1,4 +1,5 @@
-import type { PlaybackSession } from '@/entities/playback';
+import { isLocalPlaybackSourceRef, type PlaybackSession } from '@/entities/playback';
+import { progressSourceRef } from './progressSource';
 
 const PLAYBACK_SESSION_STORAGE_KEY = 'yanemedia-playback-session';
 const PLAYBACK_SESSION_STORAGE_VERSION = 2;
@@ -18,7 +19,10 @@ export function getPlaybackSessionForOwner(
 ): PlaybackSession | null {
   if (ownerId === undefined || !storedSession) return null;
 
-  return storedSession.ownerId === ownerId || (storedSession.ownerId === null && ownerId !== null)
+  return storedSession.ownerId === ownerId ||
+    (storedSession.ownerId === null &&
+      ownerId !== null &&
+      !isLocalPlaybackSourceRef(storedSession.session.sourceRef))
     ? storedSession.session
     : null;
 }
@@ -31,6 +35,7 @@ export function reconcilePlaybackSessionOwner(
   if (!storedSession || storedSession.ownerId === ownerId) return storedSession;
 
   return storedSession.ownerId === null &&
+    !isLocalPlaybackSourceRef(storedSession.session.sourceRef) &&
     ownerId !== null &&
     (previousOwnerId === undefined || previousOwnerId === null)
     ? { ...storedSession, ownerId }
@@ -175,6 +180,7 @@ export function loadPlaybackSession(): StoredPlaybackSession | null {
       ...storedSession,
       session: {
         ...session,
+        sourceRef: progressSourceRef(session.sourceRef),
         state: 'paused',
         positionSeconds,
       },
@@ -189,7 +195,7 @@ export function savePlaybackSession(ownerId: string | null, session: PlaybackSes
     const storedSession: StoredPlaybackSession = {
       version: PLAYBACK_SESSION_STORAGE_VERSION,
       ownerId,
-      session,
+      session: { ...session, sourceRef: progressSourceRef(session.sourceRef) },
     };
 
     window.localStorage.setItem(PLAYBACK_SESSION_STORAGE_KEY, JSON.stringify(storedSession));

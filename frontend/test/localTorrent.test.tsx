@@ -132,6 +132,7 @@ test('account switch revokes the old controller and clears the local snapshot', 
   await waitFor(() => expect(result.current.snapshot).not.toBeNull());
   act(() => resetTorrentClientScope());
   expect(result.current.snapshot).toBeNull();
+  expect(calls.find((call) => call.path === '/v1/controllers/current')?.init.keepalive).toBe(true);
   expect(
     calls.some((c) => c.path === '/v1/controllers/current' && c.init.method === 'DELETE'),
   ).toBe(true);

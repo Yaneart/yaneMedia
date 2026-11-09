@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { registerTorrentPlayerStop, torrentAccountSignal } from '@/entities/torrent-session';
 import {
   openLocalController,
@@ -77,7 +77,7 @@ export function useLocalTorrent() {
   const closing = useRef<Promise<unknown>>(Promise.resolve());
   const preparing = useRef<AbortController | null>(null);
 
-  function dispose() {
+  const dispose = useCallback(() => {
     preparing.current?.abort();
     preparing.current = null;
     opening.current?.abort();
@@ -87,15 +87,16 @@ export function useLocalTorrent() {
     previous?.signal.abort();
     if (previous)
       closing.current = closeLocalController(previous.controller).catch(() => undefined);
-  }
+  }, []);
+  const stop = useCallback(() => {
+    dispose();
+    setSnapshot(null);
+    setPlayback(null);
+    setPending(false);
+    setError(null);
+  }, [dispose]);
   useEffect(() => {
     mounted.current = true;
-    const stop = () => {
-      dispose();
-      setSnapshot(null);
-      setPlayback(null);
-      setPending(false);
-    };
     const unregister = registerTorrentPlayerStop(stop);
     window.addEventListener('pagehide', stop);
     return () => {
@@ -104,7 +105,7 @@ export function useLocalTorrent() {
       window.removeEventListener('pagehide', stop);
       dispose();
     };
-  }, []);
+  }, [dispose, stop]);
 
   const start = async (resolve: (signal: AbortSignal) => Promise<CompanionLocator>) => {
     if (selection.current) return;
@@ -200,7 +201,11 @@ export function useLocalTorrent() {
       clearInterval(heartbeat);
       if (active && current.current === active) {
         dispose();
-        if (mounted.current) setSnapshot(null);
+        if (mounted.current) {
+          setSnapshot(null);
+          setPlayback(null);
+          setPending(false);
+        }
       }
     }
   };
@@ -310,12 +315,6 @@ export function useLocalTorrent() {
     start,
     select,
     prepare,
-    stop: () => {
-      dispose();
-      setSnapshot(null);
-      setPlayback(null);
-      setPending(false);
-      setError(null);
-    },
+    stop,
   };
 }

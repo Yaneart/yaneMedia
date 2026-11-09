@@ -1,5 +1,6 @@
 import type { ContinueWatchingEntry } from '@/entities/playback';
 import { isMediaRef, type CanonicalMediaRef, type MediaLocator } from '@/entities/media';
+import { progressSourceRef } from './progressSource';
 
 const CONTINUE_WATCHING_STORAGE_KEY = 'yanemedia-continue-watching';
 const CONTINUE_WATCHING_STORAGE_VERSION = 2;
@@ -147,6 +148,7 @@ function normalizeEntries(entries: readonly ContinueWatchingEntry[]) {
 
     uniqueEntries.set(entry.mediaRef, {
       ...entry,
+      sourceRef: progressSourceRef(entry.sourceRef),
       positionSeconds,
     });
   }

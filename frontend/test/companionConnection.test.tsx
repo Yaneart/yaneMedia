@@ -7,6 +7,8 @@ const { renderHook, waitFor, cleanup } = await import('@testing-library/react');
 const { useCompanionConnection } =
   await import('../src/features/companion/model/useCompanionConnection');
 const { pairingStorage } = await import('../src/features/companion/model/pairingStorage');
+const { registerTorrentPlayerStop, torrentAccountSignal } =
+  await import('../src/entities/torrent-session');
 const { hello, CompanionError } = await import('../src/features/companion/api/companionClient');
 
 const originalFetch = globalThis.fetch;
@@ -153,6 +155,9 @@ test('revoked saved grant is removed and the same user action requests local app
 
 test('manual disconnect revokes remotely before deleting the browser grant', async () => {
   token = savedToken;
+  const stopped = mock(() => {});
+  const unregister = registerTorrentPlayerStop(stopped);
+  const lifetime = torrentAccountSignal();
   const { result } = renderHook(useCompanionConnection);
   await waitFor(() => expect(result.current.state.status).toBe('saved'));
   await act(() => result.current.disconnect());
@@ -160,6 +165,9 @@ test('manual disconnect revokes remotely before deleting the browser grant', asy
   expect(result.current.state.status).toBe('idle');
   expect(calls[0].options.method).toBe('DELETE');
   expect(calls[0].options.headers).toEqual({ Authorization: `Bearer ${savedToken}` });
+  expect(stopped).toHaveBeenCalledTimes(1);
+  expect(lifetime.aborted).toBe(true);
+  unregister();
 });
 
 test('failed revocation preserves the grant for retry or local revocation', async () => {
