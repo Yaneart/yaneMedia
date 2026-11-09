@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/entities/auth';
 import { getTorrentCandidates, resolveTorrentCandidate } from '@/entities/torrent-session';
@@ -36,6 +36,34 @@ export function LocalTorrentLaunch({
   const [sort, setSort] = useState<CandidateSort>('best');
   const [magnet, setMagnet] = useState('');
   const [inputError, setInputError] = useState<string | null>(null);
+  const selectionScope = JSON.stringify([owner, mediaRef, season, episode]);
+  const waiting = useRef<{
+    resolve: Parameters<typeof local.start>[0];
+    scope: string;
+  } | null>(null);
+  const launch = (resolve: Parameters<typeof local.start>[0]) => {
+    if (!connection.state.hasPairing) {
+      waiting.current = { resolve, scope: selectionScope };
+      setConnectOpen(true);
+      return;
+    }
+    onStart();
+    void local.start(resolve);
+  };
+  useEffect(() => {
+    if (connection.state.status !== 'paired' || !connection.state.playbackReady || !waiting.current)
+      return;
+    const selected = waiting.current;
+    waiting.current = null;
+    if (selected.scope !== selectionScope) return;
+    setConnectOpen(false);
+    onStart();
+    void local.start(selected.resolve);
+  }, [connection.state.status, connection.state.playbackReady, local, onStart, selectionScope]);
+  useEffect(() => {
+    waiting.current = null;
+    setConnectOpen(false);
+  }, [owner, mediaRef, season, episode]);
   const search = useQuery({
     queryKey: ['local-torrent-candidates', owner, mediaRef, season, episode],
     queryFn: ({ signal }) => getTorrentCandidates(mediaRef, season, episode, signal),
@@ -55,8 +83,8 @@ export function LocalTorrentLaunch({
       setInputError('Введите magnet-ссылку размером до 4 Кб.');
       return;
     }
-    onStart();
-    void local.start(async () => ({ kind: 'magnet', value: magnet }));
+    const value = magnet;
+    launch(async () => ({ kind: 'magnet', value }));
   }
   async function upload(file: File | undefined) {
     setInputError(null);
@@ -69,8 +97,7 @@ export function LocalTorrentLaunch({
       setInputError('Выберите файл .torrent размером до 2 Мб.');
       return;
     }
-    onStart();
-    await local.start(async (signal) => {
+    launch(async (signal) => {
       const bytes = new Uint8Array(await file.arrayBuffer());
       signal.throwIfAborted();
       let binary = '';
@@ -104,7 +131,10 @@ export function LocalTorrentLaunch({
       <CompanionDialog
         connection={connection}
         open={connectOpen}
-        onClose={() => setConnectOpen(false)}
+        onClose={() => {
+          waiting.current = null;
+          setConnectOpen(false);
+        }}
       />
       <div className="flex flex-wrap items-center gap-2">
         <Button
@@ -152,8 +182,7 @@ export function LocalTorrentLaunch({
             candidate={candidate}
             pending={local.pending || !!local.snapshot}
             onSelect={() => {
-              onStart();
-              void local.start((signal) => resolveTorrentCandidate(candidate.candidateRef, signal));
+              launch((signal) => resolveTorrentCandidate(candidate.candidateRef, signal));
             }}
           />
         ))}

@@ -2,6 +2,7 @@ import { useEffect, useId, useRef } from 'react';
 import { Button, CloseIcon, IconButton } from '@/shared';
 import { CheckIcon } from '@/shared/ui/Icons';
 import type { CompanionConnection } from '../model/useCompanionConnection';
+import { CompanionInstallation } from './CompanionInstallation';
 
 export function CompanionDialog({
   connection,
@@ -29,7 +30,7 @@ export function CompanionDialog({
       ref={dialog}
       aria-labelledby={titleId}
       onClose={close}
-      className="m-auto w-96 max-w-[calc(100vw-2rem)] rounded-overlay border border-border bg-popover p-5 text-text-primary shadow-overlay backdrop:bg-black/50"
+      className="m-auto max-h-[calc(100dvh-2rem)] w-96 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-overlay border border-border bg-popover p-5 text-text-primary shadow-overlay backdrop:bg-black/50"
     >
       <section aria-label="Подключение yaneCompanion" className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-3">
@@ -77,8 +78,8 @@ export function CompanionDialog({
           {state.status === 'pending' && (
             <>
               <p>
-                Откройте управление yaneCompanion. Сверьте адрес этого сайта и код, затем
-                подтвердите доступ.
+                Откройте окно yaneCompanion. Сверьте адрес этого сайта и код, затем подтвердите
+                доступ.
               </p>
               <p className="mt-2 text-center text-2xl font-semibold tracking-widest text-text-primary">
                 {state.code}
@@ -92,8 +93,9 @@ export function CompanionDialog({
             {state.message}
           </p>
         )}
+        {!working && state.status !== 'paired' && <CompanionInstallation />}
         {state.status === 'pending' ? (
-          <Button size="small" variant="secondary" onClick={cancel}>
+          <Button size="small" variant="secondary" onClick={close}>
             Отменить
           </Button>
         ) : (
@@ -111,7 +113,7 @@ export function CompanionDialog({
                   : 'Подключить'}
             </Button>
             {state.status === 'connecting' ? (
-              <Button size="small" variant="secondary" onClick={cancel}>
+              <Button size="small" variant="secondary" onClick={close}>
                 Отменить
               </Button>
             ) : state.hasPairing ? (
