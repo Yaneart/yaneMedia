@@ -218,7 +218,7 @@ export function MediaPlayer({
             title={`Плеер ${activeEmbedSource.label}: ${mediaTitle}`}
             className="absolute inset-0 z-0 size-full border-0"
             sandbox="allow-forms allow-presentation allow-same-origin allow-scripts"
-            allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+            allow="autoplay; encrypted-media; fullscreen *; picture-in-picture"
             onLoad={onReady}
             onError={onError}
           />
