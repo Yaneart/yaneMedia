@@ -131,12 +131,16 @@ export function MediaPlayer({
   loading,
 }: MediaPlayerProps) {
   const sectionRef = useRef<HTMLElement>(null);
+  const previousScrollRef = useRef<number | null>(null);
   const [theater, setTheater] = useState(false);
 
   useEffect(() => {
     const section = sectionRef.current!;
     const change = (event: Event) => {
       const expanded = (event as CustomEvent<{ theater: boolean }>).detail.theater;
+      if (expanded && previousScrollRef.current === null) {
+        previousScrollRef.current = section.closest('main')?.scrollTop ?? null;
+      }
       setTheater(expanded);
     };
     section.addEventListener('yp-theaterchange', change);
@@ -150,31 +154,41 @@ export function MediaPlayer({
   useEffect(() => {
     if (!theater || !isStarted || source?.kind === 'embed') return;
     const section = sectionRef.current!;
-    const frame = section.closest<HTMLElement>('.media-player-frame')!;
-    const scroller = section.closest('main')!;
-    const previousScroll = scroller.scrollTop;
+    const frame = section.closest<HTMLElement>('.media-player-frame');
+    const scroller = section.closest('main');
+    if (!frame || !scroller) return;
+    const desktop = window.matchMedia('(min-width: 1024px) and (hover: hover) and (pointer: fine)');
+    const previousScroll = previousScrollRef.current ?? scroller.scrollTop;
+    let aligned = false;
     const align = () => {
+      if (!desktop.matches) {
+        section.style.removeProperty('--media-theater-height');
+        if (aligned) scroller.scrollTo({ top: previousScroll, behavior: 'instant' });
+        aligned = false;
+        return;
+      }
       const bounds = scroller.getBoundingClientRect();
-      const toolbarHeight = frame.firstElementChild!.getBoundingClientRect().height;
-      const inset = window.matchMedia('(min-width: 1024px)').matches ? 16 : 80;
-      const height = Math.min(
-        (frame.clientWidth * 9) / 16,
-        scroller.clientHeight - inset * 2 - toolbarHeight - 2,
-      );
+      const height = Math.min((frame.clientWidth * 9) / 16, scroller.clientHeight);
       section.style.setProperty('--media-theater-height', `${Math.max(0, height)}px`);
-      scroller.scrollTo({
-        top: scroller.scrollTop + frame.getBoundingClientRect().top - bounds.top - inset,
-        behavior: 'instant',
-      });
+      if (!aligned) {
+        scroller.scrollTo({
+          top: scroller.scrollTop + frame.getBoundingClientRect().top - bounds.top,
+          behavior: 'instant',
+        });
+        aligned = true;
+      }
     };
     align();
     const observer = new ResizeObserver(align);
     observer.observe(scroller);
-    observer.observe(frame.firstElementChild!);
+    observer.observe(frame);
+    desktop.addEventListener('change', align);
     return () => {
       observer.disconnect();
+      desktop.removeEventListener('change', align);
       section.style.removeProperty('--media-theater-height');
-      scroller.scrollTo({ top: previousScroll, behavior: 'instant' });
+      if (aligned) scroller.scrollTo({ top: previousScroll, behavior: 'instant' });
+      previousScrollRef.current = null;
     };
   }, [isStarted, source?.kind, theater]);
   const sourceIssue = source ? getMediaSourcePlaybackIssue(source) : null;

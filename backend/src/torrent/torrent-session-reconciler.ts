@@ -80,6 +80,7 @@ export class TorrentSessionReconciler implements OnModuleInit, BeforeApplication
             this.gateway.probe(
               { key: engineKey, file: file.engineFileIndex as EngineFileKey, size: file.sizeBytes },
               session.selectedFileRef,
+              file.displayName,
             ),
             this.engine.listFiles(engineKey, AbortSignal.timeout(5_000)).catch(() => []),
           ]);

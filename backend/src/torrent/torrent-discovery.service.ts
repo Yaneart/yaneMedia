@@ -201,11 +201,18 @@ function publicMagnet(value: string) {
   const trackers = url.searchParams.getAll('tr');
   for (const raw of trackers) {
     const tracker = new URL(raw);
-    if (
-      tracker.search ||
-      !/^\/(?:announce(?:\.php)?|ann|tracker\/announce(?:\.php)?)\/?$/.test(tracker.pathname)
-    )
-      throw new TorrentInputError('TORRENT_CANDIDATE_UNSAFE');
+    // RuTracker's public magnet flag is not an account passkey. UDP trackers
+    // also accept a bare host:port because the UDP protocol has no HTTP path.
+    const publicRutracker =
+      ['http:', 'https:'].includes(tracker.protocol) &&
+      /^bt[1-4]?\.t-ru\.org$/.test(tracker.hostname) &&
+      tracker.pathname === '/ann' &&
+      tracker.search === '?magnet';
+    const anonymous =
+      !tracker.search &&
+      (/^\/(?:announce(?:\.php)?|ann|tracker\/announce(?:\.php)?)\/?$/.test(tracker.pathname) ||
+        (tracker.protocol === 'udp:' && ['', '/'].includes(tracker.pathname)));
+    if (!publicRutracker && !anonymous) throw new TorrentInputError('TORRENT_CANDIDATE_UNSAFE');
   }
   return url.toString();
 }

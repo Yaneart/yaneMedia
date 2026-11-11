@@ -140,8 +140,11 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
     await Promise.all(['ffmpeg', 'ffprobe'].map((binary) => this.run(binary, ['-version'], 3_000)));
   }
 
-  async probe(source: Source, fileRef: string): Promise<TorrentProbe> {
+  async probe(source: Source, fileRef: string, fileName?: string): Promise<TorrentProbe> {
     const input = await this.inputServer(source);
+    // Matroska keeps stream metadata at the start. Seeking its cues at EOF
+    // can stall a new torrent while it downloads otherwise unnecessary pieces.
+    const seekOptions = /\.(mkv|webm)$/i.test(fileName ?? '') ? ['-seekable', '0'] : [];
     try {
       try {
         const output = await this.run(
@@ -152,6 +155,7 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
             '-max_alloc',
             '67108864',
             ...INPUT_OPTIONS,
+            ...seekOptions,
             '-show_streams',
             '-show_format',
             '-of',
@@ -170,6 +174,7 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
               '-max_alloc',
               '67108864',
               ...INPUT_OPTIONS,
+              ...seekOptions,
               '-select_streams',
               String(probe.videoStreamIndex),
               '-show_entries',

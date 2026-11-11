@@ -64,6 +64,7 @@ describe('torrent session reconciliation', () => {
     listOwned,
     drop,
     getStatus,
+    listFiles: jest.fn().mockResolvedValue([]),
   } as unknown as TorrServerClient;
   const hasGeneration = jest.fn().mockReturnValue(false);
   const gateway = {
@@ -234,6 +235,38 @@ describe('torrent session reconciliation', () => {
       'failed',
       { failureCode: 'TORRENT_METADATA_TIMEOUT' },
       now,
+    );
+  });
+
+  it('passes the selected filename to probing so Matroska can avoid unavailable tail pieces', async () => {
+    const probing = { ...session('probing'), selectedFileRef: 'fixture' };
+    listForReconciliation.mockResolvedValue([{ session: probing, engineKey: key }]);
+    const probe = { audioTracks: [] };
+    const testGateway = { probe: jest.fn().mockResolvedValue(probe) };
+    const testRepository = {
+      ...repository,
+      findFile: jest.fn().mockResolvedValue({
+        engineFileIndex: 1,
+        sizeBytes: 100,
+        displayName: 'film.mkv',
+      }),
+      saveProbe: jest.fn().mockResolvedValue(undefined),
+    };
+    await new TorrentSessionReconciler(
+      testRepository as unknown as TorrentSessionRepository,
+      engine,
+      testGateway as never,
+      metrics,
+    ).pollProbes(now);
+    expect(testGateway.probe).toHaveBeenCalledWith(
+      { key, file: 1, size: 100 },
+      'fixture',
+      'film.mkv',
+    );
+    expect(testRepository.saveProbe).toHaveBeenCalledWith(
+      probing.sessionId,
+      probing.version,
+      probe,
     );
   });
 });

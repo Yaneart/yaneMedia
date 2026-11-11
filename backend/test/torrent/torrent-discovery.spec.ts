@@ -165,6 +165,43 @@ describe('torrent discovery', () => {
     expect(candidates).toHaveLength(0);
   });
 
+  it.each([
+    'http://bt.t-ru.org/ann?magnet',
+    'http://bt4.t-ru.org/ann?magnet',
+    'https://bt2.t-ru.org/ann?magnet',
+    'udp://tracker.opentrackr.org:1337',
+    'udp://tracker.opentrackr.org:1337/',
+  ])('preserves public catalog trackers without dropping the release: %s', async (tracker) => {
+    discovery.search.mockResolvedValue({
+      releases: [
+        { ...release, downloadUrl: release.downloadUrl + '&tr=' + encodeURIComponent(tracker) },
+      ],
+      degraded: false,
+    });
+    const result = await service.search(`public-${tracker}`, mediaRef);
+    expect(result.candidates).toHaveLength(1);
+    const locator = service.resolve(`public-${tracker}`, result.candidates[0].candidateRef);
+    expect(new URL(locator.locator.value).searchParams.get('tr')).toBe(tracker);
+  });
+
+  it.each([
+    'http://bt.t-ru.org/ann?magnet=secret',
+    'http://bt.t-ru.org/ann?magnet&uk=secret',
+    'http://bt.t-ru.org/ann?passkey=secret',
+    'http://bt.t-ru.org.evil.example/ann?magnet',
+    'http://other.example/ann?magnet',
+    'http://tracker.example/secret/announce',
+    'udp://tracker.example:1337/?passkey=secret',
+  ])('still rejects credential-bearing or unknown tracker forms: %s', async (tracker) => {
+    discovery.search.mockResolvedValue({
+      releases: [
+        { ...release, downloadUrl: release.downloadUrl + '&tr=' + encodeURIComponent(tracker) },
+      ],
+      degraded: false,
+    });
+    expect((await service.search(`private-${tracker}`, mediaRef)).candidates).toHaveLength(0);
+  });
+
   it('keeps successful searches when another query fails', async () => {
     discovery.search.mockRejectedValueOnce(new Error('catalog timeout')).mockResolvedValue(found);
     const result = await service.search('owner-partial', mediaRef);
