@@ -12,7 +12,7 @@ import { WatchDock } from '@/widgets/watch-dock';
 import { mediaCatalogQueryOptions } from '@/widgets/media-catalog';
 import { useQueryClient } from '@tanstack/react-query';
 import { useMediaSummaryResolution, type MediaType } from '@/entities/media';
-import { Button, DeviceIcon, mainContentId } from '@/shared';
+import { mainContentId } from '@/shared';
 import { claimIntentPrefetch } from '@/shared/lib/intentPrefetch';
 import { useRef, useState } from 'react';
 import { isActivePlaybackMediaRoute } from './watchDockVisibility';
@@ -89,12 +89,8 @@ export function AppShell() {
             primaryItems={primaryNavigationItems}
             secondaryItems={secondaryNavigationItems}
             onItemIntent={prefetchCatalog}
-            companionControl={
-              <Button variant="ghost" size="small" onClick={() => setCompanionOpen(true)}>
-                <DeviceIcon className="size-5 shrink-0" />
-                Локальный помощник
-              </Button>
-            }
+            onCompanionClick={() => setCompanionOpen(true)}
+            companionOpen={companionOpen}
             playbackDock={
               showWatchDock ? (
                 <WatchDock

@@ -1,6 +1,6 @@
 import { AccountControl } from '@/features/account';
 import { ThemeToggle } from '@/features/theme';
-import { Logo, type IconProps } from '@/shared';
+import { Logo, DeviceIcon, type IconProps } from '@/shared';
 import type { ComponentType, ReactNode } from 'react';
 import { NavLink } from 'react-router';
 
@@ -18,7 +18,8 @@ type DesktopNavigationProps = {
   secondaryItems: readonly DesktopNavigationItem[];
   onItemIntent?: (path: string) => void;
   playbackDock?: ReactNode;
-  companionControl?: ReactNode;
+  onCompanionClick?: () => void;
+  companionOpen?: boolean;
 };
 
 function getLinkClassName({ isActive }: { isActive: boolean }) {
@@ -40,7 +41,8 @@ export function DesktopNavigation({
   profilePath,
   onItemIntent,
   playbackDock,
-  companionControl,
+  onCompanionClick,
+  companionOpen = false,
 }: DesktopNavigationProps) {
   return (
     <aside className="flex h-dvh w-64 shrink-0 flex-col px-5 py-6">
@@ -114,11 +116,24 @@ export function DesktopNavigation({
             );
           })}
         </ul>
+
+        {playbackDock && <div className="mt-2">{playbackDock}</div>}
       </nav>
 
-      <div className="mt-5 flex min-h-0 flex-1 items-center justify-center">{playbackDock}</div>
+      <div className="min-h-0 flex-1" />
 
-      <div className="px-2">{companionControl}</div>
+      {onCompanionClick && (
+        <button
+          type="button"
+          onClick={onCompanionClick}
+          aria-haspopup="dialog"
+          aria-expanded={companionOpen}
+          className={[getLinkClassName({ isActive: companionOpen }), 'w-full text-left'].join(' ')}
+        >
+          <DeviceIcon className="size-5 shrink-0" />
+          yaneCompanion
+        </button>
+      )}
 
       <div className="flex items-center justify-between px-2 pt-5">
         <ThemeToggle />
