@@ -6,10 +6,34 @@ import {
   getDirectQualityKey,
   getDirectQualityOptions,
   getDirectTrackKey,
+  getEmbedProviderSources,
   getPlaybackSourcePanel,
 } from '../src/features/source-selection/model/sourceSelection';
 
 describe('source-less episode catalogs', () => {
+  it('uses one embed per provider, preferring its usable full player over translation variants', () => {
+    const main = {
+      sourceRef: 'alloha:main',
+      provider: 'alloha-streaming',
+      label: 'Alloha',
+      kind: 'embed' as const,
+      url: 'https://player.example/main',
+      availability: 'unknown' as const,
+      browserSupported: true,
+    };
+    const dub = {
+      ...main,
+      sourceRef: 'alloha:dub',
+      translation: { title: 'Dub', type: 'dub' as const },
+    };
+    const mirage = { ...dub, sourceRef: 'mirage:dub', provider: 'mirage-streaming' };
+    expect(
+      getEmbedProviderSources([dub, mirage, main, { ...dub, sourceRef: 'alloha:dub2' }]),
+    ).toEqual([main, mirage]);
+    expect(getEmbedProviderSources([{ ...main, browserSupported: false }, dub])).toEqual([dub]);
+    expect(getEmbedProviderSources([])).toEqual([]);
+  });
+
   it('retains an unknown but browser-supported direct source for an explicit track selection', () => {
     const source = {
       sourceRef: 'unknown',

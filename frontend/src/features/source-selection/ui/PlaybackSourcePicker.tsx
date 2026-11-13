@@ -2,7 +2,7 @@ import type { MediaSourceOption } from '@/entities/media-source';
 import { Button, DownIcon, Popover } from '@/shared';
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 
-import { getPlaybackSourcePanel } from '../model/sourceSelection';
+import { getEmbedProviderSources, getPlaybackSourcePanel } from '../model/sourceSelection';
 
 const labels = {
   source: '\u0418\u0441\u0442\u043e\u0447\u043d\u0438\u043a',
@@ -28,14 +28,22 @@ type PlaybackSourcePickerProps = {
 };
 
 const providerStyles: Record<string, string> = {
-  'aderom-streaming': 'playback-source-blue',
+  'aderom-streaming': 'playback-source-slate',
   'initem-streaming': 'playback-source-cyan',
   'ddbb-streaming': 'playback-source-rose',
-  'kinobd-streaming': 'playback-source-sky',
-  'veoveo-streaming': 'playback-source-violet',
-  'videohub-streaming': 'playback-source-emerald',
+  'kinobd-streaming': 'playback-source-sand',
+  'veoveo-streaming': 'playback-source-indigo',
+  'videohub-streaming': 'playback-source-teal',
   'aniliberty-streaming': 'playback-source-pink',
-  'rutube-streaming': 'playback-source-blue',
+  'rutube-streaming': 'playback-source-coral',
+  'vibix-streaming': 'playback-source-blue',
+  'collaps-streaming': 'playback-source-rose',
+  'alloha-streaming': 'playback-source-emerald',
+  'mirage-streaming': 'playback-source-violet',
+  'videoseed-streaming': 'playback-source-yellow',
+  'hdvb-streaming': 'playback-source-amber',
+  'kodik-streaming': 'playback-source-lime',
+  'filmix-streaming': 'playback-source-orange',
 };
 
 function getProviderAccent(provider: string) {
@@ -50,7 +58,7 @@ function getSourceButtonStyle(provider: string, selected: boolean) {
     ? `playback-source-surface ${providerStyle}`
     : 'border-border bg-control hover:border-text-secondary/40 hover:bg-control-hover';
 
-  return `${surface} ${selected ? 'ring-1 ring-inset ring-white/30' : ''}`;
+  return `${surface} ${selected && !providerStyle ? 'ring-1 ring-inset ring-white/30' : ''}`;
 }
 
 export function PlaybackSourcePicker({
@@ -66,6 +74,7 @@ export function PlaybackSourcePicker({
   isLoading = false,
 }: PlaybackSourcePickerProps) {
   const selectedLabel = selectedSource?.label ?? null;
+  const embedProviders = getEmbedProviderSources(embedSources);
   const providers = Array.from(
     new Map(directSources.map((source) => [source.provider, source])).entries(),
   );
@@ -203,13 +212,15 @@ export function PlaybackSourcePicker({
                   Плееры пока не найдены.
                 </p>
               )}
-              {embedSources.map((source) => (
+              {embedProviders.map((source) => (
                 <Button
-                  key={source.sourceRef}
+                  key={source.provider}
                   size="custom"
                   variant="bare"
-                  className={`min-h-12 min-w-0 w-full justify-start rounded-control border px-3 text-left text-sm text-text-primary ${getSourceButtonStyle(source.provider, selectedSource?.sourceRef === source.sourceRef)}`}
-                  aria-pressed={selectedSource?.sourceRef === source.sourceRef}
+                  className={`min-h-12 min-w-0 w-full justify-start rounded-control border px-3 text-left text-sm text-text-primary ${getSourceButtonStyle(source.provider, selectedSource?.kind === 'embed' && selectedSource.provider === source.provider)}`}
+                  aria-pressed={
+                    selectedSource?.kind === 'embed' && selectedSource.provider === source.provider
+                  }
                   onClick={() => {
                     onEmbedSelect(source.sourceRef);
                     close();

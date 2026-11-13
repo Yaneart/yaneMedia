@@ -11,6 +11,13 @@ export interface MediaEngineEnvironment {
   VEOVEO_API_KEY?: string;
   FILMIX_API_KEY?: string;
   FILMIX_API_BASE_URL?: string;
+  VIBIX_API_KEY?: string;
+  COLLAPS_API_KEY?: string;
+  ALOHA_API_KEY?: string;
+  VIDEOSEED_API_KEY?: string;
+  VIDEOSEED_PLAYER_TOKEN?: string;
+  MIRAGE_API_KEY?: string;
+  HDVB_API_KEY?: string;
 }
 
 const PROVIDER_TIMEOUT_MS = 5_000;
@@ -38,7 +45,12 @@ export async function createMediaEngine(
       aniListIdentitySource,
       aniListProvider,
       cinemetaProvider,
-      ddbbStreamingProvider,
+      vibixStreamingProvider,
+      collapsStreamingProvider,
+      allohaStreamingProvider,
+      videoSeedStreamingProvider,
+      mirageStreamingProvider,
+      hdvbStreamingProvider,
       filmixStreamingProvider,
       initemStreamingProvider,
       kinobdProvider,
@@ -69,6 +81,28 @@ export async function createMediaEngine(
   const kodikApiKey = readOptionalValue(env.KODIK_API_KEY);
   const veoVeoApiKey = readOptionalValue(env.VEOVEO_API_KEY);
   const filmixToken = readOptionalValue(env.FILMIX_API_KEY);
+  const keyedStreamingProviders: StreamingProvider[] = (
+    [
+      [env.VIBIX_API_KEY, vibixStreamingProvider, {}],
+      [env.COLLAPS_API_KEY, collapsStreamingProvider, {}],
+      // The operator explicitly approves these public tokens in their iframe URLs.
+      [env.ALOHA_API_KEY, allohaStreamingProvider, { allowApiKeyInEmbedUrl: true }],
+      [env.MIRAGE_API_KEY, mirageStreamingProvider, { allowApiKeyInEmbedUrl: true }],
+      [
+        env.VIDEOSEED_API_KEY,
+        videoSeedStreamingProvider,
+        { playerToken: readOptionalValue(env.VIDEOSEED_PLAYER_TOKEN) },
+      ],
+      [env.HDVB_API_KEY, hdvbStreamingProvider, {}],
+    ] as const
+  ).flatMap(([value, factory, options]) => {
+    const apiKey = readOptionalValue(value);
+    if (!apiKey) return [];
+    const provider = factory({ ...options, apiKey });
+    return [
+      provider.capabilities.lookup.byEpisode ? withAnimeStreamingReleases(provider) : provider,
+    ];
+  });
   const streamingProviders: StreamingProvider[] = [
     ...(kodikApiKey ? [kodikStreamingProvider({ apiKey: kodikApiKey })] : []),
     ...(filmixToken
@@ -81,11 +115,11 @@ export async function createMediaEngine(
           }),
         ]
       : []),
+    ...keyedStreamingProviders,
     rutubeStreamingProvider(),
     aderomStreamingProvider(),
     initemStreamingProvider(),
     kinobdStreamingProvider({ playerValidationLimit: 0 }),
-    ddbbStreamingProvider(),
     withAnimeStreamingTitles(aniLibertyStreamingProvider(), (ids, signal) =>
       engine.getDetails({ ids, type: 'anime', language: 'ru' }, { signal }),
     ),
@@ -118,7 +152,12 @@ export async function createMediaEngine(
       'filmix-streaming': STREAMING_PROVIDER_TIMEOUT_MS,
       'rutube-streaming': RUTUBE_STREAMING_PROVIDER_TIMEOUT_MS,
       'kinobd-streaming': STREAMING_PROVIDER_TIMEOUT_MS,
-      'ddbb-streaming': STREAMING_PROVIDER_TIMEOUT_MS,
+      'vibix-streaming': STREAMING_PROVIDER_TIMEOUT_MS,
+      'collaps-streaming': STREAMING_PROVIDER_TIMEOUT_MS,
+      'alloha-streaming': STREAMING_PROVIDER_TIMEOUT_MS,
+      'mirage-streaming': STREAMING_PROVIDER_TIMEOUT_MS,
+      'videoseed-streaming': STREAMING_PROVIDER_TIMEOUT_MS,
+      'hdvb-streaming': STREAMING_PROVIDER_TIMEOUT_MS,
       'aniliberty-streaming': STREAMING_PROVIDER_TIMEOUT_MS,
       'veoveo-streaming': STREAMING_PROVIDER_TIMEOUT_MS,
       'videohub-streaming': VIDEOHUB_STREAMING_PROVIDER_TIMEOUT_MS,

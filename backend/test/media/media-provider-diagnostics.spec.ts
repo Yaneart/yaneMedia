@@ -45,6 +45,12 @@ describe('provider diagnostics', () => {
       'kodik-streaming',
       'veoveo-streaming',
       'filmix-streaming',
+      'vibix-streaming',
+      'collaps-streaming',
+      'alloha-streaming',
+      'mirage-streaming',
+      'videoseed-streaming',
+      'hdvb-streaming',
     ];
     const events = providerDiagnostics('details', {
       providers: {

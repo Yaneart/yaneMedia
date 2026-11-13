@@ -113,6 +113,23 @@ export function getPreferredSource(sources: readonly MediaSourceOption[]) {
   );
 }
 
+export function getEmbedProviderSources(sources: readonly MediaSourceOption[]) {
+  const groups = new Map<string, MediaSourceOption[]>();
+  for (const source of sources) {
+    const group = groups.get(source.provider);
+    if (group) group.push(source);
+    else groups.set(source.provider, [source]);
+  }
+  return Array.from(groups.values(), (group) => {
+    const usable = group.filter((source) => !getMediaSourcePlaybackIssue(source));
+    return (
+      getPreferredSource(usable.filter((source) => !source.translation)) ??
+      getPreferredSource(usable) ??
+      group[0]!
+    );
+  });
+}
+
 export function getAvailableDirectSourceForTrack(
   sources: readonly MediaSourceOption[],
   trackKey: string | null,

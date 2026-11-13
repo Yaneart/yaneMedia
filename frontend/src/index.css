@@ -302,90 +302,110 @@
 }
 
 .playback-source-popover .playback-source-surface[aria-pressed='true'] {
-  border-color: var(--theme-accent-text);
-  box-shadow: inset 0 0 0 1px var(--theme-context-border);
+  border-color: color-mix(in srgb, var(--playback-source-accent) 75%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--playback-source-accent) 35%, transparent);
 }
 
 .playback-source-blue {
-  --playback-source-accent: #93c5fd;
+  --playback-source-dark: #91b7f3;
+  --playback-source-light: #4177ba;
 }
 
 .playback-source-cyan {
-  --playback-source-accent: #67e8f9;
+  --playback-source-dark: #67d4df;
+  --playback-source-light: #0e8496;
 }
 
 .playback-source-rose {
-  --playback-source-accent: #fda4af;
+  --playback-source-dark: #ed93ac;
+  --playback-source-light: #bd456e;
 }
 
-.playback-source-sky {
-  --playback-source-accent: #7dd3fc;
+.playback-source-amber {
+  --playback-source-dark: #e5b46f;
+  --playback-source-light: #ad752d;
 }
 
 .playback-source-violet {
-  --playback-source-accent: #c4b5fd;
+  --playback-source-dark: #c1a3e8;
+  --playback-source-light: #8855b5;
 }
 
 .playback-source-emerald {
-  --playback-source-accent: #6ee7b7;
+  --playback-source-dark: #8dcc9b;
+  --playback-source-light: #3e8753;
 }
 
 .playback-source-pink {
-  --playback-source-accent: #f9a8d4;
+  --playback-source-dark: #e9a1c4;
+  --playback-source-light: #b85085;
+}
+
+.playback-source-coral {
+  --playback-source-dark: #f2988c;
+  --playback-source-light: #bd594e;
+}
+
+.playback-source-teal {
+  --playback-source-dark: #72cbb6;
+  --playback-source-light: #248a73;
+}
+
+.playback-source-indigo {
+  --playback-source-dark: #a5b4fc;
+  --playback-source-light: #565fbd;
+}
+
+.playback-source-slate {
+  --playback-source-dark: #b6becd;
+  --playback-source-light: #64748b;
+}
+
+.playback-source-sand {
+  --playback-source-dark: #d9b892;
+  --playback-source-light: #996b42;
+}
+
+.playback-source-yellow {
+  --playback-source-dark: #d8ce80;
+  --playback-source-light: #91801d;
+}
+
+.playback-source-lime {
+  --playback-source-dark: #bccd79;
+  --playback-source-light: #758831;
+}
+
+.playback-source-orange {
+  --playback-source-dark: #e5a176;
+  --playback-source-light: #b66d39;
+}
+
+.playback-source-surface,
+.playback-source-accent {
+  --playback-source-accent: var(--playback-source-dark);
+}
+
+[data-theme='light'] .playback-source-surface,
+[data-theme='light'] .playback-source-accent {
+  --playback-source-accent: var(--playback-source-light);
 }
 
 .playback-source-surface {
-  border-color: color-mix(in srgb, var(--playback-source-accent) 20%, transparent);
-  background-color: color-mix(in srgb, var(--playback-source-accent) 10%, transparent);
+  border-color: color-mix(in srgb, var(--playback-source-accent) 28%, transparent);
+  background-color: color-mix(in srgb, var(--playback-source-accent) 12%, transparent);
 }
 
 .playback-source-surface:hover {
-  background-color: color-mix(in srgb, var(--playback-source-accent) 15%, transparent);
+  background-color: color-mix(in srgb, var(--playback-source-accent) 18%, transparent);
 }
 
 .playback-source-accent {
   background-color: var(--playback-source-accent);
 }
 
-[data-theme='light'] .playback-source-blue {
-  --playback-source-accent: #2563eb;
-}
-
-[data-theme='light'] .playback-source-cyan {
-  --playback-source-accent: #0891b2;
-}
-
-[data-theme='light'] .playback-source-rose {
-  --playback-source-accent: #e11d48;
-}
-
-[data-theme='light'] .playback-source-sky {
-  --playback-source-accent: #0284c7;
-}
-
-[data-theme='light'] .playback-source-violet {
-  --playback-source-accent: #7c3aed;
-}
-
-[data-theme='light'] .playback-source-emerald {
-  --playback-source-accent: #059669;
-}
-
-[data-theme='light'] .playback-source-pink {
-  --playback-source-accent: #db2777;
-}
-
 [data-theme='light'] .playback-source-surface {
   border-color: color-mix(in srgb, var(--playback-source-accent) 36%, transparent);
-  background-color: color-mix(in srgb, var(--playback-source-accent) 16%, transparent);
-}
-
-[data-theme='light'] .playback-source-surface:hover {
-  background-color: color-mix(in srgb, var(--playback-source-accent) 23%, transparent);
-}
-
-[data-theme='light'] .playback-source-surface[aria-pressed='true'] {
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--playback-source-accent) 55%, transparent);
 }
 
 /* The package owns the appearance; the app only sizes the player. */

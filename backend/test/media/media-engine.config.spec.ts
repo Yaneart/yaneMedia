@@ -45,7 +45,6 @@ describe('Media Engine configuration', () => {
       'aderom-streaming',
       'initem-streaming',
       'kinobd-streaming',
-      'ddbb-streaming',
       'aniliberty-streaming',
       'veoveo-streaming',
       'videohub-streaming',
@@ -91,5 +90,47 @@ describe('Media Engine configuration', () => {
     expect(
       providers.find(({ name }) => name === 'rutube-streaming')?.capabilities.mediaTypes,
     ).toEqual(['movie']);
+  });
+
+  it('registers the six direct balancers without DDBB or serialized credentials', async () => {
+    const engine = await createMediaEngine({
+      VIBIX_API_KEY: 'private-vibix',
+      COLLAPS_API_KEY: 'private-collaps',
+      ALOHA_API_KEY: 'public-alloha',
+      MIRAGE_API_KEY: 'public-mirage',
+      VIDEOSEED_API_KEY: 'private-videoseed',
+      VIDEOSEED_PLAYER_TOKEN: 'public-videoseed',
+      HDVB_API_KEY: 'private-hdvb',
+    });
+    const providers = engine.getStreamingProviders();
+    expect(providers.slice(0, 6).map(({ name }) => name)).toEqual([
+      'vibix-streaming',
+      'collaps-streaming',
+      'alloha-streaming',
+      'mirage-streaming',
+      'videoseed-streaming',
+      'hdvb-streaming',
+    ]);
+    expect(providers.some(({ name }) => name === 'ddbb-streaming')).toBe(false);
+    expect(JSON.stringify(providers)).not.toMatch(/private-|public-/);
+    for (const provider of providers.slice(0, 6)) {
+      expect(provider.capabilities.mediaTypes).toEqual(['movie', 'series', 'anime']);
+    }
+  });
+
+  it('skips blank direct balancer credentials and does not silently restore DDBB', async () => {
+    const engine = await createMediaEngine({
+      VIBIX_API_KEY: ' ',
+      COLLAPS_API_KEY: ' ',
+      ALOHA_API_KEY: ' ',
+      MIRAGE_API_KEY: ' ',
+      VIDEOSEED_API_KEY: ' ',
+      HDVB_API_KEY: ' ',
+    });
+    const names = engine.getStreamingProviders().map(({ name }) => name);
+    expect(names).not.toContain('ddbb-streaming');
+    for (const name of ['vibix', 'collaps', 'alloha', 'mirage', 'videoseed', 'hdvb']) {
+      expect(names).not.toContain(`${name}-streaming`);
+    }
   });
 });

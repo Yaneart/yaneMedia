@@ -469,6 +469,39 @@ test('generic Kodik remains the only embed and keeps navigation inside its own p
   expect(start).not.toHaveBeenCalled();
 });
 
+test('embed picker has one named button per provider and opens its full player', async () => {
+  globalThis.fetch = mock(() => new Promise<Response>(() => {}));
+  const { view, tree, catalog } = mount('embed', false, false);
+  const dub = catalog.sources[0]!;
+  Object.assign(dub, { provider: 'alloha-streaming', label: 'Alloha' });
+  const full = {
+    ...dub,
+    sourceRef: 'alloha:main',
+    translation: undefined,
+    url: 'about:blank#alloha',
+  };
+  const mirage = {
+    ...full,
+    sourceRef: 'mirage:main',
+    provider: 'mirage-streaming',
+    label: 'Mirage',
+  };
+  catalog.sources.push(mirage, full, { ...dub, sourceRef: 'alloha:dub2' });
+  view.rerender(tree());
+  fireEvent.click(screen.getByRole('button', { name: 'Alloha', exact: true }));
+  const panel = within(screen.getByRole('region', { name: 'Плееры' }));
+  expect(panel.getAllByRole('button').map((button) => button.textContent)).toEqual([
+    'Alloha',
+    'Mirage',
+  ]);
+  const alloha = panel.getByRole('button', { name: 'Alloha', exact: true });
+  expect(alloha.getAttribute('aria-pressed')).toBe('true');
+  fireEvent.click(alloha);
+  fireEvent.click(screen.getByRole('button', { name: 'Запустить Alloha', exact: true }));
+  view.rerender(tree());
+  await waitFor(() => expect(document.querySelector('iframe')?.src).toBe(full.url));
+});
+
 test('direct source picker has one button per provider and native tracks stay within that provider', async () => {
   globalThis.fetch = mock(() => new Promise<Response>(() => {}));
   const { view, tree, catalog, player } = mount();

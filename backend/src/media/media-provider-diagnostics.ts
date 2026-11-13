@@ -58,6 +58,12 @@ const PROVIDERS = new Set([
   'rutube-streaming',
   'kodik-streaming',
   'filmix-streaming',
+  'vibix-streaming',
+  'collaps-streaming',
+  'alloha-streaming',
+  'mirage-streaming',
+  'videoseed-streaming',
+  'hdvb-streaming',
 ]);
 const FAILURE_CODES = new Set([
   'PROVIDER_ERROR',
