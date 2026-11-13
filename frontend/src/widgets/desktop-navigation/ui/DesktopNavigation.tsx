@@ -1,7 +1,7 @@
 import { AccountControl } from '@/features/account';
 import { ThemeToggle } from '@/features/theme';
 import { Logo, DeviceIcon, type IconProps } from '@/shared';
-import type { ComponentType, ReactNode } from 'react';
+import type { ComponentType } from 'react';
 import { NavLink } from 'react-router';
 
 type DesktopNavigationItem = {
@@ -17,7 +17,6 @@ type DesktopNavigationProps = {
   primaryItems: readonly DesktopNavigationItem[];
   secondaryItems: readonly DesktopNavigationItem[];
   onItemIntent?: (path: string) => void;
-  playbackDock?: ReactNode;
   onCompanionClick?: () => void;
   companionOpen?: boolean;
 };
@@ -40,7 +39,6 @@ export function DesktopNavigation({
   secondaryItems,
   profilePath,
   onItemIntent,
-  playbackDock,
   onCompanionClick,
   companionOpen = false,
 }: DesktopNavigationProps) {
@@ -116,8 +114,6 @@ export function DesktopNavigation({
             );
           })}
         </ul>
-
-        {playbackDock && <div className="mt-2">{playbackDock}</div>}
       </nav>
 
       <div className="min-h-0 flex-1" />

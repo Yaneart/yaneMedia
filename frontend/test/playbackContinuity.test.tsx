@@ -2,7 +2,7 @@ import { afterAll, afterEach, expect, mock, test } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 GlobalRegistrator.register({ url: 'http://localhost:5173' });
 const { act } = await import('react');
-const { render, cleanup, fireEvent, screen, waitFor } = await import('@testing-library/react');
+const { render, cleanup, screen, waitFor } = await import('@testing-library/react');
 const { QueryClient, QueryClientProvider } = await import('@tanstack/react-query');
 const { MemoryRouter } = await import('react-router');
 const { AuthContext } = await import('../src/entities/auth/model/authContext');
@@ -12,7 +12,6 @@ const { usePlaybackSession } =
   await import('../src/features/playback-session/model/usePlaybackSession');
 const { usePlayerPreferences } =
   await import('../src/features/playback-session/model/usePlayerPreferences');
-const { WatchDock } = await import('../src/widgets/watch-dock/ui/WatchDock');
 const players: FakePlayer[] = [];
 let sourceGate: Promise<void> | null = null;
 class FakePlayer extends HTMLElement {
@@ -87,14 +86,7 @@ function Harness() {
           onPause={() => playback.pauseSession(session)}
           onProgress={(p, d, r) => playback.updateProgress(p, d, r, session)}
         />
-      ) : (
-        <WatchDock
-          session={session}
-          mediaTitle="Fixture"
-          onExpand={noop}
-          onClose={playback.endSession}
-        />
-      )}
+      ) : null}
     </>
   ) : null;
 }
@@ -147,7 +139,7 @@ afterEach(() => {
 });
 afterAll(() => GlobalRegistrator.unregister());
 
-test('navigation to the dock flushes confirmed progress, ignores a pending seek and resumes after refresh', async () => {
+test('leaving playback flushes confirmed progress, ignores a pending seek and resumes after refresh', async () => {
   const view = mount();
   await start();
   const player = players[0];
@@ -163,7 +155,7 @@ test('navigation to the dock flushes confirmed progress, ignores a pending seek 
     state: 'paused',
     episode: { episodeNumber: 2 },
   });
-  expect(screen.getByRole('button', { name: 'Вернуться к просмотру', exact: true })).toBeDefined();
+  expect(screen.queryByRole('button', { name: /Вернуться к просмотру/ })).toBeNull();
   expect(document.querySelector('yane-player')).toBeNull();
   view.unmount();
   const next = mount();
@@ -252,13 +244,13 @@ test('initial source and automatic language selection cannot publish zero before
   expect(playback.session).toMatchObject({ positionSeconds: 42, state: 'paused' });
 });
 
-test('closing the dock stops its torrent and removing continue-watching stops it too', async () => {
+test('ending a session stops its torrent and removing continue-watching stops it too', async () => {
   const view = mount();
   const source = 'torrent:torrent_session_abcdefghijklmnopqrstuv';
   await start(source);
   visible = false;
   view.rerender(view.tree());
-  fireEvent.click(screen.getByRole('button', { name: /Закрыть/ }));
+  await act(async () => playback.endSession());
   await waitFor(() => expect(playback.session).toBeNull());
   expect(calls.filter((call) => call.method === 'DELETE')).toHaveLength(1);
   await start(source);

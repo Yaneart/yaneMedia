@@ -71,8 +71,12 @@ export function MobileHeader({
               <nav aria-label="Разделы пользователя" className="flex items-center gap-2">
                 {onCompanionClick && (
                   <IconButton
+                    variant="bare"
+                    size="custom"
+                    className="size-10 shrink-0 rounded-lg border border-border bg-background text-text-primary hover:bg-interactive-hover focus-visible:ring-watermark/60"
                     aria-label="Локальный помощник"
                     title="Локальный помощник"
+                    aria-haspopup="dialog"
                     onClick={() => {
                       closePopover();
                       onCompanionClick();

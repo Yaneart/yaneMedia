@@ -637,7 +637,7 @@
 }
 
 @media (hover: hover) and (pointer: fine) {
-  :is(.watch-dock-sidebar, .load-more-button):hover {
+  .load-more-button:hover {
     border-color: var(--theme-watch-dock-hover-border);
   }
 }

@@ -48,7 +48,6 @@ mock.module('@/widgets/media-info', () => ({
 }));
 const { PlaybackSessionProvider, usePlaybackSession } =
   await import('../src/features/playback-session');
-const { WatchDock } = await import('../src/widgets/watch-dock/ui/WatchDock');
 import type { PlaybackSessionContextValue } from '../src/features/playback-session/model/playbackSessionContext';
 import type { AuthState } from '../src/entities/auth/model/authContext';
 let history: PlaybackSessionContextValue;
@@ -344,13 +343,6 @@ function fixture(
                   availabilityPending={options.sourcesPending ?? false}
                   availabilityStatus={options.sourcesPending ? 'loading' : 'ready'}
                 />
-              ) : history.session ? (
-                <WatchDock
-                  session={history.session}
-                  mediaTitle="Fixture"
-                  onClose={history.endSession}
-                  onExpand={noop}
-                />
               ) : null}
             </PlaybackSessionProvider>
           </AuthContext>
@@ -454,7 +446,7 @@ test('Public records only confirmed local episode progress, retains pause and re
   expect(requests).toContain('/v1/controllers/current');
 });
 
-test('navigation leaves a paused WatchDock card; refresh and a fresh helper admission resume the saved episode and position', async () => {
+test('navigation pauses playback; refresh and a fresh helper admission resume the saved episode and position', async () => {
   const first = fixture();
   let player = await startLocal();
   await act(async () => player.navigation.next({ signal: AbortSignal.timeout(2000) }));
@@ -466,7 +458,7 @@ test('navigation leaves a paused WatchDock card; refresh and a fresh helper admi
     episode: { episodeNumber: 2 },
   });
   expect(document.querySelector('yane-player')).toBeNull();
-  expect(screen.getByRole('button', { name: 'Вернуться к просмотру', exact: true })).toBeDefined();
+  expect(screen.queryByRole('button', { name: /Вернуться к просмотру/ })).toBeNull();
   expect(first.requests).toContain('/v1/controllers/current');
   first.view.unmount();
   first.restartHelper();
