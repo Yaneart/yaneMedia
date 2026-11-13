@@ -486,13 +486,21 @@ test('embed picker has one named button per provider and opens its full player',
     provider: 'mirage-streaming',
     label: 'Mirage',
   };
-  catalog.sources.push(mirage, full, { ...dub, sourceRef: 'alloha:dub2' });
+  const veo = {
+    ...full,
+    sourceRef: 'veoveo:main',
+    provider: 'veoveo-embed',
+    label: 'VeoVeo',
+    url: 'about:blank#veoveo',
+  };
+  catalog.sources.push(mirage, veo, full, { ...dub, sourceRef: 'alloha:dub2' });
   view.rerender(tree());
   fireEvent.click(screen.getByRole('button', { name: 'Alloha', exact: true }));
   const panel = within(screen.getByRole('region', { name: 'Плееры' }));
   expect(panel.getAllByRole('button').map((button) => button.textContent)).toEqual([
     'Alloha',
     'Mirage',
+    'VeoVeo',
   ]);
   const alloha = panel.getByRole('button', { name: 'Alloha', exact: true });
   expect(alloha.getAttribute('aria-pressed')).toBe('true');
@@ -500,6 +508,11 @@ test('embed picker has one named button per provider and opens its full player',
   fireEvent.click(screen.getByRole('button', { name: 'Запустить Alloha', exact: true }));
   view.rerender(tree());
   await waitFor(() => expect(document.querySelector('iframe')?.src).toBe(full.url));
+  fireEvent.click(screen.getByRole('button', { name: 'Alloha', exact: true }));
+  fireEvent.click(screen.getByRole('button', { name: 'VeoVeo', exact: true }));
+  fireEvent.click(screen.getByRole('button', { name: 'Запустить VeoVeo', exact: true }));
+  view.rerender(tree());
+  await waitFor(() => expect(document.querySelector('iframe')?.src).toBe(veo.url));
 });
 
 test('direct source picker has one button per provider and native tracks stay within that provider', async () => {

@@ -44,13 +44,11 @@ describe('provider diagnostics', () => {
       'shikimori-graphql',
       'kodik-streaming',
       'veoveo-streaming',
+      'veoveo-embed',
       'filmix-streaming',
-      'vibix-streaming',
       'collaps-streaming',
       'alloha-streaming',
       'mirage-streaming',
-      'videoseed-streaming',
-      'hdvb-streaming',
     ];
     const events = providerDiagnostics('details', {
       providers: {
@@ -131,8 +129,8 @@ describe('provider diagnostics', () => {
     const availabilityMeta = {
       ...meta,
       providers: {
-        requested: ['ddbb-streaming', 'aniliberty-streaming'],
-        successful: ['ddbb-streaming', 'aniliberty-streaming'],
+        requested: ['veoveo-embed', 'aniliberty-streaming'],
+        successful: ['veoveo-embed', 'aniliberty-streaming'],
         failed: [],
       },
     };
@@ -141,10 +139,10 @@ describe('provider diagnostics', () => {
         'availability',
         availabilityMeta,
         undefined,
-        new Map([['ddbb-streaming', 2]]),
+        new Map([['veoveo-embed', 2]]),
       ),
     ).toMatchObject([
-      { provider: 'ddbb-streaming', code: 'SUCCESS', acceptedSources: 2 },
+      { provider: 'veoveo-embed', code: 'SUCCESS', acceptedSources: 2 },
       { provider: 'aniliberty-streaming', code: 'EMPTY', acceptedSources: 0 },
     ]);
     expect(providerDiagnostics('details', { ...meta, cached: true })[0]).toMatchObject({
@@ -180,14 +178,14 @@ describe('provider diagnostics', () => {
           options: [
             {
               id: 'embed',
-              provider: 'ddbb-streaming',
+              provider: 'veoveo-embed',
               player: { kind: 'embed', label: 'Embed', providerPlayerId: 'embed' },
               access: { url: 'https://secret.example/embed' },
               availability: 'available',
             },
             {
               id: 'broken',
-              provider: 'ddbb-streaming',
+              provider: 'veoveo-embed',
               player: { kind: 'embed', label: 'Broken', providerPlayerId: 'broken' },
               access: {},
               availability: 'available',
@@ -197,8 +195,8 @@ describe('provider diagnostics', () => {
           checkedAt: '2026-09-24T00:00:00.000Z',
           meta: {
             providers: {
-              requested: ['ddbb-streaming', 'aniliberty-streaming'],
-              successful: ['ddbb-streaming', 'aniliberty-streaming'],
+              requested: ['veoveo-embed', 'aniliberty-streaming'],
+              successful: ['veoveo-embed', 'aniliberty-streaming'],
               failed: [],
             },
             cached: false,
@@ -211,7 +209,7 @@ describe('provider diagnostics', () => {
     await service.getAvailabilityByRef('imdb:tt1160419');
 
     expect(logProviderDiagnostic).toHaveBeenCalledWith(
-      expect.objectContaining({ provider: 'ddbb-streaming', code: 'SUCCESS', acceptedSources: 1 }),
+      expect.objectContaining({ provider: 'veoveo-embed', code: 'SUCCESS', acceptedSources: 1 }),
     );
     expect(logProviderDiagnostic).toHaveBeenCalledWith(
       expect.objectContaining({

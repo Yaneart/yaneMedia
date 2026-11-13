@@ -47,6 +47,7 @@ describe('Media Engine configuration', () => {
       'kinobd-streaming',
       'aniliberty-streaming',
       'veoveo-streaming',
+      'veoveo-embed',
       'videohub-streaming',
     ]);
 
@@ -58,6 +59,11 @@ describe('Media Engine configuration', () => {
     expect(serialized).not.toContain('kodik-server-secret');
     expect(serialized).not.toContain('veoveo-server-secret');
     expect(serialized).not.toContain('filmix-server-secret');
+    const veo = engine.getStreamingProviders().filter(({ name }) => name.startsWith('veoveo-'));
+    expect(veo.map(({ capabilities }) => capabilities.features.includes('embed'))).toEqual([
+      false,
+      true,
+    ]);
   });
 
   it('does not construct token-backed streaming for missing or blank configuration', async () => {
@@ -68,7 +74,12 @@ describe('Media Engine configuration', () => {
       const engine = await createMediaEngine(env);
 
       const names = engine.getStreamingProviders().map(({ name }) => name);
-      for (const name of ['kodik-streaming', 'veoveo-streaming', 'filmix-streaming']) {
+      for (const name of [
+        'kodik-streaming',
+        'veoveo-streaming',
+        'veoveo-embed',
+        'filmix-streaming',
+      ]) {
         expect(names).not.toContain(name);
       }
     }
@@ -92,44 +103,49 @@ describe('Media Engine configuration', () => {
     ).toEqual(['movie']);
   });
 
-  it('registers the six direct balancers without DDBB or serialized credentials', async () => {
+  it('registers the three direct balancers without DDBB or serialized credentials', async () => {
+    const retired = {
+      VIBIX_API_KEY: 'unused',
+      VIDEOSEED_API_KEY: 'unused',
+      HDVB_API_KEY: 'unused',
+    };
     const engine = await createMediaEngine({
-      VIBIX_API_KEY: 'private-vibix',
+      ...retired,
       COLLAPS_API_KEY: 'private-collaps',
       ALOHA_API_KEY: 'public-alloha',
       MIRAGE_API_KEY: 'public-mirage',
-      VIDEOSEED_API_KEY: 'private-videoseed',
-      VIDEOSEED_PLAYER_TOKEN: 'public-videoseed',
-      HDVB_API_KEY: 'private-hdvb',
     });
     const providers = engine.getStreamingProviders();
-    expect(providers.slice(0, 6).map(({ name }) => name)).toEqual([
-      'vibix-streaming',
+    expect(providers.slice(0, 3).map(({ name }) => name)).toEqual([
       'collaps-streaming',
       'alloha-streaming',
       'mirage-streaming',
-      'videoseed-streaming',
-      'hdvb-streaming',
     ]);
     expect(providers.some(({ name }) => name === 'ddbb-streaming')).toBe(false);
+    expect(providers.map(({ name }) => name)).not.toEqual(
+      expect.arrayContaining(['vibix-streaming']),
+    );
+    expect(providers.map(({ name }) => name)).not.toEqual(
+      expect.arrayContaining(['videoseed-streaming']),
+    );
+    expect(providers.map(({ name }) => name)).not.toEqual(
+      expect.arrayContaining(['hdvb-streaming']),
+    );
     expect(JSON.stringify(providers)).not.toMatch(/private-|public-/);
-    for (const provider of providers.slice(0, 6)) {
+    for (const provider of providers.slice(0, 3)) {
       expect(provider.capabilities.mediaTypes).toEqual(['movie', 'series', 'anime']);
     }
   });
 
   it('skips blank direct balancer credentials and does not silently restore DDBB', async () => {
     const engine = await createMediaEngine({
-      VIBIX_API_KEY: ' ',
       COLLAPS_API_KEY: ' ',
       ALOHA_API_KEY: ' ',
       MIRAGE_API_KEY: ' ',
-      VIDEOSEED_API_KEY: ' ',
-      HDVB_API_KEY: ' ',
     });
     const names = engine.getStreamingProviders().map(({ name }) => name);
     expect(names).not.toContain('ddbb-streaming');
-    for (const name of ['vibix', 'collaps', 'alloha', 'mirage', 'videoseed', 'hdvb']) {
+    for (const name of ['collaps', 'alloha', 'mirage']) {
       expect(names).not.toContain(`${name}-streaming`);
     }
   });

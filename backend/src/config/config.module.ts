@@ -32,13 +32,9 @@ export const appConfigValidationSchema = Joi.object({
   MEDIA_ENGINE_SHIKIMORI_USER_AGENT: Joi.string().trim().max(512).allow('').optional(),
   KODIK_API_KEY: Joi.string().trim().max(4096).allow('').optional(),
   VEOVEO_API_KEY: Joi.string().trim().max(4096).allow('').optional(),
-  VIBIX_API_KEY: Joi.string().trim().max(4096).allow('').optional(),
   COLLAPS_API_KEY: Joi.string().trim().max(4096).allow('').optional(),
   ALOHA_API_KEY: Joi.string().trim().max(4096).allow('').optional(),
   MIRAGE_API_KEY: Joi.string().trim().max(4096).allow('').optional(),
-  VIDEOSEED_API_KEY: Joi.string().trim().max(4096).allow('').optional(),
-  VIDEOSEED_PLAYER_TOKEN: Joi.string().trim().max(4096).allow('').optional(),
-  HDVB_API_KEY: Joi.string().trim().max(4096).allow('').optional(),
   FILMIX_API_KEY: Joi.string().trim().max(512).pattern(/^\S*$/).allow('').optional(),
   FILMIX_API_BASE_URL: Joi.string()
     .trim()
