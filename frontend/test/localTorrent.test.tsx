@@ -36,7 +36,7 @@ beforeEach(() => {
     if (url.pathname === '/hello')
       return json({
         product: 'yaneCompanion',
-        helperVersion: 'dev',
+        helperVersion: '0.2.0-dev',
         api: { major: 1, minor: 0 },
         bootId: 'boot',
         capabilities: [

@@ -3,6 +3,7 @@ import { Button, CloseIcon, IconButton } from '@/shared';
 import { CheckIcon } from '@/shared/ui/Icons';
 import type { CompanionConnection } from '../model/useCompanionConnection';
 import { CompanionInstallation } from './CompanionInstallation';
+import { MIN_COMPANION_VERSION } from '../api/companionClient';
 
 export function CompanionDialog({
   connection,
@@ -93,6 +94,25 @@ export function CompanionDialog({
             {state.message}
           </p>
         )}
+        {state.helperVersion && (
+          <p className="text-xs text-text-secondary">
+            yaneCompanion {state.helperVersion}
+            {state.updateRequired && ` · требуется ${MIN_COMPANION_VERSION} или новее`}
+          </p>
+        )}
+        {state.updateRequired && (
+          <p className="text-sm text-text-secondary">
+            Откройте в помощнике «Обслуживание» → «Проверить обновления». Перед установкой
+            остановите локальный просмотр и выберите «Выход». Настройки и подключения сохранятся.
+            Если раздела «Обслуживание» нет, установите полный пакет по ссылке ниже.
+          </p>
+        )}
+        <details className="text-xs text-text-secondary">
+          <summary className="cursor-pointer">Диагностика подключения</summary>
+          <p className="mt-2 select-all whitespace-pre-line">
+            {`yaneCompanion: ${state.helperVersion ?? 'версия не проверена'}\nМинимальная версия: ${MIN_COMPANION_VERSION}\n${state.message ?? (state.status === 'paired' ? 'Подключение проверено.' : 'Подключение пока не проверено.')}`}
+          </p>
+        </details>
         {!working && state.status !== 'paired' && <CompanionInstallation />}
         {state.status === 'pending' ? (
           <Button size="small" variant="secondary" onClick={close}>

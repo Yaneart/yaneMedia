@@ -1,11 +1,22 @@
 export const COMPANION_ORIGIN = 'http://127.0.0.1:45723';
+export const MIN_COMPANION_VERSION = '0.2.0';
+
+function validVersion(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.length <= 32 &&
+    /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-dev)?$/.test(value)
+  );
+}
 
 export class CompanionError extends Error {
   code: string;
+  helperVersion?: string;
 
-  constructor(code: string) {
+  constructor(code: string, helperVersion?: string) {
     super(code);
     this.code = code;
+    if (validVersion(helperVersion)) this.helperVersion = helperVersion;
   }
 }
 
@@ -94,13 +105,24 @@ const request = companionRequest;
 
 export async function hello(signal: AbortSignal): Promise<CompanionHello> {
   const result = await request('/hello', 'GET', signal);
+  if (result?.product !== 'yaneCompanion' || !validVersion(result.helperVersion)) {
+    throw new CompanionError('INVALID_RESPONSE');
+  }
+  if (Number.isInteger(result.api?.major) && result.api.major > 1) {
+    throw new CompanionError('SITE_UPDATE_REQUIRED', result.helperVersion);
+  }
+  const installed = result.helperVersion.replace(/-dev$/, '').split('.').map(Number);
+  const minimum = MIN_COMPANION_VERSION.split('.').map(Number);
+  const different = installed.findIndex((part: number, index: number) => part !== minimum[index]);
   if (
-    result?.product !== 'yaneCompanion' ||
+    (different >= 0 && installed[different] < minimum[different]) ||
     result.api?.major !== 1 ||
+    !Number.isInteger(result.api?.minor) ||
+    result.api.minor < 0 ||
     !Array.isArray(result.capabilities) ||
     !result.capabilities.includes('pairing.v1')
   ) {
-    throw new CompanionError('INCOMPATIBLE_VERSION');
+    throw new CompanionError('INCOMPATIBLE_VERSION', result.helperVersion);
   }
   return result;
 }

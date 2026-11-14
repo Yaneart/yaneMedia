@@ -23,7 +23,7 @@ const pairing = {
 };
 const handshake = {
   product: 'yaneCompanion',
-  helperVersion: '0.1.0-dev',
+  helperVersion: '0.2.0-dev',
   api: { major: 1, minor: 0 },
   bootId: 'boot',
   capabilities: ['pairing.v1'],
@@ -265,9 +265,33 @@ test('an incompatible helper cannot request pairing', async () => {
   const { result } = renderHook(useCompanionConnection);
   await waitFor(() => expect(result.current.state.status).toBe('idle'));
   await act(() => result.current.connect());
-  expect(result.current.state.message).toContain('несовместима');
+  expect(result.current.state.message).toContain('обновления сайта');
   expect(calls).toHaveLength(1);
   expect(token).toBeNull();
+});
+
+test('an outdated helper reports its version and retains the saved grant without pairing', async () => {
+  token = savedToken;
+  respond = () => json({ ...handshake, helperVersion: '0.1.9' });
+  const { result } = renderHook(useCompanionConnection);
+  await waitFor(() => expect(result.current.state.status).toBe('saved'));
+  await act(() => result.current.connect());
+  expect(result.current.state.updateRequired).toBe(true);
+  expect(result.current.state.helperVersion).toBe('0.1.9');
+  expect(result.current.state.message).toContain('Обновите yaneCompanion');
+  expect(calls).toHaveLength(1);
+  expect(clear).not.toHaveBeenCalled();
+  expect(token).toBe(savedToken);
+});
+
+test('malformed version strings cannot be shown as helper version details', async () => {
+  respond = () => json({ ...handshake, helperVersion: 'secret-token https://private/path' });
+  const { result } = renderHook(useCompanionConnection);
+  await waitFor(() => expect(result.current.state.status).toBe('idle'));
+  await act(() => result.current.connect());
+  expect(result.current.state.helperVersion).toBeUndefined();
+  expect(result.current.state.status).toBe('error');
+  expect(calls).toHaveLength(1);
 });
 
 test('malformed approved proof is rejected and its request is cancelled', async () => {

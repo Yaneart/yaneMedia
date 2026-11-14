@@ -20,9 +20,13 @@ type ConnectionState = {
   playbackReady?: boolean;
   checkedAt?: number;
   message?: string;
+  helperVersion?: string;
+  updateRequired?: boolean;
 };
 
 const messages: Record<string, string> = {
+  SITE_UPDATE_REQUIRED:
+    'Эта версия помощника требует обновления сайта. Обновите страницу или обратитесь к владельцу сайта.',
   PERMISSION_DENIED:
     'Разрешите этому сайту доступ к приложениям на устройстве в настройках браузера.',
   INCOMPATIBLE_VERSION:
@@ -98,10 +102,12 @@ export function useCompanionConnection() {
     let written = false;
     let success = false;
     let hasPairing = state.hasPairing;
+    let helperVersion: string | undefined;
     let next: ConnectionState = { status: 'idle', hasPairing };
     setState({ status: 'connecting', hasPairing });
     try {
       const handshake = await hello(signal);
+      helperVersion = handshake.helperVersion;
       const token = await pairingStorage.read();
       hasPairing = !!token;
       signal.throwIfAborted();
@@ -145,6 +151,7 @@ export function useCompanionConnection() {
         status: 'paired',
         hasPairing: true,
         checkedAt: Date.now(),
+        helperVersion,
         playbackReady: ['sessions.v1', 'hls.mse', 'timeline.windowed-vod'].every((capability) =>
           handshake.capabilities.includes(capability),
         ),
@@ -153,7 +160,14 @@ export function useCompanionConnection() {
       success = false;
       next = signal.aborted
         ? { status: hasPairing ? 'saved' : 'idle', hasPairing }
-        : { status: 'error', hasPairing, message: errorMessage(error) };
+        : {
+            status: 'error',
+            hasPairing,
+            message: errorMessage(error),
+            helperVersion: error instanceof CompanionError ? error.helperVersion : helperVersion,
+            updateRequired:
+              error instanceof CompanionError && error.code === 'INCOMPATIBLE_VERSION',
+          };
     } finally {
       if (!success && pending) {
         await cancelPairing(pending).catch(() => undefined);
