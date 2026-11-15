@@ -14,8 +14,8 @@ const stages: Record<TorrentSessionState, { label: string; start: number; limit:
 };
 
 export function TorrentPreparation({ state = 'created' }: { state?: TorrentSessionState }) {
-  const [progress, setProgress] = useState(0);
   const stage = stages[state];
+  const [progress, setProgress] = useState(stage.start);
 
   useEffect(() => {
     if (state === 'failed' || state === 'ready') return;
@@ -31,7 +31,8 @@ export function TorrentPreparation({ state = 'created' }: { state?: TorrentSessi
     return () => clearInterval(timer);
   }, [stage, state]);
 
-  const percent = state === 'ready' ? 100 : Math.min(95, Math.floor(progress));
+  const percent =
+    state === 'ready' ? 100 : Math.min(95, Math.floor(Math.max(progress, stage.start)));
 
   return (
     <div className="flex flex-col items-center justify-center gap-4 px-4 text-center">

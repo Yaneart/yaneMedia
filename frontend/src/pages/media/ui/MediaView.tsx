@@ -325,7 +325,7 @@ export function MediaView({
   const accountKey = authState.status === 'authenticated' ? authState.user.email : authState.status;
   const queryClient = useQueryClient();
   const [torrentOpen, setTorrentOpen] = useState(false);
-  const local = useLocalTorrent();
+  const local = useLocalTorrent(preferences);
   const stopLocal = local.stop;
   const [localSelected, setLocalSelected] = useState(
     !SERVER_TORRENT_ENABLED && isLocalPlaybackSourceRef(savedProgress?.sourceRef ?? ''),
@@ -1379,6 +1379,7 @@ export function MediaView({
                               : () => (
                                   <LocalTorrentLaunch
                                     local={local}
+                                    open={torrentOpen}
                                     onStart={() => {
                                       localChoiceMade.current = true;
                                       localConfirmedBinding.current = null;
@@ -1388,8 +1389,6 @@ export function MediaView({
                                       setLocalPaused(false);
                                       setPlayerStatus('loading');
                                     }}
-                                    onSelect={(fileRef) => void selectLocalFile(fileRef)}
-                                    onStop={resetPlayer}
                                     mediaRef={media.mediaRef}
                                     season={
                                       usesEpisodePlayback(media)
@@ -1433,14 +1432,8 @@ export function MediaView({
                 localPlayback={localSelected ? (local.playback ?? undefined) : undefined}
                 navigation={playerNavigation}
                 loading={
-                  localSelected && !local.playback ? (
-                    <Spinner
-                      label={
-                        local.pending
-                          ? 'Подготавливаем локальное видео'
-                          : 'Выберите файл в меню источника'
-                      }
-                    />
+                  localSelected ? (
+                    <TorrentPreparation key={local.preparationId} state={local.preparationState} />
                   ) : torrentSelected || activeTorrentId ? (
                     <TorrentPreparation
                       key={torrentPlayRequest}

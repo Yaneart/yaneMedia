@@ -1,4 +1,4 @@
-import type { HostCommand, HostContext } from '@yaneart/yaneplayer';
+import type { HostCommand, HostContext, TrackPreferences } from '@yaneart/yaneplayer';
 import { CompanionError, companionRequest } from '../api/companionClient';
 import {
   localOperation,
@@ -6,7 +6,7 @@ import {
   type LocalController,
   type LocalSnapshot,
 } from '../api/companionAdmission';
-import { localTrackSource, type LocalMediaSource } from './localTracks';
+import { localTrackSource, preferredLocalTrack, type LocalMediaSource } from './localTracks';
 
 export type LocalPlayback = {
   signal: AbortSignal;
@@ -14,11 +14,17 @@ export type LocalPlayback = {
   source: LocalMediaSource;
   audioId: string;
   position: number;
+  textPreference?: TrackPreferences['text'];
   execute: (
     command: HostCommand,
     context: HostContext,
   ) => Promise<{ source?: LocalMediaSource; audioId: string }>;
-  report: (source: LocalMediaSource, position: number, signal: AbortSignal) => Promise<unknown>;
+  report: (
+    source: LocalMediaSource,
+    position: number,
+    signal: AbortSignal,
+    textDelay?: number,
+  ) => Promise<unknown>;
 };
 
 const pause = (signal: AbortSignal, ms = 250) =>
@@ -41,8 +47,10 @@ export function createLocalPlayback(
   controller: LocalController,
   session: string,
   lifetime: AbortSignal,
+  onPreparation?: (state: 'probing' | 'preparing' | 'ready') => void,
 ) {
   let serial: Promise<unknown> = Promise.resolve();
+  let progress: Promise<unknown> = Promise.resolve();
   const request = (
     path: string,
     method: string,
@@ -202,7 +210,12 @@ export function createLocalPlayback(
     });
   };
   return {
-    prepare(fileRef: string, position: number, signal: AbortSignal) {
+    prepare(
+      fileRef: string,
+      position: number,
+      signal: AbortSignal,
+      preferences?: TrackPreferences,
+    ) {
       return queued(signal, async (active) => {
         const capabilities = [
           'sessions.v1',
@@ -219,27 +232,49 @@ export function createLocalPlayback(
         const selected = previous.probe?.audioTracks.find(
           (a) => a.audioRef === previous.target?.audioRef,
         );
+        onPreparation?.('probing');
         const probed = await command({ action: 'probe', fileRef }, active);
-        const audio =
+        const previousAudio =
           selected &&
           probed.probe?.audioTracks.find(
             (a) => a.label === selected.label && a.language === selected.language,
           );
+        // Prepare the saved language before exposing video. Otherwise the
+        // player's startup preference immediately pauses it to configure again.
+        const preferred = preferredLocalTrack(
+          probed.probe?.audioTracks ?? [],
+          preferences?.audioLanguages,
+        );
+        const audio = previousAudio || preferred;
+        onPreparation?.('preparing');
         const ready = await configure(probed, position, active, audio?.audioRef);
+        onPreparation?.('ready');
         const playback: LocalPlayback = {
           signal: lifetime,
           fileRef,
           source: ready.source,
           audioId: ready.target.audioRef,
           position: ready.target.positionSeconds,
+          textPreference: preferences?.text,
           execute,
-          report: (source, positionSeconds, signal) =>
-            request(
-              `/v1/sessions/${session}/progress`,
-              'POST',
-              AbortSignal.any([lifetime, signal]),
-              { sourceRevision: source.revision, positionSeconds },
-            ),
+          report: (source, positionSeconds, signal, textDelaySeconds) => {
+            const result = progress
+              .catch(() => {})
+              .then(() =>
+                request(
+                  `/v1/sessions/${session}/progress`,
+                  'POST',
+                  AbortSignal.any([lifetime, signal]),
+                  {
+                    sourceRevision: source.revision,
+                    positionSeconds,
+                    ...(source.textWindowSeconds === 30 ? { textDelaySeconds } : {}),
+                  },
+                ),
+              );
+            progress = result;
+            return result;
+          },
         };
         return { snapshot: ready, playback };
       });

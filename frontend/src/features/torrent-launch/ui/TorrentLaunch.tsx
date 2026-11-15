@@ -1,4 +1,5 @@
-import { CandidateCard } from './CandidateCard';
+import { TorrentCandidatesPanel } from './TorrentCandidatesPanel';
+import { TorrentManualForm } from './TorrentManualForm';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useEffectEvent, useRef, useState, type FormEvent } from 'react';
 
@@ -27,20 +28,12 @@ import {
 import { ResendVerification } from '@/features/auth-form';
 import { privateProfileQueryOptions } from '@/features/social-data';
 import { SocialLoginLink, useRestoreSocialAction } from '@/features/social-access';
-import { Button, Select, Spinner } from '@/shared';
+import { Button } from '@/shared';
 import {
   initialTorrentEpisode,
   sameTorrentEpisode,
   torrentEpisodes,
 } from '../model/torrentEpisodes';
-import {
-  candidateOptions,
-  candidateTrackerLabel,
-  emptyCandidateFilters,
-  selectCandidates,
-  type CandidateFilters,
-  type CandidateSort,
-} from '../model/candidateView';
 
 const maxTorrentFileBytes = 2 * 1024 * 1024;
 const maxMagnetBytes = 4096;
@@ -180,12 +173,7 @@ export function TorrentLaunch({
   const { state: authState, refresh } = useAuth();
   const accountKey = authState.status === 'authenticated' ? authState.user.email : 'inactive';
   const queryClient = useQueryClient();
-  const [candidateSort, setCandidateSort] = useState<CandidateSort>('best');
-  const [candidateFilters, setCandidateFilters] = useState<CandidateFilters>(emptyCandidateFilters);
   const panelRef = useRef<HTMLElement>(null);
-  const magnetInputRef = useRef<HTMLTextAreaElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const manualDetailsRef = useRef<HTMLDetailsElement>(null);
   const profileQuery = useQuery({
     ...privateProfileQueryOptions(accountKey),
     enabled: open && authState.status === 'authenticated',
@@ -233,18 +221,6 @@ export function TorrentLaunch({
     retry: false,
     refetchOnWindowFocus: false,
   });
-  const allCandidates = discoveryQuery.data?.candidates ?? [];
-  const visibleCandidates = selectCandidates(allCandidates, candidateSort, candidateFilters);
-  const hasCandidateFilters = Object.values(candidateFilters).some(Boolean);
-  const updateCandidateFilter = (key: keyof CandidateFilters, value: string | boolean) => {
-    setCandidateFilters((current) => ({ ...current, [key]: value }));
-  };
-
-  useEffect(() => {
-    setCandidateSort('best');
-    setCandidateFilters(emptyCandidateFilters);
-  }, [accountKey, mediaRef, season, episode]);
-
   useEffect(() => {
     if (!pending && !session && activeSession && activeSession.mediaRef === mediaRef)
       setSession(activeSession);
@@ -590,235 +566,46 @@ export function TorrentLaunch({
                   </label>
                 )}
 
-              <div className="space-y-3" aria-label="Найденные раздачи">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h3 className="font-semibold text-text-primary">Найденные раздачи</h3>
-                  <Button
-                    variant="secondary"
-                    size="small"
-                    disabled={discoveryQuery.isFetching}
-                    onClick={() => {
-                      setError(null);
-                      candidateKeyRef.current = null;
-                      void discoveryQuery.refetch();
-                    }}
-                  >
-                    Обновить
-                  </Button>
-                </div>
-                {discoveryQuery.isPending || (discoveryQuery.isFetching && !discoveryQuery.data) ? (
-                  <div className="flex min-h-36 flex-col items-center justify-center gap-3 py-6">
-                    <Spinner size="large" label="Ищем раздачи" />
-                    <p className="text-sm text-text-secondary">Ищем раздачи…</p>
-                  </div>
-                ) : discoveryQuery.isError ? (
-                  <p role="alert" className="text-sm text-error">
-                    Поиск сейчас недоступен. Повторите попытку или добавьте торрент вручную.
-                  </p>
-                ) : discoveryQuery.data ? (
-                  <>
-                    {discoveryQuery.data.candidates.length === 0 ? (
-                      <p className="text-sm text-text-secondary">
-                        Подходящих раздач не найдено. Попробуйте обновить поиск или добавить торрент
-                        вручную.
-                      </p>
-                    ) : (
-                      <>
-                        <div className="grid grid-cols-2 gap-2 rounded-control bg-control/50 p-2 min-[480px]:grid-cols-3">
-                          <div className="min-w-0 text-xs text-text-secondary">
-                            <span>Сортировка</span>
-                            <Select
-                              aria-label="Сортировка"
-                              value={candidateSort}
-                              onChange={(value) => setCandidateSort(value as CandidateSort)}
-                              allowEmpty={false}
-                              matchMenuWidth
-                              placeholder="Лучшие"
-                              options={[
-                                { value: 'best', label: 'Лучшие' },
-                                { value: 'newest', label: 'Сначала новые' },
-                                { value: 'seeders', label: 'Больше раздающих' },
-                              ]}
-                              className="mt-1 block w-full min-w-0 [&>button]:min-h-8 [&>button]:min-w-0 [&>button]:px-2 [&>button]:text-xs"
-                            />
-                          </div>
-                          {(['tracker', 'resolution', 'quality', 'voice'] as const).map((field) => (
-                            <div key={field} className="min-w-0 text-xs text-text-secondary">
-                              <span>
-                                {
-                                  {
-                                    tracker: 'Источник',
-                                    resolution: 'Разрешение',
-                                    quality: 'Качество',
-                                    voice: 'Озвучка',
-                                  }[field]
-                                }
-                              </span>
-                              <Select
-                                aria-label={
-                                  {
-                                    tracker: 'Источник раздачи',
-                                    resolution: 'Разрешение',
-                                    quality: 'Качество',
-                                    voice: 'Озвучка',
-                                  }[field]
-                                }
-                                value={candidateFilters[field] || null}
-                                onChange={(value) => updateCandidateFilter(field, value ?? '')}
-                                placeholder="Все"
-                                matchMenuWidth
-                                options={candidateOptions(allCandidates, field).map(
-                                  ({ value, count }) => ({
-                                    value,
-                                    label: `${field === 'tracker' ? candidateTrackerLabel(value) : value} (${count})`,
-                                  }),
-                                )}
-                                className="mt-1 block w-full min-w-0 [&>button]:min-h-8 [&>button]:min-w-0 [&>button]:px-2 [&>button]:text-xs"
-                              />
-                            </div>
-                          ))}
-                          {allCandidates.some((item) => item.seeders !== null) && (
-                            <label className="flex items-center gap-2 self-end py-2 text-sm text-text-primary">
-                              <input
-                                type="checkbox"
-                                checked={candidateFilters.seededOnly}
-                                onChange={(event) =>
-                                  updateCandidateFilter('seededOnly', event.target.checked)
-                                }
-                              />
-                              Только с раздающими
-                            </label>
-                          )}
-                        </div>
-                        <div
-                          className="flex flex-wrap items-center gap-3 text-sm text-text-secondary"
-                          role="status"
-                        >
-                          <span>
-                            Показано {visibleCandidates.length} из {allCandidates.length} ·{' '}
-                            {
-                              {
-                                best: 'Лучшие',
-                                newest: 'Сначала новые',
-                                seeders: 'Больше раздающих',
-                              }[candidateSort]
-                            }
-                          </span>
-                          {hasCandidateFilters && (
-                            <Button
-                              variant="secondary"
-                              size="small"
-                              onClick={() => setCandidateFilters(emptyCandidateFilters)}
-                            >
-                              Сбросить фильтры
-                            </Button>
-                          )}
-                        </div>
-                        {visibleCandidates.length === 0 && (
-                          <p className="text-sm text-text-secondary">
-                            Варианты скрыты выбранными фильтрами. Сбросьте фильтры или обновите
-                            поиск.
-                          </p>
-                        )}
-                        <div className="space-y-2">
-                          {visibleCandidates.map((candidate) => (
-                            <CandidateCard
-                              key={candidate.candidateRef}
-                              candidate={candidate}
-                              pending={pending || activeQuery.isPending}
-                              selected={selected && selectedCandidateRef === candidate.candidateRef}
-                              status={
-                                selected &&
-                                selectedCandidateRef === candidate.candidateRef &&
-                                currentSession
-                                  ? currentSession.state === 'ready'
-                                    ? 'Сейчас воспроизводится'
-                                    : preparationLabel(currentSession)
-                                  : undefined
-                              }
-                              onSelect={() => void chooseCandidate(candidate)}
-                            />
-                          ))}
-                        </div>
-                      </>
-                    )}
-                  </>
-                ) : null}
-              </div>
-              <details ref={manualDetailsRef} className="rounded-control border border-border p-3">
-                <summary className="cursor-pointer font-semibold text-text-primary">
-                  Добавить вручную
-                </summary>
-                <form onSubmit={(event) => void submit(event)} className="mt-4 space-y-4">
-                  <fieldset className="flex flex-wrap gap-4 text-sm text-text-primary">
-                    <legend className="mb-2 font-semibold">Источник торрента</legend>
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="radio"
-                        name="torrent-input"
-                        checked={inputKind === 'magnet'}
-                        onChange={() => {
-                          setInputKind('magnet');
-                          setError(null);
-                          createKeyRef.current = null;
-                        }}
-                      />
-                      Magnet-ссылка
-                    </label>
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="radio"
-                        name="torrent-input"
-                        checked={inputKind === 'file'}
-                        onChange={() => {
-                          setInputKind('file');
-                          setError(null);
-                          createKeyRef.current = null;
-                        }}
-                      />
-                      Файл .torrent
-                    </label>
-                  </fieldset>
-                  {inputKind === 'magnet' ? (
-                    <label className="block space-y-2 text-sm font-semibold text-text-primary">
-                      <span>Magnet-ссылка</span>
-                      <textarea
-                        ref={magnetInputRef}
-                        rows={3}
-                        value={magnet}
-                        onChange={(event) => {
-                          setMagnet(event.target.value);
-                          setError(null);
-                          createKeyRef.current = null;
-                        }}
-                        placeholder="magnet:?xt=urn:btih:…"
-                        spellCheck={false}
-                        autoCapitalize="off"
-                        autoComplete="off"
-                        className="w-full resize-y rounded-control border border-border bg-surface px-3 py-2 font-normal text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/20"
-                      />
-                    </label>
-                  ) : (
-                    <label className="block space-y-2 text-sm font-semibold text-text-primary">
-                      <span>Файл .torrent (до 2 Мб)</span>
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept=".torrent,application/x-bittorrent"
-                        onChange={(event) => {
-                          setFile(event.target.files?.[0] ?? null);
-                          setError(null);
-                          createKeyRef.current = null;
-                        }}
-                        className="block w-full text-sm font-normal"
-                      />
-                    </label>
-                  )}
-                  <Button type="submit" disabled={pending}>
-                    {pending ? 'Запускаем…' : 'Запустить'}
-                  </Button>
-                </form>
-              </details>
+              <TorrentCandidatesPanel
+                key={JSON.stringify([accountKey, mediaRef, season, episode])}
+                query={discoveryQuery}
+                pending={pending || activeQuery.isPending}
+                selectedCandidateRef={selected ? selectedCandidateRef : null}
+                status={
+                  currentSession
+                    ? currentSession.state === 'ready'
+                      ? 'Сейчас воспроизводится'
+                      : preparationLabel(currentSession)
+                    : undefined
+                }
+                onRefresh={() => {
+                  setError(null);
+                  candidateKeyRef.current = null;
+                  void discoveryQuery.refetch();
+                }}
+                onSelect={(candidate) => void chooseCandidate(candidate)}
+              />
+              <TorrentManualForm
+                inputKind={inputKind}
+                magnet={magnet}
+                pending={pending}
+                onInputKindChange={(value) => {
+                  setInputKind(value);
+                  setError(null);
+                  createKeyRef.current = null;
+                }}
+                onMagnetChange={(value) => {
+                  setMagnet(value);
+                  setError(null);
+                  createKeyRef.current = null;
+                }}
+                onFileChange={(value) => {
+                  setFile(value);
+                  setError(null);
+                  createKeyRef.current = null;
+                }}
+                onSubmit={(event) => void submit(event)}
+              />
             </div>
           ) : (
             <p className="text-sm text-text-secondary">Проверяем доступ…</p>

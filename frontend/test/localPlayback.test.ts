@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, mock, test } from 'bun:test';
 import { createLocalPlayback } from '../src/features/companion/model/localPlayback';
 import type { LocalSnapshot } from '../src/features/companion/api/companionAdmission';
+import type { LocalAudio } from '../src/features/companion/model/localTracks';
 
 const originalFetch = globalThis.fetch;
 const session = 'a'.repeat(32),
@@ -16,6 +17,7 @@ const capabilities = [
   'text.prepared',
 ];
 let state: LocalSnapshot;
+let audioTracks: LocalAudio[];
 let operations: Map<
   string,
   { sessionId: string; operationId: string; revision: number; state: string }
@@ -23,6 +25,7 @@ let operations: Map<
 let posts: any[], cancelled: number[], pending: boolean, lost: boolean, supported: boolean;
 const json = (value: unknown, status = 200) => Response.json(value, { status });
 beforeEach(() => {
+  audioTracks = [{ audioRef: audio, label: 'Original', codec: 'aac', channels: 2, default: true }];
   state = {
     sessionId: session,
     revision: 1,
@@ -63,9 +66,7 @@ beforeEach(() => {
         state.probe = {
           durationSeconds: 100,
           video: { contentType: 'video/mp4; codecs="avc1.640028"' },
-          audioTracks: [
-            { audioRef: audio, label: 'Original', codec: 'aac', channels: 2, default: true },
-          ],
+          audioTracks,
           outputs: ['original'],
         };
       } else {
@@ -131,6 +132,47 @@ test('probe precedes codec admission; host seek uses confirmed position and fres
   expect(next.source.timeline.absoluteAnchorSeconds).toBe(50);
   await ready.playback.report(next.source, 51, AbortSignal.timeout(2000));
 });
+
+test('serializes applied subtitle delays and keeps legacy progress compatible', async () => {
+  const { playback } = await adapter().prepare(file, 12, AbortSignal.timeout(2000));
+  const original = globalThis.fetch;
+  const bodies: any[] = [];
+  let acknowledge!: (response: Response) => void;
+  globalThis.fetch = mock((input, init) => {
+    if (new URL(String(input)).pathname.endsWith('/progress')) {
+      bodies.push(JSON.parse(init!.body as string));
+      return bodies.length === 1
+        ? new Promise<Response>((done) => {
+            acknowledge = done;
+          })
+        : Promise.resolve(new Response(null, { status: 204 }));
+    }
+    return original(input, init);
+  }) as typeof fetch;
+  const s = { ...playback.source, textWindowSeconds: 30 as const };
+  const signal = AbortSignal.timeout(2000);
+  const first = playback.report(s, 12, signal, 0);
+  await new Promise((done) => setTimeout(done, 0));
+  const next = playback.report(s, 12, signal, 60);
+  expect(bodies).toHaveLength(1);
+  acknowledge(new Response(null, { status: 204 }));
+  await Promise.all([first, next]);
+  expect(bodies.map((b) => b.textDelaySeconds)).toEqual([0, 60]);
+  await playback.report(playback.source, 12, signal, 60);
+  expect(bodies[2]).not.toHaveProperty('textDelaySeconds');
+});
+
+test('local preparation exposes confirmed stages for the shared Home loading view', async () => {
+  const stages: string[] = [];
+  const media = createLocalPlayback(
+    { token: 'd'.repeat(64), bootId: 'fixture', capabilities },
+    session,
+    new AbortController().signal,
+    (stage) => stages.push(stage),
+  );
+  await media.prepare(file, 0, AbortSignal.timeout(2000));
+  expect(stages).toEqual(['probing', 'preparing', 'ready']);
+});
 test('incompatible helper and unsupported browser never configure media', async () => {
   await expect(adapter([]).prepare(file, 0, AbortSignal.timeout(2000))).rejects.toThrow(
     'INCOMPATIBLE_VERSION',
@@ -141,6 +183,32 @@ test('incompatible helper and unsupported browser never configure media', async 
     'UNSUPPORTED_MEDIA',
   );
   expect(posts.map((p) => p.action)).toEqual(['probe']);
+});
+
+test('prepares the saved audio language once before playback, retaining the selected track across files', async () => {
+  const russian = 'f'.repeat(64);
+  audioTracks[0].language = 'eng';
+  audioTracks.push({
+    ...audioTracks[0],
+    audioRef: russian,
+    label: 'Russian',
+    language: 'rus',
+    default: false,
+  });
+  const media = adapter();
+  const ready = await media.prepare(file, 12, AbortSignal.timeout(2000), {
+    audioLanguages: ['rus-RU'],
+  });
+  expect(posts.map((p) => p.action)).toEqual(['probe', 'configure']);
+  expect(posts[1].target.audioRef).toBe(russian);
+  const selected = await ready.playback.execute(
+    { type: 'audio', target: { audioId: russian } } as any,
+    { signal: AbortSignal.timeout(2000), positionSeconds: 12, intent: 'playing' } as any,
+  );
+  expect(selected).toEqual({ audioId: russian });
+  expect(posts).toHaveLength(2);
+  await media.prepare(file, 0, AbortSignal.timeout(2000), { audioLanguages: ['eng'] });
+  expect(posts[3].target.audioRef).toBe(russian);
 });
 
 test('selecting the active audio acknowledges selection without replacing the same source revision', async () => {

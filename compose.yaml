@@ -84,7 +84,10 @@ services:
       - torrent-egress
 
   backend:
-    build: ./backend
+    image: yanemedia-backend:home
+    build:
+      context: ./backend
+      target: home
     cpus: 2
     mem_limit: 4g
     memswap_limit: 4g
@@ -128,6 +131,8 @@ services:
       - torrent-control
 
   frontend:
+    environment:
+      VITE_SERVER_TORRENT_ENABLED: "true"
     build: ./frontend
     ports:
       - "5173:5173"

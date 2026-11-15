@@ -64,6 +64,14 @@ bun run catalog:sync
 
 При локальном запуске из `.env.example` серверный torrent выключен. Для домашнего просмотра используйте режим Home из корня проекта: он подключает TorrServer и необходимые секреты.
 
+Home и Public используют общие модули каталога, аккаунтов и библиотеки, но разные точки входа. `bun run build` / `bun run start:prod` сохраняют Home. `bun run build:public` компилирует `src/main.public.ts` и нужные ему модули в `dist-public`; локальный запуск — `bun run start:public`. В Public включён только metadata discovery: нет серверных torrent routes, reconciler, HLS/subtitle workers, клиента TorrServer и FFmpeg. Попытка передать Public настройки engine или включить `TORRENT_STREAMING_ENABLED` завершает запуск ошибкой.
+
+Docker targets `home` и `public` выбираются через Compose и имеют разные теги образов. Public runtime содержит только скомпилированный граф, общие миграции и служебные команды каталога; исходники Home и FFmpeg в него не копируются. `db:migrate`, `catalog:sync`, `catalog:rebuild`, `catalog:assets:cleanup` работают в обоих образах. Генерация новых миграций выполняется из исходников, а не внутри Public runtime. Общая схема БД сохраняет домашние сессии и их очистку при logout/reset password; миграций для переключения режима нет.
+
+В обоих режимах `/api/v1/health/ready` описывает готовность API независимо от torrent. `/api/v1/health/ready/torrent` возвращает `ready` в исправном Home и `disabled` в Public. Метрики `/api/v1/health/torrent-metrics` и server video routes доступны только в Home. Поиск `/api/v1/torrent-discovery` остаётся отдельным metadata API по контракту LC-005.
+
+Целевые проверки границы: `bun run test --runInBand --runTestsByPath test/deployment/public-boundary.spec.ts test/deployment/compose-boundary.spec.ts`. Docker-прогон переключения описан в [Home/Public](../docs/home-torrent.md).
+
 Поиск раздач обращается только к JSON API: JacRed (`JACRED_BASE_URL`) и независимому [Knaben v2](https://knaben.org/api/v2/) (`KNABEN_BASE_URL`) параллельно. `JACRED_FALLBACK_URLS` задаёт до двух резервных JacRed origins через запятую. Пример настроек — в `.env.example`; для отключения поиска очистите все три значения, ручной ввод magnet/`.torrent` останется доступен.
 
 JacRed принимает все 25 известных трекеров его [каталога](https://github.com/jacred-fdb/jacred/blob/main/docs/trackers/overview.mdx), а также совместимые записи Pirate Bay/YTS/1337x/Nyaa. Наличие конкретного трекера зависит от наполнения выбранного API. Объединённая запись относится к фактическому хосту её topic URL; остальные названия не создают фиктивных копий. Knaben добавляет собственные источники, включая Nyaa, YTS, 1337x и The Pirate Bay. Между каталогами удаляются дубликаты одного hash на одном трекере.

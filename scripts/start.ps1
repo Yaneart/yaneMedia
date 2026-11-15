@@ -23,10 +23,15 @@ if ($Mode -eq 'Public') {
     if ($resolved.services.torrserver) {
         throw 'Public mode must not enable home-torrent. Check COMPOSE_PROFILES.'
     }
-    foreach ($key in @('TORRSERVER_BASE_URL', 'TORRSERVER_USERNAME_FILE', 'TORRSERVER_PASSWORD_FILE', 'TORRENT_IDEMPOTENCY_SECRET_FILE', 'JACRED_BASE_URL', 'JACRED_FALLBACK_URLS', 'KNABEN_BASE_URL')) {
+    foreach ($key in @('TORRSERVER_BASE_URL', 'TORRSERVER_USERNAME_FILE', 'TORRSERVER_PASSWORD_FILE', 'TORRENT_IDEMPOTENCY_SECRET_FILE')) {
         if ($resolved.services.backend.environment.$key) {
             throw "Public mode inherited $key from the host environment. Unset it before starting."
         }
+    }
+    if ($resolved.services.backend.build.target -ne 'public' -or
+        $resolved.services.backend.environment.TORRENT_STREAMING_ENABLED -ne 'false' -or
+        $resolved.services.backend.secrets.Count -gt 0) {
+        throw 'Public mode requires the public backend target without engine secrets.'
     }
 }
 if ($Check) {
@@ -36,7 +41,7 @@ if ($Check) {
 
 if ($Mode -eq 'Public') {
     # Inactive profiles do not stop existing containers. Keep their volumes for Home.
-    & docker @baseArguments stop torrserver
+    & docker @baseArguments stop backend torrserver
     if ($LASTEXITCODE -ne 0) { throw 'Cannot stop the home torrent services.' }
 }
 $startArguments = @('up', '-d')

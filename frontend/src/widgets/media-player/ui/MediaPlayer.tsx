@@ -260,7 +260,10 @@ export function MediaPlayer({
         <div
           className={[
             'relative z-10 flex size-full items-center justify-center p-5 text-center sm:p-8',
-            activeSource && status === 'ready' && !selection ? 'pointer-events-none' : '',
+            !selection &&
+            ((activeSource && status === 'ready') || (activeVideoSource && status === 'loading'))
+              ? 'pointer-events-none'
+              : '',
           ].join(' ')}
         >
           {selection}

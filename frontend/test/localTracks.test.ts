@@ -108,6 +108,20 @@ test('rejects foreign resource origins, another generation grant and arbitrary p
   }
 });
 
+test('keeps the full audio duration while limiting native seeks to positions with video frames', () => {
+  const s = source();
+  s.timeline.videoEndSeconds = 198.4;
+  const timeline = localTrackSource(s).timeline;
+  expect(timeline?.durationSeconds).toBe(200);
+  expect(timeline?.seekableRanges).toEqual([[0, 198.4]]);
+  expect(localTrackSource(source()).timeline?.seekableRanges).toBeUndefined();
+  for (const end of [NaN, Infinity, -1, 0, 88, 201]) {
+    const invalid = source();
+    invalid.timeline.videoEndSeconds = end;
+    expect(() => localTrackSource(invalid)).toThrow('INVALID_LOCAL_MEDIA');
+  }
+});
+
 test('feeds confirmed progress while captions load, and Off cancels a pending refresh', async () => {
   const s = source();
   let snapshot = {
@@ -143,16 +157,18 @@ test('feeds confirmed progress while captions load, and Off cancels a pending re
     playback: 'playing',
     captions: { status: 'loading' },
   } as PlayerEvent['snapshot']);
-  expect(report).toHaveBeenCalledWith(s, 90, expect.any(AbortSignal));
+  expect(report).toHaveBeenCalledWith(s, 90, expect.any(AbortSignal), 0);
   stream.update(snapshot);
   snapshot = { ...snapshot, positionSeconds: 102 };
   stream.update(snapshot);
+  await settle();
   expect(selectText).not.toHaveBeenCalled();
   resolve(new Response('ASS', { headers: { 'X-Yane-Text-End': '160' } }));
   await settle();
   expect(selectText).toHaveBeenCalledWith(`subtitle:${textRef}`);
-  snapshot = { ...snapshot, positionSeconds: 125 };
+  snapshot = { ...snapshot, positionSeconds: 156 };
   stream.update(snapshot);
+  await settle();
   snapshot = { ...snapshot, selection: { ...snapshot.selection, textId: null } };
   stream.update(snapshot);
   expect(signal.aborted).toBe(true);
@@ -188,12 +204,141 @@ test('a replacement prevents late caption publication and never fetches stale UR
   stream.configure(s);
   stream.update(snapshot);
   stream.update({ ...snapshot, positionSeconds: 102 });
+  await settle();
   stream.configure({ ...s, revision: 3 });
   expect(signal.aborted).toBe(true);
   resolve(new Response('ASS', { headers: { 'X-Yane-Text-End': '200' } }));
   await settle();
   stream.update(snapshot);
   expect(selectText).not.toHaveBeenCalled();
-  expect(report).toHaveBeenCalledTimes(1);
+  expect(report).toHaveBeenCalledTimes(2);
+  stream.dispose();
+});
+
+test('a slow refill cannot reload an expired window and a valid window avoids redundant polling', async () => {
+  const s = source();
+  s.textWindowSeconds = 30;
+  let snapshot = {
+    source: { id: s.id, revision: '2' },
+    positionSeconds: 90,
+    pending: null,
+    selection: { textId: `subtitle:${textRef}` },
+    captions: { status: 'ready', delaySeconds: 0 },
+  } as PlayerEvent['snapshot'];
+  const selectText = mock(async () => {});
+  const player = {
+    runtime: { getSnapshot: () => snapshot },
+    selectText,
+  } as unknown as YanePlayerElement;
+  let resolve!: (r: Response) => void;
+  const fetchWindow = mock(
+    () =>
+      new Promise<Response>((done) => {
+        resolve = done;
+      }),
+  );
+  globalThis.fetch = fetchWindow as typeof fetch;
+  const stream = createLocalTrackStream(player, async () => {});
+  stream.configure(s);
+  stream.update(snapshot);
+  snapshot = { ...snapshot, positionSeconds: 100 };
+  stream.update(snapshot);
+  await settle();
+  // Video keeps advancing (e.g. 2x) while the peer-backed extraction waits.
+  snapshot = { ...snapshot, positionSeconds: 132 };
+  resolve(new Response('old cues', { headers: { 'X-Yane-Text-End': '130' } }));
+  await settle();
+  expect(selectText).not.toHaveBeenCalled();
+  stream.update(snapshot);
+  await settle();
+  resolve(new Response('current cues', { headers: { 'X-Yane-Text-End': '162' } }));
+  await settle();
+  expect(selectText).toHaveBeenCalledTimes(1);
+  const requests = fetchWindow.mock.calls.length;
+  for (const positionSeconds of [138, 144, 150]) {
+    snapshot = { ...snapshot, positionSeconds };
+    stream.update(snapshot);
+    await settle();
+  }
+  expect(fetchWindow).toHaveBeenCalledTimes(requests);
+  stream.dispose();
+});
+
+test('a paused delay change settles progress before fetching and retries after a failed window', async () => {
+  const s = source();
+  s.textWindowSeconds = 30;
+  let snapshot = {
+    source: { id: s.id, revision: '2' },
+    positionSeconds: 90,
+    pending: null,
+    selection: { textId: `subtitle:${textRef}` },
+    captions: { status: 'ready', delaySeconds: 0 },
+    intent: 'paused',
+  } as PlayerEvent['snapshot'];
+  const selectText = mock(async () => {});
+  const player = {
+    runtime: { getSnapshot: () => snapshot },
+    selectText,
+  } as unknown as YanePlayerElement;
+  let resolveReport!: () => void;
+  const report = mock(
+    () =>
+      new Promise<void>((done) => {
+        resolveReport = done;
+      }),
+  );
+  const fetchWindow = mock(async () => new Response('retry', { status: 422 }));
+  globalThis.fetch = fetchWindow as typeof fetch;
+  const stream = createLocalTrackStream(player, report);
+  stream.configure(s);
+  stream.update(snapshot);
+  await settle();
+  expect(fetchWindow).not.toHaveBeenCalled();
+  resolveReport();
+  await settle();
+  expect(fetchWindow).toHaveBeenCalledTimes(1);
+  expect(selectText).not.toHaveBeenCalled();
+  snapshot = { ...snapshot, captions: { ...snapshot.captions, delaySeconds: 60 } };
+  stream.update(snapshot);
+  expect(report).toHaveBeenLastCalledWith(s, 90, expect.any(AbortSignal), 60);
+  fetchWindow.mockImplementation(
+    async () => new Response('ASS', { headers: { 'X-Yane-Text-End': '120' } }),
+  );
+  resolveReport();
+  await settle();
+  expect(selectText).toHaveBeenCalledWith(`subtitle:${textRef}`);
+  expect(snapshot.intent).toBe('paused');
+  stream.dispose();
+});
+
+test('a paused final window keeps the last cues even with less than five seconds remaining', async () => {
+  const s = source();
+  // The API rounds X-Yane-Text-End to milliseconds, unlike the probe duration.
+  s.timeline.durationSeconds = 200.0004;
+  s.textWindowSeconds = 30;
+  let snapshot = {
+    source: { id: s.id, revision: '2' },
+    positionSeconds: 180,
+    pending: null,
+    selection: { textId: `subtitle:${textRef}` },
+    captions: { status: 'ready', delaySeconds: 0 },
+    intent: 'paused',
+  } as PlayerEvent['snapshot'];
+  const selectText = mock(async () => {});
+  const player = {
+    runtime: { getSnapshot: () => snapshot },
+    selectText,
+  } as unknown as YanePlayerElement;
+  globalThis.fetch = mock(
+    async () => new Response('final cues', { headers: { 'X-Yane-Text-End': '200' } }),
+  ) as typeof fetch;
+  const stream = createLocalTrackStream(player, async () => {});
+  stream.configure(s);
+  stream.update(snapshot);
+  snapshot = { ...snapshot, positionSeconds: 196 };
+  stream.update(snapshot);
+  await settle();
+  expect(selectText).toHaveBeenCalledWith(`subtitle:${textRef}`);
+  expect(snapshot.intent).toBe('paused');
   stream.dispose();
 });

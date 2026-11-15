@@ -96,10 +96,14 @@ afterAll(() => GlobalRegistrator.unregister());
 test('mounting never contacts the helper; explicit admission and file choice use a separate controller', async () => {
   const { result } = renderHook(() => useLocalTorrent());
   expect(calls).toHaveLength(0);
+  const initialPreparation = result.current.preparationId;
+  expect(result.current.preparationState).toBe('created');
   act(() => {
     void result.current.start(async () => locator);
   });
   await waitFor(() => expect(result.current.snapshot?.state).toBe('awaiting_file'));
+  expect(result.current.preparationState).toBe('awaiting_file');
+  expect(result.current.preparationId).toBe(initialPreparation + 1);
   expect(calls.find((c) => c.path === '/v1/sessions')!.init.headers).toMatchObject({
     Authorization: `Bearer ${token}`,
   });
@@ -107,13 +111,30 @@ test('mounting never contacts the helper; explicit admission and file choice use
     await result.current.select(file);
   });
   expect(result.current.snapshot?.downloadedBytes).toBe(2 ** 20);
+  expect(result.current.preparationId).toBe(initialPreparation + 1);
   act(() => result.current.stop());
+  expect(result.current.preparationState).toBe('created');
   await waitFor(() =>
     expect(
       calls.some((c) => c.path === '/v1/controllers/current' && c.init.method === 'DELETE'),
     ).toBe(true),
   );
 }, 10000);
+
+test('a fresh launch resets preparation once, independently of session discovery', async () => {
+  const { result } = renderHook(() => useLocalTorrent());
+  act(() => {
+    void result.current.start(async () => locator);
+  });
+  await waitFor(() => expect(result.current.snapshot?.sessionId).toBe(session));
+  const first = result.current.preparationId;
+  act(() => result.current.stop());
+  act(() => {
+    void result.current.start(async () => locator);
+  });
+  await waitFor(() => expect(result.current.snapshot?.sessionId).toBe(session));
+  expect(result.current.preparationId).toBe(first + 1);
+});
 test('lost session response reconciles the original key and never resubmits admission', async () => {
   lost = true;
   const { result } = renderHook(() => useLocalTorrent());

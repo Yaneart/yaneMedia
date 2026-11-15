@@ -1,9 +1,12 @@
-# Public-site baseline. Local companion playback is added by the LC roadmap.
+# Public delivery: external providers and local companion, metadata-only torrent search.
 # Use with compose.yaml; home-server mode uses compose.yaml alone.
 services:
   torrserver:
     profiles: [home-torrent]
   backend:
+    image: yanemedia-backend:public
+    build:
+      target: public
     environment:
       TORRENT_STREAMING_ENABLED: "false"
       TORRSERVER_BASE_URL: null

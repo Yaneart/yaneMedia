@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./dist-public",
+    "tsBuildInfoFile": "./dist-public/tsconfig.public.tsbuildinfo"
+  },
+  "files": [
+    "src/main.public.ts",
+    "src/scripts/sync-editorial-catalog.ts",
+    "src/scripts/cleanup-editorial-assets.ts"
+  ],
+  "include": [],
+  "exclude": ["node_modules", "test", "dist", "dist-public"]
+}

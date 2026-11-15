@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { registerTorrentPlayerStop, torrentAccountSignal } from '@/entities/torrent-session';
+import { flushSync } from 'react-dom';
+import type { PreferencesAdapter } from '@yaneart/yaneplayer';
+import {
+  registerTorrentPlayerStop,
+  torrentAccountSignal,
+  type TorrentSessionState,
+} from '@/entities/torrent-session';
 import {
   openLocalController,
   admitLocalTorrent,
@@ -22,7 +28,8 @@ export function localTorrentError(error: unknown) {
     PAIRING_REQUIRED: 'Подключите локальный помощник, затем повторите выбор раздачи.',
     CONTROLLER_REQUIRED: 'Доступ к локальной сессии истёк. Повторите выбор раздачи.',
     INCOMPATIBLE_VERSION: 'Обновите помощник: эта версия не поддерживает локальный просмотр.',
-    DEVICE_BUSY: 'На этом компьютере уже открыта раздача. Остановите её в прежней вкладке.',
+    DEVICE_BUSY:
+      'Помощник ещё занят раздачей. Остановите просмотр в прежней вкладке или дождитесь завершения остановки.',
     UNSAFE_LOCATOR: 'Раздача содержит неподдерживаемые или небезопасные данные. Выберите другую.',
     NO_PEERS:
       'Не удалось получить данные от участников раздачи. Повторите попытку или выберите другую.',
@@ -60,11 +67,13 @@ const pause = (signal: AbortSignal) =>
     signal.addEventListener('abort', abort, { once: true });
   });
 
-export function useLocalTorrent() {
+export function useLocalTorrent(preferences?: PreferencesAdapter) {
   const [playback, setPlayback] = useState<LocalPlayback | null>(null);
   const [snapshot, setSnapshot] = useState<LocalSnapshot | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [preparationState, setPreparationState] = useState<TorrentSessionState>('created');
+  const [preparationId, setPreparationId] = useState(0);
   const current = useRef<{
     controller: LocalController;
     signal: AbortController;
@@ -94,6 +103,7 @@ export function useLocalTorrent() {
     setPlayback(null);
     setPending(false);
     setError(null);
+    setPreparationState('created');
   }, [dispose]);
   useEffect(() => {
     mounted.current = true;
@@ -115,7 +125,9 @@ export function useLocalTorrent() {
     setPlayback(null);
     setPending(true);
     setError(null);
+    setPreparationState('created');
     const abort = new AbortController();
+    setPreparationId((previous) => previous + 1);
     opening.current = abort;
     const signal = AbortSignal.any([abort.signal, torrentAccountSignal()]);
     let active: NonNullable<typeof current.current> | undefined;
@@ -167,7 +179,9 @@ export function useLocalTorrent() {
         }
       }
       if (!active.session) throw new CompanionError('UNAVAILABLE');
-      active.media = createLocalPlayback(controller, active.session, signal);
+      active.media = createLocalPlayback(controller, active.session, signal, (state) => {
+        if (mounted.current && current.current === active) setPreparationState(state);
+      });
       selection.current = false;
       let lastRevision = 0;
       while (!signal.aborted) {
@@ -177,6 +191,8 @@ export function useLocalTorrent() {
         if (state.revision < lastRevision) throw new CompanionError('INVALID_RESPONSE');
         lastRevision = state.revision;
         setSnapshot(state);
+        if (state.state === 'metadata') setPreparationState('fetching_metadata');
+        if (state.state === 'awaiting_file') setPreparationState('awaiting_file');
         setPending(state.state === 'metadata' || selection.current);
         if (state.error) setError(localTorrentError(new CompanionError(state.error)));
         if (state.state === 'failed' || state.state === 'stopped') break;
@@ -268,16 +284,24 @@ export function useLocalTorrent() {
       torrentAccountSignal(),
       ...(hostSignal ? [hostSignal] : []),
     ]);
+    setPreparationId((previous) => previous + 1);
+    setPreparationState('probing');
     setPending(true);
     setError(null);
     // Old read grants are revoked as soon as probe starts. Keep the player
     // mounted while navigation is pending, but suppress its stale callbacks.
     try {
-      const ready = await active.media.prepare(fileRef, position, signal);
+      const saved = await preferences?.load({ signal }).catch(() => null);
+      signal.throwIfAborted();
+      const ready = await active.media.prepare(fileRef, position, signal, saved?.tracks);
       signal.throwIfAborted();
       if (current.current !== active || preparing.current !== job) return;
-      setSnapshot(ready.snapshot);
-      setPlayback(ready.playback);
+      // The imperative player's navigation callback must not settle while
+      // React still holds the old source whose read grant was revoked.
+      flushSync(() => {
+        setSnapshot(ready.snapshot);
+        setPlayback(ready.playback);
+      });
       return ready.playback;
     } catch (cause) {
       if (
@@ -308,6 +332,8 @@ export function useLocalTorrent() {
     }
   };
   return {
+    preparationId,
+    preparationState,
     playback,
     snapshot,
     pending,

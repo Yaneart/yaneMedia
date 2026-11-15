@@ -1,5 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { HealthController } from '../../src/health/health.controller';
+import { HomeTorrentReadiness } from '../../src/health/home-torrent-readiness';
+import { TORRENT_READINESS } from '../../src/health/torrent-readiness';
 import { TorrentMetricsController } from '../../src/health/torrent-metrics.controller';
 import { ApiResponseInterceptor } from '../../src/platform/http/api-response/api-response.interceptor';
 import { TorrentMetrics } from '../../src/torrent/torrent-metrics';
@@ -34,8 +36,7 @@ describe('torrent observability', () => {
     const engine = { enabled: false, checkReady: jest.fn().mockResolvedValue(undefined) };
     const gateway = { checkReady: jest.fn().mockResolvedValue(undefined) };
     const controller = new HealthController(
-      engine as unknown as TorrServerClient,
-      gateway as never,
+      new HomeTorrentReadiness(engine as unknown as TorrServerClient, gateway as never),
     );
     expect(await controller.torrentReady()).toEqual({ status: 'disabled' });
     expect(engine.checkReady).not.toHaveBeenCalled();
@@ -62,6 +63,8 @@ describe('torrent observability', () => {
     const module = await Test.createTestingModule({
       controllers: [HealthController, TorrentMetricsController],
       providers: [
+        HomeTorrentReadiness,
+        { provide: TORRENT_READINESS, useExisting: HomeTorrentReadiness },
         { provide: TorrentMetrics, useValue: metrics },
         { provide: TorrentSessionRepository, useValue: { countByState } },
         {

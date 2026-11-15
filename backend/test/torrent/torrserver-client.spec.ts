@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { appConfigValidationSchema } from '../../src/config/config.module';
 import { HealthController } from '../../src/health/health.controller';
+import { HomeTorrentReadiness } from '../../src/health/home-torrent-readiness';
 import type {
   EngineFileKey,
   EngineTorrentKey,
@@ -296,8 +297,10 @@ describe('torrent configuration and readiness', () => {
   it('keeps core readiness available when torrent playback is degraded', async () => {
     const checkReady = jest.fn().mockResolvedValue(undefined);
     const controller = new HealthController(
-      { enabled: true, checkReady } as unknown as TorrServerClient,
-      { checkReady: jest.fn().mockResolvedValue(undefined) } as never,
+      new HomeTorrentReadiness(
+        { enabled: true, checkReady } as unknown as TorrServerClient,
+        { checkReady: jest.fn().mockResolvedValue(undefined) } as never,
+      ),
     );
     expect(controller.check()).toEqual({ status: 'ok' });
     await expect(controller.ready()).resolves.toEqual({
@@ -307,11 +310,13 @@ describe('torrent configuration and readiness', () => {
     expect(checkReady).toHaveBeenCalledTimes(1);
 
     const degraded = new HealthController(
-      {
-        enabled: true,
-        checkReady: jest.fn().mockRejectedValue(new Error('private upstream details')),
-      } as unknown as TorrServerClient,
-      { checkReady: jest.fn().mockResolvedValue(undefined) } as never,
+      new HomeTorrentReadiness(
+        {
+          enabled: true,
+          checkReady: jest.fn().mockRejectedValue(new Error('private upstream details')),
+        } as unknown as TorrServerClient,
+        { checkReady: jest.fn().mockResolvedValue(undefined) } as never,
+      ),
     );
     await expect(degraded.ready()).resolves.toEqual({
       status: 'ready',

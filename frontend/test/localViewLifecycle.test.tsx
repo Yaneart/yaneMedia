@@ -94,6 +94,9 @@ class FakePlayer extends HTMLElement {
   });
   selectAudio = mock(async () => {});
   selectQuality = mock(async () => {});
+  navigate = mock(async (direction: 'previous' | 'next') => {
+    await this.navigation[direction]({ signal: AbortSignal.timeout(2000) });
+  });
   connectedCallback() {
     players.push(this);
   }
@@ -141,6 +144,8 @@ function fixture(
     writeGate?: Promise<void>;
     sourcesPending?: boolean;
     accountEntries?: any[];
+    thirdEpisode?: boolean;
+    nextProbeGate?: Promise<void>;
   } = {},
 ) {
   client = new QueryClient({
@@ -149,6 +154,7 @@ function fixture(
   const session = 'a'.repeat(32),
     first = 'b'.repeat(32),
     second = 'c'.repeat(32),
+    third = '9'.repeat(32),
     audio = 'd'.repeat(64);
   const requests: string[] = [],
     posts: any[] = [],
@@ -161,6 +167,7 @@ function fixture(
     files: [
       { fileRef: first, name: 'S01E01.mkv', size: 1000 },
       { fileRef: second, name: 'S01E02.mkv', size: 1000 },
+      ...(options.thirdEpisode ? [{ fileRef: third, name: 'S01E03.mkv', size: 1000 }] : []),
     ],
     downloadedBytes: 0,
   };
@@ -196,7 +203,8 @@ function fixture(
     if (path === '/hello')
       return Response.json({
         product: 'yaneCompanion',
-        api: { major: 1 },
+        helperVersion: '0.3.0-dev',
+        api: { major: 1, minor: 0 },
         capabilities: [
           'pairing.v1',
           'torrent-admission.v1',
@@ -222,6 +230,7 @@ function fixture(
     if (path.endsWith('/commands')) {
       const body = JSON.parse(init!.body as string);
       posts.push(body);
+      if (body.action === 'probe' && body.fileRef === second) await options.nextProbeGate;
       expect(body.expectedRevision).toBe(state.revision++);
       const key = (init!.headers as any)['Idempotency-Key'];
       operations.set(key, {
@@ -246,7 +255,12 @@ function fixture(
         state.target = body.target;
         state.state = 'ready';
         state.source = {
-          id: state.selectedFileRef === first ? '1'.repeat(32) : '2'.repeat(32),
+          id: (state.selectedFileRef === first
+            ? '1'
+            : state.selectedFileRef === second
+              ? '2'
+              : '3'
+          ).repeat(32),
           revision: ++sourceRevision,
           type: 'hls',
           url: `http://127.0.0.1:45723/v1/media/${'f'.repeat(64)}/master.m3u8`,
@@ -358,6 +372,7 @@ function fixture(
     accountWrites,
     first,
     second,
+    third,
     changeAuth(next: AuthState) {
       auth = next;
       view.rerender(tree());
@@ -444,6 +459,123 @@ test('Public records only confirmed local episode progress, retains pause and re
     ),
   ).rejects.toThrow();
   expect(requests).toContain('/v1/controllers/current');
+});
+
+test('a new file preparation resets the completed loading stage before awaiting and keeps one attempt id', async () => {
+  let release!: () => void;
+  const nextProbeGate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const app = fixture({ nextProbeGate });
+  await startLocal();
+  expect(launch.local.preparationState).toBe('ready');
+  const previousAttempt = launch.local.preparationId;
+  let preparation!: Promise<unknown>;
+  act(() => {
+    preparation = launch.local.prepare(app.second);
+  });
+  try {
+    expect(launch.local.pending).toBe(true);
+    expect(launch.local.preparationState).toBe('probing');
+    expect(launch.local.preparationId).toBe(previousAttempt + 1);
+    await waitFor(() =>
+      expect(app.posts.at(-1)).toMatchObject({ action: 'probe', fileRef: app.second }),
+    );
+    expect(launch.local.preparationState).toBe('probing');
+    expect(launch.local.preparationId).toBe(previousAttempt + 1);
+  } finally {
+    await act(async () => {
+      release();
+      await preparation;
+    });
+  }
+  expect(launch.local.pending).toBe(false);
+  expect(launch.local.preparationState).toBe('ready');
+  expect(launch.local.preparationId).toBe(previousAttempt + 1);
+});
+
+test.each(['paused', 'playing'] as const)(
+  'an explicit %s intent during next episode preparation survives loading the new source',
+  async (intent) => {
+    let release!: () => void;
+    const nextProbeGate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const app = fixture({ nextProbeGate });
+    const player = await startLocal();
+    act(() => player.emit(30, null, intent === 'paused' ? 'playing' : 'paused'));
+    let navigation!: Promise<unknown>;
+    act(() => {
+      navigation = player.navigation.next({ signal: AbortSignal.timeout(2000) });
+    });
+    try {
+      await waitFor(() =>
+        expect(app.posts.at(-1)).toMatchObject({ action: 'probe', fileRef: app.second }),
+      );
+      act(() => player.emit(30, null, intent));
+      expect(player.runtime.getSnapshot().intent).toBe(intent);
+    } finally {
+      await act(async () => {
+        release();
+        await navigation;
+      });
+    }
+    expect(player.options.intent).toBe(intent);
+    expect(history.session).toMatchObject({ episode: { episodeNumber: 2 }, state: intent });
+  },
+);
+
+test('episode navigation resolves only after replacing the imperative player source', async () => {
+  fixture();
+  const player = await startLocal();
+  const previousSource = player.descriptor.id;
+  await act(async () => {
+    await player.navigation.next({ signal: AbortSignal.timeout(2000) });
+    // The runtime releases its old transport as soon as this callback resolves.
+    // A React commit after act completes would revoke that transport too late.
+    expect(player.descriptor.id).not.toBe(previousSource);
+  });
+});
+
+test('a paused next episode confirms its own history when a different source restarts at revision one', async () => {
+  const app = fixture();
+  const player = await startLocal();
+  act(() => player.emit(30, null, 'paused'));
+  expect(history.session).toMatchObject({
+    episode: { episodeNumber: 1 },
+    positionSeconds: 30,
+    state: 'paused',
+  });
+  const previousSource = { ...player.descriptor };
+  await act(async () => player.navigation.next({ signal: AbortSignal.timeout(2000) }));
+  expect(document.querySelector('yane-player')).toBe(player);
+  expect(player.descriptor.id).not.toBe(previousSource.id);
+  expect(player.descriptor.revision).toBe(previousSource.revision);
+  expect(player.navigation.current.episodeId).toBe(app.second);
+  expect(player.options).toMatchObject({ positionSeconds: 0, intent: 'paused' });
+  expect(history.session).toMatchObject({
+    episode: { episodeNumber: 2 },
+    positionSeconds: 0,
+    state: 'paused',
+  });
+});
+
+test('confirmed endings advance consecutive episodes whose sources share revision one', async () => {
+  const app = fixture({ thirdEpisode: true });
+  const player = await startLocal();
+  const endEpisode = () => {
+    player.emit(100, null, 'playing');
+    const snapshot = { ...player.runtime.getSnapshot(), playback: 'ended' };
+    player.dispatchEvent(
+      new CustomEvent('yp-ended', { detail: { source: snapshot.source, snapshot } }),
+    );
+  };
+  act(endEpisode);
+  await waitFor(() => expect(player.navigation.current.episodeId).toBe(app.second));
+  await act(async () => {});
+  act(endEpisode);
+  await waitFor(() => expect(player.navigation.current.episodeId).toBe(app.third));
+  expect(player.navigate).toHaveBeenCalledTimes(2);
 });
 
 test('navigation pauses playback; refresh and a fresh helper admission resume the saved episode and position', async () => {

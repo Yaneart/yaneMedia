@@ -1,16 +1,21 @@
-import { Controller, Get, Header, ServiceUnavailableException } from '@nestjs/common';
-import { TorrServerClient } from '../torrent/torrserver.client';
-import { TorrentStreamGateway } from '../torrent/torrent-stream.gateway';
-
-type TorrentReadiness = { status: 'ready' | 'disabled' | 'degraded' };
+import {
+  Controller,
+  Get,
+  Header,
+  Inject,
+  Optional,
+  ServiceUnavailableException,
+} from '@nestjs/common';
+import {
+  TORRENT_READINESS,
+  type TorrentReadiness,
+  type TorrentReadinessProbe,
+} from './torrent-readiness';
 
 @Controller('health')
 export class HealthController {
-  private torrentCheck?: Promise<TorrentReadiness>;
-  private checkedUntil = 0;
   constructor(
-    private readonly torrServer: TorrServerClient,
-    private readonly gateway: TorrentStreamGateway,
+    @Optional() @Inject(TORRENT_READINESS) private readonly torrent?: TorrentReadinessProbe,
   ) {}
 
   @Get()
@@ -37,20 +42,6 @@ export class HealthController {
   }
 
   private torrentReadiness(): Promise<TorrentReadiness> {
-    if (!this.torrServer.enabled) return Promise.resolve({ status: 'disabled' });
-    if (!this.torrentCheck || Date.now() >= this.checkedUntil) {
-      // Coalesce probes and cache failures too: public polling must not spawn unlimited tools.
-      this.checkedUntil = Infinity;
-      this.torrentCheck = Promise.all([
-        this.torrServer.checkReady(AbortSignal.timeout(5_000)),
-        this.gateway.checkReady(),
-      ])
-        .then<TorrentReadiness>(() => ({ status: 'ready' }))
-        .catch((): TorrentReadiness => ({ status: 'degraded' }))
-        .finally(() => {
-          this.checkedUntil = Date.now() + 5_000;
-        });
-    }
-    return this.torrentCheck;
+    return this.torrent?.check() ?? Promise.resolve({ status: 'disabled' });
   }
 }
