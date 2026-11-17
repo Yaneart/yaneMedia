@@ -30,6 +30,13 @@ export type LocalMediaSource = {
   audioTracks: LocalAudio[];
   textTracks: LocalText[];
   textWindowSeconds?: 30;
+  audioMode?: 'separate';
+  audioRendition?: {
+    audioRef: string;
+    generation: string;
+    durationSeconds: number;
+    positionSeconds?: number;
+  };
   timeline: {
     mode: 'windowed-vod';
     continuous: boolean;
@@ -116,6 +123,22 @@ export function localTrackSource(source: LocalMediaSource): PlayerSource {
   )
     return invalid();
   const seen = new Set<string>();
+  if (
+    (source.audioMode !== undefined && source.audioMode !== 'separate') ||
+    (source.audioMode === 'separate' &&
+      (!source.audioRendition ||
+        !ref(source.audioRendition.generation) ||
+        !source.audioTracks.some((a) => a.audioRef === source.audioRendition?.audioRef) ||
+        source.audioRendition.durationSeconds !== timeline.durationSeconds))
+  )
+    return invalid();
+  if (
+    source.audioRendition?.positionSeconds !== undefined &&
+    (!Number.isFinite(source.audioRendition.positionSeconds) ||
+      source.audioRendition.positionSeconds < 0 ||
+      source.audioRendition.positionSeconds >= timeline.durationSeconds)
+  )
+    return invalid();
   const unique = (value: string) => {
     if (!ref(value) || seen.has(value)) return invalid();
     seen.add(value);

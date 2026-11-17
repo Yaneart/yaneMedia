@@ -146,3 +146,22 @@ test('manual launch trims magnet input, validates files and uses the same source
   expect(screen.getByRole('alert').textContent).toContain('Выберите файл .torrent');
   expect(start).toHaveBeenCalledTimes(1);
 });
+
+test('another release and manual input remain available while Public prepares a torrent', async () => {
+  local.pending = true;
+  mount();
+  const first = await screen.findByRole('button', { name: /Fixture 1080/ });
+  expect((first as HTMLButtonElement).disabled).toBe(false);
+  fireEvent.click(first);
+  expect(start).toHaveBeenCalledTimes(1);
+  fireEvent.click(first);
+  expect(start).toHaveBeenCalledTimes(1);
+  fireEvent.click(screen.getByRole('button', { name: /Fixture 720/ }));
+  expect(start).toHaveBeenCalledTimes(2);
+  fireEvent.click(screen.getByText('Добавить вручную'));
+  fireEvent.change(screen.getByRole('textbox', { name: 'Magnet-ссылка' }), {
+    target: { value: 'magnet:?xt=urn:btih:' + 'a'.repeat(40) },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Запустить', exact: true }));
+  expect(start).toHaveBeenCalledTimes(3);
+});

@@ -3,8 +3,11 @@ import { torrentDecodingContext } from './torrentOutputProfile';
 export type TorrentClientCapabilities = {
   originalVideo: boolean;
   audio: 'original' | 'aac-2' | 'aac-6' | 'aac-8';
+  audioRenditions?: true;
 };
 export type TorrentClientMedia = {
+  supportsAudioRenditions?: boolean;
+  videoEndSeconds?: number;
   video: {
     contentType: string | null;
     width: number;

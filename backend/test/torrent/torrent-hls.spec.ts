@@ -168,6 +168,8 @@ describe('torrent HLS gateway', () => {
       recordViewerActivity,
     } as unknown as TorrentSessionRepository;
     const gateway = {
+      audioRenditions: { get: () => undefined },
+      programDateTime: () => undefined,
       artifactDirectory: jest.fn((_id: string, requested: number) =>
         requested === generation ? directory : undefined,
       ),

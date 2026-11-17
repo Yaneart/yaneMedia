@@ -87,6 +87,7 @@ export function useLocalTorrent(preferences?: PreferencesAdapter) {
   const preparing = useRef<AbortController | null>(null);
 
   const dispose = useCallback(() => {
+    selection.current = false;
     preparing.current?.abort();
     preparing.current = null;
     opening.current?.abort();
@@ -95,7 +96,10 @@ export function useLocalTorrent(preferences?: PreferencesAdapter) {
     current.current = null;
     previous?.signal.abort();
     if (previous)
-      closing.current = closeLocalController(previous.controller).catch(() => undefined);
+      closing.current = Promise.allSettled([
+        closing.current,
+        closeLocalController(previous.controller),
+      ]);
   }, []);
   const stop = useCallback(() => {
     dispose();
@@ -118,9 +122,8 @@ export function useLocalTorrent(preferences?: PreferencesAdapter) {
   }, [dispose, stop]);
 
   const start = async (resolve: (signal: AbortSignal) => Promise<CompanionLocator>) => {
-    if (selection.current) return;
-    selection.current = true;
     dispose();
+    selection.current = true;
     setSnapshot(null);
     setPlayback(null);
     setPending(true);
@@ -182,7 +185,7 @@ export function useLocalTorrent(preferences?: PreferencesAdapter) {
       active.media = createLocalPlayback(controller, active.session, signal, (state) => {
         if (mounted.current && current.current === active) setPreparationState(state);
       });
-      selection.current = false;
+      if (opening.current === abort) selection.current = false;
       let lastRevision = 0;
       while (!signal.aborted) {
         const state = await localSnapshot(controller, active.session, signal);
@@ -213,7 +216,7 @@ export function useLocalTorrent(preferences?: PreferencesAdapter) {
         setPending(false);
       }
     } finally {
-      selection.current = false;
+      if (opening.current === abort) selection.current = false;
       clearInterval(heartbeat);
       if (active && current.current === active) {
         dispose();
@@ -268,8 +271,10 @@ export function useLocalTorrent(preferences?: PreferencesAdapter) {
         }
       }
     } finally {
-      selection.current = false;
-      if (mounted.current && current.current === active) setPending(false);
+      if (current.current === active) {
+        selection.current = false;
+        if (mounted.current) setPending(false);
+      }
     }
   };
   const prepare = async (fileRef: string, position = 0, hostSignal?: AbortSignal) => {

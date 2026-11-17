@@ -7,6 +7,9 @@ export function validTorrentClientMedia(value: unknown): value is TorrentClientM
     typeof item === 'number' && Number.isFinite(item) && item > 0 && item <= max;
   if (
     !record(value) ||
+    (value.supportsAudioRenditions !== undefined &&
+      typeof value.supportsAudioRenditions !== 'boolean') ||
+    (value.videoEndSeconds !== undefined && !number(value.videoEndSeconds, 7 * 24 * 3600)) ||
     !record(value.video) ||
     !Array.isArray(value.audio) ||
     value.audio.length > 32

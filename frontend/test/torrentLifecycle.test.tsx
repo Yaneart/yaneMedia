@@ -373,6 +373,45 @@ function openTorrent() {
 }
 
 describe('torrent user lifecycle', () => {
+  test('another candidate cancels ongoing Home playback preparation before starting its replacement', async () => {
+    discoveryMode = true;
+    let release!: () => void;
+    const stalled = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const transport = globalThis.fetch;
+    let oldSignal: AbortSignal | undefined;
+    globalThis.fetch = mock(async (input, init) => {
+      if (String(input).endsWith('/playback') && !oldSignal) {
+        oldSignal = init?.signal as AbortSignal;
+        await stalled;
+        oldSignal.throwIfAborted();
+      }
+      return transport(input, init);
+    }) as typeof fetch;
+    const view = mount();
+    openTorrent();
+    fireEvent.click(await screen.findByRole('button', { name: /Fixture 10/ }));
+    await waitFor(() => expect(oldSignal).toBeDefined());
+    openTorrent();
+    const replacement = await screen.findByRole('button', { name: /Fixture 30/ });
+    expect((replacement as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(replacement);
+    await waitFor(() => expect(candidateCreateCount).toBe(2));
+    await waitFor(() => expect(view.ready).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      release();
+      await stalled;
+    });
+    expect(view.ready).toHaveBeenCalledTimes(1);
+    const stop = calls.findIndex((call) => call.method === 'DELETE');
+    const admissions = calls
+      .map((call, index) => (call.path.endsWith('/from-candidate') ? index : -1))
+      .filter((index) => index >= 0);
+    expect(stop).toBeGreaterThan(admissions[0]);
+    expect(stop).toBeLessThan(admissions[1]);
+  });
+
   test('switching provider during candidate admission cannot resurrect the cancelled torrent', async () => {
     discoveryMode = true;
     let release!: () => void;
@@ -383,11 +422,36 @@ describe('torrent user lifecycle', () => {
     openTorrent();
     fireEvent.click(await screen.findByRole('button', { name: /Fixture 10/ }));
     await waitFor(() => expect(candidateCreateCount).toBe(1));
+    expect(screen.queryByRole('tab', { name: 'Торренты' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Other source' }));
     await act(async () => {
       release();
       await createGate;
     });
+    expect(view.ready).not.toHaveBeenCalled();
+    expect(calls.some((call) => call.path.endsWith('/playback'))).toBe(false);
+    expect(calls.some((call) => call.path.endsWith(id) && call.method === 'DELETE')).toBe(true);
+  });
+
+  test('pagehide during admission closes the menu immediately and discards the late session', async () => {
+    discoveryMode = true;
+    let release!: () => void;
+    createGate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const view = mount();
+    openTorrent();
+    fireEvent.click(await screen.findByRole('button', { name: /Fixture 10/ }));
+    expect(screen.queryByRole('tab', { name: 'Торренты' })).toBeNull();
+    await waitFor(() => expect(candidateCreateCount).toBe(1));
+    await act(async () => {
+      window.dispatchEvent(new Event('pagehide'));
+      release();
+      await createGate;
+    });
+    await waitFor(() =>
+      expect(calls.some((call) => call.path.endsWith(id) && call.method === 'DELETE')).toBe(true),
+    );
     expect(view.ready).not.toHaveBeenCalled();
     expect(calls.some((call) => call.path.endsWith('/playback'))).toBe(false);
   });
@@ -664,7 +728,7 @@ function PlayerActions() {
         start
       </button>
       <button onClick={() => playback.updateProgress(64, 1200, 'pause')}>progress</button>
-      <button onClick={playback.endSession}>stop</button>
+      <button onClick={() => playback.endSession()}>stop</button>
       <output>{playback.session?.sourceRef ?? 'closed'}</output>
     </>
   );
@@ -717,6 +781,71 @@ describe('torrent playback progress and cleanup', () => {
 });
 
 describe('torrent player adapter contract', () => {
+  test('prepared Home audio acknowledges a native rendition without returning a new source', async () => {
+    const audioTracks = [
+      { ref: 'main', label: 'Original', language: 'eng', channels: 2, isDefault: true },
+      { ref: 'dub', label: 'Dub', language: 'rus', channels: 2, isDefault: false },
+    ];
+    const playback = {
+      hlsUrl: '/same.m3u8',
+      generation: 1,
+      startPositionSeconds: 42,
+      audioMode: 'separate' as const,
+      timeline: {
+        continuous: true,
+        absoluteAnchorSeconds: 40,
+        mediaAnchorSeconds: 0.08,
+        windowEndSeconds: 100,
+        videoEndSeconds: 1200,
+      },
+      durationSeconds: 1200,
+      playbackRates: [1],
+      audioTracks,
+      selectedAudioTrackRef: 'main',
+    };
+    const onReplace = mock(async () => ({
+      id,
+      playback: { ...playback, selectedAudioTrackRef: 'dub', durationSeconds: 1250 },
+    }));
+    const view = render(
+      <MediaVideoRenderer
+        source={{
+          sourceRef: `torrent:${id}:1`,
+          kind: 'hls',
+          provider: 'torrent',
+          label: 'Torrent',
+          url: '/same.m3u8',
+          availability: 'available',
+          browserSupported: true,
+        }}
+        mediaTitle="Fixture"
+        shouldAutoPlay={false}
+        initialPositionSeconds={42}
+        torrentTimeline={{ ...playback, onReplace }}
+        onReady={() => {}}
+        onError={() => {}}
+        onProgress={() => {}}
+        onPlay={() => {}}
+        onPause={() => {}}
+      />,
+    );
+    await act(async () => {});
+    const player = players[0];
+    const signal = AbortSignal.timeout(2000);
+    const result = await player.host.execute(
+      { type: 'audio', id: 'dub', target: { audioId: 'dub' } },
+      { signal, positionSeconds: 47, intent: 'paused' },
+    );
+    expect(onReplace).toHaveBeenCalledWith(47, signal, 'dub', true);
+    expect(result.source).toBeUndefined();
+    expect(result).toEqual({
+      selection: { audioId: 'dub' },
+      audioRendition: { id: '1', durationSeconds: 1250 },
+    });
+    expect(player.setSource).toHaveBeenCalledTimes(1);
+    expect(player.descriptor.timeline.seekableRanges).toEqual([[0, 1200]]);
+    view.unmount();
+  });
   test('confirms audio only with ready replacement refs and retains the public player', async () => {
     const audioTracks = [
       { ref: 'main', label: 'Original', language: 'eng', channels: 2, isDefault: true },

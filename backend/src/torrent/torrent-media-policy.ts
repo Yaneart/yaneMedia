@@ -19,6 +19,7 @@ export interface AudioTrack {
   profile?: string;
   sampleRate?: number;
   bitrate?: number | null;
+  endSeconds?: number;
 }
 
 export interface TorrentProbe {
@@ -33,6 +34,9 @@ export interface TorrentProbe {
   audioTracks: AudioTrack[];
   subtitleTracks?: TorrentSubtitle[];
   subtitleFonts?: TorrentFont[];
+  videoEndSeconds?: number;
+  audioMode?: 'separate';
+  audioPositionSeconds?: number;
 }
 
 type Stream = {
@@ -53,9 +57,10 @@ type Stream = {
   color_space?: unknown;
   side_data_list?: Array<{ side_data_type?: unknown }>;
   duration?: unknown;
+  start_time?: unknown;
   sample_rate?: unknown;
   channels?: unknown;
-  tags?: { language?: unknown; title?: unknown };
+  tags?: { language?: unknown; title?: unknown; DURATION?: unknown };
   disposition?: { default?: unknown };
 };
 
@@ -81,6 +86,8 @@ export function parseTorrentProbe(fileRef: string, raw: unknown): TorrentProbe {
   };
   if (!Array.isArray(data.streams) || data.streams.length > 64) throw new UnsupportedTorrentMedia();
   const streams = data.streams as Stream[];
+  const sourceStart = Number(data.format?.start_time) || 0;
+  const total = Number(data.format?.duration);
   const video = streams.find(
     (stream) =>
       stream.codec_type === 'video' &&
@@ -162,6 +169,7 @@ export function parseTorrentProbe(fileRef: string, raw: unknown): TorrentProbe {
         profile: typeof stream.profile === 'string' ? stream.profile : '',
         sampleRate: Number(stream.sample_rate) || 0,
         bitrate: bitrate(stream.bit_rate),
+        endSeconds: streamEnd(stream, sourceStart, total),
         codec:
           typeof stream.codec_name === 'string' && /^[a-z0-9_]{1,24}$/.test(stream.codec_name)
             ? stream.codec_name
@@ -193,6 +201,7 @@ export function parseTorrentProbe(fileRef: string, raw: unknown): TorrentProbe {
         ? Number(data.format?.start_time)
         : 0,
       videoStreamIndex: Number(video.index),
+      videoEndSeconds: streamEnd(video, sourceStart, total),
       copyVideo: false,
       video: videoInfo,
       audioTracks,
@@ -200,4 +209,37 @@ export function parseTorrentProbe(fileRef: string, raw: unknown): TorrentProbe {
     },
     'h264-720p',
   );
+}
+
+function streamEnd(stream: Stream, sourceStart: number, total: number): number | undefined {
+  let end: number;
+  if (typeof stream.tags?.DURATION === 'string') {
+    const match = /^(\d{1,3}):([0-5]\d):([0-5]\d(?:\.\d{1,9})?)$/.exec(stream.tags.DURATION);
+    if (!match) return;
+    end = Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]) - sourceStart;
+  } else {
+    const duration = Number(stream.duration);
+    const start = stream.start_time === undefined ? sourceStart : Number(stream.start_time);
+    if (!Number.isFinite(duration) || duration <= 0) return;
+    end = start + duration - sourceStart;
+  }
+  if (
+    Number.isFinite(end) &&
+    end > 0 &&
+    end <= 7 * 24 * 3600 &&
+    Number.isFinite(total) &&
+    end <= total + 0.1
+  )
+    return Math.min(end, total);
+}
+
+export function supportsTorrentRenditions(probe: TorrentProbe): boolean {
+  return Boolean(probe.videoEndSeconds && probe.audioTracks.every((track) => track.endSeconds));
+}
+
+export function torrentSelectedDuration(probe: TorrentProbe, ref: string): number | null {
+  const audio = probe.audioTracks.find((track) => track.trackRef === ref);
+  return probe.videoEndSeconds && audio?.endSeconds
+    ? Math.max(probe.videoEndSeconds, audio.endSeconds)
+    : probe.durationSeconds;
 }

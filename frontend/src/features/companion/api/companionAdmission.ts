@@ -12,6 +12,7 @@ export type LocalTarget = {
   textRef: null;
   positionSeconds: number;
   output: string;
+  audioMode?: 'separate';
 };
 export type LocalSnapshot = {
   sessionId: string;

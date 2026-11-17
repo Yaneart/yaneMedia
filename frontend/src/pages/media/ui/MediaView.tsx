@@ -14,6 +14,7 @@ import {
   LOCAL_PLAYBACK_SOURCE_REF,
   isLocalPlaybackSourceRef,
   type PlaybackEpisodeSelection,
+  type PlaybackSession,
 } from '@/entities/playback';
 import {
   cacheTorrentSession,
@@ -40,6 +41,7 @@ import {
   useLocalTorrent,
   TorrentFilePicker,
   TorrentPreparation,
+  TorrentResumePrompt,
   torrentEpisodes,
   initialTorrentEpisode,
   type TorrentEpisode,
@@ -68,7 +70,7 @@ import {
   type MediaPlayerEmptyState,
   type MediaPlayerStatus,
 } from '@/widgets/media-player';
-import { Button, Spinner, YaneMark, YaneMarkField } from '@/shared';
+import { Spinner, YaneMark, YaneMarkField } from '@/shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { MediaAvailabilityStatus } from '../model/useMediaAvailability';
@@ -348,7 +350,11 @@ export function MediaView({
     },
     [localScope, pauseSession],
   );
-  const [torrentSelected, setTorrentSelected] = useState(false);
+  const [torrentSelected, setTorrentSelected] = useState(
+    SERVER_TORRENT_ENABLED &&
+      (isLocalPlaybackSourceRef(savedProgress?.sourceRef ?? '') ||
+        isTorrentPlaybackSourceRef(savedProgress?.sourceRef ?? '')),
+  );
   const [torrentPlayRequest, setTorrentPlayRequest] = useState(0);
   const [torrentStarting, setTorrentStarting] = useState(false);
   const [torrentPreparationState, setTorrentPreparationState] =
@@ -386,11 +392,13 @@ export function MediaView({
   }, [accountKey, media.mediaRef, stopLocal]);
   useEffect(() => {
     if (
-      !SERVER_TORRENT_ENABLED &&
       !localChoiceMade.current &&
-      isLocalPlaybackSourceRef(savedProgress?.sourceRef ?? '')
-    )
-      setLocalSelected(true);
+      (isLocalPlaybackSourceRef(savedProgress?.sourceRef ?? '') ||
+        isTorrentPlaybackSourceRef(savedProgress?.sourceRef ?? ''))
+    ) {
+      if (SERVER_TORRENT_ENABLED) setTorrentSelected(true);
+      else setLocalSelected(true);
+    }
   }, [localScope, savedProgress?.sourceRef]);
   useEffect(() => {
     if (
@@ -406,8 +414,50 @@ export function MediaView({
     accountKey: string;
     session: TorrentSession;
   } | null>(null);
+  const ownedTorrent = useRef<{
+    scope: string;
+    id: string | null;
+    playback?: PlaybackSession;
+  } | null>(null);
+  if (
+    ownedTorrent.current?.scope === localScope &&
+    ownedTorrent.current.id &&
+    mediaSession?.sourceRef === torrentPlaybackSourceRef(ownedTorrent.current.id)
+  )
+    ownedTorrent.current.playback = mediaSession;
+  useEffect(() => {
+    const detach = (reset = false) => {
+      const owned = ownedTorrent.current;
+      if (!owned || owned.scope !== localScope) return;
+      ownedTorrent.current = null;
+      torrentSwitchRef.current?.abort();
+      if (owned.id)
+        void queryClient.cancelQueries({
+          queryKey: torrentSessionQueryKeys.session(accountKey, owned.id),
+        });
+      if (owned.playback) endSession(owned.playback);
+      else if (owned.id)
+        void stopTorrentSession(owned.id, new AbortController().signal).catch(() => undefined);
+      if (reset) {
+        setLaunchedTorrent(null);
+        setReadyTorrent(null);
+        setTorrentSelected(true);
+        setTorrentStarting(false);
+        setTorrentNeedsFile(false);
+      }
+    };
+    const hide = () => detach(true);
+    window.addEventListener('pagehide', hide);
+    return () => {
+      window.removeEventListener('pagehide', hide);
+      detach();
+    };
+  }, [accountKey, endSession, localScope, queryClient]);
   const savedTorrentId =
-    SERVER_TORRENT_ENABLED && mediaSession && isTorrentPlaybackSourceRef(mediaSession.sourceRef)
+    SERVER_TORRENT_ENABLED &&
+    mediaSession &&
+    launchedTorrent?.accountKey === accountKey &&
+    mediaSession.sourceRef === torrentPlaybackSourceRef(launchedTorrent.session.id)
       ? mediaSession.sourceRef.slice('torrent:'.length)
       : null;
   const torrentQuery = useQuery({
@@ -805,8 +855,9 @@ export function MediaView({
     (usesPlayerEpisodes &&
       sessionCatalogSource !== undefined &&
       sessionCatalogSource.provider === selectedDirectSource?.provider);
-  const isPlayerStarted =
-    localSelected || activeTorrentId !== null || torrentStarting
+  const isPlayerStarted = localSelected
+    ? !!(local.snapshot || local.pending || local.error)
+    : activeTorrentId !== null || torrentStarting
       ? true
       : sessionSourceMatches &&
         (!usesPlayerEpisodes || hasSameEpisode(sessionPlaybackEpisode, selectedPlaybackEpisode));
@@ -829,6 +880,8 @@ export function MediaView({
   const handleTorrentReady = useCallback(
     (ready: TorrentSession, episode?: PlaybackEpisodeSelection | null) => {
       if (!ready.playback) return;
+      if (ownedTorrent.current?.id !== ready.id)
+        ownedTorrent.current = { scope: localScope, id: ready.id };
       const resolvedEpisode =
         episode ??
         torrentEpisodes(ready.files, media, currentAnimeSeason).find(
@@ -862,11 +915,14 @@ export function MediaView({
       if (paused) pauseSession();
       setPlayerStatus('loading');
     },
-    [accountKey, currentAnimeSeason, media, pauseSession, startSession],
+    [accountKey, currentAnimeSeason, localScope, media, pauseSession, startSession],
   );
 
   const handleTorrentSessionChange = useCallback(
     (updated: TorrentSession | null) => {
+      if (updated && ownedTorrent.current?.id !== updated.id)
+        ownedTorrent.current = { scope: localScope, id: updated.id };
+      if (!updated) ownedTorrent.current = null;
       setLaunchedTorrent(updated ? { accountKey, session: updated } : null);
       if (!updated) {
         setTorrentSelected(false);
@@ -876,7 +932,7 @@ export function MediaView({
       if (!updated && mediaSession && isTorrentPlaybackSourceRef(mediaSession.sourceRef))
         endSession();
     },
-    [accountKey, endSession, mediaSession],
+    [accountKey, endSession, localScope, mediaSession],
   );
 
   const handleTorrentPlaybackError = useCallback((message: string) => {
@@ -898,7 +954,12 @@ export function MediaView({
   };
 
   const replaceTorrent = useCallback(
-    async (positionSeconds: number, signal: AbortSignal, audioTrackRef?: string) => {
+    async (
+      positionSeconds: number,
+      signal: AbortSignal,
+      audioTrackRef?: string,
+      audioOnly = false,
+    ) => {
       if (!torrentSession || !torrentPlayback || !activeTorrentId)
         throw new Error('Torrent unavailable');
       const updated = await replaceTorrentPlayback(
@@ -906,6 +967,9 @@ export function MediaView({
         positionSeconds,
         signal,
         audioTrackRef,
+        true,
+        undefined,
+        audioOnly,
       );
       signal.throwIfAborted();
       await queryClient.cancelQueries({
@@ -944,6 +1008,7 @@ export function MediaView({
       );
       setLaunchedTorrent(null);
     }
+    ownedTorrent.current = null;
 
     setPlayerStatus('ready');
   }, [accountKey, activeTorrentId, endSession, launchedTorrent, mediaSession, stopLocal]);
@@ -1150,6 +1215,13 @@ export function MediaView({
       // The hook publishes a friendly error only for the current selection.
     }
   };
+  // Decide before rendering: the effect below starts preparation after commit,
+  // which otherwise briefly mounts (and focuses) the manual file picker.
+  const initialLocalFile = initialTorrentEpisode(
+    localFiles,
+    savedProgress?.episode ?? selectedPlaybackEpisode,
+    media.type === 'movie' || (media.type === 'anime' && media.animeKind === 'movie'),
+  );
   useEffect(() => {
     if (
       !localSelected ||
@@ -1161,46 +1233,42 @@ export function MediaView({
     )
       return;
     localAutoSession.current = local.snapshot.sessionId;
-    const row = initialTorrentEpisode(
-      localFiles,
-      savedProgress?.episode ?? selectedPlaybackEpisode,
-      media.type === 'movie' || (media.type === 'anime' && media.animeKind === 'movie'),
-    );
-    if (row) void selectLocalFile(row.file.ref);
+    if (initialLocalFile) void selectLocalFile(initialLocalFile.file.ref);
   });
-  const playerNavigation = localSelected
-    ? {
-        ...torrentEpisodeNavigation(
-          localFiles,
-          local.snapshot?.selectedFileRef ?? null,
-          media.type !== 'series',
-          async (row, signal) => {
-            await local.prepare(row.file.ref, 0, signal);
-          },
-        ),
-        pending: local.pending,
-      }
-    : (activeTorrentId || torrentSelected) && torrentFiles.length > 1
+  const playerNavigation =
+    localSelected && (usesEpisodePlayback(media) || localFiles.length > 1)
       ? {
           ...torrentEpisodeNavigation(
-            torrentFiles,
-            torrentSwitching
-              ? (readyTorrent?.session.selectedFileRef ?? null)
-              : (torrentSession?.selectedFileRef ?? null),
+            localFiles,
+            local.snapshot?.selectedFileRef ?? null,
             media.type !== 'series',
-            selectTorrentEpisode,
+            async (row, signal) => {
+              await local.prepare(row.file.ref, 0, signal);
+            },
           ),
-          pending: torrentSwitching,
+          pending: local.pending,
         }
-      : usesPlayerEpisodes && !activeTorrentId && !torrentSelected
-        ? createPlayerEpisodeNavigation(
-            directEpisodes,
-            selectedDirectEpisode,
-            media.type === 'anime' ||
-              directEpisodes.every((episode) => episode.seasonNumber === undefined),
-            selectDirectEpisode,
-          )
-        : undefined;
+      : (activeTorrentId || torrentSelected) && torrentFiles.length > 1
+        ? {
+            ...torrentEpisodeNavigation(
+              torrentFiles,
+              torrentSwitching
+                ? (readyTorrent?.session.selectedFileRef ?? null)
+                : (torrentSession?.selectedFileRef ?? null),
+              media.type !== 'series',
+              selectTorrentEpisode,
+            ),
+            pending: torrentSwitching,
+          }
+        : usesPlayerEpisodes && !activeTorrentId && !torrentSelected
+          ? createPlayerEpisodeNavigation(
+              directEpisodes,
+              selectedDirectEpisode,
+              media.type === 'anime' ||
+                directEpisodes.every((episode) => episode.seasonNumber === undefined),
+              selectDirectEpisode,
+            )
+          : undefined;
 
   const loadPlayer = () => {
     localChoiceMade.current = true;
@@ -1347,6 +1415,7 @@ export function MediaView({
                                     }
                                     playRequest={torrentPlayRequest}
                                     onSourceSelect={() => {
+                                      localChoiceMade.current = true;
                                       torrentSwitchRef.current?.abort();
                                       torrentResumeRef.current = {
                                         episode:
@@ -1361,8 +1430,9 @@ export function MediaView({
                                       setTorrentRequestedFileRef(null);
                                       setTorrentNeedsFile(false);
                                       if (mediaSession) endSession();
+                                      ownedTorrent.current = { scope: localScope, id: null };
                                       setTorrentStarting(true);
-                                      setTorrentPreparationState(null);
+                                      setTorrentPreparationState('created');
                                       setTorrentLaunchError(null);
                                       setPlayerStatus('loading');
                                       setTorrentPlayRequest((request) => request + 1);
@@ -1376,11 +1446,13 @@ export function MediaView({
                                     onSessionChange={handleTorrentSessionChange}
                                   />
                                 )
-                              : () => (
+                              : (close) => (
                                   <LocalTorrentLaunch
                                     local={local}
                                     open={torrentOpen}
                                     onStart={() => {
+                                      setTorrentOpen(false);
+                                      close();
                                       localChoiceMade.current = true;
                                       localConfirmedBinding.current = null;
                                       episodeRequestRef.current?.abort();
@@ -1442,17 +1514,23 @@ export function MediaView({
                   ) : undefined
                 }
                 selection={
-                  localSelected && !local.snapshot && !local.pending && !local.error ? (
-                    <div className="space-y-3 text-white" role="status">
-                      <p>Выберите раздачу для продолжения просмотра</p>
-                      <p className="text-caption text-white/70">Серия и позиция сохранены.</p>
-                      <Button onClick={() => setTorrentOpen(true)}>Выбрать раздачу</Button>
-                    </div>
+                  (localSelected && !local.snapshot && !local.pending && !local.error) ||
+                  (SERVER_TORRENT_ENABLED &&
+                    torrentSelected &&
+                    !torrentSession &&
+                    !torrentStarting &&
+                    !torrentLaunchError) ? (
+                    <TorrentResumePrompt
+                      episodic={usesEpisodePlayback(media)}
+                      onSelect={() => setTorrentOpen(true)}
+                    />
                   ) : localSelected &&
                     local.snapshot &&
                     !local.playback &&
                     !local.pending &&
-                    !local.error ? (
+                    !local.error &&
+                    progressStatus !== 'loading' &&
+                    (local.snapshot.state !== 'awaiting_file' || !initialLocalFile) ? (
                     <TorrentFilePicker
                       files={localFiles}
                       missing={false}
@@ -1597,6 +1675,7 @@ export function MediaView({
                     ? {
                         startPositionSeconds: torrentPlayback.startPositionSeconds,
                         durationSeconds: torrentPlayback.durationSeconds,
+                        audioMode: torrentPlayback.audioMode,
                         timeline: torrentPlayback.timeline,
                         playbackRates: torrentPlayback.playbackRates,
                         audioTracks: torrentPlayback.audioTracks,

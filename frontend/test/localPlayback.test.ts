@@ -4,6 +4,7 @@ import type { LocalSnapshot } from '../src/features/companion/api/companionAdmis
 import type { LocalAudio } from '../src/features/companion/model/localTracks';
 
 const originalFetch = globalThis.fetch;
+const originalElements = globalThis.customElements;
 const session = 'a'.repeat(32),
   file = 'b'.repeat(32),
   audio = 'c'.repeat(64);
@@ -22,7 +23,12 @@ let operations: Map<
   string,
   { sessionId: string; operationId: string; revision: number; state: string }
 >;
-let posts: any[], cancelled: number[], pending: boolean, lost: boolean, supported: boolean;
+let posts: any[],
+  cancelled: number[],
+  pending: boolean,
+  lost: boolean,
+  supported: boolean,
+  separate: boolean;
 const json = (value: unknown, status = 200) => Response.json(value, { status });
 beforeEach(() => {
   audioTracks = [{ audioRef: audio, label: 'Original', codec: 'aac', channels: 2, default: true }];
@@ -39,6 +45,7 @@ beforeEach(() => {
   pending = false;
   lost = false;
   supported = true;
+  separate = false;
   Object.defineProperty(globalThis, 'MediaSource', {
     configurable: true,
     value: { isTypeSupported: () => supported },
@@ -67,7 +74,18 @@ beforeEach(() => {
           durationSeconds: 100,
           video: { contentType: 'video/mp4; codecs="avc1.640028"' },
           audioTracks,
-          outputs: ['original'],
+          outputs: separate ? ['original', 'original-separate-audio'] : ['original'],
+        };
+      } else if (body.action === 'audio') {
+        state.target = body.target;
+        state.source = {
+          ...state.source!,
+          audioMode: 'separate',
+          audioRendition: {
+            audioRef: body.target.audioRef,
+            generation: 'f'.repeat(64),
+            durationSeconds: 100,
+          },
         };
       } else {
         state.state = 'ready';
@@ -79,6 +97,16 @@ beforeEach(() => {
           url: `http://127.0.0.1:45723/v1/media/${'e'.repeat(64)}/master.m3u8`,
           audioTracks: state.probe!.audioTracks,
           textTracks: [],
+          ...(body.target.audioMode
+            ? {
+                audioMode: 'separate' as const,
+                audioRendition: {
+                  audioRef: body.target.audioRef,
+                  generation: 'f'.repeat(64),
+                  durationSeconds: 100,
+                },
+              }
+            : {}),
           timeline: {
             mode: 'windowed-vod',
             continuous: true,
@@ -112,6 +140,10 @@ beforeEach(() => {
 });
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  Object.defineProperty(globalThis, 'customElements', {
+    configurable: true,
+    value: originalElements,
+  });
 });
 function adapter(caps = capabilities, lifetime = new AbortController()) {
   return createLocalPlayback(
@@ -224,6 +256,51 @@ test('a lost POST response is reconciled without a second submission', async () 
   lost = true;
   await adapter().prepare(file, 0, AbortSignal.timeout(2000));
   expect(posts.map((p) => p.action)).toEqual(['probe', 'configure']);
+});
+
+test('separate audio requires compatible Player, helper and measured probe support', async () => {
+  separate = true;
+  const caps = [...capabilities, 'audio.renditions'];
+  await adapter(caps).prepare(file, 12, AbortSignal.timeout(2000));
+  expect(posts[1].target).not.toHaveProperty('audioMode');
+  Object.defineProperty(globalThis, 'customElements', {
+    configurable: true,
+    value: { get: () => ({ supportsAudioRenditions: true }) },
+  });
+  await adapter().prepare(file, 12, AbortSignal.timeout(2000));
+  expect(posts[3].target).not.toHaveProperty('audioMode');
+  await adapter(caps).prepare(file, 12, AbortSignal.timeout(2000));
+  expect(posts[5].target.audioMode).toBe('separate');
+});
+
+test('prepared audio changes only the rendition and keeps source identity and URLs', async () => {
+  audioTracks.push({
+    ...audioTracks[0]!,
+    audioRef: '9'.repeat(64),
+    label: 'Second',
+    default: false,
+  });
+  const ready = await adapter().prepare(file, 12, AbortSignal.timeout(2000));
+  state.source!.audioMode = 'separate';
+  state.source!.audioRendition = {
+    audioRef: audio,
+    generation: '8'.repeat(64),
+    durationSeconds: 100,
+  };
+  const previous = structuredClone(state.source!);
+  const changed = await ready.playback.execute(
+    { type: 'audio', target: { audioId: audioTracks[1]!.audioRef } } as any,
+    { signal: AbortSignal.timeout(2000), positionSeconds: 15, intent: 'paused' } as any,
+  );
+  expect(posts.map((p) => p.action)).toEqual(['probe', 'configure', 'audio']);
+  expect(posts[2].target.positionSeconds).toBe(15);
+  expect(changed.source).toBeUndefined();
+  expect(changed.retainedSource).toMatchObject({
+    id: previous.id,
+    revision: previous.revision,
+    url: previous.url,
+  });
+  expect(changed.audioRendition).toEqual({ id: '1', durationSeconds: 100 });
 });
 test('cancellation is acknowledged before the next queued file selection', async () => {
   pending = true;

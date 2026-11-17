@@ -93,6 +93,23 @@ test('maps real track descriptions, absolute clocks and strict anonymous MSE req
   );
 });
 
+test('separate audio requires a prepared generation, a current track and selected duration', () => {
+  const value = source();
+  value.audioMode = 'separate';
+  expect(() => localTrackSource(value)).toThrow('INVALID_LOCAL_MEDIA');
+  value.audioRendition = {
+    audioRef: value.audioTracks[0]!.audioRef,
+    generation: 'e'.repeat(64),
+    durationSeconds: 200,
+  };
+  expect(localTrackSource(value).src).toBe(value.url);
+  value.audioRendition.durationSeconds = 201;
+  expect(() => localTrackSource(value)).toThrow('INVALID_LOCAL_MEDIA');
+  value.audioRendition.durationSeconds = 200;
+  value.audioRendition.audioRef = 'f'.repeat(64);
+  expect(() => localTrackSource(value)).toThrow('INVALID_LOCAL_MEDIA');
+});
+
 test('rejects foreign resource origins, another generation grant and arbitrary paths', () => {
   for (const url of [
     'https://remote.example/font.ttf',

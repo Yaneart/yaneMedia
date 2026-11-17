@@ -167,6 +167,7 @@ describePostgres('torrent session PostgreSQL persistence', () => {
     const probe = {
       fileRef: file.fileRef,
       durationSeconds: 42.5,
+      videoEndSeconds: 42.5,
       videoStreamIndex: 0,
       copyVideo: true,
       video: {
@@ -184,6 +185,7 @@ describePostgres('torrent session PostgreSQL persistence', () => {
         {
           trackRef: `torrent_track_${randomBytes(16).toString('base64url')}`,
           streamIndex: 1,
+          endSeconds: 42.5,
           label: 'English',
           language: 'eng',
           channels: 2,
@@ -193,6 +195,7 @@ describePostgres('torrent session PostgreSQL persistence', () => {
         {
           trackRef: `torrent_track_${randomBytes(16).toString('base64url')}`,
           streamIndex: 2,
+          endSeconds: 42.5,
           label: 'Dub',
           language: 'rus',
           channels: 2,
@@ -342,7 +345,11 @@ describePostgres('torrent session PostgreSQL persistence', () => {
       'ready',
       { playbackTimeline: timeline },
     );
-    const capabilities = { originalVideo: false, audio: 'aac-6' as const };
+    const capabilities = {
+      originalVideo: false,
+      audio: 'aac-6' as const,
+      audioRenditions: true as const,
+    };
     const negotiated = await repository.beginPlayback(
       owners[0],
       pending.sessionId,
@@ -374,6 +381,60 @@ describePostgres('torrent session PostgreSQL persistence', () => {
     ready = await repository.transition(pending.sessionId, negotiated.session.version, 'ready', {
       playbackTimeline: timeline,
     });
+    const audioCommand = [
+      owners[0],
+      pending.sessionId,
+      ready.version,
+      probe.audioTracks[0].trackRef,
+      3,
+      'audio-prepared-command-1',
+      '5'.repeat(64),
+      'h264-1080p',
+      capabilities,
+      true,
+    ] as const;
+    const [audioFirst, audioReplay] = await Promise.all([
+      repository.beginPlayback(...audioCommand),
+      repository.beginPlayback(...audioCommand),
+    ]);
+    expect([audioFirst.replay, audioReplay.replay].sort()).toEqual([false, true]);
+    expect(audioFirst.session.generation).toBe(ready.generation);
+    expect(audioFirst.session.state).toBe('ready');
+    expect(audioFirst.session.playbackTimeline).toEqual(timeline);
+    await expect(
+      repository.beginPlayback(
+        owners[1],
+        pending.sessionId,
+        ready.version,
+        probe.audioTracks[0].trackRef,
+        3,
+        'foreign-audio-command',
+        '4'.repeat(64),
+        'h264-1080p',
+        capabilities,
+        true,
+      ),
+    ).rejects.toBeInstanceOf(TorrentSessionNotFound);
+    const audioProbe = (await repository.getProbe(pending.sessionId))!;
+    ready = await repository.finishAudio(
+      pending.sessionId,
+      ready.generation,
+      audioFirst.session.version,
+      probe.audioTracks[0].trackRef,
+      audioProbe,
+    );
+    expect(ready.generation).toBe(audioFirst.session.generation);
+    expect(ready.selectedAudioTrackRef).toBe(probe.audioTracks[0].trackRef);
+    expect(ready.playbackPositionSeconds).toBe(1.5);
+    await expect(
+      repository.finishAudio(
+        pending.sessionId,
+        ready.generation,
+        audioFirst.session.version,
+        probe.audioTracks[1].trackRef,
+        audioProbe,
+      ),
+    ).rejects.toBeInstanceOf(TorrentSessionNotFound);
     await repository.transition(pending.sessionId, ready.version, 'awaiting_playback', {
       failureCode: 'TORRENT_TRANSCODE_FAILED',
     });

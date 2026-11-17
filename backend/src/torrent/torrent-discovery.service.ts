@@ -140,7 +140,7 @@ export class TorrentDiscoveryService {
     if (!candidate || candidate.ownerId !== ownerId || candidate.expiresAt <= Date.now())
       throw error(404, 'TORRENT_CANDIDATE_NOT_FOUND');
     try {
-      const value = publicMagnet(candidate.release.downloadUrl);
+      const value = withPublicTrackers(publicMagnet(candidate.release.downloadUrl));
       return {
         locator: { kind: 'magnet' as const, value },
         expiresAt: new Date(Math.min(candidate.expiresAt, Date.now() + 120_000)).toISOString(),
@@ -213,6 +213,32 @@ function publicMagnet(value: string) {
       (/^\/(?:announce(?:\.php)?|ann|tracker\/announce(?:\.php)?)\/?$/.test(tracker.pathname) ||
         (tracker.protocol === 'udp:' && ['', '/'].includes(tracker.pathname)));
     if (!publicRutracker && !anonymous) throw new TorrentInputError('TORRENT_CANDIDATE_UNSAFE');
+  }
+  return url.toString();
+}
+
+// Only public catalog releases get these anonymous discovery alternatives.
+// Manual/private locators and the helper's egress policy remain independently validated.
+const publicTrackers = [
+  'udp://tracker.opentrackr.org:1337/announce',
+  'udp://open.demonii.com:1337/announce',
+];
+
+function withPublicTrackers(value: string): string {
+  const url = new URL(value);
+  const existing = url.searchParams.getAll('tr');
+  const trackers = new Set(existing);
+  let count = existing.length;
+  for (const tracker of publicTrackers) {
+    if (count >= 20) break;
+    if (trackers.has(tracker)) continue;
+    url.searchParams.append('tr', tracker);
+    if (Buffer.byteLength(url.toString()) > 4096) {
+      url.searchParams.delete('tr', tracker);
+      break;
+    }
+    trackers.add(tracker);
+    count++;
   }
   return url.toString();
 }

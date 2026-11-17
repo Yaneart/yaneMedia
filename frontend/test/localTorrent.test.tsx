@@ -135,6 +135,40 @@ test('a fresh launch resets preparation once, independently of session discovery
   await waitFor(() => expect(result.current.snapshot?.sessionId).toBe(session));
   expect(result.current.preparationId).toBe(first + 1);
 });
+
+test('replacement cancels pending resolution and its late completion cannot clear the new selection', async () => {
+  const { result } = renderHook(() => useLocalTorrent());
+  let resolveOld!: (value: typeof locator) => void;
+  let oldSignal!: AbortSignal;
+  let old!: Promise<void>;
+  act(() => {
+    old = result.current.start((signal) => {
+      oldSignal = signal;
+      return new Promise((resolve) => {
+        resolveOld = resolve;
+      });
+    });
+  });
+  await waitFor(() => expect(resolveOld).toBeDefined());
+  const preparation = result.current.preparationId;
+  act(() => {
+    void result.current.start(async () => locator);
+  });
+  await waitFor(() => expect(result.current.snapshot?.state).toBe('awaiting_file'));
+  expect(oldSignal.aborted).toBe(true);
+  expect(result.current.preparationId).toBe(preparation + 1);
+  await act(async () => {
+    resolveOld(locator);
+    await old;
+  });
+  expect(result.current.snapshot?.state).toBe('awaiting_file');
+  expect(result.current.error).toBeNull();
+  expect(calls.filter((call) => call.path === '/v1/sessions')).toHaveLength(1);
+  const close = calls.findIndex((call) => call.path === '/v1/controllers/current');
+  const reopen = calls.findIndex((call, index) => index > close && call.path === '/v1/controllers');
+  expect(close).toBeGreaterThan(-1);
+  expect(reopen).toBeGreaterThan(close);
+});
 test('lost session response reconciles the original key and never resubmits admission', async () => {
   lost = true;
   const { result } = renderHook(() => useLocalTorrent());

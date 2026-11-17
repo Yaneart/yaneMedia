@@ -38,7 +38,7 @@ export type PlaybackSessionContextValue = {
     expected?: PlaybackSession,
   ) => void;
   setVolume: (volume: number) => void;
-  endSession: () => void;
+  endSession: (expected?: PlaybackSession) => void;
   prepareForLogout: () => Promise<void>;
   retry: () => void;
 };

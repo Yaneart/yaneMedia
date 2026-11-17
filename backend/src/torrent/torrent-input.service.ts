@@ -18,6 +18,7 @@ import type {
 } from './torrent-engine.port';
 import { TorrServerClient } from './torrserver.client';
 import { TorrServerError } from './torrserver.error';
+import { torrentSelectedDuration } from './torrent-media-policy';
 
 export type TorrentSessionView = Awaited<ReturnType<TorrentInputService['get']>>;
 const WINDOW_MS = 10 * 60_000;
@@ -149,6 +150,7 @@ export class TorrentInputService implements BeforeApplicationShutdown {
       .update(outputProfile);
     if (capabilities)
       digest.update('\0').update(JSON.stringify([capabilities.originalVideo, capabilities.audio]));
+    if (capabilities?.audioRenditions) digest.update('\0separate-audio');
     return digest.digest('hex');
   }
 
@@ -287,9 +289,16 @@ function toSessionView(
             },
             generation: session.generation,
             startPositionSeconds: session.playbackPositionSeconds ?? 0,
-            timeline: session.playbackTimeline,
+            timeline: {
+              ...session.playbackTimeline,
+              ...(probe.audioMode ? { videoEndSeconds: probe.videoEndSeconds } : {}),
+            },
+            audioMode: probe.audioMode,
+            audioPositionSeconds: probe.audioPositionSeconds,
             playbackRates: [0.2, 0.5, 0.7, 1, 1.2, 1.5, 1.7, 2],
-            durationSeconds: probe.durationSeconds,
+            durationSeconds: probe.audioMode
+              ? torrentSelectedDuration(probe, session.selectedAudioTrackRef)
+              : probe.durationSeconds,
             selectedAudioTrackRef: session.selectedAudioTrackRef,
             audioTracks,
             output: torrentOutputInfo(

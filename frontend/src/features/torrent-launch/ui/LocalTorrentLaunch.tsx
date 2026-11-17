@@ -78,7 +78,6 @@ export function LocalTorrentLaunch({
   });
   function manual(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (local.pending) return;
     setInputError(null);
     const value = magnet.trim();
     if (inputKind === 'magnet') {
@@ -133,7 +132,7 @@ export function LocalTorrentLaunch({
           <TorrentCandidatesPanel
             key={selectionScope}
             query={search}
-            pending={local.pending}
+            pending={false}
             selectedCandidateRef={local.snapshot || local.pending ? selectedCandidateRef : null}
             status={local.playback ? 'Сейчас воспроизводится' : 'Подготовка торрента'}
             onRefresh={() => {
@@ -142,8 +141,9 @@ export function LocalTorrentLaunch({
             }}
             onSelect={(candidate) => {
               if (
-                local.pending ||
-                (local.snapshot && selectedCandidateRef === candidate.candidateRef && !local.error)
+                (local.snapshot || local.pending) &&
+                selectedCandidateRef === candidate.candidateRef &&
+                !local.error
               )
                 return;
               if (!search.data || Date.now() >= search.data.expiresAt) {
@@ -161,7 +161,7 @@ export function LocalTorrentLaunch({
           <TorrentManualForm
             inputKind={inputKind}
             magnet={magnet}
-            pending={local.pending}
+            pending={false}
             onInputKindChange={(value) => {
               setInputKind(value);
               setInputError(null);

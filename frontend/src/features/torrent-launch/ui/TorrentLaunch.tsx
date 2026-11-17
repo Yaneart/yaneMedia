@@ -184,7 +184,7 @@ export function TorrentLaunch({
   const [session, setSession] = useState<TorrentSession | null>(null);
   const [selectedCandidateRef, setSelectedCandidateRef] = useState<string | null>(null);
   const [audioRef, setAudioRef] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
+  const [pending, setPending] = useState<false | 'admission' | 'playback'>(false);
   const [error, setError] = useState<string | null>(null);
   const requestRef = useRef<AbortController | null>(null);
   const playbackRequestRef = useRef<AbortController | null>(null);
@@ -278,7 +278,24 @@ export function TorrentLaunch({
     candidateKeyRef.current = null;
   }, [accountKey, onSessionChange]);
 
-  useEffect(() => () => requestRef.current?.abort(), [sourceRevision]);
+  useEffect(() => {
+    const cancel = () => {
+      requestRef.current?.abort();
+      waitingForPlayback.current = false;
+    };
+    const hide = () => {
+      cancel();
+      setSession(null);
+      setSelectedCandidateRef(null);
+      setPending(false);
+      setError(null);
+    };
+    window.addEventListener('pagehide', hide);
+    return () => {
+      window.removeEventListener('pagehide', hide);
+      cancel();
+    };
+  }, [accountKey, mediaRef, sourceRevision]);
 
   const stopPrevious = async (signal: AbortSignal) => {
     let previous = session ?? activeQuery.data ?? activeSession;
@@ -287,7 +304,6 @@ export function TorrentLaunch({
       if (refreshed.error) throw refreshed.error;
       previous = refreshed.data ?? null;
     }
-    waitingForPlayback.current = false;
     if (!previous) return;
     await queryClient.cancelQueries({
       queryKey: torrentSessionQueryKeys.session(accountKey, previous.id),
@@ -301,12 +317,15 @@ export function TorrentLaunch({
     setSession(null);
     setSelectedCandidateRef(null);
     queryClient.setQueryData(torrentSessionQueryKeys.active(accountKey, mediaRef), null);
-    onSessionChange(null);
   };
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (pending || authState.status !== 'authenticated' || !profileQuery.data?.emailVerified)
+    if (
+      pending === 'admission' ||
+      authState.status !== 'authenticated' ||
+      !profileQuery.data?.emailVerified
+    )
       return;
     const value = magnet.trim();
     if (
@@ -322,10 +341,12 @@ export function TorrentLaunch({
     }
 
     const controller = new AbortController();
+    requestRef.current?.abort();
     const createKey = (createKeyRef.current ??= newTorrentIdempotencyKey());
     requestRef.current = controller;
-    setPending(true);
+    setPending('admission');
     setError(null);
+    onSourceSelect?.();
     try {
       await stopPrevious(controller.signal);
       const created =
@@ -337,10 +358,14 @@ export function TorrentLaunch({
       queryClient.setQueryData(torrentSessionQueryKeys.active(accountKey, mediaRef), created);
       setSession(created);
       onSessionChange(created);
-      onSourceSelect?.();
       createKeyRef.current = null;
     } catch (cause) {
-      if (!controller.signal.aborted) setError(describeCreateError(cause));
+      if (!controller.signal.aborted) {
+        waitingForPlayback.current = false;
+        const message = describeCreateError(cause);
+        setError(message);
+        onPlaybackError?.(message);
+      }
     } finally {
       if (requestRef.current === controller) {
         requestRef.current = null;
@@ -351,7 +376,7 @@ export function TorrentLaunch({
 
   const chooseCandidate = async (candidate: TorrentCandidate) => {
     if (
-      pending ||
+      pending === 'admission' ||
       authState.status !== 'authenticated' ||
       profileQuery.data?.emailVerified !== true
     )
@@ -368,14 +393,16 @@ export function TorrentLaunch({
       return;
     }
     const controller = new AbortController();
+    requestRef.current?.abort();
     requestRef.current = controller;
     const key =
       candidateKeyRef.current?.ref === candidate.candidateRef
         ? candidateKeyRef.current.key
         : newTorrentIdempotencyKey();
     candidateKeyRef.current = { ref: candidate.candidateRef, key };
-    setPending(true);
+    setPending('admission');
     setError(null);
+    onSourceSelect?.();
     try {
       await stopPrevious(controller.signal);
       const created = await createCandidateSession(candidate.candidateRef, key, controller.signal);
@@ -385,17 +412,18 @@ export function TorrentLaunch({
       setSession(created);
       setSelectedCandidateRef(candidate.candidateRef);
       onSessionChange(created);
-      onSourceSelect?.();
       candidateKeyRef.current = null;
     } catch (cause) {
       if (!controller.signal.aborted) {
-        setError(
+        waitingForPlayback.current = false;
+        const message =
           cause instanceof TorrentRequestError && cause.status === 404
             ? 'Раздача больше недоступна. Обновите поиск и выберите другую.'
             : cause instanceof TorrentRequestError && cause.code === 'TORRENT_CANDIDATE_UNSAFE'
               ? 'Файл раздачи не прошёл проверку. Выберите другую раздачу.'
-              : describeCreateError(cause),
-        );
+              : describeCreateError(cause);
+        setError(message);
+        onPlaybackError?.(message);
         if (cause instanceof TorrentRequestError && cause.status === 404)
           void discoveryQuery.refetch();
       }
@@ -427,7 +455,7 @@ export function TorrentLaunch({
     const controller = new AbortController();
     requestRef.current = controller;
     playbackRequestRef.current = controller;
-    setPending(true);
+    setPending('playback');
     setError(null);
     try {
       await queryClient.cancelQueries({
@@ -545,7 +573,7 @@ export function TorrentLaunch({
                     <select
                       aria-label="Аудиодорожка торрента"
                       value={selectedAudio?.ref ?? ''}
-                      disabled={pending}
+                      disabled={!!pending}
                       onChange={(event) => {
                         setAudioRef(event.target.value);
                       }}
@@ -569,7 +597,7 @@ export function TorrentLaunch({
               <TorrentCandidatesPanel
                 key={JSON.stringify([accountKey, mediaRef, season, episode])}
                 query={discoveryQuery}
-                pending={pending || activeQuery.isPending}
+                pending={pending === 'admission' || activeQuery.isPending}
                 selectedCandidateRef={selected ? selectedCandidateRef : null}
                 status={
                   currentSession
@@ -588,7 +616,7 @@ export function TorrentLaunch({
               <TorrentManualForm
                 inputKind={inputKind}
                 magnet={magnet}
-                pending={pending}
+                pending={pending === 'admission'}
                 onInputKindChange={(value) => {
                   setInputKind(value);
                   setError(null);

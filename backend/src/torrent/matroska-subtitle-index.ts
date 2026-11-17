@@ -1,6 +1,10 @@
 // Read indexed subtitle blocks by byte range, leaving video/audio payloads in
 // the torrent. FFmpeg still handles subtitle codecs and Matroska track encodings.
-export type MatroskaRangeReader = (offset: number, length: number) => Promise<Buffer>;
+export type MatroskaRangeReader = (
+  offset: number,
+  length: number,
+  signal?: AbortSignal,
+) => Promise<Buffer>;
 type Element = { id: number; start: number; data: number; end: number };
 type Cue = { time: number; duration: number; cluster: number; relative: number };
 type Track = {
@@ -84,6 +88,7 @@ async function readHeader(read: MatroskaRangeReader, offset: number, size: numbe
     ...item,
     start: offset,
     data: offset + item.data,
+    unknown: item.end < 0,
     end: item.end < 0 ? size : offset + item.end,
   };
 }
@@ -145,6 +150,14 @@ export class MatroskaSubtitleIndex {
         const values = fields(entries.subarray(entry.data, entry.end));
         const format = FORMATS[values.get(0x86)?.toString('utf8') ?? ''];
         if (uint(values.get(0x83)) !== 17 || !format) continue;
+        const timing = values.get(0x23314f);
+        if (
+          timing &&
+          ((timing.length !== 4 && timing.length !== 8) ||
+            (timing.length === 4 ? timing.readFloatBE() : timing.readDoubleBE()) !== 1)
+        )
+          return null;
+        if (values.has(0x56aa) && uint(values.get(0x56aa)) !== 0) return null;
         tracks.push({
           number: uint(values.get(0xd7)),
           streamIndex: currentIndex,
@@ -162,19 +175,15 @@ export class MatroskaSubtitleIndex {
           const values = fields(data.subarray(position.data, position.end));
           const track = tracks.find((x) => x.number === uint(values.get(0xf7)));
           if (!track) continue;
-          if (
-            !values.has(0xf0) ||
-            !values.has(0xb2) ||
-            (values.has(0xea) && uint(values.get(0xea)) !== 0)
-          ) {
+          if (values.has(0xea) && uint(values.get(0xea)) !== 0) {
             track.indexed = false;
             continue;
           }
           track.cues.push({
             time,
-            duration: uint(values.get(0xb2)),
+            duration: values.has(0xb2) ? uint(values.get(0xb2)) : -1,
             cluster: uint(values.get(0xf1)),
-            relative: uint(values.get(0xf0)),
+            relative: values.has(0xf0) ? uint(values.get(0xf0)) : -1,
           });
         }
       }
@@ -192,6 +201,80 @@ export class MatroskaSubtitleIndex {
     }
   }
 
+  needsScan(ordinal: number, start: number, end: number): boolean {
+    return (
+      this.tracks[ordinal]?.cues.some(
+        (cue) =>
+          cue.time * this.scale < end &&
+          (cue.time + (cue.duration < 0 ? 120 / this.scale : cue.duration)) * this.scale > start &&
+          (cue.relative < 0 || cue.duration < 0),
+      ) ?? false
+    );
+  }
+
+  // Incomplete Cues still identify a cluster and timestamp. Walk element
+  // headers, skipping AV payloads, and retain only fully verified locations.
+  private async scanCluster(read: MatroskaRangeReader, track: Track, cues: Cue[]): Promise<Cue[]> {
+    const cluster = await readHeader(read, this.segment + cues[0].cluster, this.size);
+    if (cluster.id !== 0x1f43b675 || cluster.unknown || cluster.end > this.size)
+      return unsupported();
+    const remaining = new Set(cues);
+    const resolved = new Map<Cue, Cue>();
+    let timestamp: number | undefined;
+    for (let offset = cluster.data, count = 0; offset < cluster.end && remaining.size; count++) {
+      if (count >= 30_000) return unsupported();
+      const item = await readHeader(read, offset, this.size);
+      if (item.unknown || item.end <= item.data || item.end > cluster.end) return unsupported();
+      offset = item.end;
+      if (item.id === 0xe7) {
+        timestamp = uint(await read(item.data, item.end - item.data));
+        continue;
+      }
+      if (timestamp === undefined || ![0xa0, 0xa3].includes(item.id)) continue;
+      let block = item;
+      if (item.id === 0xa0) {
+        let found = false;
+        for (let pos = item.data, i = 0; pos < item.end && i < 32; i++) {
+          const child = await readHeader(read, pos, this.size);
+          if (child.unknown || child.end <= child.data || child.end > item.end)
+            return unsupported();
+          if (child.id === 0xa1) {
+            block = child;
+            found = true;
+            break;
+          }
+          pos = child.end;
+        }
+        if (!found) return unsupported();
+      }
+      const prefix = await read(block.data, Math.min(11, block.end - block.data));
+      const number = vint(prefix, 0);
+      if (number.value !== track.number) continue;
+      if (prefix.length < number.length + 3 || prefix[number.length + 2] & 0x06)
+        return unsupported();
+      const time = timestamp + prefix.readInt16BE(number.length);
+      const cue = [...remaining].find((candidate) => candidate.time === time);
+      if (!cue) continue;
+      // A SimpleBlock has no independent duration; do not guess from neighbors.
+      if (item.id !== 0xa0 || item.end - item.data > 65536) return unsupported();
+      const body = fields(await read(item.data, item.end - item.data));
+      const duration = uint(body.get(0x9b));
+      const relative = item.start - cluster.data;
+      if (
+        body.has(0xa4) ||
+        duration <= 0 ||
+        duration * this.scale > 120 ||
+        (cue.relative >= 0 && cue.relative !== relative) ||
+        (cue.duration >= 0 && cue.duration !== duration)
+      )
+        return unsupported();
+      resolved.set(cue, { ...cue, relative, duration });
+      remaining.delete(cue);
+    }
+    if (remaining.size) return unsupported();
+    return cues.map((cue) => resolved.get(cue)!);
+  }
+
   async window(
     read: MatroskaRangeReader,
     ordinal: number,
@@ -199,7 +282,9 @@ export class MatroskaSubtitleIndex {
     start: number,
     end: number,
     streamIndex = ordinal,
+    signal?: AbortSignal,
   ): Promise<Buffer | null> {
+    let rememberVerified: (() => void) | undefined;
     try {
       const track = this.tracks[ordinal];
       if (
@@ -210,21 +295,71 @@ export class MatroskaSubtitleIndex {
         !track.cues.length
       )
         return null;
+      signal?.throwIfAborted();
+      if (![start, end].every(Number.isFinite) || start < 0 || end <= start) return null;
       const cues = track.cues.filter(
-        (x) => (x.time + x.duration) * this.scale > start && x.time * this.scale < end,
+        (x) =>
+          (x.time + (x.duration < 0 ? 120 / this.scale : x.duration)) * this.scale > start &&
+          x.time * this.scale < end,
       );
-      if (cues.length > 100 || (!cues.length && format === 'ass')) return null;
+      if (cues.length > 256 || (!cues.length && format === 'ass')) return null;
       if (!cues.length) return Buffer.alloc(0);
+      const groups = new Map<number, Cue[]>();
+      for (const cue of cues) {
+        const group = groups.get(cue.cluster) ?? [];
+        group.push(cue);
+        groups.set(cue.cluster, group);
+      }
+      const jobs = [...groups.values()].map((originals) => ({
+        originals,
+        resolved: originals,
+        done: false,
+      }));
+      let next = 0;
+      let failure: Error | undefined;
+      const abort = new AbortController();
+      const jobSignal = signal ? AbortSignal.any([signal, abort.signal]) : abort.signal;
+      const guardedRead: MatroskaRangeReader = (offset, length) => {
+        jobSignal.throwIfAborted();
+        if (failure) throw failure;
+        return read(offset, length, jobSignal);
+      };
+      await Promise.all(
+        Array.from({ length: Math.min(4, jobs.length) }, async () => {
+          while (next < jobs.length && !failure) {
+            const job = jobs[next++];
+            try {
+              if (job.originals.some((cue) => cue.relative < 0 || cue.duration < 0))
+                job.resolved = await this.scanCluster(guardedRead, track, job.originals);
+              job.done = true;
+            } catch (error) {
+              failure ??= error instanceof Error ? error : new Error('Subtitle range failed');
+              abort.abort(failure);
+            }
+          }
+        }),
+      );
+      const remember = () => {
+        for (const job of jobs)
+          if (job.done) job.originals.forEach((cue, i) => Object.assign(cue, job.resolved[i]));
+      };
+      rememberVerified = remember;
+      if (failure) throw failure;
+      signal?.throwIfAborted();
+      const located = jobs.flatMap((job) => job.resolved);
       const clusters: Buffer[] = [];
       let bytes = 0;
-      for (const cue of cues) {
+      for (const cue of located) {
+        signal?.throwIfAborted();
+        if (cue.duration <= 0 || cue.duration * this.scale > 120) return null;
+        if ((cue.time + cue.duration) * this.scale <= start) continue;
         const cluster = await readHeader(read, this.segment + cue.cluster, this.size);
-        if (cluster.id !== 0x1f43b675 || cluster.end > this.size) return null;
+        if (cluster.id !== 0x1f43b675 || cluster.unknown || cluster.end > this.size) return null;
         // Timestamp is a mandatory Cluster child, normally the first one.
         let timestamp: number | undefined;
         for (let offset = cluster.data, i = 0; i < 8; i++) {
           const item = await readHeader(read, offset, this.size);
-          if (item.end > cluster.end || item.end - item.data > 65536) break;
+          if (item.unknown || item.end > cluster.end || item.end - item.data > 65536) break;
           if (item.id === 0xe7) {
             timestamp = uint(await read(item.data, item.end - item.data));
             break;
@@ -235,6 +370,7 @@ export class MatroskaSubtitleIndex {
         const item = await readHeader(read, cluster.data + cue.relative, this.size);
         if (
           ![0xa0, 0xa3].includes(item.id) ||
+          item.unknown ||
           item.end > cluster.end ||
           item.end - item.data > 65536
         )
@@ -243,13 +379,19 @@ export class MatroskaSubtitleIndex {
         const block = item.id === 0xa0 ? fields(body).get(0xa1) : body;
         if (!block) return null;
         const number = vint(block, 0);
-        if (number.value !== track.number || block.length < number.length + 3) return null;
+        if (
+          number.value !== track.number ||
+          block.length < number.length + 3 ||
+          block[number.length + 2] & 0x06
+        )
+          return null;
         if (timestamp + block.readInt16BE(number.length) !== cue.time) return null;
         if (item.id === 0xa3) {
           body = Buffer.from(body);
           body[number.length + 2] &= 0x0e;
           body = Buffer.concat([wrap(0xa1, body), wrap(0x9b, integer(cue.duration))]);
-        } else if (uint(fields(body).get(0x9b)) !== cue.duration) return null;
+        } else if (fields(body).has(0xa4) || uint(fields(body).get(0x9b)) !== cue.duration)
+          return null;
         const output = wrap(
           0x1f43b675,
           Buffer.concat([wrap(0xe7, integer(timestamp)), wrap(0xa0, body)]),
@@ -258,15 +400,31 @@ export class MatroskaSubtitleIndex {
         if (bytes > MAX_METADATA) return null;
         clusters.push(output);
       }
-      return Buffer.concat([
+      signal?.throwIfAborted();
+      // A conservative incomplete cue may resolve to a block ending before
+      // this window. Header-only Matroska is not decodable subtitle input.
+      if (!clusters.length) {
+        remember();
+        return format === 'vtt' ? Buffer.alloc(0) : null;
+      }
+      const output = Buffer.concat([
         this.header,
         Buffer.from('1853806701ffffffffffffff', 'hex'),
         this.info,
         wrap(0x1654ae6b, track.entry),
         ...clusters,
       ]);
+      if (output.length > MAX_METADATA) return null;
+      remember();
+      return output;
     } catch (error) {
       if (error instanceof MatroskaIndexUnavailable) return null;
+      const reason: unknown = signal?.reason;
+      if (
+        (!signal?.aborted || (reason instanceof Error && reason.name === 'TimeoutError')) &&
+        !(error instanceof Error && error.name === 'AbortError')
+      )
+        rememberVerified?.();
       throw error;
     }
   }

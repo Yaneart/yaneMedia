@@ -17,7 +17,7 @@ import {
   canTransitionTorrentSession,
   isVisibleTorrentSession,
 } from './torrent-session.state';
-import type { TorrentProbe } from './torrent-media-policy';
+import { supportsTorrentRenditions, type TorrentProbe } from './torrent-media-policy';
 import { selectTorrentOutput, type TorrentOutputProfile } from './torrent-output-policy';
 import type { TorrentClientCapabilities } from './torrent-client-capabilities';
 import { TorrentMetrics } from './torrent-metrics';
@@ -665,7 +665,9 @@ export class TorrentSessionRepository {
     digest: string,
     outputProfile: TorrentOutputProfile = 'h264-720p',
     capabilities?: TorrentClientCapabilities,
+    audioOnly = false,
   ): Promise<{ session: TorrentSessionRow; replay: boolean }> {
+    const route = audioOnly ? 'audio' : 'playback';
     return this.database.db.transaction(async (tx) => {
       await tx.execute(sql`select pg_advisory_xact_lock(725134, 6)`);
       const [existing] = await tx
@@ -674,7 +676,7 @@ export class TorrentSessionRepository {
         .where(
           and(
             eq(torrentIdempotency.ownerId, ownerId),
-            eq(torrentIdempotency.route, 'playback'),
+            eq(torrentIdempotency.route, route),
             eq(torrentIdempotency.key, idempotencyKey),
           ),
         );
@@ -700,7 +702,7 @@ export class TorrentSessionRepository {
           .where(
             and(
               eq(torrentIdempotency.ownerId, ownerId),
-              eq(torrentIdempotency.route, 'playback'),
+              eq(torrentIdempotency.route, route),
               eq(torrentIdempotency.key, idempotencyKey),
             ),
           );
@@ -730,17 +732,35 @@ export class TorrentSessionRepository {
       if (!['awaiting_playback', 'ready'].includes(session.state))
         throw new TorrentSessionConflict('TORRENT_SESSION_CHANGED', session.version);
       let updated = session;
-      if (!(
+      if (audioOnly) {
+        if (session.state !== 'ready' || row.probe.audioMode !== 'separate')
+          throw new TorrentSessionConflict('TORRENT_SESSION_CHANGED', session.version);
+        [updated] = await tx
+          .update(torrentSessions)
+          .set({ version: session.version + 1, updatedAt: new Date() })
+          .where(eq(torrentSessions.sessionId, sessionId))
+          .returning();
+      } else if (!(
         session.state === 'ready' &&
         session.selectedAudioTrackRef === audioTrackRef &&
         (row.probe.outputProfile ?? 'h264-720p') === outputProfile &&
         row.probe.capabilities?.originalVideo === capabilities?.originalVideo &&
         row.probe.capabilities?.audio === capabilities?.audio &&
+        row.probe.capabilities?.audioRenditions === capabilities?.audioRenditions &&
         session.playbackPositionSeconds === position
       )) {
         await tx
           .update(torrentSessionProbes)
-          .set({ probe: selectTorrentOutput(row.probe, outputProfile, capabilities) })
+          .set({
+            probe: {
+              ...selectTorrentOutput(row.probe, outputProfile, capabilities),
+              audioPositionSeconds: undefined,
+              audioMode:
+                capabilities?.audioRenditions && supportsTorrentRenditions(row.probe)
+                  ? 'separate'
+                  : undefined,
+            },
+          })
           .where(eq(torrentSessionProbes.sessionId, sessionId));
         [updated] = await tx
           .update(torrentSessions)
@@ -760,13 +780,50 @@ export class TorrentSessionRepository {
       }
       await tx.insert(torrentIdempotency).values({
         ownerId,
-        route: 'playback',
+        route,
         key: idempotencyKey,
         inputDigest: digest,
         sessionId,
         expiresAt: new Date(Date.now() + 24 * HOUR_MS),
       });
       return { session: updated, replay: false };
+    });
+  }
+
+  async finishAudio(
+    sessionId: string,
+    generation: number,
+    expectedVersion: number,
+    ref: string,
+    probe: TorrentProbe,
+  ): Promise<TorrentSessionRow> {
+    if (!probe.audioTracks.some((track) => track.trackRef === ref))
+      throw new TorrentSessionNotFound();
+    return this.database.db.transaction(async (tx) => {
+      const [current] = await tx
+        .select()
+        .from(torrentSessions)
+        .where(eq(torrentSessions.sessionId, sessionId))
+        .for('update');
+      if (
+        !current ||
+        current.state !== 'ready' ||
+        current.generation !== generation ||
+        current.version !== expectedVersion ||
+        current.expiresAt <= new Date() ||
+        current.idleExpiresAt <= new Date()
+      )
+        throw new TorrentSessionNotFound();
+      await tx
+        .update(torrentSessionProbes)
+        .set({ probe })
+        .where(eq(torrentSessionProbes.sessionId, sessionId));
+      const [updated] = await tx
+        .update(torrentSessions)
+        .set({ selectedAudioTrackRef: ref, version: expectedVersion + 1, updatedAt: new Date() })
+        .where(eq(torrentSessions.sessionId, sessionId))
+        .returning();
+      return updated;
     });
   }
 

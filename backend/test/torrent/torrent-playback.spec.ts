@@ -53,6 +53,7 @@ describe('torrent playback commands', () => {
     findEngineKey: jest.fn(),
     transition: jest.fn(),
     selectFile: jest.fn(),
+    finishAudio: jest.fn(),
   };
   const gateway = {
     hasCapacity: jest.fn(),
@@ -60,6 +61,7 @@ describe('torrent playback commands', () => {
     waitReady: jest.fn(),
     waitComplete: jest.fn(),
     stop: jest.fn(),
+    audioRenditions: { select: jest.fn() },
   };
   const input = { view: jest.fn(), digestPlayback: jest.fn() };
   const service = new TorrentPlaybackService(
@@ -118,6 +120,81 @@ describe('torrent playback commands', () => {
   it('rejects a missing idempotency key before repository access', async () => {
     await expect(service.playback('owner', id, request, '')).rejects.toMatchObject({ status: 400 });
     expect(repository.findVisible).not.toHaveBeenCalled();
+  });
+
+  it('serializes audio receipts, preserves ready video, and joins a same-key retry', async () => {
+    const ready = { ...session, state: 'ready', version: 10 };
+    const measured = {
+      ...probe,
+      audioMode: 'separate',
+      durationSeconds: 100,
+      videoEndSeconds: 100,
+      capabilities: { originalVideo: true, audio: 'aac-2' },
+      audioTracks: [{ ...audio, endSeconds: 100 }],
+    };
+    repository.findVisible.mockResolvedValue(ready);
+    repository.getProbe.mockResolvedValue(measured);
+    repository.beginPlayback.mockResolvedValue({
+      session: { ...ready, version: 11 },
+      replay: false,
+    });
+    repository.finishAudio.mockResolvedValue({ ...ready, version: 12 });
+    let prepared!: () => void;
+    gateway.audioRenditions.select.mockReturnValue(
+      new Promise<void>((resolve) => {
+        prepared = resolve;
+      }),
+    );
+    const body = { expectedVersion: 10, positionSeconds: 12, audioTrackRef: trackRef };
+    const first = service.selectAudio('owner', id, body, key);
+    await settleWorker();
+    const retry = service.selectAudio('owner', id, body, key);
+    await expect(
+      service.selectAudio('owner', id, { ...body, positionSeconds: 13 }, key),
+    ).rejects.toMatchObject({ status: 409 });
+    await expect(
+      service.playback('owner', id, request, 'another-command-key'),
+    ).rejects.toMatchObject({ status: 409 });
+    expect(repository.finishAudio).not.toHaveBeenCalled();
+    prepared();
+    await expect(first).resolves.toMatchObject({ generation: 2, version: 12, state: 'ready' });
+    await expect(retry).resolves.toMatchObject({ version: 12 });
+    expect(gateway.audioRenditions.select).toHaveBeenCalledTimes(1);
+    expect(gateway.start).not.toHaveBeenCalled();
+    expect(gateway.stop).not.toHaveBeenCalled();
+  });
+
+  it('corrects position when a shorter selected track has already ended', async () => {
+    const ready = { ...session, state: 'ready', version: 10 };
+    const measured = {
+      ...probe,
+      audioMode: 'separate',
+      videoEndSeconds: 24,
+      durationSeconds: 28,
+      audioTracks: [{ ...audio, endSeconds: 24 }],
+      capabilities: { originalVideo: true, audio: 'aac-2' },
+    };
+    repository.findVisible.mockResolvedValue(ready);
+    repository.getProbe.mockResolvedValue(measured);
+    repository.beginPlayback.mockResolvedValue({
+      session: { ...ready, version: 11 },
+      replay: false,
+    });
+    repository.finishAudio.mockResolvedValue({ ...ready, version: 12 });
+    await service.selectAudio(
+      'owner',
+      id,
+      { expectedVersion: 10, positionSeconds: 28, audioTrackRef: trackRef },
+      key,
+    );
+    expect(gateway.audioRenditions.select).toHaveBeenCalledWith(
+      id,
+      2,
+      trackRef,
+      23.99,
+      expect.objectContaining({ audioPositionSeconds: 23.99 }),
+    );
+    expect(gateway.start).not.toHaveBeenCalled();
   });
 
   it('requires reopening old probes before applying the new colour/output contract', async () => {

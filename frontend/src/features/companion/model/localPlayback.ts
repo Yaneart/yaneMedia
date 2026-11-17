@@ -18,7 +18,12 @@ export type LocalPlayback = {
   execute: (
     command: HostCommand,
     context: HostContext,
-  ) => Promise<{ source?: LocalMediaSource; audioId: string }>;
+  ) => Promise<{
+    source?: LocalMediaSource;
+    retainedSource?: LocalMediaSource;
+    audioRendition?: { id: string; durationSeconds: number; positionSeconds?: number };
+    audioId: string;
+  }>;
   report: (
     source: LocalMediaSource,
     position: number,
@@ -164,6 +169,14 @@ export function createLocalPlayback(
       !contentTypes.every((type) => MediaSource.isTypeSupported(type))
     )
       throw new CompanionError('UNSUPPORTED_MEDIA');
+    const player = globalThis.customElements?.get('yane-player') as
+      (CustomElementConstructor & { supportsAudioRenditions?: boolean }) | undefined;
+    const audioMode =
+      probe.outputs.includes('original-separate-audio') &&
+      controller.capabilities?.includes('audio.renditions') &&
+      player?.supportsAudioRenditions
+        ? 'separate'
+        : undefined;
     const ready = await command(
       {
         action: 'configure',
@@ -173,13 +186,19 @@ export function createLocalPlayback(
           textRef: null,
           positionSeconds: Math.min(position, Math.max(0, probe.durationSeconds - 0.01)),
           output: 'original',
+          ...(audioMode ? { audioMode } : {}),
         },
         clientMedia: contentTypes.map((contentType) => ({ contentType, supported: true })),
       },
       signal,
     );
     signal.throwIfAborted();
-    if (ready.state !== 'ready' || !ready.source || !ready.target)
+    if (
+      ready.state !== 'ready' ||
+      !ready.source ||
+      !ready.target ||
+      ready.source.audioMode !== audioMode
+    )
       throw new CompanionError('INVALID_RESPONSE');
     localTrackSource(ready.source);
     return ready as LocalSnapshot & {
@@ -197,9 +216,54 @@ export function createLocalPlayback(
         commandValue.type === 'audio' &&
         audioId &&
         audioId === state.target?.audioRef &&
-        state.source
+        state.source &&
+        (state.source.audioMode !== 'separate' || state.source.audioRendition?.audioRef === audioId)
       )
         return { audioId };
+      if (commandValue.type === 'audio' && state.source?.audioMode === 'separate' && audioId) {
+        const previous = state.source;
+        const ready = await command(
+          {
+            action: 'audio',
+            target: {
+              ...state.target,
+              fileRef: state.selectedFileRef,
+              audioRef: audioId,
+              textRef: null,
+              output: 'original',
+              audioMode: 'separate',
+              positionSeconds: context.positionSeconds ?? 0,
+            },
+          },
+          signal,
+        );
+        const source = ready.source;
+        if (
+          !source ||
+          source.id !== previous.id ||
+          source.revision !== previous.revision ||
+          source.url !== previous.url ||
+          source.timeline.absoluteAnchorSeconds !== previous.timeline.absoluteAnchorSeconds ||
+          source.timeline.mediaAnchorSeconds !== previous.timeline.mediaAnchorSeconds ||
+          source.audioTracks.map((a) => a.audioRef).join() !==
+            previous.audioTracks.map((a) => a.audioRef).join() ||
+          source.audioRendition?.audioRef !== audioId
+        )
+          throw new CompanionError('INVALID_RESPONSE');
+        localTrackSource(source);
+        const index = source.audioTracks.findIndex((a) => a.audioRef === audioId);
+        return {
+          audioId,
+          retainedSource: source,
+          audioRendition: {
+            id: String(index),
+            durationSeconds: source.audioRendition.durationSeconds,
+            ...(source.audioRendition.positionSeconds !== undefined
+              ? { positionSeconds: source.audioRendition.positionSeconds }
+              : {}),
+          },
+        };
+      }
       const ready = await configure(
         state,
         commandValue.target.positionSeconds ?? context.positionSeconds ?? 0,

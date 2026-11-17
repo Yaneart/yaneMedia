@@ -43,11 +43,14 @@ export type TorrentSessionDto = {
   audioTracks: TorrentAudioTrackDto[];
   media?: TorrentClientMedia;
   playback: {
+    audioMode?: 'separate';
+    audioPositionSeconds?: number;
     source: { type: 'hls'; url: string };
     generation: number;
     startPositionSeconds: number;
     timeline: {
       continuous?: boolean;
+      videoEndSeconds?: number;
       absoluteAnchorSeconds: number;
       mediaAnchorSeconds: number;
       windowEndSeconds: number;

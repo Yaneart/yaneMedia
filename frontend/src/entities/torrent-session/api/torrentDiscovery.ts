@@ -1,6 +1,6 @@
 import { ApiClientError, apiRequest } from '@/shared/api';
 import { mapTorrentSession } from './mapTorrentSession';
-import { toTorrentRequestError } from './torrentSessionApi';
+import { stopTorrentSession, toTorrentRequestError } from './torrentSessionApi';
 import type { TorrentSession } from '../model/torrentSession';
 import { torrentAccountSignal } from '../model/torrentClientScope';
 
@@ -131,8 +131,11 @@ export async function createCandidateSession(
       },
       body: JSON.stringify({ candidateRef }),
     });
+    const session = mapTorrentSession(value);
+    if (combined.aborted)
+      void stopTorrentSession(session.id, new AbortController().signal).catch(() => undefined);
     combined.throwIfAborted();
-    return mapTorrentSession(value);
+    return session;
   } catch (error) {
     throw toTorrentRequestError(error);
   }

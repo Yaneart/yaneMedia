@@ -52,6 +52,60 @@ afterEach(() => {
   resetTorrentClientScope();
 });
 
+test('separate audio uses its own command, keeps video anchors, and reconciles a lost response', async () => {
+  const current = { ...wire, playback: { ...wire.playback, audioMode: 'separate' as const } };
+  const prepared = {
+    ...current,
+    version: 7,
+    playback: { ...current.playback, selectedAudioTrackRef: 'dub', durationSeconds: 1200 },
+  };
+  const keys: string[] = [];
+  globalThis.fetch = mock(async (url: string, init: RequestInit) => {
+    if (init.method === 'POST') {
+      expect(String(url)).toEndWith('/audio');
+      const body = JSON.parse(init.body as string);
+      expect(body.positionSeconds).toBe(47);
+      expect(body.audioTrackRef).toBe('dub');
+      keys.push(new Headers(init.headers).get('Idempotency-Key')!);
+      if (keys.length === 1) throw new TypeError('response lost');
+      return response(prepared);
+    }
+    return response({ ...current, version: 6 });
+  });
+  const result = await replaceTorrentPlayback(
+    mapTorrentSession(current),
+    47,
+    AbortSignal.timeout(2000),
+    'dub',
+    true,
+    undefined,
+    true,
+  );
+  expect(result.playback?.generation).toBe(1);
+  expect(result.playback?.durationSeconds).toBe(1200);
+  expect(keys[0]).toBe(keys[1]);
+  globalThis.fetch = mock(async () =>
+    response({
+      ...prepared,
+      playback: {
+        ...prepared.playback,
+        timeline: { ...prepared.playback.timeline, mediaAnchorSeconds: 1 },
+      },
+    }),
+  );
+  await expect(
+    replaceTorrentPlayback(
+      mapTorrentSession(current),
+      47,
+      AbortSignal.timeout(2000),
+      'dub',
+      true,
+      undefined,
+      true,
+    ),
+  ).rejects.toThrow('Playback generation replaced');
+});
+
 test('reconciles a lost POST response with the same key and waits beyond admission', async () => {
   const keys: string[] = [];
   let gets = 0;

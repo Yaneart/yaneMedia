@@ -3,13 +3,15 @@ import type { AudioTrack, TorrentProbe } from './torrent-media-policy';
 export type TorrentClientCapabilities = {
   originalVideo: boolean;
   audio: 'original' | 'aac-2' | 'aac-6' | 'aac-8';
+  audioRenditions?: true;
 };
 
 export function isTorrentClientCapabilities(value: unknown): value is TorrentClientCapabilities {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const item = value as Record<string, unknown>;
   return (
-    Object.keys(item).length === 2 &&
+    Object.keys(item).every((key) => ['originalVideo', 'audio', 'audioRenditions'].includes(key)) &&
+    (item.audioRenditions === undefined || item.audioRenditions === true) &&
     typeof item.originalVideo === 'boolean' &&
     ['original', 'aac-2', 'aac-6', 'aac-8'].includes(String(item.audio))
   );
@@ -49,6 +51,10 @@ export function torrentClientMedia(probe: TorrentProbe) {
   const video = probe.video;
   return video
     ? {
+        supportsAudioRenditions: Boolean(
+          probe.videoEndSeconds && probe.audioTracks.every((track) => track.endSeconds),
+        ),
+        videoEndSeconds: probe.videoEndSeconds,
         video: {
           contentType: video.contentType ?? null,
           width: video.width,

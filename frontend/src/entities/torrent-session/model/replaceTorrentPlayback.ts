@@ -2,6 +2,8 @@ import {
   getTorrentSession,
   newTorrentIdempotencyKey,
   startTorrentPlayback,
+  selectTorrentAudio,
+  supportsPreparedTorrentAudio,
   TorrentRequestError,
 } from '../api/torrentSessionApi';
 import type { TorrentSession, TorrentSessionState } from './torrentSession';
@@ -17,8 +19,13 @@ export async function replaceTorrentPlayback(
   audioTrackRef = initial.playback?.selectedAudioTrackRef,
   retryUnavailable = true,
   onProgress?: (state: TorrentSessionState) => void,
+  audioOnly = false,
 ): Promise<TorrentSession> {
   signal.throwIfAborted();
+  if (!audioOnly && initial.media?.videoEndSeconds && supportsPreparedTorrentAudio(initial.media))
+    position = Math.min(position, Math.max(0, initial.media.videoEndSeconds - 0.01));
+  if (audioOnly && (initial.playback?.audioMode !== 'separate' || !audioTrackRef))
+    throw new Error('Separate audio unavailable');
   const deadline = AbortSignal.any([AbortSignal.timeout(110_000), torrentAccountSignal()]);
   const key = newTorrentIdempotencyKey();
   let current = initial;
@@ -34,16 +41,18 @@ export async function replaceTorrentPlayback(
     if (admittedVersion === null && current.state !== 'preparing') {
       if (++attempts > 4) throw new Error('Playback admission failed');
       try {
-        current = await startTorrentPlayback(
-          initial.id,
-          position,
-          current.version,
-          key,
-          deadline,
-          audio,
-          outputProfile,
-          initial.media,
-        );
+        current = audioOnly
+          ? await selectTorrentAudio(initial, position, audio!, current.version, key, deadline)
+          : await startTorrentPlayback(
+              initial.id,
+              position,
+              current.version,
+              key,
+              deadline,
+              audio,
+              outputProfile,
+              initial.media,
+            );
         admittedVersion = current.version;
       } catch (error) {
         signal.throwIfAborted();
@@ -63,8 +72,16 @@ export async function replaceTorrentPlayback(
     if (current.state !== 'ready') onProgress?.(current.state);
     if (admittedVersion !== null && current.state === 'ready') {
       if (
+        !current.playback ||
         current.version < admittedVersion ||
-        current.playback?.startPositionSeconds !== position ||
+        (!audioOnly && current.playback?.startPositionSeconds !== position) ||
+        (audioOnly &&
+          (current.playback?.generation !== initial.playback?.generation ||
+            current.playback?.hlsUrl !== initial.playback?.hlsUrl ||
+            current.playback?.timeline.absoluteAnchorSeconds !==
+              initial.playback?.timeline.absoluteAnchorSeconds ||
+            current.playback?.timeline.mediaAnchorSeconds !==
+              initial.playback?.timeline.mediaAnchorSeconds)) ||
         (audio !== undefined && current.playback.selectedAudioTrackRef !== audio) ||
         (current.playback.output !== undefined &&
           current.playback.output.profile !== outputProfile) ||

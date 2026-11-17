@@ -17,6 +17,8 @@ type Manifest = {
   playlistRef: string;
   initRef: string;
   segments: Map<string, string>;
+  audioPlaylists: Map<string, string>;
+  copies: Map<string, Manifest>;
 };
 type Kind = 'master' | 'media' | 'init' | 'segment';
 const ref = () => randomBytes(16).toString('base64url');
@@ -66,7 +68,7 @@ export class TorrentHlsService implements BeforeApplicationShutdown {
         { code: 'RANGE_NOT_SATISFIABLE', message: 'RANGE_NOT_SATISFIABLE' },
         416,
       );
-    const directory = this.gateway.artifactDirectory(sessionId, session.generation);
+    let directory = this.gateway.artifactDirectory(sessionId, session.generation);
     if (!directory) throw missing();
     if ((this.active.get(sessionId) ?? 0) >= 8 || this.totalActive >= 16) {
       response.setHeader('Retry-After', '1');
@@ -75,7 +77,42 @@ export class TorrentHlsService implements BeforeApplicationShutdown {
     this.active.set(sessionId, (this.active.get(sessionId) ?? 0) + 1);
     this.totalActive++;
     try {
-      const manifest = this.manifest(sessionId, session.generation);
+      const root = this.manifest(sessionId, session.generation);
+      let manifest = root;
+      let artifactId = sessionId;
+      const renditions = this.gateway.audioRenditions.get(sessionId, session.generation);
+      if (renditions) {
+        const copies = [renditions.audio, renditions.retired].filter((copy) => !!copy);
+        for (const id of root.copies.keys())
+          if (!copies.some((copy) => copy.id === id)) root.copies.delete(id);
+        for (const copy of copies)
+          if (!root.copies.has(copy.id)) root.copies.set(copy.id, newManifest(session.generation));
+        for (const track of renditions.probe.audioTracks)
+          if (!root.audioPlaylists.has(track.trackRef))
+            root.audioPlaylists.set(track.trackRef, ref());
+        if (kind === 'media' && handle !== root.playlistRef) {
+          const track = [...root.audioPlaylists].find(([, value]) => value === handle)?.[0];
+          const copy = copies.find((item) => item.ref === track);
+          if (!copy) throw missing();
+          artifactId = copy.id;
+          manifest = root.copies.get(artifactId)!;
+          handle = manifest.playlistRef;
+        } else if (kind === 'init' || kind === 'segment') {
+          for (const [id, copy] of root.copies) {
+            if (
+              kind === 'init'
+                ? copy.initRef === handle
+                : [...copy.segments.values()].includes(handle!)
+            ) {
+              artifactId = id;
+              manifest = copy;
+              break;
+            }
+          }
+        }
+        directory = this.gateway.artifactDirectory(artifactId, session.generation);
+        if (!directory) throw missing();
+      }
       if (
         kind !== 'master' &&
         handle !==
@@ -95,7 +132,7 @@ export class TorrentHlsService implements BeforeApplicationShutdown {
           ...(await Promise.all(
             playlist.segments.map(async (segment) =>
               Math.ceil(
-                ((await stat(join(directory, segment.filename))).size * 8) /
+                ((await stat(join(directory!, segment.filename))).size * 8) /
                   Number(segment.duration.slice(8, -1)),
               ),
             ),
@@ -105,17 +142,28 @@ export class TorrentHlsService implements BeforeApplicationShutdown {
         const base = `/api/v1/torrent-sessions/${sessionId}/hls`;
         sendPlaylist(
           response,
-          `#EXTM3U\n#EXT-X-VERSION:7\n#EXT-X-STREAM-INF:BANDWIDTH=${bandwidth}\n${base}/media/${manifest.playlistRef}.m3u8\n`,
+          `#EXTM3U\n#EXT-X-VERSION:7\n${
+            renditions
+              ? renditions.probe.audioTracks
+                  .map((track, index) => {
+                    const label = track.label.replace(/["\r\n]/g, "'");
+                    const selected = renditions.audio?.ref === track.trackRef ? 'YES' : 'NO';
+                    return `#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio",NAME="${label} (${index + 1})",DEFAULT=${selected},AUTOSELECT=${selected},URI="${base}/media/${root.audioPlaylists.get(track.trackRef)}.m3u8"\n`;
+                  })
+                  .join('')
+              : ''
+          }#EXT-X-STREAM-INF:BANDWIDTH=${bandwidth}${renditions ? ',AUDIO="audio"' : ''}\n${base}/media/${manifest.playlistRef}.m3u8\n`,
           this.metrics,
         );
         return;
       }
       const playlist = await this.refresh(
-        sessionId,
+        artifactId,
         session.generation,
         directory,
         manifest,
         session.version,
+        sessionId,
       );
       const base = `/api/v1/torrent-sessions/${sessionId}/hls`;
       if (kind === 'media') {
@@ -130,13 +178,15 @@ export class TorrentHlsService implements BeforeApplicationShutdown {
           '#EXT-X-INDEPENDENT-SEGMENTS',
           `#EXT-X-MAP:URI="${base}/init/${manifest.initRef}.mp4"`,
         ];
+        const date = this.gateway.programDateTime(artifactId, session.generation);
+        if (date) lines.push(`#EXT-X-PROGRAM-DATE-TIME:${date}`);
         for (const segment of playlist.segments) {
           lines.push(
             segment.duration,
             `${base}/segments/${manifest.segments.get(segment.filename)}.m4s`,
           );
         }
-        if (playlist.ended && this.gateway.isCompleted(sessionId, session.generation))
+        if (playlist.ended && this.gateway.isCompleted(artifactId, session.generation))
           lines.push('#EXT-X-ENDLIST');
         sendPlaylist(response, `${lines.join('\n')}\n`, this.metrics);
         return;
@@ -238,7 +288,7 @@ export class TorrentHlsService implements BeforeApplicationShutdown {
           }
         }
       }
-      manifest = { generation, playlistRef: ref(), initRef: ref(), segments: new Map() };
+      manifest = newManifest(generation);
       this.manifests.set(sessionId, manifest);
     }
     return manifest;
@@ -250,6 +300,7 @@ export class TorrentHlsService implements BeforeApplicationShutdown {
     directory: string,
     manifest: Manifest,
     version: number,
+    ownerSessionId = sessionId,
   ) {
     const file = join(directory, 'media.m3u8');
     let playlist: ParsedTorrentPlaylist;
@@ -258,9 +309,9 @@ export class TorrentHlsService implements BeforeApplicationShutdown {
       playlist = await this.gateway.playlist(sessionId, generation);
     } catch (error) {
       if (error instanceof InvalidTorrentPlaylist) {
-        await this.gateway.stop(sessionId, generation);
+        await this.gateway.stop(ownerSessionId, generation);
         await this.repository
-          .transition(sessionId, version, 'awaiting_playback', {
+          .transition(ownerSessionId, version, 'awaiting_playback', {
             failureCode: 'TORRENT_TRANSCODE_FAILED',
           })
           .catch(() => undefined);
@@ -274,6 +325,17 @@ export class TorrentHlsService implements BeforeApplicationShutdown {
     manifest.segments = next;
     return playlist;
   }
+}
+
+function newManifest(generation: number): Manifest {
+  return {
+    generation,
+    playlistRef: ref(),
+    initRef: ref(),
+    segments: new Map(),
+    audioPlaylists: new Map(),
+    copies: new Map(),
+  };
 }
 
 function sendPlaylist(response: Response, body: string, metrics: TorrentMetrics): void {

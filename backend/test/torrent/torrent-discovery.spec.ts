@@ -150,6 +150,59 @@ describe('torrent discovery', () => {
     const home = service.homeCandidate('owner-2', candidates[0].candidateRef);
     expect(home.mediaRef).toBe(mediaRef);
     expect(home.input).toContain('xt=');
+    expect(new URL(home.input).searchParams.getAll('tr')).toHaveLength(0);
+    expect(new URL(result.locator.value).searchParams.getAll('tr')).toEqual([
+      'udp://tracker.opentrackr.org:1337/announce',
+      'udp://open.demonii.com:1337/announce',
+    ]);
+  });
+
+  it('adds public discovery alternatives once and preserves the tracker count bound', async () => {
+    const trackers = Array.from(
+      { length: 20 },
+      (_, i) => `udp://tracker${i}.example:1337/announce`,
+    );
+    discovery.search.mockResolvedValue({
+      releases: [
+        {
+          ...release,
+          downloadUrl:
+            release.downloadUrl +
+            trackers.map((tracker) => '&tr=' + encodeURIComponent(tracker)).join(''),
+        },
+      ],
+      degraded: false,
+    });
+    const { candidates } = await service.search('tracker-limit', mediaRef);
+    const resolved = service.resolve('tracker-limit', candidates[0].candidateRef);
+    expect(new URL(resolved.locator.value).searchParams.getAll('tr')).toEqual(trackers);
+    const existing = 'udp://tracker.opentrackr.org:1337/announce';
+    discovery.search.mockResolvedValue({
+      releases: [
+        { ...release, downloadUrl: release.downloadUrl + '&tr=' + encodeURIComponent(existing) },
+      ],
+      degraded: false,
+    });
+    const next = await service.search('tracker-dedup', mediaRef);
+    const output = service.resolve('tracker-dedup', next.candidates[0].candidateRef);
+    expect(new URL(output.locator.value).searchParams.getAll('tr')).toEqual([
+      existing,
+      'udp://open.demonii.com:1337/announce',
+    ]);
+  });
+
+  it.each([19, 20])('counts repeated tracker parameters toward the %s-slot input limit', async (count) => {
+    const tracker = 'udp://tracker.example:1337/announce';
+    discovery.search.mockResolvedValue({
+      releases: [{ ...release, downloadUrl: release.downloadUrl + ('&tr=' + encodeURIComponent(tracker)).repeat(count) }],
+      degraded: false,
+    });
+    const { candidates } = await service.search(`tracker-duplicates-${count}`, mediaRef);
+    const output = service.resolve(`tracker-duplicates-${count}`, candidates[0].candidateRef);
+    const trackers = new URL(output.locator.value).searchParams.getAll('tr');
+    expect(trackers).toHaveLength(20);
+    expect(trackers.slice(0, count)).toEqual(Array(count).fill(tracker));
+    expect(Buffer.byteLength(output.locator.value)).toBeLessThanOrEqual(4096);
   });
 
   it('rejects arbitrary query coordinates and unsafe download origins', async () => {

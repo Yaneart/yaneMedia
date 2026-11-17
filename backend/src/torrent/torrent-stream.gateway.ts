@@ -19,6 +19,7 @@ import { TorrServerClient } from './torrserver.client';
 import { InvalidTorrentPlaylist, parseTorrentPlaylist } from './torrent-hls-playlist';
 import { TorrentSegmentBuffer } from './torrent-segment-buffer';
 import { MatroskaIndexUnavailable, MatroskaSubtitleIndex } from './matroska-subtitle-index';
+import { TorrentAudioRenditions, type TorrentTrackKind } from './torrent-audio-renditions';
 import {
   TORRENT_OUTPUT_PROFILES,
   torrentOutputInfo,
@@ -49,6 +50,9 @@ import {
 type Source = { key: EngineTorrentKey; file: EngineFileKey; size: number };
 // Input is an untrusted file, never a playlist that can fetch secondary URLs or local files.
 const INPUT_OPTIONS = [
+  // AVI can carry valid decode timestamps while omitting presentation timestamps.
+  '-fflags',
+  '+genpts',
   '-protocol_whitelist',
   'http,tcp',
   '-format_whitelist',
@@ -61,6 +65,9 @@ const INPUT_OPTIONS = [
   '2',
 ];
 type Worker = {
+  kind: TorrentTrackKind;
+  timeline?: TorrentTimeline;
+  programOrigin?: number;
   process: ChildProcess;
   server: Server;
   directory: string;
@@ -87,11 +94,15 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
       directory: string;
       absoluteAnchorSeconds: number;
       buffer: TorrentSegmentBuffer;
+      kind: TorrentTrackKind;
+      finished: boolean;
+      timeline?: TorrentTimeline;
+      programOrigin?: number;
     }
   >();
   private readonly starting = new Map<
     string,
-    { generation: number; video: boolean; cancelled: boolean }
+    { generation: number; video: boolean; cancelled: boolean; kind: TorrentTrackKind }
   >();
   private closing = false;
   private readonly commands = new Set<ChildProcess>();
@@ -102,6 +113,23 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
   >();
   private readonly subtitleCache = new Map<string, { start: number; end: number; text: string }>();
   private readonly subtitleIndexes = new Map<string, MatroskaSubtitleIndex | null>();
+  readonly audioRenditions = new TorrentAudioRenditions({
+    start: (...args) => this.start(...args),
+    ready: (...args) => this.waitReady(...args),
+    stop: (...args) => this.stop(...args),
+    freeze: (...args) => this.freezeTrack(...args),
+    has: (id, generation) => this.rawHasGeneration(id, generation),
+    ended: (...args) => this.isCompleted(...args),
+    covers: (id, generation, position) => {
+      const stream = this.workers.get(id) ?? this.completed.get(id);
+      return (
+        stream?.generation === generation &&
+        position >= stream.buffer.anchor - 0.1 &&
+        position <= stream.buffer.edge + 0.1
+      );
+    },
+    confirm: (id, generation, position) => this.confirmTrackPosition(id, generation, position),
+  });
 
   private trimSubtitleCache(sessionId?: string): void {
     let bytes = 0,
@@ -128,7 +156,7 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
   constructor(private readonly engine: TorrServerClient) {}
 
   activeTranscodes(): { copy: number; transcode: number } {
-    const workers = [...this.workers.values()];
+    const workers = [...this.workers.values()].filter((worker) => worker.kind !== 'audio');
     return {
       copy: workers.filter((worker) => !worker.videoTranscode).length,
       transcode: workers.filter((worker) => worker.videoTranscode).length,
@@ -296,23 +324,25 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
       if (track && !sidecar) {
         let readBytes = 0,
           requests = 0;
-        const read = async (offset: number, length: number) => {
-          bounded.throwIfAborted();
+        let scan = false;
+        const read = async (offset: number, length: number, jobSignal?: AbortSignal) => {
+          const reading = jobSignal ? AbortSignal.any([bounded, jobSignal]) : bounded;
+          reading.throwIfAborted();
           if (
             !Number.isSafeInteger(offset) ||
             !Number.isSafeInteger(length) ||
             offset < 0 ||
             length <= 0 ||
             offset + length > source.size ||
-            ++requests > 512 ||
-            (readBytes += length) > 8 * 1024 * 1024
+            ++requests > (scan ? 8192 : 512) ||
+            (readBytes += length) > (scan ? 128 : 8) * 1024 * 1024
           )
             throw new MatroskaIndexUnavailable('Subtitle index read limit');
           const { body } = await this.engine.openFileStream(
             source.key,
             source.file,
             { offset, length },
-            bounded,
+            reading,
           );
           const chunks: Buffer[] = [];
           let size = 0;
@@ -337,7 +367,12 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
           probe.subtitleTracks
             ?.filter((x) => !x.sidecar)
             .findIndex((x) => x.trackRef === track.trackRef) ?? -1;
-        if (index)
+        if (index) {
+          scan = index.needsScan(
+            ordinal,
+            position + (probe.sourceStartSeconds ?? 0),
+            end + (probe.sourceStartSeconds ?? 0),
+          );
           indexed = await index.window(
             read,
             ordinal,
@@ -345,7 +380,9 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
             position + (probe.sourceStartSeconds ?? 0),
             end + (probe.sourceStartSeconds ?? 0),
             track.streamIndex,
+            bounded,
           );
+        }
         bounded.throwIfAborted();
       }
       if (indexed) {
@@ -520,10 +557,10 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
 
   hasCapacity(videoTranscode: boolean, excludeSessionId?: string): boolean {
     const workers = [...this.workers]
-      .filter(([id]) => id !== excludeSessionId)
+      .filter(([id, worker]) => id !== excludeSessionId && worker.kind !== 'audio')
       .map(([, worker]) => worker.videoTranscode);
     const starting = [...this.starting]
-      .filter(([id]) => id !== excludeSessionId)
+      .filter(([id, reservation]) => id !== excludeSessionId && reservation.kind !== 'audio')
       .map(([, reservation]) => reservation.video);
     return (
       workers.length + starting.length < 2 &&
@@ -532,6 +569,13 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
   }
 
   hasGeneration(sessionId: string, generation: number): boolean {
+    return (
+      this.rawHasGeneration(sessionId, generation) &&
+      this.audioRenditions.healthy(sessionId, generation)
+    );
+  }
+
+  private rawHasGeneration(sessionId: string, generation: number): boolean {
     return (
       this.workers.get(sessionId)?.generation === generation ||
       this.completed.get(sessionId)?.generation === generation
@@ -546,7 +590,8 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
   }
 
   isCompleted(sessionId: string, generation: number): boolean {
-    return this.completed.get(sessionId)?.generation === generation;
+    const completed = this.completed.get(sessionId);
+    return completed?.generation === generation && completed.finished !== false;
   }
 
   async playlist(sessionId: string, generation: number) {
@@ -555,12 +600,27 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
     return stream.buffer.refresh();
   }
 
+  programDateTime(sessionId: string, generation: number): string | undefined {
+    const stream = this.workers.get(sessionId) ?? this.completed.get(sessionId);
+    if (stream?.generation !== generation || stream.programOrigin === undefined) return;
+    // A source-scoped file clock aligns lazy audio even when its media sequence
+    // restarts. Include eviction and measured decode delay, rather than seek time.
+    const seconds = stream.programOrigin + stream.buffer.firstStart - stream.buffer.anchor;
+    return new Date(Date.UTC(2000, 0, 1) + Math.round(seconds * 1000)).toISOString();
+  }
+
   confirmPosition(sessionId: string, generation: number, position: number): boolean {
+    return this.audioRenditions.confirm(sessionId, generation, position);
+  }
+
+  private confirmTrackPosition(sessionId: string, generation: number, position: number): boolean {
     const stream = this.workers.get(sessionId) ?? this.completed.get(sessionId);
     return stream?.generation === generation && stream.buffer.confirm(position);
   }
 
   playbackPosition(sessionId: string, generation: number): number | undefined {
+    const confirmed = this.audioRenditions.get(sessionId, generation)?.position;
+    if (confirmed !== undefined) return confirmed;
     const stream = this.workers.get(sessionId) ?? this.completed.get(sessionId);
     return stream?.generation === generation ? stream.buffer.position : undefined;
   }
@@ -582,15 +642,20 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
     probe: TorrentProbe,
     audio: AudioTrack,
     position: number,
+    kind?: TorrentTrackKind,
   ): Promise<void> {
+    if (!kind && probe.audioMode === 'separate')
+      return this.audioRenditions.prepare(sessionId, generation, source, probe, audio, position);
+    kind ??= 'muxed';
     if (this.closing) throw new TorrentGatewayCapacity();
     if (torrentNeedsUnsupportedTranscode(probe)) throw new UnsupportedTorrentMedia();
-    const videoTranscode = !probe.copyVideo;
+    const videoTranscode = kind !== 'audio' && !probe.copyVideo;
     const profile = TORRENT_OUTPUT_PROFILES[probe.outputProfile ?? 'h264-720p'];
     const output = torrentOutputInfo(probe, audio);
     if (this.starting.has(sessionId)) throw new TorrentGatewayCapacity();
-    if (!this.hasCapacity(videoTranscode, sessionId)) throw new TorrentGatewayCapacity();
-    const reservation = { generation, video: videoTranscode, cancelled: false };
+    if (kind !== 'audio' && !this.hasCapacity(videoTranscode, sessionId))
+      throw new TorrentGatewayCapacity();
+    const reservation = { generation, video: videoTranscode, cancelled: false, kind };
     this.starting.set(sessionId, reservation);
     let input: Awaited<ReturnType<TorrentStreamGateway['inputServer']>> | undefined;
     try {
@@ -608,7 +673,9 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
           '-nostdin',
           '-copyts',
           '-start_at_zero',
-          ...(position > 0 ? ['-ss', String(position)] : []),
+          ...(position > 0
+            ? ['-ss', String(kind === 'audio' ? Math.max(0, position - 2) : position)]
+            : []),
           '-noaccurate_seek',
           ...INPUT_OPTIONS,
           '-i',
@@ -641,7 +708,8 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
       )
         throw new Error('Invalid source timestamp');
       const anchor = Math.max(0, absoluteAnchorSeconds);
-      const seekPosition = probe.copyVideo ? position : anchor;
+      const seekPosition =
+        kind === 'audio' ? Math.max(0, position - 2) : probe.copyVideo ? position : anchor;
       if (position - anchor >= TORRENT_WINDOW_SECONDS - 2) throw new UnsupportedTorrentMedia();
       const directory = join(tmpdir(), 'yanemedia-torrent-hls', sessionId, String(generation));
       await mkdir(directory, { recursive: true, mode: 0o700 });
@@ -657,65 +725,69 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
         '-filter_threads',
         '2',
         '-y',
+        ...(kind === 'muxed' ? [] : ['-copyts', '-start_at_zero']),
         ...(seekPosition > 0 ? ['-ss', String(seekPosition)] : []),
-        ...(probe.copyVideo ? ['-noaccurate_seek'] : []),
+        ...(probe.copyVideo || kind === 'audio' ? ['-noaccurate_seek'] : []),
         '-rw_timeout',
         '120000000',
         ...INPUT_OPTIONS,
         // Bound production speed so backpressure can stop unknown/VBR output within budget.
-        ...(probe.copyVideo ? ['-readrate', '4'] : []),
+        ...(probe.copyVideo || kind === 'audio' ? ['-readrate', '4'] : []),
         '-i',
         input.url,
         '-avoid_negative_ts',
-        'make_zero',
-        '-map',
-        `0:${probe.videoStreamIndex}`,
-        '-map',
-        `0:${audio.streamIndex}`,
-        ...(probe.copyVideo
-          ? ['-c:v', 'copy', ...(probe.video?.codec === 'hevc' ? ['-tag:v', 'hvc1'] : [])]
-          : [
-              '-c:v',
-              'libx264',
-              '-preset',
-              'ultrafast',
-              '-pix_fmt',
-              'yuv420p',
-              '-profile:v',
-              'high',
-              '-level:v',
-              '4.1',
-              '-vf',
-              output
-                ? `scale=${output.video.width}:${output.video.height},fps=${output.video.fps}`
-                : "scale=w='min(1280,iw)':h='min(720,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2,fps=30",
-              '-b:v',
-              profile.bitrate,
-              '-maxrate',
-              profile.peak,
-              '-bufsize',
-              '6000k',
-              '-g',
-              '48',
-              '-keyint_min',
-              '48',
-              '-sc_threshold',
-              '0',
-            ]),
-        ...(audio.copy
-          ? ['-c:a', 'copy']
-          : [
-              '-c:a',
-              'aac',
-              '-profile:a',
-              'aac_low',
-              '-b:a',
-              (output?.audio.channels ?? 2) > 2 ? '512k' : '192k',
-              '-ac',
-              String(output?.audio.channels ?? 2),
-              '-ar',
-              '48000',
-            ]),
+        kind === 'muxed' ? 'make_zero' : 'disabled',
+        ...(kind === 'muxed' ? [] : ['-output_ts_offset', '1']),
+        ...(kind === 'audio' ? [] : ['-map', `0:${probe.videoStreamIndex}`]),
+        ...(kind === 'video' ? [] : ['-map', `0:${audio.streamIndex}`]),
+        ...(kind === 'audio'
+          ? ['-vn']
+          : probe.copyVideo
+            ? ['-c:v', 'copy', ...(probe.video?.codec === 'hevc' ? ['-tag:v', 'hvc1'] : [])]
+            : [
+                '-c:v',
+                'libx264',
+                '-preset',
+                'ultrafast',
+                '-pix_fmt',
+                'yuv420p',
+                '-profile:v',
+                'high',
+                '-level:v',
+                '4.1',
+                '-vf',
+                output
+                  ? `scale=${output.video.width}:${output.video.height},fps=${output.video.fps}`
+                  : "scale=w='min(1280,iw)':h='min(720,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2,fps=30",
+                '-b:v',
+                profile.bitrate,
+                '-maxrate',
+                profile.peak,
+                '-bufsize',
+                '6000k',
+                '-g',
+                '48',
+                '-keyint_min',
+                '48',
+                '-sc_threshold',
+                '0',
+              ]),
+        ...(kind === 'video'
+          ? ['-an']
+          : audio.copy
+            ? ['-c:a', 'copy']
+            : [
+                '-c:a',
+                'aac',
+                '-profile:a',
+                'aac_low',
+                '-b:a',
+                (output?.audio.channels ?? 2) > 2 ? '512k' : '192k',
+                '-ac',
+                String(output?.audio.channels ?? 2),
+                '-ar',
+                '48000',
+              ]),
         '-sn',
         '-dn',
         '-threads',
@@ -726,6 +798,12 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
         'experimental',
         '-hls_segment_type',
         'fmp4',
+        ...(kind === 'muxed'
+          ? []
+          : [
+              '-hls_segment_options',
+              'avoid_negative_ts=disabled:use_editlist=0:movflags=+frag_discont',
+            ]),
         '-hls_time',
         '2',
         '-hls_list_size',
@@ -739,7 +817,14 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
         join(directory, 'media.m3u8'),
       ];
       const process = spawn('ffmpeg', args, { stdio: 'ignore' });
-      const buffer = new TorrentSegmentBuffer(directory, anchor, position);
+      const limit =
+        kind === 'video'
+          ? 104 * 1024 * 1024
+          : kind === 'audio'
+            ? 8 * 1024 * 1024
+            : TORRENT_WINDOW_BYTES;
+      const targetBytes = kind === 'audio' ? 2 * 1024 * 1024 : TORRENT_WINDOW_TARGET_BYTES;
+      const buffer = new TorrentSegmentBuffer(directory, anchor, position, limit, kind === 'audio');
       let lastOutput = Date.now();
       let previousBytes = 0;
       let ticks = 0;
@@ -764,15 +849,14 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
             if (
               !current.suspended &&
               ahead > TORRENT_STARTUP_SECONDS &&
-              (buffer.bytes >= TORRENT_WINDOW_TARGET_BYTES ||
+              (buffer.bytes >= targetBytes ||
                 ahead >= TORRENT_WINDOW_SECONDS ||
                 buffer.count >= TORRENT_WINDOW_SEGMENTS - 4)
             ) {
               current.suspended = process.kill('SIGSTOP');
             } else if (
               current.suspended &&
-              ((buffer.bytes < TORRENT_WINDOW_TARGET_BYTES * 0.75 &&
-                ahead < TORRENT_WINDOW_SECONDS * 0.75) ||
+              ((buffer.bytes < targetBytes * 0.75 && ahead < TORRENT_WINDOW_SECONDS * 0.75) ||
                 ahead <= TORRENT_STARTUP_SECONDS) &&
               buffer.count < TORRENT_WINDOW_SEGMENTS - 8
             ) {
@@ -807,6 +891,7 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
         positionSeconds: position,
         buffer,
         suspended: false,
+        kind,
       });
       const server = input.server;
       const ended = async (code: number | null) => {
@@ -831,6 +916,10 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
               directory,
               absoluteAnchorSeconds: anchor,
               buffer,
+              kind,
+              finished: true,
+              timeline: current.timeline,
+              programOrigin: current.programOrigin,
             });
           else {
             this.logger.warn({
@@ -883,9 +972,11 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
             ? completed.directory
             : undefined;
       if (!directory) throw new Error('FFmpeg worker stopped');
+      const stream = worker?.generation === generation ? worker : completed!;
+      if (stream.timeline) return stream.timeline;
       try {
         const playlist = await readFile(join(directory, 'media.m3u8'), 'utf8');
-        const parsed = parseTorrentPlaylist(playlist);
+        const parsed = parseTorrentPlaylist(playlist, stream.kind === 'audio');
         const segment = parsed.segments[0].filename;
         const duration = parsed.segments.reduce(
           (sum, item) => sum + Number(item.duration.slice(8, -1)),
@@ -920,10 +1011,10 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
                 '-v',
                 'error',
                 '-select_streams',
-                'v:0',
+                stream.kind === 'audio' ? 'a:0' : 'v:0',
                 '-show_packets',
                 '-show_entries',
-                'packet=pts_time',
+                'packet=pts_time,dts_time',
                 '-of',
                 'json',
                 '-i',
@@ -934,18 +1025,32 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
               1_000_000,
               Buffer.concat([init, fragment]),
             ),
-          ) as { packets?: { pts_time?: string }[] };
-          const mediaAnchorSeconds = Number(raw.packets?.[0]?.pts_time);
-          const absoluteAnchorSeconds = anchor;
+          ) as { packets?: { pts_time?: string; dts_time?: string }[] };
+          const pts = Number(raw.packets?.[0]?.pts_time);
+          const dts = Number(raw.packets?.[0]?.dts_time);
+          const separate = stream.kind === 'video' || stream.kind === 'audio';
+          const mediaAnchorSeconds = separate ? pts - dts : pts;
+          const absoluteAnchorSeconds = separate ? Math.max(0, pts - 1) : anchor;
           if (!Number.isFinite(mediaAnchorSeconds) || mediaAnchorSeconds < 0)
             throw new Error('Invalid media timestamp');
+          if (
+            !Number.isFinite(absoluteAnchorSeconds) ||
+            absoluteAnchorSeconds > (worker?.positionSeconds ?? absoluteAnchorSeconds) + 1
+          )
+            throw new Error('Invalid absolute timestamp');
           if (!this.hasGeneration(sessionId, generation)) throw new Error('Worker replaced');
-          return {
+          if (separate) {
+            await stream.buffer.reanchor(absoluteAnchorSeconds);
+            stream.absoluteAnchorSeconds = absoluteAnchorSeconds;
+            stream.programOrigin = dts - 1;
+          }
+          stream.timeline = {
             continuous: true,
             absoluteAnchorSeconds,
             mediaAnchorSeconds,
             windowEndSeconds: absoluteAnchorSeconds + duration,
           };
+          return stream.timeline;
         }
       } catch {
         /* Artifact is still being published. */
@@ -957,7 +1062,18 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
 
   async waitComplete(sessionId: string, generation: number, signal: AbortSignal): Promise<void> {
     while (!signal.aborted) {
-      if (this.isCompleted(sessionId, generation)) return;
+      const audio = this.audioRenditions.get(sessionId, generation)?.audio;
+      if (audio && !this.rawHasGeneration(audio.id, generation))
+        throw new Error('Audio worker stopped');
+      if (
+        this.isCompleted(sessionId, generation) &&
+        (!audio || this.isCompleted(audio.id, generation))
+      )
+        return;
+      if (this.isCompleted(sessionId, generation)) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        continue;
+      }
       if (this.workers.get(sessionId)?.generation !== generation)
         throw new Error('FFmpeg worker stopped before completion');
       await new Promise((resolve) => setTimeout(resolve, 100));
@@ -966,6 +1082,7 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
   }
 
   async stop(sessionId: string, generation?: number, preserveStarting = false): Promise<void> {
+    await this.audioRenditions.stop(sessionId, generation);
     const subtitles = this.subtitleJobs.get(sessionId);
     if (subtitles && (generation === undefined || subtitles.generation === generation)) {
       subtitles.controller.abort();
@@ -1033,6 +1150,29 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
     await rm(join(tmpdir(), 'yanemedia-torrent-hls', sessionId), { recursive: true, force: true });
   }
 
+  private async freezeTrack(id: string, generation: number): Promise<void> {
+    const worker = this.workers.get(id);
+    if (worker?.generation !== generation) return;
+    this.workers.delete(id);
+    clearInterval(worker.heartbeat);
+    if (worker.suspended) worker.process.kill('SIGCONT');
+    worker.process.kill('SIGKILL');
+    if (worker.process.exitCode === null && worker.process.signalCode === null)
+      await once(worker.process, 'exit');
+    worker.server.closeAllConnections();
+    worker.server.close();
+    this.completed.set(id, {
+      generation,
+      directory: worker.directory,
+      absoluteAnchorSeconds: worker.absoluteAnchorSeconds,
+      buffer: worker.buffer,
+      kind: worker.kind,
+      finished: false,
+      timeline: worker.timeline,
+      programOrigin: worker.programOrigin,
+    });
+  }
+
   async beforeApplicationShutdown(): Promise<void> {
     this.closing = true;
     this.subtitleCache.clear();
@@ -1048,6 +1188,7 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
   }
 
   async cleanupStaleDirectories(protectedSessions: Set<string>, before: number): Promise<void> {
+    const audioIds = this.audioRenditions.protectedIds();
     const root = join(tmpdir(), 'yanemedia-torrent-hls');
     const entries = await readdir(root, { withFileTypes: true }).catch(
       (error: NodeJS.ErrnoException) => {
@@ -1059,7 +1200,8 @@ export class TorrentStreamGateway implements BeforeApplicationShutdown {
       const id = entry.name;
       if (
         !entry.isDirectory() ||
-        !/^torrent_session_[A-Za-z0-9_-]{22}$/.test(id) ||
+        !/^torrent_session_[A-Za-z0-9_-]{22}(?:_audio_[0-9a-f]{24})?$/.test(id) ||
+        audioIds.has(id) ||
         protectedSessions.has(id) ||
         this.workers.has(id) ||
         this.starting.has(id)

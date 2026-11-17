@@ -5,7 +5,7 @@ Object.defineProperty(globalThis, 'MediaSource', {
   configurable: true,
   value: { isTypeSupported: () => true },
 });
-const { act, StrictMode } = await import('react');
+const { act, StrictMode, useLayoutEffect } = await import('react');
 const { render, fireEvent, screen, waitFor, cleanup } = await import('@testing-library/react');
 const { QueryClient, QueryClientProvider } = await import('@tanstack/react-query');
 const { MemoryRouter } = await import('react-router');
@@ -14,14 +14,23 @@ const { pairingStorage } = await import('../src/features/companion/model/pairing
 const { useLocalTorrent } = await import('../src/features/torrent-launch/model/useLocalTorrent');
 const episodeModel = await import('../src/features/torrent-launch/model/torrentEpisodes');
 const { TorrentFilePicker } = await import('../src/features/torrent-launch/ui/TorrentFilePicker');
+const { TorrentResumePrompt } =
+  await import('../src/features/torrent-launch/ui/TorrentResumePrompt');
 const noop = () => {};
 let launch: any;
+let filePickerMounts = 0;
 mock.module('@/shared/config/serverTorrent', () => ({ SERVER_TORRENT_ENABLED: false }));
 mock.module('@/features/torrent-launch', () => ({
   ...episodeModel,
   useLocalTorrent,
-  TorrentFilePicker,
+  TorrentFilePicker: (props: Parameters<typeof TorrentFilePicker>[0]) => {
+    useLayoutEffect(() => {
+      filePickerMounts++;
+    }, []);
+    return <TorrentFilePicker {...props} />;
+  },
   TorrentPreparation: () => null,
+  TorrentResumePrompt,
   TorrentLaunch: () => {
     throw new Error('Public mounted server launch');
   },
@@ -126,6 +135,7 @@ afterEach(async () => {
   localStorage.clear();
   sessionStorage.clear();
   players.length = 0;
+  filePickerMounts = 0;
   mock.restore();
   globalThis.fetch = originalFetch;
 });
@@ -146,6 +156,8 @@ function fixture(
     accountEntries?: any[];
     thirdEpisode?: boolean;
     nextProbeGate?: Promise<void>;
+    movie?: boolean;
+    animeMovie?: boolean;
   } = {},
 ) {
   client = new QueryClient({
@@ -165,8 +177,17 @@ function fixture(
     revision: 1,
     state: 'awaiting_file',
     files: [
-      { fileRef: first, name: 'S01E01.mkv', size: 1000 },
-      { fileRef: second, name: 'S01E02.mkv', size: 1000 },
+      {
+        fileRef: first,
+        name:
+          options.movie || options.animeMovie
+            ? 'Dune.Part.Two.2024.BDRip.1080p.long-release-name.mkv'
+            : 'S01E01.mkv',
+        size: 1000,
+      },
+      ...(!options.movie && !options.animeMovie
+        ? [{ fileRef: second, name: 'S01E02.mkv', size: 1000 }]
+        : []),
       ...(options.thirdEpisode ? [{ fileRef: third, name: 'S01E03.mkv', size: 1000 }] : []),
     ],
     downloadedBytes: 0,
@@ -304,8 +325,10 @@ function fixture(
                   media={
                     {
                       mediaRef: mediaRef as any,
-                      type: 'series',
+                      type: options.animeMovie ? 'anime' : options.movie ? 'movie' : 'series',
+                      ...(options.animeMovie ? { animeKind: 'movie', episodes: [] } : {}),
                       title: 'Fixture',
+                      backdrop: { url: '/fixture-backdrop.jpg' },
                       slug: 'fixture',
                       genres: [],
                       countries: [],
@@ -397,6 +420,7 @@ async function startLocal() {
       value: `magnet:?xt=urn:btih:${'a'.repeat(40)}`,
     }));
   });
+  expect(screen.queryByRole('tab', { name: 'Торренты' }) === null).toBe(true);
   await waitFor(() => expect(players.find((p) => p.isConnected)?.descriptor).toBeDefined(), {
     timeout: 4000,
   });
@@ -408,6 +432,57 @@ async function startLocal() {
   );
   return players.find((p) => p.isConnected)!;
 }
+
+test.each([false, true])(
+  'a single torrent movie has no episode menu (anime=%s)',
+  async (animeMovie) => {
+    fixture(animeMovie ? { animeMovie: true } : { movie: true });
+    const player = await startLocal();
+    expect(player.navigation.select).toBeUndefined();
+    expect(player.navigation.episodes).toBeUndefined();
+    expect(player.navigation.seasons).toBeUndefined();
+  },
+);
+
+test('automatic file selection never flashes the file picker during startup', async () => {
+  fixture();
+  await startLocal();
+  expect(filePickerMounts).toBe(0);
+});
+
+test('a missing saved episode still offers manual file selection', async () => {
+  const app = fixture({
+    auth: alice,
+    accountEntries: [
+      {
+        mediaRef,
+        mediaSnapshot: { title: 'Fixture' },
+        sourceRef: 'local-torrent',
+        episode: { seasonNumber: 1, episodeNumber: 9 },
+        positionSeconds: 47,
+        durationSeconds: 100,
+        updatedAt: new Date().toISOString(),
+      },
+    ],
+  });
+  await waitFor(() => expect(history.status).toBe('ready'));
+  fireEvent.click(screen.getByRole('button', { name: /^(Direct|Торрент · на устройстве)$/ }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Торренты' }));
+  act(() => {
+    launch.onStart();
+    void launch.local.start(async () => ({
+      kind: 'magnet',
+      value: `magnet:?xt=urn:btih:${'a'.repeat(40)}`,
+    }));
+  });
+  await waitFor(() => expect(screen.getByLabelText('Выбор файла торрента')).toBeDefined());
+  expect(app.posts).toHaveLength(0);
+  expect(screen.queryByRole('tab', { name: 'Торренты' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: /1 сезон · 1 серия/ }));
+  await waitFor(() => expect(players.find((p) => p.isConnected)?.descriptor).toBeDefined());
+  expect(app.posts[0]).toMatchObject({ action: 'probe', fileRef: app.first });
+  expect(app.posts[1].target.positionSeconds).toBe(0);
+});
 
 test('Public records only confirmed local episode progress, retains pause and rejects late results after switching to direct', async () => {
   const { requests, posts, second } = fixture();
@@ -598,7 +673,11 @@ test('navigation pauses playback; refresh and a fresh helper admission resume th
   const fresh = fixture();
   expect(fresh.requests).toHaveLength(0);
   expect(screen.getByText('Выберите раздачу для продолжения просмотра')).toBeDefined();
+  expect(
+    document.querySelector('section[aria-label="Плеер: Fixture"] img')?.getAttribute('src'),
+  ).toBe('/fixture-backdrop.jpg');
   player = await startLocal();
+  expect(document.querySelector('section[aria-label="Плеер: Fixture"] img')).toBeNull();
   expect(fresh.posts[0].fileRef).toBe(fresh.second);
   expect(fresh.posts[1].target.positionSeconds).toBe(42);
   expect(player.options.positionSeconds).toBe(42);
@@ -677,6 +756,7 @@ test('late account history selects its saved file before preparing and account w
   });
   await waitFor(() => expect(launch.local.snapshot?.state).toBe('awaiting_file'));
   expect(app.posts).toHaveLength(0);
+  expect(filePickerMounts).toBe(0);
   await act(async () =>
     resolve({
       entries: [
@@ -695,6 +775,7 @@ test('late account history selects its saved file before preparing and account w
   await act(async () => {});
   expect(app.posts[0].fileRef).toBe(app.second);
   expect(app.posts[1].target.positionSeconds).toBe(47);
+  expect(filePickerMounts).toBe(0);
   const player = players.find((p) => p.isConnected)!;
   act(() => player.emit(52, null, 'paused'));
   await waitFor(() => expect(app.accountWrites.at(-1)?.positionSeconds).toBe(52));

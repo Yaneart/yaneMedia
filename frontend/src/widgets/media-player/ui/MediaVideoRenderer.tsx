@@ -33,6 +33,7 @@ export type MediaVideoDirectControls = {
 };
 
 export type TorrentVideoTimeline = {
+  audioMode?: 'separate';
   generation?: number;
   startPositionSeconds: number;
   durationSeconds: number | null;
@@ -46,6 +47,7 @@ export type TorrentVideoTimeline = {
     positionSeconds: number,
     signal: AbortSignal,
     audioTrackRef?: string,
+    audioOnly?: boolean,
   ) => Promise<TorrentSession>;
 };
 
@@ -61,6 +63,7 @@ function torrentDescriptor(
     src: source.url,
     title,
     crossOrigin: 'use-credentials',
+    ...(playback.audioMode ? { hlsPlayback: 'mse' as const } : {}),
     audioTracks: playback.audioTracks.map((track) => ({
       id: track.ref,
       label: track.label,
@@ -90,6 +93,9 @@ function torrentDescriptor(
       mode: 'windowed-vod',
       ...playback.timeline,
       durationSeconds: playback.durationSeconds,
+      ...(playback.timeline.videoEndSeconds
+        ? { seekableRanges: [[0, playback.timeline.videoEndSeconds]] as const }
+        : {}),
     },
     capabilities: {
       seek: 'host',
@@ -438,7 +444,17 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
               context.signal.throwIfAborted();
               if (disposed || propsRef.current.localPlayback !== binding)
                 throw new DOMException('Source changed', 'AbortError');
-              if (!result.source) return { selection: { audioId: result.audioId } };
+              if (!result.source) {
+                if (result.retainedSource) {
+                  binding.source = result.retainedSource;
+                  torrentAudioRef.current = result.audioId;
+                  localStream.configure(result.retainedSource);
+                }
+                return {
+                  selection: { audioId: result.audioId },
+                  audioRendition: result.audioRendition,
+                };
+              }
               const descriptor = localTrackSource(result.source);
               loadedRevisionRef.current = descriptor.revision;
               loadedSourceIdRef.current = descriptor.id;
@@ -464,6 +480,47 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
             context.positionSeconds;
           if (position === null || position === undefined)
             return Promise.reject(new Error('Torrent position unavailable'));
+          if (command.type === 'audio' && current.torrentTimeline.audioMode === 'separate') {
+            const audioId = command.target.audioId!;
+            torrentCommandRef.current = { sourceRef: current.source.sourceRef };
+            return current.torrentTimeline
+              .onReplace(position, context.signal, audioId, true)
+              .then((ready) => {
+                context.signal.throwIfAborted();
+                if (
+                  disposed ||
+                  !ready.playback ||
+                  ready.playback.generation !== current.torrentTimeline!.generation ||
+                  ready.playback.hlsUrl !== current.source.url
+                )
+                  throw new Error('Audio source replaced');
+                const index = ready.playback.audioTracks.findIndex(
+                  (track) => track.ref === audioId,
+                );
+                if (
+                  index < 0 ||
+                  ready.playback.selectedAudioTrackRef !== audioId ||
+                  !ready.playback.durationSeconds
+                )
+                  throw new Error('Audio selection unconfirmed');
+                stream.configure(ready.playback.hlsUrl, ready.playback, loadedRevisionRef.current!);
+                torrentAudioRef.current = audioId;
+                rememberTorrentAudio(ready.playback.audioTracks[index]!);
+                return {
+                  selection: { audioId },
+                  audioRendition: {
+                    id: String(index),
+                    durationSeconds: ready.playback.durationSeconds,
+                    ...(ready.playback.audioPositionSeconds !== undefined
+                      ? { positionSeconds: ready.playback.audioPositionSeconds }
+                      : {}),
+                  },
+                };
+              })
+              .finally(() => {
+                torrentCommandRef.current = null;
+              });
+          }
           return replaceTorrent(position, context.signal, command.target.audioId);
         }
         const controls = current.directControls;
@@ -598,7 +655,7 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
     // Only the confirmed absolute episode end may advance torrent files.
     player.navigation =
       timeline || local ? { ...props.navigation, autoAdvance: false } : (props.navigation ?? {});
-    const timeout = local ? 125_000 : 15_000;
+    const timeout = timeline || local ? 125_000 : 15_000;
     if (player.commandTimeoutMs !== timeout) player.commandTimeoutMs = timeout;
     if (local && appliedLocalRef.current === local) {
       if (navigationSettled) settleSourceRef.current();
@@ -635,7 +692,11 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
       ? torrentTextRef.current.text
       : torrentTracks?.textTracks?.find((track) => track.id === torrentTracks.selection.textId);
     const localIntent =
-      local && appliedLocalRef.current?.signal === local.signal ? torrentTracks?.intent : undefined;
+      local &&
+      appliedLocalRef.current?.signal === local.signal &&
+      torrentTracks?.playback !== 'ended'
+        ? torrentTracks?.intent
+        : undefined;
     torrentTextRef.current = null;
     torrentCommandRef.current = null;
     loadedRevisionRef.current = descriptor.revision;
@@ -670,7 +731,7 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
         .setSource(descriptor, {
           positionSeconds: initial.position,
           intent: current?.intent ?? localIntent ?? (props.shouldAutoPlay ? 'playing' : 'paused'),
-          ...(local || torrentTracks ? { trackPreferences: { text: null } } : {}),
+          ...(timeline || local ? { trackPreferences: { text: null } } : {}),
         })
         .then(async () => {
           if (
@@ -690,14 +751,21 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
             await player.selectAudio(controls.selectedTrackKey);
           if (controls?.selectedQualityKey && descriptor.capabilities?.quality === 'host')
             await player.selectQuality(controls.selectedQualityKey);
-          if (local && initializingRef.current === initial) {
+          if ((timeline || local) && initializingRef.current === initial) {
             // Position and audio are ready. Captions are an independent choice;
             // their failure must not abort startup or defer the initial seek.
             initializingRef.current = null;
             settleSourceRef.current();
           }
-          if (local && !torrentTracks && local.textPreference) {
-            const preference = local.textPreference;
+          if ((timeline || local) && !torrentTracks) {
+            const preference = local
+              ? local.textPreference
+              : (
+                  await props.preferences
+                    ?.load({ signal: new AbortController().signal })
+                    .catch(() => null)
+                )?.tracks?.text;
+            if (!preference) return;
             const target = preferredLocalTrack(
               player.runtime?.getSnapshot().textTracks ?? [],
               preference.languages,

@@ -2,7 +2,7 @@ import { ApiClientError, apiRequest } from '@/shared/api';
 import type { TorrentSession } from '../model/torrentSession';
 import { torrentAccountSignal } from '../model/torrentClientScope';
 import { mapTorrentSession } from './mapTorrentSession';
-import { torrentOutputProfile } from '../model/torrentOutputProfile';
+import { torrentDecodingContext, torrentOutputProfile } from '../model/torrentOutputProfile';
 import type { TorrentOutputProfile } from '../model/torrentOutput';
 import {
   torrentClientCapabilities,
@@ -52,16 +52,24 @@ export function toTorrentRequestError(error: unknown): TorrentRequestError {
   return new TorrentRequestError('network', 'NETWORK_ERROR', null, null, 'Network unavailable');
 }
 
-async function request<T>(path: string, init: RequestInit, map: (value: unknown) => T): Promise<T> {
+async function request<T>(
+  path: string,
+  init: RequestInit,
+  map: (value: unknown) => T,
+  onCancelled?: (value: T) => void,
+  timeoutMs = 15_000,
+): Promise<T> {
   const signal = AbortSignal.any([
     ...(init.signal ? [init.signal] : []),
     torrentAccountSignal(),
-    AbortSignal.timeout(15_000),
+    AbortSignal.timeout(timeoutMs),
   ]);
   try {
     const value = await apiRequest<unknown>(path, { credentials: 'include', ...init, signal });
+    const mapped = map(value);
+    if (signal.aborted) onCancelled?.(mapped);
     signal.throwIfAborted();
-    return map(value);
+    return mapped;
   } catch (error) {
     throw toTorrentRequestError(error);
   }
@@ -82,6 +90,21 @@ export function newTorrentIdempotencyKey(): string {
   return crypto.randomUUID();
 }
 
+export function supportsPreparedTorrentAudio(media?: TorrentClientMedia): boolean {
+  const player = globalThis.customElements?.get('yane-player') as
+    (CustomElementConstructor & { supportsAudioRenditions?: boolean }) | undefined;
+  return Boolean(
+    media?.supportsAudioRenditions &&
+    player?.supportsAudioRenditions &&
+    typeof document !== 'undefined' &&
+    !torrentDecodingContext().native,
+  );
+}
+
+function discardSession(session: TorrentSession) {
+  void stopTorrentSession(session.id, new AbortController().signal).catch(() => undefined);
+}
+
 export function createMagnetSession(
   magnet: string,
   idempotencyKey: string,
@@ -97,6 +120,7 @@ export function createMagnetSession(
       body: JSON.stringify({ magnet, ...(mediaRef ? { mediaRef } : {}) }),
     },
     mapTorrentSession,
+    discardSession,
   );
 }
 
@@ -118,6 +142,7 @@ export function createFileSession(
       body,
     },
     mapTorrentSession,
+    discardSession,
   );
 }
 
@@ -186,6 +211,8 @@ export async function startTorrentPlayback(
       outputProfiles.get(idempotencyKey)!,
       clientCapabilities.get(idempotencyKey),
     ]);
+    if (capabilities && supportsPreparedTorrentAudio(media))
+      capabilities = { ...capabilities, audioRenditions: true };
     signal.throwIfAborted();
   } catch (error) {
     throw toTorrentRequestError(error);
@@ -214,8 +241,40 @@ export function stopTorrentSession(sessionId: string, signal: AbortSignal): Prom
     {
       method: 'DELETE',
       signal,
+      keepalive: true,
       headers: commandHeaders(),
     },
     () => undefined,
+  );
+}
+
+export async function selectTorrentAudio(
+  session: TorrentSession,
+  positionSeconds: number,
+  audioTrackRef: string,
+  expectedVersion: number,
+  key: string,
+  signal: AbortSignal,
+): Promise<TorrentSession> {
+  const capabilities = session.media
+    ? await torrentClientCapabilities(session.media, audioTrackRef)
+    : undefined;
+  signal.throwIfAborted();
+  return request(
+    `${sessionPath(session.id)}/audio`,
+    {
+      method: 'POST',
+      signal,
+      headers: { ...commandHeaders(key), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        expectedVersion,
+        positionSeconds,
+        audioTrackRef,
+        ...(capabilities ? { capabilities } : {}),
+      }),
+    },
+    mapTorrentSession,
+    undefined,
+    110_000,
   );
 }

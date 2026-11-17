@@ -798,17 +798,21 @@ export function PlaybackSessionProvider({ children }: PlaybackSessionProviderPro
     [resolvedOwnerId, storeSession],
   );
 
-  const endSession = useCallback(() => {
-    const current = sessionRef.current;
-    if (current && !isPlaybackCompleted(current)) recordSession(current, true);
-    storeSession(null);
-    if (current && isLocalPlaybackSourceRef(current.sourceRef)) resetTorrentClientScope();
-    if (current && isTorrentPlaybackSourceRef(current.sourceRef))
-      void stopTorrentSession(
-        current.sourceRef.slice('torrent:'.length),
-        new AbortController().signal,
-      ).catch(() => undefined);
-  }, [recordSession, storeSession]);
+  const endSession = useCallback(
+    (expected?: PlaybackSession) => {
+      const current = sessionRef.current;
+      if (expected && !matchesSession(current, expected)) return;
+      if (current && !isPlaybackCompleted(current)) recordSession(current, true);
+      storeSession(null);
+      if (current && isLocalPlaybackSourceRef(current.sourceRef)) resetTorrentClientScope();
+      if (current && isTorrentPlaybackSourceRef(current.sourceRef))
+        void stopTorrentSession(
+          current.sourceRef.slice('torrent:'.length),
+          new AbortController().signal,
+        ).catch(() => undefined);
+    },
+    [recordSession, storeSession],
+  );
 
   const retry = useCallback(() => {
     if (authState.status === 'error') {

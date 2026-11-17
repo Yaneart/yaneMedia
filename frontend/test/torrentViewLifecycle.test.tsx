@@ -1,4 +1,4 @@
-import { afterAll, expect, mock, test } from 'bun:test';
+import { afterAll, afterEach, expect, mock, test } from 'bun:test';
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 
 GlobalRegistrator.register({ url: 'http://localhost:5173' });
@@ -6,7 +6,7 @@ Object.defineProperty(globalThis, 'MediaSource', {
   configurable: true,
   value: { isTypeSupported: () => true },
 });
-const { act } = await import('react');
+const { act, StrictMode, useContext } = await import('react');
 const { render, fireEvent, screen, waitFor, cleanup } = await import('@testing-library/react');
 const { QueryClient, QueryClientProvider } = await import('@tanstack/react-query');
 const { MemoryRouter } = await import('react-router');
@@ -23,6 +23,8 @@ let launch: any;
 const episodeModel = await import('../src/features/torrent-launch/model/torrentEpisodes');
 const { TorrentFilePicker } = await import('../src/features/torrent-launch/ui/TorrentFilePicker');
 const { TorrentPreparation } = await import('../src/features/torrent-launch/ui/TorrentPreparation');
+const { TorrentResumePrompt } =
+  await import('../src/features/torrent-launch/ui/TorrentResumePrompt');
 const { useLocalTorrent } = await import('../src/features/torrent-launch/model/useLocalTorrent');
 mock.module('@/features/torrent-launch', () => ({
   useLocalTorrent,
@@ -30,6 +32,7 @@ mock.module('@/features/torrent-launch', () => ({
   ...episodeModel,
   TorrentFilePicker,
   TorrentPreparation,
+  TorrentResumePrompt,
   TorrentLaunch: (props: any) => {
     launch = props;
     return null;
@@ -68,9 +71,15 @@ let playback: any = {
   updateProgress: noop,
   endSession: noop,
 };
+const { PlaybackSessionContext } =
+  await import('../src/features/playback-session/model/playbackSessionContext');
+const { PlaybackSessionProvider } =
+  await import('../src/features/playback-session/model/PlaybackSessionProvider');
+const { usePlaybackSession: useActualPlaybackSession } =
+  await import('../src/features/playback-session/model/usePlaybackSession');
 mock.module('@/features/playback-session', () => ({
   usePlayerPreferences: () => undefined,
-  usePlaybackSession: () => playback,
+  usePlaybackSession: () => useContext(PlaybackSessionContext) ?? playback,
 }));
 
 const players: FakePlayer[] = [];
@@ -94,11 +103,31 @@ class FakePlayer extends HTMLElement {
   disconnectedCallback() {
     this.disconnected = true;
   }
+  emit(positionSeconds: number) {
+    const snapshot = {
+      source: { id: this.descriptor.id, revision: this.descriptor.revision },
+      positionSeconds,
+      durationSeconds: 1200,
+      playback: 'playing',
+      intent: 'playing',
+      pending: null,
+      selection: { audioId: 'audio', textId: null },
+      seekable: [],
+    };
+    this.dispatchEvent(
+      new CustomEvent('yp-positionchange', { detail: { source: snapshot.source, snapshot } }),
+    );
+  }
 }
 customElements.define('yane-player', FakePlayer);
 mock.module('@yaneart/yaneplayer', () => ({}));
 const { MediaView } = await import('../src/pages/media/ui/MediaView');
 const originalFetch = globalThis.fetch;
+afterEach(() => {
+  cleanup();
+  localStorage.clear();
+  globalThis.fetch = originalFetch;
+});
 afterAll(async () => {
   cleanup();
   globalThis.fetch = originalFetch;
@@ -189,10 +218,11 @@ test.each([`torrent:${id}`, 'local-torrent'])(
       </QueryClientProvider>
     );
     const view = render(tree());
-    if (sourceRef === 'local-torrent') {
-      expect(screen.queryByText('Выберите раздачу для продолжения просмотра')).toBeNull();
-      fireEvent.click(screen.getByRole('button', { name: 'Источник', exact: true }));
-      fireEvent.click(screen.getByRole('tab', { name: 'Торренты' }));
+    {
+      expect(screen.getByText('Выберите раздачу для продолжения просмотра')).toBeDefined();
+      expect(screen.getByText('Позиция сохранена.')).toBeDefined();
+      expect(document.querySelector('yane-player')).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Выбрать раздачу', exact: true }));
       expect(launch.resumePositionSeconds).toBe(42);
       await act(async () => {
         launch.onSourceSelect();
@@ -235,6 +265,197 @@ test.each([`torrent:${id}`, 'local-torrent'])(
     expect(document.querySelector('yane-player')).toBeNull();
     view.unmount();
     client.clear();
+  },
+);
+
+test.each([
+  ['unmount', 'admitting'],
+  ['unmount', 'probing'],
+  ['unmount', 'playing'],
+  ['pagehide', 'admitting'],
+  ['pagehide', 'probing'],
+  ['pagehide', 'playing'],
+] as const)(
+  'Home %s releases its %s session and returns to shared resume UI',
+  async (exit, phase) => {
+    const playing = phase === 'playing';
+    const admitted = phase !== 'admitting';
+    players.length = 0;
+    let history: any;
+    function HistoryProbe() {
+      history = useActualPlaybackSession();
+      return null;
+    }
+    let entries = [
+      {
+        mediaRef,
+        sourceRef: 'local-torrent',
+        episode: { seasonNumber: 1, episodeNumber: 2 },
+        positionSeconds: 47,
+        durationSeconds: 1200,
+        updatedAt: new Date().toISOString(),
+      },
+    ];
+    const requests: { path: string; init: RequestInit }[] = [];
+    globalThis.fetch = mock(async (url, init: RequestInit = {}) => {
+      const path = new URL(String(url), location.origin).pathname;
+      requests.push({ path, init });
+      if (path.includes('/continue-watching')) {
+        if (init.method === 'PUT')
+          entries = [
+            { ...JSON.parse(String(init.body)), mediaRef, updatedAt: new Date().toISOString() },
+          ];
+        return Response.json({ data: { entries } });
+      }
+      if (init.method === 'DELETE') return new Response(null, { status: 204 });
+      return new Promise<Response>(() => {});
+    }) as typeof fetch;
+    const audio = {
+      ref: 'audio',
+      label: 'Original',
+      language: 'eng',
+      channels: 2,
+      isDefault: true,
+    };
+    const ready: TorrentSession = {
+      id,
+      mediaRef,
+      state: 'ready',
+      version: 5,
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 3600000).toISOString(),
+      idleExpiresAt: new Date(Date.now() + 3600000).toISOString(),
+      progress: { basisPoints: null, speedBytesPerSecond: 0, peers: 0, downloadedBytes: 0 },
+      files: [{ ref: 'file', name: 'Show.S01E02.mkv', sizeBytes: 1000 }],
+      selectedFileRef: 'file',
+      audioTracks: [audio],
+      failure: null,
+      playback: {
+        hlsUrl: 'http://localhost:3000/api/v1/torrent-sessions/' + id + '/hls/master.m3u8',
+        generation: 1,
+        startPositionSeconds: 47,
+        durationSeconds: 1200,
+        selectedAudioTrackRef: 'audio',
+        audioTracks: [audio],
+        playbackRates: [1],
+        timeline: {
+          continuous: true,
+          absoluteAnchorSeconds: 47,
+          mediaAnchorSeconds: 0,
+          windowEndSeconds: 167,
+        },
+      },
+    };
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(torrentSessionQueryKeys.session(email, id), ready);
+    let visible = true;
+    const tree = () => (
+      <StrictMode>
+        <QueryClientProvider client={client}>
+          <MemoryRouter>
+            <AuthContext
+              value={{
+                state: {
+                  status: 'authenticated',
+                  user: { email, displayName: 'Fixture', createdAt: new Date().toISOString() },
+                },
+                setAuthenticated: noop,
+                setGuest: noop,
+                refresh: async () => {},
+              }}
+            >
+              <PlaybackSessionProvider>
+                <HistoryProbe />
+                {visible && (
+                  <MediaView
+                    media={{
+                      mediaRef: mediaRef as any,
+                      type: 'series',
+                      slug: 'fixture',
+                      title: 'Fixture',
+                      genres: [],
+                      countries: [],
+                      languages: [],
+                      persons: [],
+                      seasons: [],
+                    }}
+                    animeSeasonChain={[]}
+                    onAnimeSeasonChange={noop}
+                    availability={null}
+                    availabilityPending={false}
+                    availabilityStatus="ready"
+                  />
+                )}
+              </PlaybackSessionProvider>
+            </AuthContext>
+          </MemoryRouter>
+        </QueryClientProvider>
+      </StrictMode>
+    );
+    const view = render(tree());
+    try {
+      await waitFor(() => expect(history.status).toBe('ready'));
+      expect(screen.getByText('Серия и позиция сохранены.')).toBeDefined();
+      expect(requests.some(({ path }) => path.includes('/torrent-sessions'))).toBe(false);
+      fireEvent.click(screen.getByRole('button', { name: 'Выбрать раздачу', exact: true }));
+      expect(launch.resumePositionSeconds).toBe(47);
+      await act(async () => {
+        launch.onSourceSelect();
+        if (admitted)
+          launch.onSessionChange(playing ? ready : { ...ready, state: 'probing', playback: null });
+        if (playing) launch.onPlaybackReady(ready, { seasonNumber: 1, episodeNumber: 2 });
+      });
+      if (playing) {
+        await waitFor(() => expect(players.find((p) => p.isConnected)?.descriptor).toBeDefined());
+        await act(async () => {});
+        act(() => players.find((p) => p.isConnected)!.emit(63));
+        expect(history.session.positionSeconds).toBe(63);
+      }
+      await act(async () => {
+        if (exit === 'pagehide') window.dispatchEvent(new Event('pagehide'));
+        else {
+          visible = false;
+          view.rerender(tree());
+        }
+      });
+      await waitFor(() =>
+        expect(
+          requests.filter(({ path, init }) => path.endsWith(id) && init.method === 'DELETE'),
+        ).toHaveLength(admitted ? 1 : 0),
+      );
+      if (admitted)
+        expect(requests.find(({ init }) => init.method === 'DELETE')!.init.keepalive).toBe(true);
+      expect(history.session).toBeNull();
+      expect(history.continueWatchingEntries[0]).toMatchObject({
+        sourceRef: 'local-torrent',
+        positionSeconds: playing ? 63 : 47,
+        episode: { seasonNumber: 1, episodeNumber: 2 },
+      });
+      const requestCount = requests.length;
+      await act(async () => {
+        visible = true;
+        view.rerender(tree());
+      });
+      expect(screen.getByText('Выберите раздачу для продолжения просмотра')).toBeDefined();
+      expect(document.querySelector('yane-player')).toBeNull();
+      expect(
+        requests.slice(requestCount).some(({ path }) => path.includes('/torrent-sessions')),
+      ).toBe(false);
+      // A fresh provider receives descriptive history, never the stopped binding.
+      expect(JSON.stringify(entries)).not.toContain('torrent_session_');
+      view.unmount();
+      const fresh = render(tree());
+      try {
+        await waitFor(() => expect(history.status).toBe('ready'));
+        expect(screen.getByText('Выберите раздачу для продолжения просмотра')).toBeDefined();
+        expect(document.querySelector('yane-player')).toBeNull();
+      } finally {
+        fresh.unmount();
+      }
+    } finally {
+      view.unmount();
+      client.clear();
+    }
   },
 );
 
@@ -393,8 +614,16 @@ test('torrent episode navigation switches real file refs, keeps the element and 
       </MemoryRouter>
     </QueryClientProvider>,
   );
+  fireEvent.click(screen.getByRole('button', { name: 'Выбрать раздачу', exact: true }));
+  await act(async () => {
+    launch.onSourceSelect();
+    launch.onSessionChange(ready);
+    launch.onPlaybackReady(ready);
+  });
+  await waitFor(() => expect(started).toHaveBeenCalled());
   await waitFor(() => expect(players).toHaveLength(1));
   const player = players[0]!;
+  started.mockClear();
   expect(player.navigation.seasons.map((season: any) => season.id)).toEqual(['1', '2']);
   let navigation!: Promise<void>;
   await act(async () => {

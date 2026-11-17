@@ -32,6 +32,7 @@ import { TorrentInputService } from './torrent-input.service';
 import { TorrentPlaybackService } from './torrent-playback.service';
 import { TorrentSessionReconciler } from './torrent-session-reconciler';
 import { TorrentInputError, validateMagnet, validateMetainfo } from './torrent-input.validation';
+import { stopDisconnectedTorrent } from './torrent-admission-lifetime';
 
 const bad = (status: number, code: string): never => {
   throw new HttpException({ code, message: code }, status);
@@ -103,6 +104,19 @@ export class TorrentInputController {
     });
   }
 
+  @TorrentLimit('playback')
+  @Post(':sessionId/audio')
+  @HttpCode(200)
+  @NoStore()
+  audio(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('sessionId') sessionId: string,
+    @Headers('idempotency-key') key: string,
+    @Body() body: unknown,
+  ) {
+    return this.playbackService.selectAudio(user.id, sessionId, body, key);
+  }
+
   @TorrentLimit('create')
   @Post('magnet')
   @HttpCode(202)
@@ -111,6 +125,7 @@ export class TorrentInputController {
     @CurrentUser() user: AuthenticatedUser,
     @Headers('idempotency-key') key: string,
     @Body() body: unknown,
+    @Res({ passthrough: true }) response: Response,
   ) {
     if (!body || typeof body !== 'object' || Array.isArray(body)) bad(400, 'VALIDATION_FAILED');
     const fields = Object.keys(body as object);
@@ -120,13 +135,17 @@ export class TorrentInputController {
     if (input.mediaRef !== undefined && typeof input.mediaRef !== 'string')
       bad(400, 'MEDIA_REF_INVALID');
     try {
-      return await this.input.create(
-        user.id,
-        'magnet',
-        validateMagnet(input.magnet),
-        input.mediaRef as string | undefined,
-        key,
-        input.magnet as string,
+      return await stopDisconnectedTorrent(
+        response,
+        this.input.create(
+          user.id,
+          'magnet',
+          validateMagnet(input.magnet),
+          input.mediaRef as string | undefined,
+          key,
+          input.magnet as string,
+        ),
+        (id) => this.reconciler.stop(user.id, id),
       );
     } catch (error) {
       if (error instanceof TorrentInputError) bad(400, 'TORRENT_INVALID_INPUT');
@@ -149,6 +168,7 @@ export class TorrentInputController {
     @Headers('idempotency-key') key: string,
     @Body() body: Record<string, unknown>,
     @UploadedFile() file: { buffer: Buffer } | undefined,
+    @Res({ passthrough: true }) response: Response,
   ) {
     if (!file?.buffer) bad(415, 'TORRENT_FILE_TYPE_UNSUPPORTED');
     if (!body || Object.keys(body).some((field) => field !== 'mediaRef'))
@@ -156,12 +176,16 @@ export class TorrentInputController {
     if (body.mediaRef !== undefined && typeof body.mediaRef !== 'string')
       bad(400, 'MEDIA_REF_INVALID');
     try {
-      return await this.input.create(
-        user.id,
-        'file',
-        validateMetainfo(file!.buffer),
-        body.mediaRef as string | undefined,
-        key,
+      return await stopDisconnectedTorrent(
+        response,
+        this.input.create(
+          user.id,
+          'file',
+          validateMetainfo(file!.buffer),
+          body.mediaRef as string | undefined,
+          key,
+        ),
+        (id) => this.reconciler.stop(user.id, id),
       );
     } catch (error) {
       if (error instanceof TorrentInputError) bad(400, 'TORRENT_INVALID_INPUT');

@@ -14,7 +14,7 @@ export type ParsedTorrentPlaylist = {
 };
 
 // Parse the small subset emitted by our FFmpeg command. Never forward worker text verbatim.
-export function parseTorrentPlaylist(input: string): ParsedTorrentPlaylist {
+export function parseTorrentPlaylist(input: string, audioOnly = false): ParsedTorrentPlaylist {
   if (input.length > 16_384) throw new InvalidTorrentPlaylist();
   const lines = input.trim().split(/\r?\n/);
   if (lines.shift() !== '#EXTM3U') throw new InvalidTorrentPlaylist();
@@ -52,7 +52,7 @@ export function parseTorrentPlaylist(input: string): ParsedTorrentPlaylist {
   }
   if (
     !version ||
-    !independent ||
+    (!independent && !audioOnly) ||
     !map ||
     targetDuration === undefined ||
     mediaSequence === undefined ||

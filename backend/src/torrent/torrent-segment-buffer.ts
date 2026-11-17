@@ -29,11 +29,32 @@ export class TorrentSegmentBuffer {
 
   constructor(
     readonly directory: string,
-    readonly anchor: number,
+    public anchor: number,
     position: number,
+    private readonly limit = TORRENT_WINDOW_BYTES,
+    private readonly audioOnly = false,
   ) {
     this.edge = anchor;
     this.position = position;
+  }
+
+  async reanchor(anchor: number): Promise<void> {
+    const update = this.operation.then(() => {
+      const delta = anchor - this.anchor;
+      for (const segment of this.segments.values()) {
+        segment.start += delta;
+        segment.end += delta;
+      }
+      this.anchor = anchor;
+      this.edge += delta;
+    });
+    this.operation = update.catch(() => undefined);
+    return update;
+  }
+
+  get firstStart(): number {
+    const first = this.segments.values().next().value as Segment | undefined;
+    return first?.start ?? this.anchor;
   }
 
   confirm(position: number): boolean {
@@ -52,7 +73,7 @@ export class TorrentSegmentBuffer {
   private async read(): Promise<ParsedTorrentPlaylist> {
     const file = join(this.directory, 'media.m3u8');
     if ((await stat(file)).size > 16_384) throw new InvalidTorrentPlaylist();
-    const raw = parseTorrentPlaylist(await readFile(file, 'utf8'));
+    const raw = parseTorrentPlaylist(await readFile(file, 'utf8'), this.audioOnly);
     for (let index = 0; index < raw.segments.length; index++) {
       const sequence = raw.mediaSequence + index;
       if (sequence < this.next) continue;
@@ -97,7 +118,7 @@ export class TorrentSegmentBuffer {
       this.count--;
       this.segments.delete(sequence);
     }
-    if (this.bytes > TORRENT_WINDOW_BYTES || this.count > TORRENT_WINDOW_SEGMENTS)
+    if (this.bytes > this.limit || this.count > TORRENT_WINDOW_SEGMENTS)
       throw new InvalidTorrentPlaylist('cache_limit');
     return {
       targetDuration: this.targetDuration,

@@ -152,6 +152,11 @@ export function mapTorrentSession(value: unknown): TorrentSession {
     playback !== null &&
     (!record(playback) ||
       !record(playback.source) ||
+      (playback.audioMode !== undefined && playback.audioMode !== 'separate') ||
+      (playback.audioPositionSeconds !== undefined &&
+        (!nonNegative(playback.audioPositionSeconds) ||
+          !nonNegative(playback.durationSeconds) ||
+          playback.audioPositionSeconds >= playback.durationSeconds)) ||
       playback.source.type !== 'hls' ||
       !validMasterUrl(playback.source.url, dto.sessionId!) ||
       !count(playback.generation) ||
@@ -160,6 +165,8 @@ export function mapTorrentSession(value: unknown): TorrentSession {
       (playback.timeline.continuous !== undefined &&
         typeof playback.timeline.continuous !== 'boolean') ||
       !nonNegative(playback.timeline.absoluteAnchorSeconds) ||
+      (playback.timeline.videoEndSeconds !== undefined &&
+        !nonNegative(playback.timeline.videoEndSeconds)) ||
       !nonNegative(playback.timeline.mediaAnchorSeconds) ||
       !nonNegative(playback.timeline.windowEndSeconds) ||
       playback.timeline.windowEndSeconds <= playback.timeline.absoluteAnchorSeconds ||
@@ -221,6 +228,8 @@ export function mapTorrentSession(value: unknown): TorrentSession {
       ? {
           hlsUrl: new URL(playback.source.url, API_BASE_URL).toString(),
           generation: playback.generation,
+          audioMode: playback.audioMode,
+          audioPositionSeconds: playback.audioPositionSeconds,
           startPositionSeconds: playback.startPositionSeconds,
           timeline: playback.timeline,
           playbackRates: playback.playbackRates,

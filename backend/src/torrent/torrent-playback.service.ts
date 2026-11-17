@@ -18,9 +18,14 @@ import {
   TorrentGatewayTimeout,
   TorrentStreamGateway,
 } from './torrent-stream.gateway';
+import { torrentSelectedDuration } from './torrent-media-policy';
 
 @Injectable()
 export class TorrentPlaybackService {
+  private readonly audioCommands = new Map<
+    string,
+    { key: string; fingerprint: string; result: Promise<unknown> }
+  >();
   constructor(
     private readonly repository: TorrentSessionRepository,
     private readonly input: TorrentInputService,
@@ -28,6 +33,7 @@ export class TorrentPlaybackService {
   ) {}
 
   async selectFile(ownerId: string, sessionId: string, body: unknown) {
+    if (this.audioCommands.has(sessionId)) throw this.error(409, 'TORRENT_SESSION_CHANGED');
     const request = body as { fileRef?: unknown; expectedVersion?: unknown };
     if (
       !request ||
@@ -53,6 +59,7 @@ export class TorrentPlaybackService {
   }
 
   async playback(ownerId: string, sessionId: string, body: unknown, key: string) {
+    if (this.audioCommands.has(sessionId)) throw this.error(409, 'TORRENT_SESSION_CHANGED');
     const request = body as {
       startPositionSeconds?: unknown;
       audioTrackRef?: unknown;
@@ -129,6 +136,118 @@ export class TorrentPlaybackService {
       return this.input.view(updated);
     } catch (error) {
       this.mapError(error);
+    }
+  }
+
+  async selectAudio(ownerId: string, sessionId: string, body: unknown, key: string) {
+    const request = body as {
+      expectedVersion?: unknown;
+      audioTrackRef?: unknown;
+      positionSeconds?: unknown;
+      capabilities?: unknown;
+    };
+    if (
+      !/^[\x21-\x7e]{16,128}$/.test(key) ||
+      !request ||
+      typeof request !== 'object' ||
+      Object.keys(request).some(
+        (field) =>
+          !['expectedVersion', 'audioTrackRef', 'positionSeconds', 'capabilities'].includes(field),
+      ) ||
+      !Number.isSafeInteger(request.expectedVersion) ||
+      (request.expectedVersion as number) < 1 ||
+      typeof request.audioTrackRef !== 'string' ||
+      !Number.isFinite(request.positionSeconds) ||
+      (request.positionSeconds as number) < 0 ||
+      (request.capabilities !== undefined && !isTorrentClientCapabilities(request.capabilities))
+    )
+      throw this.error(400, 'VALIDATION_FAILED');
+    const session = await this.repository.findVisible(ownerId, sessionId);
+    if (!session) throw this.error(404, 'TORRENT_SESSION_NOT_FOUND');
+    const capabilities = request.capabilities;
+    const fingerprint = JSON.stringify([
+      request.audioTrackRef,
+      request.positionSeconds,
+      capabilities
+        ? [capabilities.originalVideo, capabilities.audio, capabilities.audioRenditions]
+        : null,
+    ]);
+    const pending = this.audioCommands.get(sessionId);
+    if (pending) {
+      if (pending.key !== key) throw this.error(409, 'TORRENT_SESSION_CHANGED');
+      if (pending.fingerprint !== fingerprint) throw this.error(409, 'IDEMPOTENCY_KEY_REUSED');
+      return pending.result;
+    }
+    const run = async () => {
+      try {
+        const probe = await this.repository.getProbe(sessionId);
+        if (!probe || probe.audioMode !== 'separate' || session.state !== 'ready')
+          throw new TorrentSessionNotFound();
+        const requestedPosition = request.positionSeconds as number;
+        const ref = request.audioTrackRef as string;
+        const selected = selectTorrentOutput(
+          probe,
+          probe.outputProfile ?? 'h264-720p',
+          capabilities ?? probe.capabilities,
+        );
+        const duration = torrentSelectedDuration(selected, ref);
+        if (!duration || selected.copyVideo !== probe.copyVideo)
+          throw this.error(415, 'TORRENT_CLIENT_UNSUPPORTED');
+        const position =
+          requestedPosition >= duration
+            ? Math.max(0, Math.min(probe.videoEndSeconds ?? duration, duration) - 0.01)
+            : requestedPosition;
+        selected.audioPositionSeconds = position !== requestedPosition ? position : undefined;
+        const digest = this.input.digestPlayback(
+          sessionId,
+          requestedPosition,
+          ref,
+          probe.outputProfile,
+          capabilities,
+        );
+        const { session: admitted, replay } = await this.repository.beginPlayback(
+          ownerId,
+          sessionId,
+          request.expectedVersion as number,
+          ref,
+          position,
+          key,
+          digest,
+          probe.outputProfile,
+          selected.capabilities,
+          true,
+        );
+        if (replay) {
+          if (admitted.selectedAudioTrackRef !== ref)
+            throw this.error(409, 'TORRENT_SESSION_CHANGED');
+          return this.input.view(admitted);
+        }
+        await this.gateway.audioRenditions.select(
+          sessionId,
+          admitted.generation,
+          ref,
+          position,
+          selected,
+        );
+        const ready = await this.repository.finishAudio(
+          sessionId,
+          admitted.generation,
+          admitted.version,
+          ref,
+          selected,
+        );
+        return this.input.view(ready);
+      } catch (error) {
+        this.mapError(error);
+      }
+    };
+    const result = Promise.resolve().then(run);
+    const command = { key, fingerprint, result };
+    this.audioCommands.set(sessionId, command);
+    try {
+      return await result;
+    } finally {
+      if (this.audioCommands.get(sessionId) === command) this.audioCommands.delete(sessionId);
     }
   }
 

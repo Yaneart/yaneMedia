@@ -22,6 +22,10 @@ function fixture(
     state?: number;
     simple?: boolean;
     badOffset?: boolean;
+    trackScale?: number;
+    codecDelay?: number;
+    unknownCluster?: boolean;
+    secondCluster?: boolean;
   } = {},
 ) {
   const header = tag(0x1a45dfa3, Buffer.alloc(0));
@@ -31,7 +35,24 @@ function fixture(
     0x1654ae6b,
     tag(
       0xae,
-      Buffer.concat([field(0xd7, 7), field(0x83, 17), tag(0x86, Buffer.from('S_TEXT/UTF8'))]),
+      Buffer.concat([
+        field(0xd7, 7),
+        field(0x83, 17),
+        tag(0x86, Buffer.from('S_TEXT/UTF8')),
+        ...(options.trackScale === undefined
+          ? []
+          : [
+              tag(
+                0x23314f,
+                (() => {
+                  const bytes = Buffer.alloc(8);
+                  bytes.writeDoubleBE(options.trackScale);
+                  return bytes;
+                })(),
+              ),
+            ]),
+        ...(options.codecDelay === undefined ? [] : [field(0x56aa, options.codecDelay)]),
+      ]),
     ),
   );
   const timestamp = field(0xe7, 1000);
@@ -43,40 +64,71 @@ function fixture(
     0x1f43b675,
     Buffer.concat([timestamp, block, tag(0xa3, Buffer.alloc(1024 * 1024))]),
   );
+  const point = (position: number) =>
+    tag(
+      0xbb,
+      Buffer.concat([
+        field(0xb3, 1005),
+        tag(
+          0xb7,
+          Buffer.concat([
+            field(0xf7, 7),
+            field(0xf1, position),
+            ...(options.relative === false
+              ? []
+              : [field(0xf0, options.badOffset ? 0xffffff : timestamp.length)]),
+            ...(options.duration === false ? [] : [field(0xb2, 2000)]),
+            field(0xea, options.state ?? 0),
+          ]),
+        ),
+      ]),
+    );
   const cues = (position: number) =>
     tag(
       0x1c53bb6b,
-      tag(
-        0xbb,
-        Buffer.concat([
-          field(0xb3, 1005),
-          tag(
-            0xb7,
-            Buffer.concat([
-              field(0xf7, 7),
-              field(0xf1, position),
-              ...(options.relative === false
-                ? []
-                : [field(0xf0, options.badOffset ? 0xffffff : timestamp.length)]),
-              ...(options.duration === false ? [] : [field(0xb2, 2000)]),
-              field(0xea, options.state ?? 0),
-            ]),
-          ),
-        ]),
-      ),
+      Buffer.concat([
+        point(position),
+        ...(options.secondCluster ? [point(position + cluster.length)] : []),
+      ]),
     );
   const index = cues(info.length + tracks.length + cues(0).length);
-  const file = Buffer.concat([header, segment, info, tracks, index, cluster]);
+  const file = Buffer.concat([
+    header,
+    segment,
+    info,
+    tracks,
+    index,
+    options.unknownCluster
+      ? Buffer.concat([cluster.subarray(0, 4), Buffer.from([255]), cluster.subarray(8)])
+      : cluster,
+    ...(options.secondCluster ? [cluster] : []),
+  ]);
   let bytes = 0;
   const read = jest.fn((offset: number, length: number) => {
     if (offset < 0 || offset + length > file.length) throw new Error('Out of bounds');
     bytes += length;
     return Promise.resolve(file.subarray(offset, offset + length));
   });
-  return { file, read, bytes: () => bytes };
+  return {
+    file,
+    read,
+    bytes: () => bytes,
+    clusterOffset: header.length + segment.length + info.length + tracks.length + index.length,
+    secondClusterOffset:
+      header.length + segment.length + info.length + tracks.length + index.length + cluster.length,
+  };
 }
 
 describe('indexed Matroska subtitle input', () => {
+  it('returns an empty window when an incomplete cue resolves before the requested position', async () => {
+    const f = fixture({ duration: false });
+    const index = await MatroskaSubtitleIndex.load(f.read, f.file.length);
+    expect(await index!.window(f.read, 0, 'vtt', 4, 8)).toEqual(Buffer.alloc(0));
+    const calls = f.read.mock.calls.length;
+    expect(await index!.window(f.read, 0, 'vtt', 4, 8)).toEqual(Buffer.alloc(0));
+    expect(f.read.mock.calls.length).toBe(calls);
+  });
+
   it.each([false, true])(
     'reads only metadata and the selected BlockGroup/SimpleBlock (simple=%s)',
     async (simple) => {
@@ -92,7 +144,7 @@ describe('indexed Matroska subtitle input', () => {
     },
   );
 
-  it.each([{ relative: false }, { duration: false }, { state: 1 }, { badOffset: true }])(
+  it.each([{ state: 1 }, { badOffset: true }, { relative: false, simple: true }])(
     'falls back when the index cannot safely locate complete cues: %j',
     async (options) => {
       const f = fixture(options);
@@ -100,6 +152,96 @@ describe('indexed Matroska subtitle input', () => {
       expect(await index!.window(f.read, 0, 'vtt', 1, 2)).toBeNull();
     },
   );
+
+  it.each([{ relative: false }, { duration: false }, { relative: false, duration: false }])(
+    'resolves incomplete Cues and reuses verified offsets: %j',
+    async (options) => {
+      const f = fixture(options);
+      const index = await MatroskaSubtitleIndex.load(f.read, f.file.length);
+      expect(index!.needsScan(0, 1, 2)).toBe(true);
+      const before = f.read.mock.calls.length;
+      const first = await index!.window(f.read, 0, 'vtt', 1, 2);
+      const scanReads = f.read.mock.calls.length - before;
+      expect(first?.includes(Buffer.from('Indexed cue'))).toBe(true);
+      expect(index!.needsScan(0, 1, 2)).toBe(false);
+      const again = f.read.mock.calls.length;
+      expect(await index!.window(f.read, 0, 'vtt', 1, 2)).toEqual(first);
+      expect(f.read.mock.calls.length - again).toBeLessThan(scanReads);
+      expect(f.bytes()).toBeLessThan(3000);
+    },
+  );
+
+  it('does not publish resolved offsets after explicit cancellation', async () => {
+    const f = fixture({ relative: false, duration: false });
+    const index = await MatroskaSubtitleIndex.load(f.read, f.file.length);
+    const abort = new AbortController();
+    let count = 0;
+    const read = async (offset: number, length: number) => {
+      const bytes = await f.read(offset, length);
+      if (++count === 6) abort.abort();
+      return bytes;
+    };
+    await expect(index!.window(read, 0, 'vtt', 1, 2, 0, abort.signal)).rejects.toThrow();
+    expect(index!.needsScan(0, 1, 2)).toBe(true);
+    expect(
+      (await index!.window(f.read, 0, 'vtt', 1, 2))?.includes(Buffer.from('Indexed cue')),
+    ).toBe(true);
+  });
+
+  it.each([{ trackScale: 2 }, { codecDelay: 1_000_000_000 }])(
+    'rejects per-track clocks that differ from Segment timestamps: %j',
+    async (options) => {
+      const f = fixture({ ...options, relative: false });
+      expect(await MatroskaSubtitleIndex.load(f.read, f.file.length)).toBeNull();
+    },
+  );
+
+  it('rejects unknown-sized clusters without retaining offsets', async () => {
+    const f = fixture({ relative: false, unknownCluster: true });
+    const index = await MatroskaSubtitleIndex.load(f.read, f.file.length);
+    expect(await index!.window(f.read, 0, 'vtt', 1, 2)).toBeNull();
+    expect(index!.needsScan(0, 1, 2)).toBe(true);
+  });
+
+  it('retains verified cluster offsets after a later range timeout without publishing partial text', async () => {
+    const f = fixture({ relative: false, duration: false });
+    const index = await MatroskaSubtitleIndex.load(f.read, f.file.length);
+    let calls = 0;
+    const read = (offset: number, length: number) => {
+      if (++calls === 11) throw new DOMException('Range deadline', 'TimeoutError');
+      return f.read(offset, length);
+    };
+    await expect(index!.window(read, 0, 'vtt', 1, 2)).rejects.toThrow('Range deadline');
+    expect(index!.needsScan(0, 1, 2)).toBe(false);
+    expect(
+      (await index!.window(f.read, 0, 'vtt', 1, 2))?.includes(Buffer.from('Indexed cue')),
+    ).toBe(true);
+  });
+
+  it('cancels an in-flight sibling range when another cluster fails validation', async () => {
+    const f = fixture({ relative: false, secondCluster: true });
+    const index = await MatroskaSubtitleIndex.load(f.read, f.file.length);
+    let aborted = false;
+    const read = (offset: number, length: number, signal?: AbortSignal) => {
+      if (offset === f.clusterOffset) return Promise.resolve(Buffer.alloc(length));
+      if (offset === f.secondClusterOffset)
+        return new Promise<Buffer>((_resolve, reject) => {
+          signal!.addEventListener(
+            'abort',
+            () => {
+              aborted = true;
+              reject(new Error('Sibling canceled', { cause: signal?.reason }));
+            },
+            { once: true },
+          );
+        });
+      return f.read(offset, length);
+    };
+    const result = await index!.window(read, 0, 'vtt', 1, 2, 0, AbortSignal.timeout(2000));
+    expect(result).toBeNull();
+    expect(aborted).toBe(true);
+    expect(index!.needsScan(0, 1, 2)).toBe(true);
+  });
 
   it('does not use another track or codec and rejects malformed/non-Matroska metadata', async () => {
     const f = fixture();
