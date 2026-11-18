@@ -32,34 +32,60 @@ export function rankRelease(release: DiscoveryRelease, identity: SearchIdentity)
   const reasons: string[] = [];
   let score = Math.round(match * 70);
   if (match >= 0.8) reasons.push('title_match');
-  if (match < 0.5) {
+  if (match < 0.6) {
     score -= 75;
     reasons.push('title_mismatch');
   }
-  const years = [...release.title.matchAll(/\b(?:19|20)\d{2}\b/g)].map(([value]) => Number(value));
+  const titleYears = new Set(
+    identity.titles.flatMap((name) => name.match(/\b(?:19|20)\d{2}\b/g) ?? []),
+  );
+  const years = release.year
+    ? [release.year]
+    : [...release.title.matchAll(/\b(?:19|20)\d{2}\b/g)]
+        .filter(([value]) => !titleYears.has(value))
+        .map(([value]) => Number(value));
   if (identity.year && years.length) {
     if (years.includes(identity.year)) {
       score += 18;
       reasons.push('year_match');
-    } else {
+    } else if (identity.kind === 'movie') {
       score -= 25;
       reasons.push('year_mismatch');
     }
   }
-  const seasonEpisode = /\bS(\d{1,2})\s*E(\d{1,3})\b/i.exec(release.title);
-  const seasonOnly = /\b(?:S|season\s*)(\d{1,2})\b/i.exec(release.title);
+  const seasonEpisode = /\bS(\d{1,2})\s*E(\d{1,3})(?:\s*[-–]\s*(?:E)?(\d{1,3}))?\b/i.exec(
+    release.title,
+  );
+  const seasonOnly =
+    /\b(?:S|season\s*)(\d{1,2})(?:\s*[-–]\s*S?(\d{1,2}))?\b/i.exec(release.title) ??
+    /сезон(?:ы)?\s*[:-]?\s*(\d{1,2})(?:\s*[-–]\s*(\d{1,2}))?/iu.exec(release.title) ??
+    /\b(\d{1,2})(?:\s*[-–]\s*(\d{1,2}))?\s*сезон/iu.exec(release.title);
   const season = seasonEpisode
     ? Number(seasonEpisode[1])
     : seasonOnly
       ? Number(seasonOnly[1])
-      : null;
+      : release.seasons?.length === 1
+        ? release.seasons[0]
+        : null;
   const episode = seasonEpisode ? Number(seasonEpisode[2]) : null;
-  if (identity.kind === 'movie' && season !== null) {
+  if (
+    (identity.kind === 'movie' && (season !== null || release.kind === 'tv')) ||
+    (identity.kind === 'tv' && release.kind === 'movie')
+  ) {
     score -= 35;
     reasons.push('type_mismatch');
   }
-  if (identity.season !== undefined && season !== null) {
-    if (season === identity.season) {
+  const seasonEnd = Number(seasonOnly?.[2] ?? season);
+  const seasons = release.seasons?.length
+    ? release.seasons
+    : season === null
+      ? []
+      : Array.from(
+          { length: Math.max(1, Math.min(100, seasonEnd - season + 1)) },
+          (_, i) => season + i,
+        );
+  if (identity.season !== undefined && seasons.length) {
+    if (seasons.includes(identity.season)) {
       score += 14;
       reasons.push('season_match');
     } else {
@@ -68,7 +94,8 @@ export function rankRelease(release: DiscoveryRelease, identity: SearchIdentity)
     }
   }
   if (identity.episode !== undefined && episode !== null) {
-    if (episode === identity.episode) {
+    const episodeEnd = Number(seasonEpisode?.[3] ?? episode);
+    if (identity.episode >= episode && identity.episode <= Math.max(episode, episodeEnd)) {
       score += 12;
       reasons.push('episode_match');
     } else {
@@ -76,28 +103,64 @@ export function rankRelease(release: DiscoveryRelease, identity: SearchIdentity)
       reasons.push('episode_mismatch');
     }
   }
-  const resolution =
-    /\b(2160p|1080p|720p|480p|4k)\b/i.exec(release.title)?.[1]?.toLowerCase() ?? null;
-  const quality =
-    /\b(BDRemux|BDRip|Blu[- ]?Ray|Remux|HDRip|WEB[- .]?DL|WEBRip|HDTV|CAM|TS)\b/i
-      .exec(release.title)?.[1]
-      ?.toUpperCase() ?? null;
-  if (quality === 'CAM' || quality === 'TS') {
-    score -= 40;
+  const resolutionMatch = /\b(4320|2160|1440|1080|720|576|480|360)[pi]\b|\b(8k|4k|uhd|fhd)\b/i.exec(
+    release.title,
+  );
+  const aliases: Record<string, number> = { '8k': 4320, '4k': 2160, uhd: 2160, fhd: 1080 };
+  const height =
+    release.resolution ??
+    (resolutionMatch ? Number(resolutionMatch[1]) || aliases[resolutionMatch[2].toLowerCase()] : 0);
+  const resolution = height ? `${height}p` : null;
+  // A work named "Cam" is not a camera release. Remove trusted names before reading tags.
+  let technicalTitle = release.title;
+  for (const name of identity.titles)
+    technicalTitle = technicalTitle.replace(
+      new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'giu'),
+      ' ',
+    );
+  const qualityTag =
+    /\b(HDCAM|CAMRip|CAM|HDTS|TELESYNC|TS|TELECINE|TC|WORKPRINT)\b/i.exec(technicalTitle)?.[1] ??
+    /\b(BD[- .]?Remux|BDRip|Blu[- ]?Ray|Remux|HDRip|WEB[- .]?DL(?:Rip)?|WEBRip|HDTV|DVD[- .]?Rip)\b/i.exec(
+      technicalTitle,
+    )?.[1];
+  const quality = qualityTag
+    ? qualityTag
+        .toUpperCase()
+        .replace(/[ .-]/g, '')
+        .replace(/^WEBDL$/, 'WEB-DL')
+    : null;
+  if (quality && /^(?:HDCAM|CAMRIP|CAM|HDTS|TELESYNC|TS|TELECINE|TC|WORKPRINT)$/.test(quality)) {
+    score -= 100;
     reasons.push('low_quality');
-  } else if (quality || resolution) {
-    score += 8;
-    reasons.push('quality_label');
+  } else {
+    const sourceBonus: Record<string, number> = {
+      BDREMUX: 20,
+      REMUX: 20,
+      BLURAY: 20,
+      'WEB-DL': 18,
+      BDRIP: 16,
+      WEBRIP: 10,
+      WEBDLRIP: 7,
+      HDTV: 5,
+      HDRIP: 2,
+      DVDRIP: 0,
+    };
+    score += quality ? (sourceBonus[quality] ?? 0) : 0;
+    const band = [2160, 1440, 1080, 720].findIndex((minimum) => height >= minimum);
+    const bonuses = [20, 23, 25, 5];
+    score += band >= 0 ? bonuses[band] : height ? -25 : -5;
+    if (quality || resolution) reasons.push('quality_label');
   }
+  const voiceTitle = `${release.title} ${(release.voices ?? []).join(' ')}`;
   const voiceLabel =
-    /(?:^|[^\p{L}\p{N}])(DUB|MVO|DVO|AVO|VO|МВО|ДВО|АВО|Лицензия)(?=$|[^\p{L}\p{N}])/iu.exec(
-      release.title,
+    /(?:^|[^\p{L}\p{N}])(DUB|MVO|DVO|AVO|VO|МВО|ДВО|АВО|Лицензия|Дубляж)(?=$|[^\p{L}\p{N}])/iu.exec(
+      voiceTitle,
     )?.[1] ?? null;
   const voice =
     voiceLabel?.toLowerCase() === 'лицензия' ? 'Лицензия' : (voiceLabel?.toUpperCase() ?? null);
   const studio =
     /(?:^|[^\p{L}\p{N}])(Кубик в Кубе|LostFilm|NewStudio|HDRezka(?: Studio)?|AniLibria|AniDub|Red Head Sound|Bravo Records Georgia|Kubik|RuDub|Jaskier|NewComers|TVShows|WinMedia|Ю(?:рий|\.) Сербин)(?=$|[^\p{L}\p{N}])/iu.exec(
-      release.title,
+      voiceTitle,
     )?.[1] ?? null;
   const russianSubtitles = /rus(?:sian)?[ ._-]?sub|рус(?:ские)?[ ._-]?субтитры/i.test(
     release.title,
@@ -113,16 +176,15 @@ export function rankRelease(release: DiscoveryRelease, identity: SearchIdentity)
   if (russianSubtitles) reasons.push('russian_subtitles_claim');
   if (release.seeders !== null) {
     if (release.seeders === 0) {
-      score -= 20;
+      score -= 30;
       reasons.push('no_seeders');
     } else {
-      score += Math.min(15, Math.floor(Math.log2(release.seeders + 1) * 3));
+      score += Math.min(24, Math.round(Math.log2(release.seeders + 1) * 2));
       reasons.push('seeders');
     }
   }
-  const maxSize = identity.kind === 'movie' ? 35 * 1024 ** 3 : 100 * 1024 ** 3;
-  if (release.size > maxSize) {
-    score -= 25;
+  if (identity.kind === 'movie' && release.size > 15 * 1024 ** 3) {
+    score -= Math.min(18, Math.round(Math.log2(release.size / (15 * 1024 ** 3)) * 8));
     reasons.push('large_size');
   }
   if (release.size > 200 * 1024 ** 3) {
@@ -157,6 +219,13 @@ export function rankRelease(release: DiscoveryRelease, identity: SearchIdentity)
   };
 }
 
+export type RankedRelease = { release: DiscoveryRelease; rank: ReturnType<typeof rankRelease> };
+export const compareRanked = (a: RankedRelease, b: RankedRelease) =>
+  b.rank.score - a.rank.score ||
+  a.release.tracker.localeCompare(b.release.tracker, 'ru') ||
+  a.release.title.localeCompare(b.release.title, 'ru') ||
+  a.release.size - b.release.size;
+
 export function dedupeReleases(releases: DiscoveryRelease[]): DiscoveryRelease[] {
   const positions = new Map<string, number>();
   const unique: DiscoveryRelease[] = [];
@@ -173,23 +242,4 @@ export function dedupeReleases(releases: DiscoveryRelease[]): DiscoveryRelease[]
     } else if (unique[index].stale && !release.stale) unique[index] = release;
   }
   return unique;
-}
-
-export function limitByTracker<T>(items: T[], limit: number, tracker: (item: T) => string): T[] {
-  const quota = Math.max(1, Math.floor(limit / (new Set(items.map(tracker)).size || 1)));
-  const counts = new Map<string, number>();
-  const selected = new Set<T>();
-  for (const item of items) {
-    if (selected.size >= limit) break;
-    const name = tracker(item);
-    const count = counts.get(name) ?? 0;
-    if (count >= quota) continue;
-    selected.add(item);
-    counts.set(name, count + 1);
-  }
-  for (const item of items) {
-    if (selected.size >= limit) break;
-    selected.add(item);
-  }
-  return items.filter((item) => selected.has(item));
 }

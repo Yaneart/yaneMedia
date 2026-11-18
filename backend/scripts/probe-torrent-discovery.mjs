@@ -33,7 +33,7 @@ for (let round = 1; round <= rounds; round++) {
         query: values.query,
         title: values.query,
         kind: values.kind,
-        limit: 50,
+        limit: 2000,
         offset: 0,
       },
       AbortSignal.timeout(25000),

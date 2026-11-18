@@ -1,16 +1,19 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { UseQueryResult } from '@tanstack/react-query';
 import type { TorrentCandidate, TorrentCandidates } from '@/entities/torrent-session';
 import { Button, Select, Spinner } from '@/shared';
-import { CandidateCard } from './CandidateCard';
+import { TorrentCandidateList } from './TorrentCandidateList';
 import {
   candidateOptions,
   candidateTrackerLabel,
   emptyCandidateFilters,
+  filterCandidates,
   selectCandidates,
   type CandidateFilters,
   type CandidateSort,
 } from '../model/candidateView';
+
+const emptyCandidates: readonly TorrentCandidate[] = [];
 
 export function TorrentCandidatesPanel({
   query,
@@ -29,8 +32,19 @@ export function TorrentCandidatesPanel({
 }) {
   const [candidateSort, setCandidateSort] = useState<CandidateSort>('best');
   const [candidateFilters, setCandidateFilters] = useState<CandidateFilters>(emptyCandidateFilters);
-  const allCandidates = query.data?.candidates ?? [];
-  const visibleCandidates = selectCandidates(allCandidates, candidateSort, candidateFilters);
+  const allCandidates = useMemo(
+    () =>
+      (query.data?.candidates ?? emptyCandidates).filter((candidate) => candidate.seeders !== 0),
+    [query.data?.candidates],
+  );
+  const matchingCandidates = useMemo(
+    () => filterCandidates(allCandidates, candidateFilters),
+    [allCandidates, candidateFilters],
+  );
+  const visibleCandidates = useMemo(
+    () => selectCandidates(matchingCandidates, candidateSort, emptyCandidateFilters),
+    [matchingCandidates, candidateSort],
+  );
   const hasCandidateFilters = Object.values(candidateFilters).some(Boolean);
   const updateCandidateFilter = (key: keyof CandidateFilters, value: string | boolean) => {
     setCandidateFilters((current) => ({ ...current, [key]: value }));
@@ -130,7 +144,11 @@ export function TorrentCandidatesPanel({
                 role="status"
               >
                 <span>
-                  Показано {visibleCandidates.length} из {allCandidates.length} ·{' '}
+                  Показано {visibleCandidates.length} из {matchingCandidates.length}
+                  {hasCandidateFilters && matchingCandidates.length !== allCandidates.length
+                    ? ` · Всего ${allCandidates.length}`
+                    : ''}{' '}
+                  ·{' '}
                   {
                     {
                       best: 'Лучшие',
@@ -154,18 +172,14 @@ export function TorrentCandidatesPanel({
                   Варианты скрыты выбранными фильтрами. Сбросьте фильтры или обновите поиск.
                 </p>
               )}
-              <div className="space-y-2">
-                {visibleCandidates.map((candidate) => (
-                  <CandidateCard
-                    key={candidate.candidateRef}
-                    candidate={candidate}
-                    pending={pending}
-                    selected={selectedCandidateRef === candidate.candidateRef}
-                    status={selectedCandidateRef === candidate.candidateRef ? status : undefined}
-                    onSelect={() => onSelect(candidate)}
-                  />
-                ))}
-              </div>
+              <TorrentCandidateList
+                key={JSON.stringify([candidateSort, candidateFilters, query.data.expiresAt])}
+                candidates={visibleCandidates}
+                pending={pending}
+                selectedCandidateRef={selectedCandidateRef}
+                status={status}
+                onSelect={onSelect}
+              />
             </>
           )}
         </>

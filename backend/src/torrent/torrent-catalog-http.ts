@@ -13,7 +13,7 @@ export function catalogSearchTitle(input: DiscoverySearch): string {
     title.length > 160 ||
     !Number.isInteger(input.limit) ||
     input.limit < 1 ||
-    input.limit > 100 ||
+    input.limit > 2000 ||
     input.offset !== 0 ||
     !['movie', 'tv', 'anime'].includes(input.kind) ||
     [...input.query, ...title].some((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127)

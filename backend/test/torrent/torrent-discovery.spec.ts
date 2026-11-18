@@ -62,7 +62,7 @@ describe('torrent discovery', () => {
       expect.objectContaining({
         query: 'Interstellar',
         kind: 'tv',
-        limit: 50,
+        limit: 2000,
         offset: 0,
       }),
       expect.any(AbortSignal),
@@ -74,7 +74,7 @@ describe('torrent discovery', () => {
     expect(JSON.stringify(result)).not.toContain('infoHash');
   });
 
-  it('keeps a bounded set with stable ties', async () => {
+  it('retains the full result with stable ties', async () => {
     discovery.search.mockResolvedValue({
       releases: Array.from({ length: 55 }, (_, index) => ({
         ...release,
@@ -85,9 +85,28 @@ describe('torrent discovery', () => {
       degraded: false,
     });
     const result = await service.search('owner-bounded', mediaRef);
-    expect(result.candidates).toHaveLength(50);
+    expect(result.candidates).toHaveLength(55);
     expect(result.candidates[0].title).toContain('00');
-    expect(result.candidates.at(-1)?.title).toContain('49');
+    expect(result.candidates.at(-1)?.title).toContain('54');
+  });
+
+  it('returns the complete validated result so client sorting can reach entries beyond the first 100', async () => {
+    discovery.search.mockResolvedValue({
+      releases: Array.from({ length: 353 }, (_, i) => ({
+        ...release,
+        guid: String(i),
+        infoHash: null,
+        title: 'Interstellar 2014 1080p WEB-DL ' + String(i).padStart(3, '0'),
+        seeders: i + 1,
+      })),
+      degraded: false,
+    });
+    const result = await service.search('full-pool', mediaRef);
+    expect(result.candidates).toHaveLength(353);
+    const hidden = result.candidates[352];
+    expect(service.resolve('full-pool', hidden.candidateRef).locator.kind).toBe('magnet');
+    expect(() => service.resolve('another-owner', hidden.candidateRef)).toThrow();
+    expect(JSON.stringify(result)).not.toContain('magnet:');
   });
 
   it('also searches the localized title when the original already found many releases', async () => {
@@ -111,7 +130,22 @@ describe('torrent discovery', () => {
     expect(result.candidates.some((candidate) => candidate.tracker === 'Rutor')).toBe(true);
   });
 
-  it('preserves every source after final ranking, including identical hashes from different sources', async () => {
+  it('excludes explicit zero seeders but retains unknown counts in the full result', async () => {
+    discovery.search.mockResolvedValue({
+      releases: [0, null, 1].map((seeders, i) => ({
+        ...release,
+        guid: `seeders-${i}`,
+        infoHash: null,
+        seeders,
+      })),
+      degraded: false,
+    });
+    const result = await service.search('seeders-filter', mediaRef);
+    expect(result.candidates).toHaveLength(2);
+    expect(result.candidates.map((candidate) => candidate.seeders).sort()).toEqual([1, null]);
+  });
+
+  it('retains all tracker results for client filtering', async () => {
     discovery.search.mockResolvedValue({
       releases: [
         ...Array.from({ length: 55 }, (_, i) => ({ ...release, guid: String(i), infoHash: null })),
@@ -121,7 +155,7 @@ describe('torrent discovery', () => {
       degraded: false,
     });
     const result = await service.search('owner-source-reservation', mediaRef);
-    expect(result.candidates).toHaveLength(50);
+    expect(result.candidates).toHaveLength(57);
     expect(new Set(result.candidates.map((x) => x.tracker))).toEqual(
       new Set(['Example', 'BigFANGroup', 'Kinozal']),
     );
@@ -191,19 +225,27 @@ describe('torrent discovery', () => {
     ]);
   });
 
-  it.each([19, 20])('counts repeated tracker parameters toward the %s-slot input limit', async (count) => {
-    const tracker = 'udp://tracker.example:1337/announce';
-    discovery.search.mockResolvedValue({
-      releases: [{ ...release, downloadUrl: release.downloadUrl + ('&tr=' + encodeURIComponent(tracker)).repeat(count) }],
-      degraded: false,
-    });
-    const { candidates } = await service.search(`tracker-duplicates-${count}`, mediaRef);
-    const output = service.resolve(`tracker-duplicates-${count}`, candidates[0].candidateRef);
-    const trackers = new URL(output.locator.value).searchParams.getAll('tr');
-    expect(trackers).toHaveLength(20);
-    expect(trackers.slice(0, count)).toEqual(Array(count).fill(tracker));
-    expect(Buffer.byteLength(output.locator.value)).toBeLessThanOrEqual(4096);
-  });
+  it.each([19, 20])(
+    'counts repeated tracker parameters toward the %s-slot input limit',
+    async (count) => {
+      const tracker = 'udp://tracker.example:1337/announce';
+      discovery.search.mockResolvedValue({
+        releases: [
+          {
+            ...release,
+            downloadUrl: release.downloadUrl + ('&tr=' + encodeURIComponent(tracker)).repeat(count),
+          },
+        ],
+        degraded: false,
+      });
+      const { candidates } = await service.search(`tracker-duplicates-${count}`, mediaRef);
+      const output = service.resolve(`tracker-duplicates-${count}`, candidates[0].candidateRef);
+      const trackers = new URL(output.locator.value).searchParams.getAll('tr');
+      expect(trackers).toHaveLength(20);
+      expect(trackers.slice(0, count)).toEqual(Array(count).fill(tracker));
+      expect(Buffer.byteLength(output.locator.value)).toBeLessThanOrEqual(4096);
+    },
+  );
 
   it('rejects arbitrary query coordinates and unsafe download origins', async () => {
     await expect(service.search('owner-3', mediaRef, 100)).rejects.toMatchObject({ status: 400 });

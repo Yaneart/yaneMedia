@@ -57,22 +57,65 @@ describe('JacRed discovery boundary', () => {
     expect((await client().search(input, AbortSignal.timeout(1000))).releases).toEqual([]);
   });
 
-  it('reserves room for each source before limiting a broad catalog response', async () => {
-    jest
-      .spyOn(global, 'fetch')
-      .mockResolvedValue(
-        response([
-          ...Array.from({ length: 60 }, (_, i) => ({ ...row, title: `Movie ${i}` })),
-          { ...row, tracker: 'nnmclub', url: 'https://nnmclub.to/forum/viewtopic.php?t=1' },
-          { ...row, tracker: 'rutracker', url: 'https://rutracker.org/forum/viewtopic.php?t=1' },
-        ]),
-      );
-    const result = await client().search({ ...input, limit: 3 }, AbortSignal.timeout(1000));
-    expect(result.releases.map((x) => x.tracker)).toEqual([
-      'Kinozal',
+  it('retains a broad response without tracker quotas or quality filtering', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValue(
+      response([
+        ...Array.from({ length: 351 }, (_, i) => ({
+          ...row,
+          title: `Oppenheimer 2023 480p HDRip ${i}`,
+          magnet: `magnet:?xt=urn:btih:${i.toString(16).padStart(40, '0')}`,
+        })),
+        { ...row, tracker: 'nnmclub', url: 'https://nnmclub.to/forum/viewtopic.php?t=1' },
+        { ...row, tracker: 'rutracker', url: 'https://rutracker.org/forum/viewtopic.php?t=1' },
+      ]),
+    );
+    const result = await client().search({ ...input, limit: 2000 }, AbortSignal.timeout(1000));
+    expect(result.releases).toHaveLength(353);
+    expect(result.releases.slice(-2).map((x) => x.tracker)).toEqual([
       'NoNaMe Club',
       'RuTracker.org',
     ]);
+  });
+
+  it('preserves validated structured quality, voice, season and kind fields without trusting malformed metadata', async () => {
+    const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValueOnce(
+      response([
+        {
+          ...row,
+          quality: 2160,
+          relased: 2023,
+          voices: ['Дубляж', 'LostFilm'],
+          seasons: [1, 2],
+          types: ['serial'],
+          videotype: 'hdr',
+        },
+      ]),
+    );
+    expect((await client().search(input, AbortSignal.timeout(1000))).releases[0]).toMatchObject({
+      resolution: 2160,
+      year: 2023,
+      voices: ['Дубляж', 'LostFilm'],
+      seasons: [1, 2],
+      kind: 'tv',
+    });
+    fetchSpy.mockResolvedValueOnce(
+      response([
+        {
+          ...row,
+          quality: '1080',
+          relased: -1,
+          seasons: ['1'],
+          voices: [null, 'bad\nvoice', 'x'.repeat(81)],
+          types: ['movie', 'serial'],
+        },
+      ]),
+    );
+    const metadata = (await client().search(input, AbortSignal.timeout(1000))).releases[0];
+    expect(metadata.resolution).toBeUndefined();
+    expect(metadata.year).toBeUndefined();
+    expect(metadata.seasons).toBeUndefined();
+    expect(metadata.kind).toBeUndefined();
+    expect(metadata.voices).toEqual([]);
   });
 
   it.each([

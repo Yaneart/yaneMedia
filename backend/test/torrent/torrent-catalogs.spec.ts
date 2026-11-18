@@ -2,6 +2,9 @@ import { TorrentCatalogsService } from '../../src/torrent/torrent-catalogs.servi
 import type { JacredClient } from '../../src/torrent/jacred.client';
 import type { KnabenClient } from '../../src/torrent/knaben.client';
 import type { DiscoveryRelease } from '../../src/torrent/torrent-discovery.port';
+import { ConfigService } from '@nestjs/config';
+import { JacredClient as RealJacredClient } from '../../src/torrent/jacred.client';
+import { KnabenClient as RealKnabenClient } from '../../src/torrent/knaben.client';
 
 const input = { query: 'Oppenheimer', kind: 'movie' as const, limit: 50, offset: 0 };
 const release: DiscoveryRelease = {
@@ -36,7 +39,7 @@ const setup = () => {
 describe('torrent catalog redundancy', () => {
   afterEach(() => jest.restoreAllMocks());
 
-  it('starts independent APIs in parallel and merges their sources', async () => {
+  it('waits for JacRed and never queries Knaben after a successful response', async () => {
     const { jacred, knaben, service } = setup();
     let finish!: (value: typeof found) => void;
     jacred.search.mockImplementation(
@@ -46,11 +49,12 @@ describe('torrent catalog redundancy', () => {
         }),
     );
     const pending = service().search(input, AbortSignal.timeout(1000));
-    expect(knaben.search).toHaveBeenCalledTimes(1);
+    expect(knaben.search).not.toHaveBeenCalled();
     finish(found);
     const result = await pending;
-    expect(result.releases.map((item) => item.tracker)).toEqual(['Rutor', 'YTS']);
+    expect(result.releases.map((item) => item.tracker)).toEqual(['Rutor']);
     expect(result.degraded).toBe(false);
+    expect(knaben.search).not.toHaveBeenCalled();
   });
 
   it('returns independent results when JacRed times out and skips failed APIs during cooldown', async () => {
@@ -67,18 +71,19 @@ describe('torrent catalog redundancy', () => {
     expect(jacred.search).toHaveBeenCalledTimes(2);
   });
 
-  it('retains JacRed if the independent API fails and deduplicates shared trackers and hashes', async () => {
-    const { knaben, service } = setup();
-    knaben.search.mockRejectedValueOnce(new Error('offline'));
+  it('does not use Knaben when a JacRed mirror succeeds or a healthy JacRed is empty', async () => {
+    const { jacred, knaben, service } = setup();
+    jacred.search.mockResolvedValueOnce({ ...found, degraded: true });
     expect(await service().search(input, AbortSignal.timeout(1000))).toMatchObject({
-      ...found,
+      releases: [release],
       degraded: true,
     });
-    knaben.search.mockResolvedValue({
-      releases: [{ ...release, catalog: 'Knaben' }],
+    jacred.search.mockResolvedValueOnce({ releases: [], degraded: false });
+    expect(await service().search(input, AbortSignal.timeout(1000))).toEqual({
+      releases: [],
       degraded: false,
     });
-    expect((await service().search(input, AbortSignal.timeout(1000))).releases).toHaveLength(1);
+    expect(knaben.search).not.toHaveBeenCalled();
   });
 
   it('uses fresh cache then bounded stale results during a total outage', async () => {
@@ -87,18 +92,100 @@ describe('torrent catalog redundancy', () => {
     await catalogs.search(input, AbortSignal.timeout(1000));
     await catalogs.search(input, AbortSignal.timeout(1000));
     expect(jacred.search).toHaveBeenCalledTimes(1);
-    expect(knaben.search).toHaveBeenCalledTimes(1);
+    expect(knaben.search).not.toHaveBeenCalled();
     jacred.search.mockRejectedValue(new Error('offline'));
     knaben.search.mockRejectedValue(new Error('offline'));
     const now = Date.now();
     const clock = jest.spyOn(Date, 'now').mockReturnValue(now + 60_001);
     const stale = await catalogs.search(input, AbortSignal.timeout(1000));
     expect(stale.degraded).toBe(true);
-    expect(stale.releases).toHaveLength(2);
+    expect(stale.releases).toHaveLength(1);
     expect(stale.releases.every((item) => item.stale)).toBe(true);
     expect(release.stale).toBeUndefined();
     clock.mockReturnValue(now + 10 * 60_000 + 1);
     await expect(catalogs.search(input, AbortSignal.timeout(1000))).rejects.toThrow();
+  });
+
+  it('tries fresh Knaben before stale JacRed, then restores JacRed after cooldown even with a fresh fallback cache', async () => {
+    const { jacred, knaben, service } = setup();
+    const catalogs = service();
+    const now = Date.now();
+    const clock = jest.spyOn(Date, 'now').mockReturnValue(now);
+    await catalogs.search(input, AbortSignal.timeout(1000));
+    clock.mockReturnValue(now + 60_001);
+    jacred.search.mockRejectedValueOnce(new Error('offline'));
+    const fallback = await catalogs.search(input, AbortSignal.timeout(1000));
+    expect(fallback.releases[0]).toMatchObject({ catalog: 'Knaben' });
+    expect(fallback.releases[0].stale).toBeUndefined();
+    clock.mockReturnValue(now + 120_002);
+    expect((await catalogs.search(input, AbortSignal.timeout(1000))).releases[0].catalog).toBe(
+      'JacRed',
+    );
+    expect(knaben.search).toHaveBeenCalledTimes(1);
+  });
+
+  it('caches different pool sizes separately without truncating a larger result', async () => {
+    const { jacred, service } = setup();
+    const catalogs = service();
+    await catalogs.search(input, AbortSignal.timeout(1000));
+    await catalogs.search({ ...input, limit: 2000 }, AbortSignal.timeout(1000));
+    expect(jacred.search).toHaveBeenCalledTimes(2);
+  });
+
+  it('uses the actual HTTP chain primary -> mirror -> Knaben only after failures', async () => {
+    const config = new ConfigService({
+      JACRED_BASE_URL: 'https://primary.example',
+      JACRED_FALLBACK_URLS: 'https://mirror.example',
+      KNABEN_BASE_URL: 'https://knaben.example',
+    });
+    const make = () =>
+      new TorrentCatalogsService(new RealJacredClient(config), new RealKnabenClient(config));
+    const row = {
+      tracker: 'rutor',
+      url: 'https://rutor.info/torrent/123/movie',
+      title: release.title,
+      size: 1024,
+      sid: 20,
+      magnet: release.downloadUrl,
+    };
+    const fetchSpy = jest
+      .spyOn(global, 'fetch')
+      .mockRejectedValueOnce(new Error('primary offline'))
+      .mockResolvedValueOnce(Response.json([row]));
+    expect((await make().search(input, AbortSignal.timeout(1000))).releases[0].catalog).toBe(
+      'JacRed',
+    );
+    expect(fetchSpy.mock.calls.map(([url]) => (url as URL).origin)).toEqual([
+      'https://primary.example',
+      'https://mirror.example',
+    ]);
+    fetchSpy
+      .mockReset()
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce(
+        Response.json({
+          hits: [
+            {
+              title: release.title,
+              tracker: 'YTS',
+              trackerId: 'yts',
+              bytes: 1024,
+              seeders: 20,
+              hash: release.infoHash,
+              magnetUrl: release.downloadUrl,
+            },
+          ],
+        }),
+      );
+    expect((await make().search(input, AbortSignal.timeout(1000))).releases[0].catalog).toBe(
+      'Knaben',
+    );
+    expect(fetchSpy.mock.calls.map(([url]) => (url as URL).origin)).toEqual([
+      'https://primary.example',
+      'https://mirror.example',
+      'https://knaben.example',
+    ]);
   });
 
   it('reports total outage, distinguishes successful empty responses and supports manual-only mode', async () => {

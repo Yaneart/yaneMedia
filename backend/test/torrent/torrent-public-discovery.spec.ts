@@ -196,4 +196,25 @@ describe('Public metadata discovery without engine or media workers', () => {
     const response = await candidates();
     expect(((await response.json()) as { candidates: unknown[] }).candidates).toEqual([]);
   });
+
+  it('returns the full public metadata pool without a selection preference', async () => {
+    search.mockResolvedValue({
+      releases: Array.from({ length: 353 }, (_, i) => ({
+        guid: String(i),
+        title: 'Fixture film 2026 1080p ' + i,
+        tracker: 'Example',
+        size: 1024,
+        seeders: i + 1,
+        publishedAt: null,
+        downloadUrl: 'magnet:?xt=urn:btih:' + 'a'.repeat(40),
+        infoHash: null,
+      })),
+      degraded: false,
+    });
+    const response = await candidates();
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { candidates: unknown[] };
+    expect(body.candidates).toHaveLength(353);
+    expect(JSON.stringify(body)).not.toContain('magnet:');
+  });
 });

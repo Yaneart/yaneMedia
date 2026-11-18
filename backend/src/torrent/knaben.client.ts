@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { catalogSearchTitle, fetchCatalogJson } from './torrent-catalog-http';
-import { limitByTracker } from './torrent-candidate-ranking';
 import { validateMagnet } from './torrent-input.validation';
 import { trackerName } from './torrent-tracker-sources';
 import type {
@@ -78,6 +77,9 @@ export class KnabenClient implements TorrentDiscoveryPort {
         return [];
       }
     });
-    return { releases: limitByTracker(releases, input.limit, (x) => x.tracker), degraded: false };
+    return {
+      releases: releases.slice(0, input.limit),
+      degraded: false,
+    };
   }
 }

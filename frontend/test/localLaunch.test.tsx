@@ -23,7 +23,7 @@ const candidates = [1080, 720, 2160].map((resolution, index) => ({
   tracker: index ? 'Knaben' : 'RuTracker.org',
   stale: false,
   size: 1024,
-  seeders: index === 2 ? 0 : 20 + index,
+  seeders: index === 2 ? null : 20 + index,
   publishedAt: null,
   score: 100 - index,
   reasons: [],
@@ -44,10 +44,11 @@ beforeEach(() => {
   globalThis.fetch = mock(async (input, init) => {
     const path = new URL(String(input)).pathname;
     calls.push(path);
-    if (path.endsWith('/candidates'))
+    if (path.endsWith('/candidates')) {
       return Response.json({
         data: { mediaRef, candidates, degraded: false, expiresInSeconds: 300 },
       });
+    }
     if (path.endsWith('/resolve'))
       return Response.json({
         data: {
@@ -98,7 +99,7 @@ test('Public searches on opening and uses the Home filters, reset, refresh and c
   fireEvent.click(screen.getByRole('button', { name: 'Разрешение', exact: true }));
   fireEvent.click(screen.getByRole('option', { name: '720p (1)' }));
   expect(screen.queryByRole('button', { name: /Fixture 1080/ })).toBeNull();
-  expect(screen.getByText('Показано 1 из 3 · Лучшие')).toBeDefined();
+  expect(screen.getByText('Показано 1 из 1 · Всего 3 · Лучшие')).toBeDefined();
   fireEvent.click(screen.getByRole('button', { name: 'Сбросить фильтры' }));
   fireEvent.click(screen.getByRole('checkbox', { name: 'Только с раздающими' }));
   expect(screen.queryByRole('button', { name: /Fixture 2160/ })).toBeNull();

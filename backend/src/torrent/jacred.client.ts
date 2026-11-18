@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { validateMagnet } from './torrent-input.validation';
-import { limitByTracker } from './torrent-candidate-ranking';
 import { catalogSearchTitle, fetchCatalogJson } from './torrent-catalog-http';
 import { jacredTrackerName } from './torrent-tracker-sources';
 import type {
@@ -44,7 +43,7 @@ export class JacredClient implements TorrentDiscoveryPort {
         continue;
       }
       try {
-        const releases = await this.searchAt(baseUrl, search, input.limit, signal);
+        const releases = await this.searchAt(baseUrl, search, input, signal);
         this.unavailableUntil.delete(baseUrl);
         return { releases, degraded };
       } catch {
@@ -56,7 +55,12 @@ export class JacredClient implements TorrentDiscoveryPort {
     throw new Error('Catalog unavailable');
   }
 
-  private async searchAt(baseUrl: string, search: string, limit: number, signal: AbortSignal) {
+  private async searchAt(
+    baseUrl: string,
+    search: string,
+    input: DiscoverySearch,
+    signal: AbortSignal,
+  ) {
     const url = new URL('/api/v1.0/torrents', baseUrl);
     url.search = new URLSearchParams({ search, sort: 'sid' }).toString();
     const raw = await fetchCatalogJson(url, signal);
@@ -101,12 +105,47 @@ export class JacredClient implements TorrentDiscoveryPort {
             downloadUrl: magnet,
             infoHash: hash.toLowerCase(),
             catalog: 'JacRed',
+            ...releaseMetadata(x),
           },
         ];
       } catch {
         return [];
       }
     });
-    return limitByTracker(releases, limit, (x) => x.tracker);
+    return releases.slice(0, input.limit);
   }
+}
+
+function releaseMetadata(row: Record<string, unknown>): Partial<DiscoveryRelease> {
+  const metadata: Partial<DiscoveryRelease> = {};
+  if (
+    Number.isInteger(row.quality) &&
+    [360, 480, 576, 720, 1080, 1440, 2160, 4320].includes(row.quality as number)
+  )
+    metadata.resolution = row.quality as number;
+  const year = row.relased ?? row.year;
+  if (Number.isInteger(year) && (year as number) >= 1900 && (year as number) <= 2199)
+    metadata.year = year as number;
+  if (
+    Array.isArray(row.seasons) &&
+    row.seasons.length <= 100 &&
+    row.seasons.every((n) => Number.isInteger(n) && n >= 0 && n <= 99)
+  )
+    metadata.seasons = [...new Set(row.seasons as number[])];
+  if (Array.isArray(row.voices))
+    metadata.voices = row.voices
+      .slice(0, 20)
+      .filter(
+        (v): v is string =>
+          typeof v === 'string' &&
+          v.length > 0 &&
+          v.length <= 80 &&
+          ![...v].some((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127),
+      );
+  if (Array.isArray(row.types)) {
+    const movie = row.types.includes('movie'),
+      tv = row.types.includes('serial');
+    if (movie !== tv) metadata.kind = movie ? 'movie' : 'tv';
+  }
+  return metadata;
 }

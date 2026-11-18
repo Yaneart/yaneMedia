@@ -5,6 +5,7 @@ import {
   candidateTrackerLabel,
   emptyCandidateFilters,
   selectCandidates,
+  filterCandidates,
 } from '../src/features/torrent-launch/model/candidateView';
 
 const item = (title: string, values: Partial<TorrentCandidate> = {}): TorrentCandidate => ({
@@ -28,6 +29,32 @@ const item = (title: string, values: Partial<TorrentCandidate> = {}): TorrentCan
 });
 
 describe('candidate sorting and filtering', () => {
+  test('sorts and filters the full pool before limiting the displayed list to 100', () => {
+    const pool = Array.from({ length: 353 }, (_, i) =>
+      item(String(i).padStart(3, '0'), {
+        score: 353 - i,
+        seeders: i + 1,
+        publishedAt: new Date(Date.UTC(2020, 0, i + 1)).toISOString(),
+        resolution: i === 352 ? '2160p' : '1080p',
+      }),
+    );
+    const original = pool.map((x) => x.title);
+    const best = selectCandidates(pool, 'best', emptyCandidateFilters);
+    expect(best).toHaveLength(100);
+    expect(best.at(-1)?.title).toBe('099');
+    expect(best.some((x) => x.title === '352')).toBe(false);
+    for (const sort of ['newest', 'seeders'] as const) {
+      const selected = selectCandidates(pool, sort, emptyCandidateFilters);
+      expect(selected).toHaveLength(100);
+      expect(selected[0].title).toBe('352');
+      expect(selected.some((x) => x.title === '000')).toBe(false);
+    }
+    const filters = { ...emptyCandidateFilters, resolution: '2160p' };
+    expect(selectCandidates(pool, 'best', filters).map((x) => x.title)).toEqual(['352']);
+    expect(filterCandidates(pool, filters)).toHaveLength(1);
+    expect(candidateOptions(pool, 'resolution')).toContainEqual({ value: '2160p', count: 1 });
+    expect(pool.map((x) => x.title)).toEqual(original);
+  });
   test('orders resolution options from largest to smallest and keeps unknown last', () => {
     const resolutions = ['1080p', null, '720p', '4k', '2160p', '480p', '8k', '1440p'];
     expect(
@@ -80,13 +107,11 @@ describe('candidate sorting and filtering', () => {
     expect(selectCandidates(items, 'newest', emptyCandidateFilters).map((x) => x.title)).toEqual([
       'Newer',
       'Older',
-      'Zero',
       'Unknown',
     ]);
     expect(selectCandidates(items, 'seeders', emptyCandidateFilters).map((x) => x.title)).toEqual([
       'Newer',
       'Older',
-      'Zero',
       'Unknown',
     ]);
     expect(selectCandidates(items, 'best', emptyCandidateFilters)[0]?.title).toBe('Unknown');
@@ -99,6 +124,17 @@ describe('candidate sorting and filtering', () => {
       'A',
       'B',
     ]);
+  });
+
+  test('always excludes zero seeders before applying the display limit, retaining unknown counts', () => {
+    for (const sort of ['best', 'newest', 'seeders'] as const) {
+      expect(
+        selectCandidates(items, sort, emptyCandidateFilters).map((x) => x.title),
+      ).not.toContain('Zero');
+      expect(selectCandidates(items, sort, emptyCandidateFilters).map((x) => x.title)).toContain(
+        'Unknown',
+      );
+    }
   });
 
   test('combines filters and treats unknown labels explicitly', () => {

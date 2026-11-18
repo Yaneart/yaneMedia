@@ -10,13 +10,13 @@ import {
 } from './torrent-discovery.port';
 import {
   dedupeReleases,
-  limitByTracker,
+  compareRanked,
   rankRelease,
   type SearchIdentity,
 } from './torrent-candidate-ranking';
 
 const TTL_MS = 10 * 60_000;
-const MAX_CANDIDATES = 500;
+const MAX_CANDIDATES = 10_000;
 const error = (status: number, code: string) => new HttpException({ code, message: code }, status);
 const safeText = (value: string) =>
   [...value]
@@ -80,7 +80,13 @@ export class TorrentDiscoveryService {
         if (controller.signal.aborted) break;
         try {
           const result = await this.discovery.search(
-            { query: title, title, kind: identity.kind, limit: 50, offset: 0 },
+            {
+              query: title,
+              title,
+              kind: identity.kind,
+              limit: 2000,
+              offset: 0,
+            },
             controller.signal,
           );
           results.push(result.releases);
@@ -96,36 +102,28 @@ export class TorrentDiscoveryService {
       this.sweep();
       const ranked = releases
         .map((release) => ({ release, rank: rankRelease(release, identity) }))
-        .filter(({ rank, release }) => rank.score > -50 && release.size <= 200 * 1024 ** 3)
-        .sort(
-          (a, b) =>
-            b.rank.score - a.rank.score ||
-            a.release.tracker.localeCompare(b.release.tracker, 'ru') ||
-            a.release.title.localeCompare(b.release.title, 'ru') ||
-            a.release.size - b.release.size,
-        );
-      const candidates = limitByTracker(ranked, 50, (x) => x.release.tracker).map(
-        ({ release, rank }) => {
-          const candidateRef = `candidate_${randomBytes(18).toString('base64url')}`;
-          this.candidates.set(candidateRef, {
-            ownerId,
-            mediaRef,
-            release,
-            expiresAt: Date.now() + TTL_MS,
-          });
-          return {
-            candidateRef,
-            title: safeText(release.title).slice(0, 256),
-            tracker: safeText(release.tracker),
-            stale: release.stale === true,
-            ...(release.catalog ? { catalog: release.catalog } : {}),
-            size: release.size,
-            seeders: release.seeders,
-            publishedAt: release.publishedAt,
-            ...rank,
-          };
-        },
-      );
+        .filter(({ release }) => release.seeders !== 0 && release.size <= 200 * 1024 ** 3)
+        .sort(compareRanked);
+      const candidates = ranked.map(({ release, rank }) => {
+        const candidateRef = `candidate_${randomBytes(18).toString('base64url')}`;
+        this.candidates.set(candidateRef, {
+          ownerId,
+          mediaRef,
+          release,
+          expiresAt: Date.now() + TTL_MS,
+        });
+        return {
+          candidateRef,
+          title: safeText(release.title).slice(0, 256),
+          tracker: safeText(release.tracker),
+          stale: release.stale === true,
+          ...(release.catalog ? { catalog: release.catalog } : {}),
+          size: release.size,
+          seeders: release.seeders,
+          publishedAt: release.publishedAt,
+          ...rank,
+        };
+      });
       this.sweep();
       return { mediaRef, candidates, degraded: failed > 0, expiresInSeconds: TTL_MS / 1000 };
     } finally {

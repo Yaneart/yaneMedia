@@ -1,6 +1,7 @@
 import type { TorrentCandidate } from '@/entities/torrent-session';
 
 export type CandidateSort = 'best' | 'newest' | 'seeders';
+export const candidateDisplayLimit = 100;
 export type CandidateFilters = {
   tracker: string;
   resolution: string;
@@ -68,20 +69,24 @@ function knownDescending(a: number | null, b: number | null) {
   return b - a;
 }
 
+export function filterCandidates(items: readonly TorrentCandidate[], filters: CandidateFilters) {
+  return items.filter(
+    (item) =>
+      item.seeders !== 0 &&
+      (!filters.tracker || label(item.tracker) === filters.tracker) &&
+      (!filters.resolution || label(item.resolution) === filters.resolution) &&
+      (!filters.quality || label(item.quality) === filters.quality) &&
+      (!filters.voice || candidateVoice(item) === filters.voice) &&
+      (!filters.seededOnly || (item.seeders !== null && item.seeders > 0)),
+  );
+}
+
 export function selectCandidates(
   items: readonly TorrentCandidate[],
   sort: CandidateSort,
   filters: CandidateFilters,
 ) {
-  return items
-    .filter(
-      (item) =>
-        (!filters.tracker || label(item.tracker) === filters.tracker) &&
-        (!filters.resolution || label(item.resolution) === filters.resolution) &&
-        (!filters.quality || label(item.quality) === filters.quality) &&
-        (!filters.voice || candidateVoice(item) === filters.voice) &&
-        (!filters.seededOnly || (item.seeders !== null && item.seeders > 0)),
-    )
+  return filterCandidates(items, filters)
     .sort((a, b) => {
       const primary =
         sort === 'newest'
@@ -99,5 +104,6 @@ export function selectCandidates(
         a.title.localeCompare(b.title, 'ru') ||
         a.size - b.size
       );
-    });
+    })
+    .slice(0, candidateDisplayLimit);
 }

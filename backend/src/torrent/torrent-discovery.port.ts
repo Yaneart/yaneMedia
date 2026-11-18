@@ -20,6 +20,11 @@ export interface DiscoveryRelease {
   infoHash: string | null;
   stale?: boolean;
   catalog?: 'JacRed' | 'Knaben';
+  resolution?: number;
+  year?: number;
+  seasons?: number[];
+  voices?: string[];
+  kind?: 'movie' | 'tv';
 }
 
 export interface DiscoverySearchResult {
