@@ -45,6 +45,10 @@ export function localTorrentError(error: unknown) {
     MEDIA_FAILED:
       'Не удалось подготовить видео. Повторите выбор файла или выберите другую раздачу.',
     RESOURCE_LIMIT: 'Для этого файла недостаточно ресурсов. Выберите другой файл.',
+    CACHE_FULL:
+      'Недостаточно места для локального просмотра. Освободите место и повторите выбор раздачи.',
+    PREPARATION_TIMEOUT:
+      'Подготовка видео заняла слишком много времени. Повторите попытку или выберите другую раздачу.',
   };
   const apiCode = (error as { code?: string } | null)?.code;
   return (
@@ -135,6 +139,7 @@ export function useLocalTorrent(preferences?: PreferencesAdapter) {
     const signal = AbortSignal.any([abort.signal, torrentAccountSignal()]);
     let active: NonNullable<typeof current.current> | undefined;
     let heartbeat: ReturnType<typeof setInterval> | undefined;
+    let heartbeatPending = false;
     try {
       await closing.current;
       signal.throwIfAborted();
@@ -147,15 +152,21 @@ export function useLocalTorrent(preferences?: PreferencesAdapter) {
       current.current = active;
       // Keep the lease independently of metadata polling and open UI menus.
       heartbeat = setInterval(() => {
-        void heartbeatLocalController(controller, signal).catch((cause) => {
-          if (!signal.aborted && mounted.current) {
-            setError(localTorrentError(cause));
-            dispose();
-            setSnapshot(null);
-            setPlayback(null);
-            setPending(false);
-          }
-        });
+        if (heartbeatPending || signal.aborted) return;
+        heartbeatPending = true;
+        void heartbeatLocalController(controller, signal)
+          .catch((cause) => {
+            if (!signal.aborted && mounted.current && current.current === active) {
+              setError(localTorrentError(cause));
+              dispose();
+              setSnapshot(null);
+              setPlayback(null);
+              setPending(false);
+            }
+          })
+          .finally(() => {
+            heartbeatPending = false;
+          });
       }, 20_000);
       const locator = await resolve(signal);
       signal.throwIfAborted();

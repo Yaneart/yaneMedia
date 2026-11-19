@@ -323,3 +323,41 @@ test('losing access during media preparation releases pending so another torrent
   });
   await waitFor(() => expect(result.current.snapshot?.state).toBe('awaiting_file'));
 });
+
+test('heartbeat attempts do not overlap and disk pressure clears an idle picker', async () => {
+  const interval = globalThis.setInterval;
+  let heartbeat!: () => void;
+  spyOn(globalThis, 'setInterval').mockImplementation(((callback: () => void, delay: number) => {
+    if (delay === 20_000) heartbeat = callback;
+    return interval(callback, delay);
+  }) as typeof setInterval);
+  const { result } = renderHook(() => useLocalTorrent());
+  act(() => {
+    void result.current.start(async () => locator);
+  });
+  await waitFor(() => expect(result.current.snapshot?.state).toBe('awaiting_file'));
+  const transport = globalThis.fetch;
+  let finish!: (response: Response) => void;
+  let beats = 0;
+  globalThis.fetch = mock(async (url, init) => {
+    if (String(url).endsWith('/heartbeat')) {
+      beats++;
+      return await new Promise<Response>((resolve) => {
+        finish = resolve;
+      });
+    }
+    return transport(url, init);
+  }) as typeof fetch;
+  act(() => {
+    heartbeat();
+    heartbeat();
+  });
+  expect(beats).toBe(1);
+  await act(async () => {
+    finish(json({ error: { code: 'CACHE_FULL' } }, 503));
+  });
+  await waitFor(() => expect(result.current.snapshot).toBeNull());
+  expect(result.current.error).toContain('Недостаточно места');
+  expect(result.current.pending).toBe(false);
+  expect(beats).toBe(1);
+});

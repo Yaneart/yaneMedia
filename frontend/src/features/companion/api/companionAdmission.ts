@@ -46,6 +46,39 @@ const invalid = (): never => {
   throw new CompanionError('INVALID_RESPONSE');
 };
 
+// Only reads and the idempotent lease heartbeat may retry a lost connection.
+// Mutations are reconciled by operation ID instead of being submitted again.
+async function recoverConnection<T>(signal: AbortSignal, read: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    signal.throwIfAborted();
+    try {
+      return await read();
+    } catch (error) {
+      if (
+        signal.aborted ||
+        !(error instanceof CompanionError) ||
+        error.code !== 'UNAVAILABLE' ||
+        attempt >= 2
+      )
+        throw error;
+      await new Promise<void>((resolve, reject) => {
+        const abort = () => {
+          clearTimeout(timer);
+          reject(signal.reason);
+        };
+        const timer = setTimeout(
+          () => {
+            signal.removeEventListener('abort', abort);
+            resolve();
+          },
+          500 * 2 ** attempt,
+        );
+        signal.addEventListener('abort', abort, { once: true });
+      });
+    }
+  }
+}
+
 export async function openLocalController(signal: AbortSignal): Promise<LocalController> {
   await closePendingControllers(signal);
   const handshake = await hello(signal);
@@ -94,7 +127,9 @@ export async function localOperation(
   key: string,
   signal: AbortSignal,
 ): Promise<{ sessionId: string; revision: number; state: string; error?: string }> {
-  const result = await companionRequest(`/v1/operations/${key}`, 'GET', signal, controller.token);
+  const result = await recoverConnection(signal, () =>
+    companionRequest(`/v1/operations/${key}`, 'GET', signal, controller.token),
+  );
   if (
     !id(result?.sessionId) ||
     result.operationId !== key ||
@@ -108,7 +143,9 @@ export async function localSnapshot(
   session: string,
   signal: AbortSignal,
 ): Promise<LocalSnapshot> {
-  const value = await companionRequest(`/v1/sessions/${session}`, 'GET', signal, controller.token);
+  const value = await recoverConnection(signal, () =>
+    companionRequest(`/v1/sessions/${session}`, 'GET', signal, controller.token),
+  );
   if (
     value?.sessionId !== session ||
     !id(value.sessionId) ||
@@ -173,6 +210,8 @@ export async function selectLocalFile(
     return invalid();
 }
 export const heartbeatLocalController = (controller: LocalController, signal: AbortSignal) =>
-  companionRequest('/v1/controllers/current/heartbeat', 'POST', signal, controller.token);
+  recoverConnection(signal, () =>
+    companionRequest('/v1/controllers/current/heartbeat', 'POST', signal, controller.token),
+  );
 export const closeLocalController = (controller: LocalController) =>
   closeController(controller.token);
