@@ -6,6 +6,7 @@ const documentTitles: Record<string, string> = {
   [routePaths.movies]: 'Фильмы',
   [routePaths.series]: 'Сериалы',
   [routePaths.anime]: 'Аниме',
+  [routePaths.releases]: 'Новинки',
   [routePaths.editorialPicks]: 'Выбор редакции',
   [routePaths.favorites]: 'Избранное',
   [routePaths.history]: 'История',

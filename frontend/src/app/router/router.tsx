@@ -3,6 +3,7 @@ import { createBrowserRouter } from 'react-router';
 import { AppShell } from '../layout/AppShell';
 import {
   AnimePage,
+  ReleasesPage,
   EditorialCollectionPage,
   FavoritesPage,
   HistoryPage,
@@ -114,6 +115,10 @@ export const router = createBrowserRouter([
           {
             path: routePaths.editorialPicks,
             element: lazyRoute(<EditorialCollectionPage />, <EditorialCollectionPageSkeleton />),
+          },
+          {
+            path: routePaths.releases,
+            element: lazyRoute(<ReleasesPage />),
           },
           {
             path: routePaths.media,

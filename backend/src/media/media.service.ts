@@ -140,7 +140,9 @@ export class MediaService {
       () =>
         this.mediaEngine.getDetails({
           ids: engineIds,
-          ...(catalogItem ? { type: catalogItem.type } : {}),
+          ...(catalogItem || resolved.identity
+            ? { type: catalogItem?.type ?? resolved.identity!.type }
+            : {}),
           language: 'ru',
         }),
       queueWaitMs,

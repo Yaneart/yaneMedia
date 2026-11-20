@@ -7,6 +7,9 @@ const loadMoviesPage = () =>
   import('@/pages/movies').then(({ MoviesPage }) => ({ default: MoviesPage }));
 const loadSeriesPage = () =>
   import('@/pages/series').then(({ SeriesPage }) => ({ default: SeriesPage }));
+export const ReleasesPage = lazy(() =>
+  import('@/pages/releases/ReleasesPage').then(({ ReleasesPage }) => ({ default: ReleasesPage })),
+);
 export const AnimePage = lazy(loadAnimePage);
 export const EditorialCollectionPage = lazy(() =>
   import('@/pages/editorial-collection').then(({ EditorialCollectionPage }) => ({

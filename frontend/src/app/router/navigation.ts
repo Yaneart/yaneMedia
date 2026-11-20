@@ -13,6 +13,7 @@ import {
   SearchFilledIcon,
   SeriesIcon,
   SeriesFilledIcon,
+  StarIcon,
   type IconProps,
 } from '@/shared';
 import type { ComponentType } from 'react';
@@ -55,6 +56,12 @@ export const primaryNavigationItems = [
     path: routePaths.anime,
     icon: AnimeIcon,
     activeIcon: AnimeFilledIcon,
+  },
+  {
+    label: 'Новинки',
+    path: routePaths.releases,
+    icon: StarIcon,
+    activeIcon: StarIcon,
   },
 ] satisfies NavigationItem[];
 

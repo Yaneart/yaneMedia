@@ -15,10 +15,12 @@ import { MediaAssetsController } from './assets/media-assets.controller';
 import { MediaAssetCleanupService } from './assets/media-asset-cleanup.service';
 import { MediaRegistryService } from './registry/media-registry.service';
 import { createMediaEngine } from './media-engine.config';
+import { ReleasesService } from './releases/releases.service';
+import { ReleasesController } from './releases/releases.controller';
 
 @Module({
   imports: [AppConfigModule, DatabaseModule],
-  controllers: [MediaController, MediaAssetsController],
+  controllers: [ReleasesController, MediaController, MediaAssetsController],
   providers: [
     {
       provide: MEDIA_ENGINE,
@@ -39,6 +41,7 @@ import { createMediaEngine } from './media-engine.config';
         }),
     },
     MediaService,
+    ReleasesService,
     MediaRegistryService,
     MediaCatalogService,
     EditorialCatalogRepository,

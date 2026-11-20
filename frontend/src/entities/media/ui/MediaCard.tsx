@@ -3,7 +3,7 @@ import { MediaPosterFallback } from './MediaPosterFallback';
 import { MediaLink } from './MediaLink';
 import type { MediaSummary } from '../model/media';
 import { getCardPosterUrl } from '../model/cardPoster';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 
 export type MediaCardProps = {
   media: MediaSummary;
@@ -11,6 +11,7 @@ export type MediaCardProps = {
   imageLoading?: 'eager' | 'lazy';
   favoriteDisabled?: boolean;
   onFavoriteChange: () => void;
+  posterOverlay?: ReactNode;
 };
 
 export function MediaCard({
@@ -19,6 +20,7 @@ export function MediaCard({
   imageLoading = 'lazy',
   favoriteDisabled = false,
   onFavoriteChange,
+  posterOverlay,
 }: MediaCardProps) {
   const [failedPosterUrl, setFailedPosterUrl] = useState<string | null>(null);
 
@@ -47,7 +49,7 @@ export function MediaCard({
           'motion-reduce:transform-none motion-reduce:transition-none',
         ].join(' ')}
       >
-        <div className="aspect-2/3 overflow-hidden rounded-card border border-context-border bg-elevated">
+        <div className="relative aspect-2/3 overflow-hidden rounded-card border border-context-border bg-elevated">
           {canShowPoster ? (
             <img
               src={getCardPosterUrl(poster.url)}
@@ -66,6 +68,7 @@ export function MediaCard({
           ) : (
             <MediaPosterFallback mediaRef={media.mediaRef} title={media.title} type={media.type} />
           )}
+          {posterOverlay}
         </div>
 
         <p className="mt-2 truncate font-semibold text-text-primary">{media.title}</p>
