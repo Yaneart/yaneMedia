@@ -31,6 +31,7 @@ import {
   SocialPageSkeleton,
 } from '@/shared';
 import { HomePage } from '@/pages/home';
+import { ReleasesPageSkeleton } from '@/pages/releases/ReleasesPageSkeleton';
 import { MediaCatalogSkeleton } from '@/widgets/media-catalog';
 import { LibraryPageSkeleton } from '@/widgets/library-page';
 import { AuthFormLayoutSkeleton } from '@/widgets/auth-form-layout';
@@ -118,7 +119,7 @@ export const router = createBrowserRouter([
           },
           {
             path: routePaths.releases,
-            element: lazyRoute(<ReleasesPage />),
+            element: lazyRoute(<ReleasesPage />, <ReleasesPageSkeleton />),
           },
           {
             path: routePaths.media,
