@@ -15,7 +15,7 @@ import {
   EmptyState,
   ErrorState,
   FavoriteIcon,
-  LoadMoreButton,
+  InfiniteScroll,
   MediaGrid,
   ProfileIcon,
   Skeleton,
@@ -62,31 +62,6 @@ function PanelSkeleton({ kind }: { kind: PublicProfileTabId }) {
 
 function PanelContent({ children }: { children: ReactNode }) {
   return <div className="p-4 sm:p-6">{children}</div>;
-}
-
-function PaginationFooter({
-  hasNextPage,
-  isFetchingNextPage,
-  hasError,
-  onLoadMore,
-}: {
-  hasNextPage: boolean;
-  isFetchingNextPage: boolean;
-  hasError: boolean;
-  onLoadMore: () => void;
-}) {
-  if (!hasNextPage && !hasError) return null;
-
-  return (
-    <div className="flex flex-col items-center gap-2 border-t border-border px-4 py-5 sm:px-6">
-      <LoadMoreButton isLoading={isFetchingNextPage} hasError={hasError} onClick={onLoadMore} />
-      {hasError && (
-        <p role="status" className="text-center text-caption text-danger">
-          Не удалось загрузить следующую страницу. Уже загруженные материалы сохранены.
-        </p>
-      )}
-    </div>
-  );
 }
 
 export function PublicProfileActivity({
@@ -173,11 +148,10 @@ export function PublicProfileActivity({
             ))}
           </div>
         </PanelContent>
-        <PaginationFooter
-          hasNextPage={reviewsQuery.hasNextPage}
-          isFetchingNextPage={reviewsQuery.isFetchingNextPage}
-          hasError={reviewsQuery.isFetchNextPageError}
-          onLoadMore={() => void reviewsQuery.fetchNextPage({ cancelRefetch: false })}
+        <InfiniteScroll
+          key={`${profile.handle}:reviews:${ownerAccountKey ?? ''}`}
+          query={reviewsQuery}
+          className="px-4 pb-4"
         />
       </>
     );
@@ -221,11 +195,10 @@ export function PublicProfileActivity({
             ))}
           </MediaGrid>
         </PanelContent>
-        <PaginationFooter
-          hasNextPage={ratingsQuery.hasNextPage}
-          isFetchingNextPage={ratingsQuery.isFetchingNextPage}
-          hasError={ratingsQuery.isFetchNextPageError}
-          onLoadMore={() => void ratingsQuery.fetchNextPage({ cancelRefetch: false })}
+        <InfiniteScroll
+          key={`${profile.handle}:ratings`}
+          query={ratingsQuery}
+          className="px-4 pb-4"
         />
       </>
     );
@@ -260,11 +233,10 @@ export function PublicProfileActivity({
             ))}
           </MediaGrid>
         </PanelContent>
-        <PaginationFooter
-          hasNextPage={favoritesQuery.hasNextPage}
-          isFetchingNextPage={favoritesQuery.isFetchingNextPage}
-          hasError={favoritesQuery.isFetchNextPageError}
-          onLoadMore={() => void favoritesQuery.fetchNextPage({ cancelRefetch: false })}
+        <InfiniteScroll
+          key={`${profile.handle}:favorites`}
+          query={favoritesQuery}
+          className="px-4 pb-4"
         />
       </>
     );

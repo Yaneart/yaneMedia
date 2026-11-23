@@ -107,7 +107,10 @@ export function useMediaSearch(filters: MediaSearchFilters, debounceMs = 300) {
   });
 
   const pages = query.data?.pages;
-  const items: MediaSummary[] = pages ? collectUniqueMediaSearchItems(pages) : [];
+  const items: MediaSummary[] = useMemo(
+    () => (pages ? collectUniqueMediaSearchItems(pages) : []),
+    [pages],
+  );
   const resultFilters = pages?.[0]?.filters ?? null;
   const isPreviousResult =
     resultFilters !== null && !filtersMatch(normalizedFilters, resultFilters);
@@ -131,14 +134,9 @@ export function useMediaSearch(filters: MediaSearchFilters, debounceMs = 300) {
     isPreviousResult,
     isUpdating: enabled && (!isDebounced || (query.isFetching && !query.isFetchingNextPage)),
     hasRefreshError: query.isError && pages !== undefined && !query.isFetchNextPageError,
-    hasMore: query.hasNextPage,
-    isLoadingMore: query.isFetchingNextPage,
-    loadMoreError: query.isFetchNextPageError,
+    pagination: query,
     retry: () => {
       void query.refetch({ cancelRefetch: false });
-    },
-    loadMore: () => {
-      void query.fetchNextPage({ cancelRefetch: false });
     },
   };
 }

@@ -6,7 +6,7 @@ import {
   DownIcon,
   EmptyState,
   ErrorState,
-  LoadMoreButton,
+  InfiniteScroll,
   LoadingState,
   MediaGrid,
   SearchInput,
@@ -30,10 +30,6 @@ import {
   type CatalogSearchFilters,
 } from '../model/catalogSearchParams';
 import { getGenreOptions } from '../model/genreOptions';
-import {
-  shouldEnableCatalogPaginationSentinel,
-  useCatalogPaginationSentinel,
-} from '../model/useCatalogPaginationSentinel';
 import { useMediaCatalog } from '../model/useMediaCatalog';
 import { getYearOptions } from '../model/yearOptions';
 import { MediaCatalogSkeleton } from './MediaCatalogSkeleton';
@@ -52,10 +48,7 @@ export function MediaCatalog({ type, title, filters }: MediaCatalogProps) {
     hasRefreshError,
     isFetching,
     isPaused,
-    hasMore: hasMoreCatalogCollections,
-    isLoadingMore: areMoreCatalogCollectionsLoading,
-    loadMoreError: hasMoreCatalogCollectionsError,
-    loadMore: loadMoreCatalogCollections,
+    pagination: catalogPagination,
     retry,
   } = useMediaCatalog(type);
   const { isFavorite, isFavoriteUpdating, toggleFavorite, canUpdateFavorites } = useFavorites();
@@ -109,11 +102,8 @@ export function MediaCatalog({ type, title, filters }: MediaCatalogProps) {
     isPreviousResult: isPreviousQueryResult,
     isUpdating: isQueryUpdating,
     hasRefreshError: hasSearchRefreshError,
-    hasMore,
-    isLoadingMore,
-    loadMoreError,
+    pagination: searchPagination,
     retry: retrySearch,
-    loadMore,
   } = useMediaSearch(
     {
       query: urlFilters.query,
@@ -127,18 +117,6 @@ export function MediaCatalog({ type, title, filters }: MediaCatalogProps) {
 
   const isPreviousResult = isPreviousQueryResult || isSearchDraftPending;
   const isSearchUpdating = isQueryUpdating || isSearchDraftPending;
-  const catalogPaginationSentinelRef = useCatalogPaginationSentinel({
-    enabled: shouldEnableCatalogPaginationSentinel({
-      isResultsMode,
-      hasCatalog: Boolean(catalog),
-      hasMore: hasMoreCatalogCollections,
-      isLoadingMore: areMoreCatalogCollectionsLoading,
-      hasLoadMoreError: hasMoreCatalogCollectionsError,
-      isPaused,
-    }),
-    onLoadMore: loadMoreCatalogCollections,
-  });
-
   if (!catalog && !isResultsMode && !isError && !isPaused) {
     return <MediaCatalogSkeleton title={title} />;
   }
@@ -194,12 +172,7 @@ export function MediaCatalog({ type, title, filters }: MediaCatalogProps) {
   };
 
   return (
-    <section
-      aria-busy={
-        (isResultsMode && (searchStatus === 'loading' || isSearchUpdating)) ||
-        (!isResultsMode && areMoreCatalogCollectionsLoading)
-      }
-    >
+    <section aria-busy={isResultsMode && (searchStatus === 'loading' || isSearchUpdating)}>
       <p role="status" aria-atomic="true" className="sr-only">
         {searchResultsAnnouncement}
       </p>
@@ -399,21 +372,12 @@ export function MediaCatalog({ type, title, filters }: MediaCatalogProps) {
               ))}
             </MediaGrid>
 
-            {(hasMore || loadMoreError) && (
-              <div className="mt-8 flex flex-col items-center gap-3">
-                {loadMoreError && (
-                  <p role="alert" className="text-caption text-danger">
-                    Не удалось загрузить следующую страницу.
-                  </p>
-                )}
-                <LoadMoreButton
-                  isLoading={isLoadingMore}
-                  hasError={loadMoreError}
-                  disabled={isSearchUpdating}
-                  onClick={loadMore}
-                />
-              </div>
-            )}
+            <InfiniteScroll
+              key={searchParams.toString()}
+              query={searchPagination}
+              disabled={isSearchUpdating || isPreviousResult}
+              className="mt-4"
+            />
           </div>
         ) : (
           <EmptyState
@@ -472,7 +436,6 @@ export function MediaCatalog({ type, title, filters }: MediaCatalogProps) {
                     key={item.mediaRef}
                     media={item}
                     isFavorite={isFavorite(item.mediaRef)}
-                    imageLoading="eager"
                     favoriteDisabled={!canUpdateFavorites || isFavoriteUpdating(item.mediaRef)}
                     onFavoriteChange={() => toggleFavorite(item.mediaRef)}
                   />
@@ -481,24 +444,11 @@ export function MediaCatalog({ type, title, filters }: MediaCatalogProps) {
             </section>
           ))}
 
-          {(hasMoreCatalogCollections || hasMoreCatalogCollectionsError) && (
-            <div
-              ref={catalogPaginationSentinelRef}
-              className="flex min-h-20 flex-col items-center justify-center gap-3"
-            >
-              {hasMoreCatalogCollectionsError && (
-                <p role="alert" className="text-caption text-danger">
-                  Не удалось загрузить следующие подборки.
-                </p>
-              )}
-              <LoadMoreButton
-                isLoading={areMoreCatalogCollectionsLoading}
-                hasError={hasMoreCatalogCollectionsError}
-                disabled={areMoreCatalogCollectionsLoading || isPaused}
-                onClick={loadMoreCatalogCollections}
-              />
-            </div>
-          )}
+          <InfiniteScroll
+            key={type}
+            query={catalogPagination}
+            errorMessage="Не удалось загрузить следующие подборки."
+          />
         </div>
       )}
     </section>

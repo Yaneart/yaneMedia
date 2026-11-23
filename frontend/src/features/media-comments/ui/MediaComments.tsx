@@ -5,7 +5,7 @@ import {
   useQueryClient,
   type InfiniteData,
 } from '@tanstack/react-query';
-import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 
 import { createPublicProfilePath } from '@/app/router/routes';
@@ -32,7 +32,7 @@ import {
   SocialLoginLink,
   useRestoreSocialAction,
 } from '@/features/social-access';
-import { Button, LoadMoreButton, ProfileIcon, Skeleton, YaneMark, YaneMarkField } from '@/shared';
+import { Button, InfiniteScroll, ProfileIcon, Skeleton, YaneMark, YaneMarkField } from '@/shared';
 import { ApiClientError } from '@/shared/api';
 import {
   appendMediaComment,
@@ -385,7 +385,7 @@ function CommentCard({
   );
 }
 
-export function MediaComments({ media }: { media: MediaSummary }) {
+export function MediaComments({ media, active }: { media: MediaSummary; active: boolean }) {
   const composerId = useId();
   const { state: authState, setGuest, refresh } = useAuth();
   const queryClient = useQueryClient();
@@ -403,18 +403,24 @@ export function MediaComments({ media }: { media: MediaSummary }) {
     ),
     enabled: authState.status === 'authenticated',
   });
-  const comments = mergeMediaComments(query.data?.pages ?? []);
-  const byId = new Map(comments.map((comment) => [comment.commentId, comment]));
-  const roots = comments.filter(
-    (comment) => comment.parentCommentId === null || !byId.has(comment.parentCommentId),
-  );
-  const repliesByRoot = new Map<string, MediaComment[]>();
-  for (const comment of comments) {
-    if (!comment.parentCommentId || !byId.has(comment.parentCommentId)) continue;
-    const replies = repliesByRoot.get(comment.parentCommentId) ?? [];
-    replies.push(comment);
-    repliesByRoot.set(comment.parentCommentId, replies);
-  }
+  const pages = query.data?.pages;
+  const { comments, roots, repliesByRoot } = useMemo(() => {
+    const comments = mergeMediaComments(pages ?? []);
+    const ids = new Set(comments.map((comment) => comment.commentId));
+    const roots: MediaComment[] = [];
+    const repliesByRoot = new Map<string, MediaComment[]>();
+    for (const comment of comments) {
+      const parentId = comment.parentCommentId;
+      if (!parentId || !ids.has(parentId)) {
+        roots.push(comment);
+        continue;
+      }
+      const replies = repliesByRoot.get(parentId) ?? [];
+      replies.push(comment);
+      repliesByRoot.set(parentId, replies);
+    }
+    return { comments, roots, repliesByRoot };
+  }, [pages]);
 
   useRestoreSocialAction(
     'comment',
@@ -632,15 +638,7 @@ export function MediaComments({ media }: { media: MediaSummary }) {
             </div>
           )}
 
-          {query.hasNextPage && (
-            <div className="mt-5 flex justify-center">
-              <LoadMoreButton
-                isLoading={query.isFetchingNextPage}
-                hasError={query.isFetchNextPageError}
-                onClick={() => void query.fetchNextPage({ cancelRefetch: false })}
-              />
-            </div>
-          )}
+          <InfiniteScroll key={media.mediaRef} query={query} disabled={!active} className="mt-4" />
         </div>
       </div>
     </section>

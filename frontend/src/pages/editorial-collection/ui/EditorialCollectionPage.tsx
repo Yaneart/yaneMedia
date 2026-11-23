@@ -4,15 +4,14 @@ import {
   EditorialCollectionHeader,
   EditorialCollectionPageSkeleton,
   ErrorState,
-  LoadMoreButton,
+  InfiniteScroll,
   MediaGrid,
 } from '@/shared';
 
 import { useEditorialCollection } from '../model/useEditorialCollection';
 
 export function EditorialCollectionPage() {
-  const { collection, status, isLoadingMore, loadMoreFailed, loadMore, retry } =
-    useEditorialCollection();
+  const { collection, status, pagination, retry } = useEditorialCollection();
   const { isFavorite, isFavoriteUpdating, toggleFavorite, canUpdateFavorites } = useFavorites();
 
   if (!collection && status === 'error') {
@@ -33,10 +32,8 @@ export function EditorialCollectionPage() {
     return <EditorialCollectionPageSkeleton />;
   }
 
-  const hasMore = collection.nextOffset < collection.total;
-
   return (
-    <section className="min-w-0 space-y-7 pb-4" aria-busy={isLoadingMore}>
+    <section className="min-w-0 space-y-7 pb-4">
       <EditorialCollectionHeader total={collection.total} />
 
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -66,17 +63,10 @@ export function EditorialCollectionPage() {
         ))}
       </MediaGrid>
 
-      {(hasMore || loadMoreFailed) && (
-        <div className="flex flex-col items-center gap-3 pt-2">
-          {loadMoreFailed && (
-            <p role="status" className="text-caption text-text-secondary">
-              Следующую часть подборки не удалось загрузить.
-            </p>
-          )}
-
-          <LoadMoreButton isLoading={isLoadingMore} hasError={loadMoreFailed} onClick={loadMore} />
-        </div>
-      )}
+      <InfiniteScroll
+        query={pagination}
+        errorMessage="Следующую часть подборки не удалось загрузить."
+      />
     </section>
   );
 }

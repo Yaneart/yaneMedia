@@ -1,4 +1,5 @@
 import { infiniteQueryOptions, useInfiniteQuery } from '@tanstack/react-query';
+import { useMemo } from 'react';
 
 import type { MediaType } from '@/entities/media';
 import { getMediaCatalog } from '../api/getMediaCatalog';
@@ -24,21 +25,19 @@ export function mediaCatalogQueryOptions(type: MediaType) {
 
 export function useMediaCatalog(type: MediaType) {
   const query = useInfiniteQuery(mediaCatalogQueryOptions(type));
-  const pages = query.data?.pages ?? [];
-  const catalog = pages.length > 0 ? mergeMediaCatalogPages(pages) : undefined;
+  const pages = query.data?.pages;
+  const catalog = useMemo(
+    () => (pages?.length ? mergeMediaCatalogPages(pages) : undefined),
+    [pages],
+  );
 
   return {
     catalog,
-    isError: query.isError && pages.length === 0,
+    isError: query.isError && !catalog,
     hasRefreshError: query.isRefetchError && !query.isFetchNextPageError,
     isFetching: query.isRefetching && !query.isFetchingNextPage,
     isPaused: query.isPaused,
-    hasMore: query.hasNextPage,
-    isLoadingMore: query.isFetchingNextPage,
-    loadMoreError: query.isFetchNextPageError,
-    loadMore: () => {
-      void query.fetchNextPage({ cancelRefetch: false });
-    },
+    pagination: query,
     retry: () => {
       void query.refetch({ cancelRefetch: false });
     },

@@ -7,6 +7,7 @@ import {
 } from '@tanstack/react-query';
 import {
   useEffect,
+  useMemo,
   useRef,
   useState,
   type FormEvent,
@@ -37,7 +38,7 @@ import {
   SocialLoginLink,
   useRestoreSocialAction,
 } from '@/features/social-access';
-import { Button, DeleteIcon, LoadMoreButton, MoreIcon, ProfileIcon, ShieldIcon } from '@/shared';
+import { Button, DeleteIcon, InfiniteScroll, MoreIcon, ProfileIcon, ShieldIcon } from '@/shared';
 import { ApiClientError } from '@/shared/api';
 import {
   appendReviewComment,
@@ -480,7 +481,8 @@ export function ReviewDiscussion({ review }: DiscussionProps) {
     ),
     enabled: authState.status === 'authenticated',
   });
-  const comments = mergeReviewComments(query.data?.pages ?? []);
+  const pages = query.data?.pages;
+  const comments = useMemo(() => mergeReviewComments(pages ?? []), [pages]);
 
   useRestoreSocialAction(
     'comment',
@@ -716,20 +718,7 @@ export function ReviewDiscussion({ review }: DiscussionProps) {
             </ul>
           )}
 
-          {query.hasNextPage && (
-            <div className="mt-5 flex justify-center">
-              <LoadMoreButton
-                isLoading={query.isFetchingNextPage}
-                hasError={query.isFetchNextPageError}
-                onClick={() => void query.fetchNextPage()}
-              />
-            </div>
-          )}
-          {query.isFetchNextPageError && (
-            <p role="alert" className="mt-3 text-center text-sm text-error">
-              Следующая страница не загрузилась. Уже показанные комментарии сохранены.
-            </p>
-          )}
+          <InfiniteScroll key={review.reviewId} query={query} className="mt-4" />
         </div>
       </div>
     </section>

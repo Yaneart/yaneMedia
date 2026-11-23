@@ -11,7 +11,6 @@ import {
   mediaCatalogStaleTimeMs,
   mergeMediaCatalogPages,
 } from '../src/widgets/media-catalog/model/mediaCatalogPagination';
-import { shouldEnableCatalogPaginationSentinel } from '../src/widgets/media-catalog/model/useCatalogPaginationSentinel';
 
 function item(mediaRef: string): MediaSummary {
   return { mediaRef, type: 'movie', title: mediaRef, genres: [] };
@@ -80,21 +79,5 @@ describe('media catalog pagination', () => {
     expect(getNextMediaCatalogPageParam(page({ offset: 2, mediaRefs: ['local:three'] }))).toBe(
       undefined,
     );
-  });
-
-  test('observes the sentinel only for a healthy editorial tail', () => {
-    const ready = {
-      isResultsMode: false,
-      hasCatalog: true,
-      hasMore: true,
-      isLoadingMore: false,
-      hasLoadMoreError: false,
-      isPaused: false,
-    };
-
-    expect(shouldEnableCatalogPaginationSentinel(ready)).toBe(true);
-    expect(shouldEnableCatalogPaginationSentinel({ ...ready, isResultsMode: true })).toBe(false);
-    expect(shouldEnableCatalogPaginationSentinel({ ...ready, isLoadingMore: true })).toBe(false);
-    expect(shouldEnableCatalogPaginationSentinel({ ...ready, hasLoadMoreError: true })).toBe(false);
   });
 });

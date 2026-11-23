@@ -626,22 +626,6 @@
   );
 }
 
-.load-more-button {
-  transition-property: background-color, border-color, color, opacity, transform;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .load-more-button {
-    transition-property: none;
-  }
-}
-
-@media (hover: hover) and (pointer: fine) {
-  .load-more-button:hover {
-    border-color: var(--theme-watch-dock-hover-border);
-  }
-}
-
 .home-hero-overlay {
   background:
     linear-gradient(

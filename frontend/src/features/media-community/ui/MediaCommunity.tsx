@@ -69,7 +69,7 @@ export function MediaCommunity({ media }: { media: MediaSummary }) {
         aria-labelledby="media-community-comments-tab"
         hidden={tab !== 'comments'}
       >
-        <MediaComments media={media} />
+        <MediaComments media={media} active={tab === 'comments'} />
       </div>
       <div
         id="media-community-reviews-panel"
@@ -81,7 +81,7 @@ export function MediaCommunity({ media }: { media: MediaSummary }) {
         {reviewsVisited && (
           <>
             <ReviewEditor media={media} />
-            <MediaReviews media={media} />
+            <MediaReviews media={media} active={tab === 'reviews'} />
           </>
         )}
       </div>

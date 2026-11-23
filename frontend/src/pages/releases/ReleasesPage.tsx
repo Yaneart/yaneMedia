@@ -9,7 +9,7 @@ import {
   EmptyState,
   ErrorState,
   LoadingState,
-  LoadMoreButton,
+  InfiniteScroll,
   MediaGrid,
   YaneMark,
   MoviesIcon,
@@ -17,7 +17,7 @@ import {
   AnimeIcon,
   type IconProps,
 } from '@/shared';
-import type { ComponentType } from 'react';
+import { useMemo, type ComponentType } from 'react';
 import { ReleasePosterOverlay } from './ReleasePosterOverlay';
 
 type ReleaseDto = MediaSummaryDto & {
@@ -56,11 +56,15 @@ export function ReleasesPage({ schedule = false }: { schedule?: boolean }) {
     getNextPageParam: (last, _pages, page) => (last.hasMore ? page + 1 : undefined),
     staleTime: 5 * 60_000,
   });
-  const items = [
-    ...new Map(
-      query.data?.pages.flatMap((page) => page.items).map((item) => [item.mediaRef, item]) ?? [],
-    ).values(),
-  ];
+  const pages = query.data?.pages;
+  const items = useMemo(
+    () => [
+      ...new Map(
+        pages?.flatMap((page) => page.items.map((item) => [item.mediaRef, item])),
+      ).values(),
+    ],
+    [pages],
+  );
   const update = (nextType: MediaType, nextPeriod: string) =>
     setParams(schedule ? { type: nextType } : { type: nextType, period: nextPeriod });
 
@@ -130,7 +134,7 @@ export function ReleasesPage({ schedule = false }: { schedule?: boolean }) {
           )}
         </div>
       </header>
-      <div className="mt-6 sm:mt-8" aria-busy={query.isFetching}>
+      <div className="mt-6 sm:mt-8" aria-busy={query.isFetching && !query.isFetchingNextPage}>
         {!query.data ? (
           query.isError ? (
             <ErrorState
@@ -189,21 +193,7 @@ export function ReleasesPage({ schedule = false }: { schedule?: boolean }) {
                 }
               />
             )}
-            {(query.hasNextPage || query.isFetchNextPageError) && (
-              <div className="mt-8 flex flex-col items-center gap-3">
-                {query.isFetchNextPageError && (
-                  <p role="alert" className="text-caption text-danger">
-                    Не удалось загрузить следующую страницу.
-                  </p>
-                )}
-                <LoadMoreButton
-                  isLoading={query.isFetchingNextPage}
-                  hasError={query.isFetchNextPageError}
-                  disabled={query.isFetching || query.isPaused}
-                  onClick={() => void query.fetchNextPage({ cancelRefetch: false })}
-                />
-              </div>
-            )}
+            <InfiniteScroll key={`pagination:${type}:${period}`} query={query} className="mt-4" />
           </>
         )}
       </div>

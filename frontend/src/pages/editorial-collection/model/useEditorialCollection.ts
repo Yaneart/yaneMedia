@@ -1,4 +1,5 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
+import { useMemo } from 'react';
 
 import { getEditorialCollection } from '../api/getEditorialCollection';
 import type { EditorialCollection } from './editorialCollection';
@@ -38,7 +39,7 @@ export function useEditorialCollection() {
       lastPage.nextOffset < lastPage.total ? lastPage.nextOffset : undefined,
   });
   const pages = query.data?.pages;
-  const collection = pages ? mergeCollectionPages(pages) : undefined;
+  const collection = useMemo(() => (pages ? mergeCollectionPages(pages) : undefined), [pages]);
 
   let status: EditorialCollectionStatus = 'loading';
 
@@ -51,11 +52,7 @@ export function useEditorialCollection() {
   return {
     collection,
     status,
-    isLoadingMore: query.isFetchingNextPage,
-    loadMoreFailed: query.isFetchNextPageError,
-    loadMore: () => {
-      void query.fetchNextPage({ cancelRefetch: false });
-    },
+    pagination: query,
     retry: () => {
       void query.refetch({ cancelRefetch: false });
     },

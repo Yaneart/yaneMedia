@@ -1,5 +1,5 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { useAuth } from '@/entities/auth';
 import type { MediaSummary } from '@/entities/media';
@@ -9,7 +9,7 @@ import { mediaReviewsQueryOptions, type SocialViewer } from '@/features/social-d
 import {
   Button,
   ErrorState,
-  LoadMoreButton,
+  InfiniteScroll,
   ProfileIcon,
   Select,
   Skeleton,
@@ -71,7 +71,7 @@ function EmptyReviews({
   );
 }
 
-export function MediaReviews({ media }: { media: MediaSummary }) {
+export function MediaReviews({ media, active }: { media: MediaSummary; active: boolean }) {
   const { state: authState, refresh } = useAuth();
   const [sort, setSort] = useState<ReviewSort>('new');
   const viewer: SocialViewer =
@@ -81,7 +81,8 @@ export function MediaReviews({ media }: { media: MediaSummary }) {
     ...mediaReviewsQueryOptions(media.mediaRef, sort, viewer),
     enabled: viewerReady,
   });
-  const reviews = mergeCursorPages(query.data?.pages ?? [], (review) => review.reviewId);
+  const pages = query.data?.pages;
+  const reviews = useMemo(() => mergeCursorPages(pages ?? [], (review) => review.reviewId), [pages]);
 
   return (
     <section
@@ -137,20 +138,12 @@ export function MediaReviews({ media }: { media: MediaSummary }) {
                 ))}
               </div>
 
-              {(query.hasNextPage || query.isFetchNextPageError) && (
-                <div className="mt-6 flex flex-col items-center gap-2 border-t border-border pt-5">
-                  <LoadMoreButton
-                    isLoading={query.isFetchingNextPage}
-                    hasError={query.isFetchNextPageError}
-                    onClick={() => void query.fetchNextPage({ cancelRefetch: false })}
-                  />
-                  {query.isFetchNextPageError && (
-                    <p role="status" className="text-center text-caption text-danger">
-                      Следующая страница не загрузилась. Уже показанные рецензии сохранены.
-                    </p>
-                  )}
-                </div>
-              )}
+              <InfiniteScroll
+                key={`${media.mediaRef}:${sort}`}
+                query={query}
+                disabled={!active}
+                className="mt-4"
+              />
             </>
           )}
         </div>

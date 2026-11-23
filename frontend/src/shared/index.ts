@@ -51,8 +51,7 @@ export type { IconProps } from './ui/Icons';
 
 export { Button } from './ui/Button';
 export type { ButtonProps, ButtonSize, ButtonVariant } from './ui/Button';
-export { LoadMoreButton } from './ui/LoadMoreButton';
-export type { LoadMoreButtonProps } from './ui/LoadMoreButton';
+export { InfiniteScroll } from './ui/InfiniteScroll';
 
 export { IconButton } from './ui/IconButton';
 export type { IconButtonProps } from './ui/IconButton';
