@@ -1,9 +1,18 @@
-import { useEffect, useId, useRef } from 'react';
+import { useEffect, useId, useRef, type MouseEvent } from 'react';
 import { Button, CloseIcon, IconButton } from '@/shared';
 import { CheckIcon } from '@/shared/ui/Icons';
+import ExternalLinkIcon from '@mingcute/react/core-regular/external-link';
 import type { CompanionConnection } from '../model/useCompanionConnection';
 import { CompanionInstallation } from './CompanionInstallation';
 import { MIN_COMPANION_VERSION } from '../api/companionClient';
+
+function isBackdropClick(event: MouseEvent<HTMLDialogElement>) {
+  if (event.target !== event.currentTarget) return false;
+  const { left, top, right, bottom } = event.currentTarget.getBoundingClientRect();
+  return (
+    event.clientX < left || event.clientX >= right || event.clientY < top || event.clientY >= bottom
+  );
+}
 
 export function CompanionDialog({
   connection,
@@ -15,6 +24,7 @@ export function CompanionDialog({
   onClose: () => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
+  const pressedBackdrop = useRef(false);
   const titleId = useId();
   useEffect(() => {
     if (open) dialog.current?.showModal();
@@ -22,6 +32,7 @@ export function CompanionDialog({
   }, [open]);
   const { state, connect, cancel, disconnect } = connection;
   const working = ['loading', 'connecting', 'pending', 'disconnecting'].includes(state.status);
+  const showSetup = !working && state.status !== 'paired';
   const close = () => {
     if (state.status === 'pending' || state.status === 'connecting') cancel();
     onClose();
@@ -31,30 +42,34 @@ export function CompanionDialog({
       ref={dialog}
       aria-labelledby={titleId}
       onClose={close}
-      className="m-auto max-h-[calc(100dvh-2rem)] w-96 max-w-[calc(100vw-2rem)] overflow-y-auto rounded-overlay border border-border bg-popover p-5 text-text-primary shadow-overlay backdrop:bg-black/50"
+      onPointerDown={(event) => {
+        pressedBackdrop.current = isBackdropClick(event);
+      }}
+      onClick={(event) => {
+        const dismiss = pressedBackdrop.current && isBackdropClick(event);
+        pressedBackdrop.current = false;
+        if (dismiss) event.currentTarget.close();
+      }}
+      className="m-auto max-h-[calc(100dvh-2rem)] w-[31rem] max-w-[calc(100vw-2rem)] overflow-y-auto rounded-overlay border border-border bg-popover p-4 text-text-primary shadow-overlay backdrop:bg-black/50 sm:p-5"
     >
-      <section aria-label="Подключение yaneCompanion" className="flex flex-col gap-3">
+      <section className="flex flex-col gap-4">
         <div className="flex items-center justify-between gap-3">
-          <h2 id={titleId} className="text-body font-semibold">
-            Локальный помощник
+          <h2 id={titleId} className="text-lg font-semibold">
+            yaneCompanion
           </h2>
           <IconButton aria-label="Закрыть окно помощника" size="small" onClick={close}>
             <CloseIcon className="size-5" />
           </IconButton>
         </div>
-        <p className="text-sm text-text-secondary">
-          yaneCompanion работает на этом компьютере. Подключение доступно и без аккаунта.
-        </p>
         <div
           role="status"
           aria-live="polite"
           aria-atomic="true"
-          className="text-sm text-text-secondary"
+          className="text-sm text-text-secondary empty:hidden"
         >
           {state.status === 'loading' && 'Проверяем сохранённое подключение…'}
-          {state.status === 'idle' && 'Запустите yaneCompanion и нажмите «Подключить».'}
-          {state.status === 'saved' &&
-            'Доступ сохранён в этом браузере. Нажмите «Проверить подключение».'}
+          {state.status === 'idle' && 'Подключите yaneCompanion для просмотра торрентов.'}
+          {state.status === 'saved' && 'Доступ к yaneCompanion сохранён в этом браузере.'}
           {state.status === 'connecting' &&
             (state.hasPairing ? 'Проверяем подключение…' : 'Подключаемся к помощнику…')}
           {state.status === 'disconnecting' && 'Отключаем…'}
@@ -63,13 +78,8 @@ export function CompanionDialog({
               <div className="rounded-control bg-success/10 px-3 py-2 text-success">
                 <p className="flex items-center gap-2 font-medium">
                   <CheckIcon aria-hidden="true" className="size-4 shrink-0" />
-                  Подключение проверено
+                  yaneCompanion подключён
                 </p>
-                {state.checkedAt && (
-                  <p className="mt-1 text-xs">
-                    Последняя проверка: {new Date(state.checkedAt).toLocaleTimeString('ru-RU')}
-                  </p>
-                )}
               </div>
               {!state.playbackReady && (
                 <p className="mt-2">Эта версия пока не поддерживает локальный просмотр.</p>
@@ -94,26 +104,12 @@ export function CompanionDialog({
             {state.message}
           </p>
         )}
-        {state.helperVersion && (
-          <p className="text-xs text-text-secondary">
-            yaneCompanion {state.helperVersion}
-            {state.updateRequired && ` · требуется ${MIN_COMPANION_VERSION} или новее`}
-          </p>
-        )}
         {state.updateRequired && (
           <p className="text-sm text-text-secondary">
-            Откройте в помощнике «Обслуживание» → «Проверить обновления». Перед установкой
-            остановите локальный просмотр и выберите «Выход». Настройки и подключения сохранятся.
-            Если раздела «Обслуживание» нет, установите полный пакет по ссылке ниже.
+            Требуется версия {MIN_COMPANION_VERSION} или новее. Проверьте обновления в разделе
+            «Поддержка» приложения или скачайте установщик.
           </p>
         )}
-        <details className="text-xs text-text-secondary">
-          <summary className="cursor-pointer">Диагностика подключения</summary>
-          <p className="mt-2 select-all whitespace-pre-line">
-            {`yaneCompanion: ${state.helperVersion ?? 'версия не проверена'}\nМинимальная версия: ${MIN_COMPANION_VERSION}\n${state.message ?? (state.status === 'paired' ? 'Подключение проверено.' : 'Подключение пока не проверено.')}`}
-          </p>
-        </details>
-        {!working && state.status !== 'paired' && <CompanionInstallation />}
         {state.status === 'pending' ? (
           <Button size="small" variant="secondary" onClick={close}>
             Отменить
@@ -121,7 +117,6 @@ export function CompanionDialog({
         ) : (
           <>
             <Button
-              size="small"
               disabled={working}
               aria-busy={state.status === 'connecting'}
               onClick={() => void connect()}
@@ -136,17 +131,23 @@ export function CompanionDialog({
               <Button size="small" variant="secondary" onClick={close}>
                 Отменить
               </Button>
-            ) : state.hasPairing ? (
-              <Button
-                size="small"
-                variant="secondary"
-                disabled={working}
-                onClick={() => void disconnect()}
-              >
-                Отключить и отозвать доступ
-              </Button>
             ) : null}
           </>
+        )}
+        {!working && (
+          <a
+            className="inline-flex min-h-10 items-center justify-center gap-2 rounded-control border border-border bg-control px-3 text-sm font-semibold hover:bg-control-hover focus-visible:outline-2 focus-visible:outline-watermark"
+            href="yanecompanion://open"
+          >
+            <ExternalLinkIcon aria-hidden="true" className="size-4 text-accent-text" />
+            Открыть yaneCompanion
+          </a>
+        )}
+        {showSetup && <CompanionInstallation />}
+        {state.hasPairing && state.status !== 'connecting' && (
+          <Button size="small" variant="ghost" disabled={working} onClick={() => void disconnect()}>
+            Отключить и отозвать доступ
+          </Button>
         )}
       </section>
     </dialog>

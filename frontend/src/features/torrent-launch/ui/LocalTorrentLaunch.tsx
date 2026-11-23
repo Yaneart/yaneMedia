@@ -126,9 +126,21 @@ export function LocalTorrentLaunch({
       />
       {open && (
         <div className="space-y-4">
-          <Button variant="secondary" size="small" onClick={() => setConnectOpen(true)}>
-            yaneCompanion
-          </Button>
+          {connection.state.status !== 'loading' && !connection.state.hasPairing && (
+            <div className="space-y-2">
+              <p className="text-sm text-text-secondary">
+                Для просмотра торрентов нужен yaneCompanion.
+              </p>
+              <Button
+                variant="secondary"
+                size="small"
+                aria-haspopup="dialog"
+                onClick={() => setConnectOpen(true)}
+              >
+                Подключить yaneCompanion
+              </Button>
+            </div>
+          )}
           <TorrentCandidatesPanel
             key={selectionScope}
             query={search}

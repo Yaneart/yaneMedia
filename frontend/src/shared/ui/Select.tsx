@@ -202,6 +202,7 @@ export function Select({
 
   const handleListboxKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'Escape') {
+      event.preventDefault();
       event.stopPropagation();
       setIsOpen(false);
       triggerRef.current?.focus({ preventScroll: true });

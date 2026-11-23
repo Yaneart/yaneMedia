@@ -85,12 +85,17 @@ function mount(open = true) {
 }
 
 test('Public searches on opening and uses the Home filters, reset, refresh and collapsed manual form', async () => {
+  connection.state.hasPairing = false;
   const view = mount(false);
   expect(calls).toHaveLength(0);
   view.update();
   await screen.findByRole('button', { name: /Fixture 1080/ });
   expect(calls).toHaveLength(1);
-  const button = screen.getByRole('button', { name: 'yaneCompanion', exact: true });
+  const button = screen.getByRole('button', { name: 'Подключить yaneCompanion', exact: true });
+  const hint = 'Для просмотра торрентов нужен yaneCompanion.';
+  expect(
+    screen.getByText(hint).compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
   const heading = screen.getByRole('heading', { name: 'Найденные раздачи' });
   expect(button.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   for (const name of ['Сортировка', 'Источник раздачи', 'Разрешение', 'Качество', 'Озвучка'])
@@ -107,6 +112,10 @@ test('Public searches on opening and uses the Home filters, reset, refresh and c
   await waitFor(() => expect(calls).toHaveLength(2));
   fireEvent.click(button);
   expect(screen.getByRole('dialog')).toBeDefined();
+  connection.state.hasPairing = true;
+  view.update();
+  expect(screen.queryByRole('button', { name: 'Подключить yaneCompanion' })).toBeNull();
+  expect(screen.queryByText(hint)).toBeNull();
 });
 
 test('an active local release can be replaced, and unpaired selection opens Companion without starting', async () => {

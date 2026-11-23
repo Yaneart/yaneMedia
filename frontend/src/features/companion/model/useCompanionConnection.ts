@@ -72,9 +72,20 @@ export function useCompanionConnection() {
   useEffect(() => {
     mounted.current = true;
     let cancelled = false;
+    const syncPairing = (hasPairing: boolean) => {
+      setState((previous) =>
+        previous.status !== 'loading' && previous.hasPairing === hasPairing
+          ? previous
+          : { status: hasPairing ? 'saved' : 'idle', hasPairing },
+      );
+    };
+    const unsubscribe = pairingStorage.subscribe((hasPairing) => {
+      cancelled = true;
+      if (!active.current) syncPairing(hasPairing);
+    });
     void pairingStorage.read().then(
       (token) => {
-        if (!cancelled) setState({ status: token ? 'saved' : 'idle', hasPairing: !!token });
+        if (!cancelled) syncPairing(!!token);
       },
       () => {
         if (!cancelled) {
@@ -88,6 +99,7 @@ export function useCompanionConnection() {
     );
     return () => {
       cancelled = true;
+      unsubscribe();
       mounted.current = false;
       active.current?.abort();
     };

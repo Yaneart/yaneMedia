@@ -47,8 +47,19 @@ async function access(mode: IDBTransactionMode, value?: string | null): Promise<
   });
 }
 
+const listeners = new Set<(hasPairing: boolean) => void>();
+
+async function save(token: string | null) {
+  await access('readwrite', token);
+  listeners.forEach((listener) => listener(token !== null));
+}
+
 export const pairingStorage = {
   read: () => access('readonly'),
-  write: (token: string) => access('readwrite', token),
-  clear: () => access('readwrite', null),
+  write: (token: string) => save(token),
+  clear: () => save(null),
+  subscribe(listener: (hasPairing: boolean) => void) {
+    listeners.add(listener);
+    return () => listeners.delete(listener);
+  },
 };
