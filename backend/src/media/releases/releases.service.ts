@@ -1,4 +1,9 @@
-import { ConflictException, Injectable, ServiceUnavailableException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { MediaSummaryDto } from '../dto/media-summary.dto';
 import { MediaRegistryService } from '../registry/media-registry.service';
@@ -8,7 +13,6 @@ import { paginateReleases } from './releases-pagination';
 export interface ReleaseItem extends MediaSummaryDto {
   releaseDate?: string;
   nextEpisodeAt?: string;
-  ongoing?: boolean;
 }
 export interface ReleasePage {
   items: ReleaseItem[];
@@ -38,6 +42,10 @@ interface AnimeItem {
 }
 type Candidate = ReleaseItem & { providerId: string; imdb?: string };
 
+const SCHEDULE_DAYS = 30;
+const dateAfterDays = (now: Date, days: number) =>
+  new Date(now.getTime() + days * 86400_000).toISOString().slice(0, 10);
+
 export function hasRussianTitle(title?: string): title is string {
   return typeof title === 'string' && /[а-яё]/i.test(title);
 }
@@ -55,24 +63,27 @@ export function animeReleaseDate(date: AnimeItem['airedOn']): string | undefined
 
 export function tmdbReleaseParams(query: ReleasesQueryDto, now: Date): URLSearchParams {
   const recent = query.period === 'recent';
+  const schedule = query.period === 'schedule';
   const field =
-    query.type === 'movie' ? 'primary_release_date' : recent ? 'air_date' : 'first_air_date';
-  const day = (offset: number) =>
-    new Date(now.getTime() + offset * 86400_000).toISOString().slice(0, 10);
+    query.type === 'movie'
+      ? 'primary_release_date'
+      : recent || schedule
+        ? 'air_date'
+        : 'first_air_date';
   const params = new URLSearchParams({
     page: String(query.page),
     include_adult: 'false',
     sort_by: 'popularity.desc',
   });
-  params.set(`${field}.gte`, day(recent ? -90 : 1));
-  params.set(`${field}.lte`, day(recent ? 0 : 180));
+  params.set(`${field}.gte`, dateAfterDays(now, recent ? -90 : schedule ? 0 : 1));
+  params.set(`${field}.lte`, dateAfterDays(now, recent ? 0 : schedule ? SCHEDULE_DAYS : 180));
   if (recent) {
     params.set('vote_average.gte', '6.5');
     params.set('vote_count.gte', query.type === 'movie' ? '30' : '50');
   }
   if (query.type === 'series') {
     params.set('without_genres', '10763,10764,10766,10767');
-    if (recent) params.set('first_air_date.lte', day(0));
+    if (recent || schedule) params.set('first_air_date.lte', dateAfterDays(now, 0));
   }
   return params;
 }
@@ -88,6 +99,9 @@ export class ReleasesService {
   ) {}
 
   getReleases(query: ReleasesQueryDto): Promise<ReleasePage> {
+    if (query.type === 'movie' && query.period === 'schedule') {
+      throw new BadRequestException('Episode schedules are available for series and anime');
+    }
     const deadline = Date.now() + 30_000;
     return paginateReleases(query.page, (page) => {
       if (Date.now() > deadline) {
@@ -136,11 +150,14 @@ export class ReleasesService {
   }
 
   private async anime(query: ReleasesQueryDto, now: Date) {
+    const schedule = query.period === 'schedule';
     const fields =
-      'id name russian score status airedOn { year month day } poster { main2xUrl mainUrl } nextEpisodeAt';
+      'id name russian score status airedOn { year month day } poster { main2xUrl mainUrl }' +
+      (schedule ? ' nextEpisodeAt' : '');
     const args = `page: ${query.page}, limit: 20, order: popularity, kind: "tv,movie,ona,ova", censored: true`;
-    const since = new Date(now.getTime() - 90 * 86400_000).toISOString().slice(0, 10);
-    const today = now.toISOString().slice(0, 10);
+    const since = dateAfterDays(now, -90);
+    const today = dateAfterDays(now, 0);
+    const scheduleEnd = dateAfterDays(now, SCHEDULE_DAYS);
     const result = await this.json<{
       data?: { animes: AnimeItem[]; ongoing?: AnimeItem[] };
       errors?: unknown[];
@@ -151,8 +168,9 @@ export class ReleasesService {
         'User-Agent': this.config.get<string>('MEDIA_ENGINE_SHIKIMORI_USER_AGENT') || 'yaneMedia',
       },
       body: JSON.stringify({
-        query:
-          query.period === 'upcoming'
+        query: schedule
+          ? `query { animes(${args}, status: "ongoing") { ${fields} } }`
+          : query.period === 'upcoming'
             ? `query { animes(${args}, status: "anons", season: "${now.getUTCFullYear()}_${now.getUTCFullYear() + 1}") { ${fields} } }`
             : `query { animes(${args}, status: "released", score: 6, season: "${new Date(since).getUTCFullYear()}_${now.getUTCFullYear()}") { ${fields} } ongoing: animes(${args}, status: "ongoing", score: 6) { ${fields} } }`,
       }),
@@ -164,6 +182,15 @@ export class ReleasesService {
       const releaseDate = animeReleaseDate(anime.airedOn);
       const ongoing = anime.status === 'ongoing';
       if (!hasRussianTitle(anime.russian)) return [];
+      const nextEpisodeAt = schedule ? anime.nextEpisodeAt : undefined;
+      if (
+        schedule &&
+        (!ongoing ||
+          !nextEpisodeAt ||
+          !(Date.parse(nextEpisodeAt) > now.getTime()) ||
+          nextEpisodeAt.slice(0, 10) > scheduleEnd)
+      )
+        return [];
       if (
         query.period === 'recent' &&
         ((Number(anime.score) || 0) < 6.5 ||
@@ -184,11 +211,7 @@ export class ReleasesService {
           genres: [],
           year: anime.airedOn?.year,
           releaseDate,
-          ongoing,
-          nextEpisodeAt:
-            ongoing && anime.nextEpisodeAt && Date.parse(anime.nextEpisodeAt) > now.getTime()
-              ? anime.nextEpisodeAt
-              : undefined,
+          nextEpisodeAt,
           poster: poster ? { url: poster } : undefined,
           rating: Number(anime.score) > 0 ? { value: Number(anime.score), scale: 10 } : undefined,
         },
@@ -209,6 +232,7 @@ export class ReleasesService {
 
   private async films(query: ReleasesQueryDto, now: Date) {
     const movie = query.type === 'movie';
+    const schedule = query.period === 'schedule';
     const result = await this.tmdb<{ results: TmdbItem[]; total_pages: number }>(
       `discover/${movie ? 'movie' : 'tv'}`,
       tmdbReleaseParams(query, now),
@@ -234,8 +258,9 @@ export class ReleasesService {
       }));
     let partial = false;
     const deadline = AbortSignal.timeout(12_000);
-    const today = now.toISOString().slice(0, 10);
-    // Bound enrichment traffic and keep the list usable if episode metadata fails.
+    const today = dateAfterDays(now, 0);
+    const scheduleEnd = dateAfterDays(now, SCHEDULE_DAYS);
+    // Keep enrichment within the shared request budget.
     for (let start = 0; start < items.length; start += 3) {
       await Promise.all(
         items.slice(start, start + 3).map(async (item) => {
@@ -243,7 +268,6 @@ export class ReleasesService {
             const details = await this.tmdb<{
               imdb_id?: string;
               external_ids?: { imdb_id?: string };
-              status?: string;
               next_episode_to_air?: { air_date?: string };
             }>(
               `${movie ? 'movie' : 'tv'}/${item.providerId}`,
@@ -251,16 +275,27 @@ export class ReleasesService {
               deadline,
             );
             item.imdb = details.imdb_id || details.external_ids?.imdb_id;
-            item.ongoing = !movie && details.status === 'Returning Series';
             const date = details.next_episode_to_air?.air_date;
-            if (!movie && date && date >= today) item.nextEpisodeAt = date;
+            if (
+              schedule &&
+              date &&
+              /^\d{4}-\d{2}-\d{2}$/.test(date) &&
+              date >= today &&
+              date <= scheduleEnd
+            ) {
+              item.nextEpisodeAt = date;
+            }
           } catch {
             partial = true;
           }
         }),
       );
     }
-    return { items, hasMore: query.page < Math.min(result.total_pages, 50), partial };
+    return {
+      items: schedule ? items.filter((item) => item.nextEpisodeAt) : items,
+      hasMore: query.page < Math.min(result.total_pages, 50),
+      partial,
+    };
   }
 
   private async load(query: ReleasesQueryDto): Promise<ReleasePage> {

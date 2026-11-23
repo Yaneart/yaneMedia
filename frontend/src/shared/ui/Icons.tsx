@@ -1,4 +1,5 @@
 export { default as AnimeFilledIcon } from '@mingcute/react/core-filled/sparkles';
+export { default as CalendarFilledIcon } from '@mingcute/react/core-filled/calendar-day';
 export { default as FavoriteFilledIcon } from '@mingcute/react/core-filled/heart';
 export { default as HistoryFilledIcon } from '@mingcute/react/core-filled/history';
 export { default as HomeFilledIcon } from '@mingcute/react/core-filled/home-4';
@@ -10,6 +11,7 @@ export { default as SunFilledIcon } from '@mingcute/react/core-filled/sun';
 export { default as SystemThemeFilledIcon } from '@mingcute/react/core-filled/computer';
 
 export { default as AnimeIcon } from '@mingcute/react/core-regular/sparkles';
+export { default as CalendarIcon } from '@mingcute/react/core-regular/calendar-day';
 export { default as CloseIcon } from '@mingcute/react/core-regular/close';
 export { default as FavoriteIcon } from '@mingcute/react/core-regular/heart';
 export { default as HistoryIcon } from '@mingcute/react/core-regular/history';

@@ -6,8 +6,8 @@ export class ReleasesQueryDto {
   @IsIn(['movie', 'series', 'anime'])
   type: MediaRefType = 'movie';
 
-  @IsIn(['recent', 'upcoming'])
-  period: 'recent' | 'upcoming' = 'recent';
+  @IsIn(['recent', 'upcoming', 'schedule'])
+  period: 'recent' | 'upcoming' | 'schedule' = 'recent';
 
   @Type(() => Number)
   @IsInt()

@@ -5,6 +5,7 @@ export const routePaths = {
   series: '/series',
   anime: '/anime',
   releases: '/releases',
+  schedule: '/schedule',
   editorialPicks: '/collections/editorial-picks',
   media: '/media/:mediaRef',
   favorites: '/favorites',

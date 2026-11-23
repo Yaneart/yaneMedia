@@ -1,6 +1,8 @@
 import {
   AnimeIcon,
   AnimeFilledIcon,
+  CalendarIcon,
+  CalendarFilledIcon,
   FavoriteIcon,
   FavoriteFilledIcon,
   HistoryIcon,
@@ -62,6 +64,12 @@ export const primaryNavigationItems = [
     path: routePaths.releases,
     icon: StarIcon,
     activeIcon: StarIcon,
+  },
+  {
+    label: 'Расписание',
+    path: routePaths.schedule,
+    icon: CalendarIcon,
+    activeIcon: CalendarFilledIcon,
   },
 ] satisfies NavigationItem[];
 

@@ -9,27 +9,18 @@ afterEach(cleanup);
 afterAll(() => GlobalRegistrator.unregister());
 
 describe('release cards', () => {
-  test('leaves released standalone posters free of release labels', () => {
-    const { container } = render(
-      <ReleasePosterOverlay upcoming={false} releaseDate="2026-11-20" />,
-    );
-    expect(container.textContent).toBe('');
-  });
   test('puts a precise premiere date over a darkened upcoming poster', () => {
-    const { container, getByText } = render(
-      <ReleasePosterOverlay upcoming releaseDate="2027-02" />,
-    );
+    const { container, getByText } = render(<ReleasePosterOverlay date="2027-02" />);
     expect(getByText('Скоро на экране')).toBeTruthy();
     expect(container.querySelector('time')?.dateTime).toBe('2027-02');
     expect(container.textContent).toContain('февраль');
     expect(container.firstElementChild?.className).toContain('absolute inset-0');
   });
-  test('shows episode dates only for current releases', () => {
-    const { container } = render(
-      <ReleasePosterOverlay upcoming={false} nextEpisodeAt="2027-02-09" ongoing />,
-    );
-    expect(container.textContent).toContain('Новая серия');
+  test('displays the next episode with the same poster layout as a premiere', () => {
+    const { container, getByText } = render(<ReleasePosterOverlay date="2027-02-09" episode />);
+    expect(getByText('Новая серия')).toBeTruthy();
     expect(container.querySelector('time')?.dateTime).toBe('2027-02-09');
+    expect(container.firstElementChild?.className).toContain('absolute inset-0');
   });
   test('does not invent a precise release date', () => {
     expect(formatReleaseDate('2027')).toBe('2027 год');

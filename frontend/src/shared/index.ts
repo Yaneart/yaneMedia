@@ -8,6 +8,8 @@ export {
   ArrowRightIcon,
   AnimeIcon,
   AnimeFilledIcon,
+  CalendarIcon,
+  CalendarFilledIcon,
   CloseIcon,
   CommentIcon,
   DeleteIcon,

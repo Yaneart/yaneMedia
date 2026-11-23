@@ -122,6 +122,10 @@ export const router = createBrowserRouter([
             element: lazyRoute(<ReleasesPage />, <ReleasesPageSkeleton />),
           },
           {
+            path: routePaths.schedule,
+            element: lazyRoute(<ReleasesPage schedule />, <ReleasesPageSkeleton schedule />),
+          },
+          {
             path: routePaths.media,
             element: lazyRoute(<MediaPage />, <MediaPageSkeleton />),
           },

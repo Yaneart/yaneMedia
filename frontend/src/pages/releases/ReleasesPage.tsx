@@ -23,7 +23,6 @@ import { ReleasePosterOverlay } from './ReleasePosterOverlay';
 type ReleaseDto = MediaSummaryDto & {
   releaseDate?: string;
   nextEpisodeAt?: string;
-  ongoing?: boolean;
 };
 type ReleasePage = { items: ReleaseDto[]; hasMore: boolean; partial: boolean };
 const categories: { value: MediaType; label: string; icon: ComponentType<IconProps> }[] = [
@@ -31,12 +30,21 @@ const categories: { value: MediaType; label: string; icon: ComponentType<IconPro
   { value: 'series', label: 'Сериалы', icon: SeriesIcon },
   { value: 'anime', label: 'Аниме', icon: AnimeIcon },
 ];
+const scheduleCategories = categories.filter(({ value }) => value !== 'movie');
 
-export function ReleasesPage() {
+export function ReleasesPage({ schedule = false }: { schedule?: boolean }) {
   const [params, setParams] = useSearchParams();
+  const visibleCategories = schedule ? scheduleCategories : categories;
   const type =
-    categories.find((category) => category.value === params.get('type'))?.value ?? 'movie';
-  const period = params.get('period') === 'upcoming' ? 'upcoming' : 'recent';
+    visibleCategories.find((category) => category.value === params.get('type'))?.value ??
+    (schedule ? 'series' : 'movie');
+  const period = schedule
+    ? 'schedule'
+    : params.get('period') === 'upcoming'
+      ? 'upcoming'
+      : 'recent';
+  const heading = schedule ? 'Расписание' : 'Новинки';
+  const listName = schedule ? 'расписание' : 'новинки';
   const favorites = useFavorites();
   const query = useInfiniteQuery({
     queryKey: ['releases', type, period],
@@ -54,31 +62,36 @@ export function ReleasesPage() {
     ).values(),
   ];
   const update = (nextType: MediaType, nextPeriod: string) =>
-    setParams({ type: nextType, period: nextPeriod });
+    setParams(schedule ? { type: nextType } : { type: nextType, period: nextPeriod });
 
   return (
     <section>
       <header className="relative isolate overflow-hidden pt-2 sm:pt-5">
         <YaneMark className="pointer-events-none absolute -top-14 -right-8 -z-10 size-72 -rotate-12 text-watermark opacity-[0.07] sm:right-8 sm:size-96" />
         <div className="max-w-2xl py-4 sm:py-6">
-          <p className="flex items-center gap-2 text-[11px] font-semibold tracking-[0.22em] text-accent-text uppercase">
-            <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />В центре
-            внимания
-          </p>
+          {!schedule && (
+            <p className="flex items-center gap-2 text-[11px] font-semibold tracking-[0.22em] text-accent-text uppercase">
+              <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />В центре
+              внимания
+            </p>
+          )}
           <h1
             data-page-heading
             tabIndex={-1}
             className="mt-3 text-4xl font-semibold tracking-tight text-text-primary sm:text-5xl"
           >
-            Новинки<span className="text-accent-text">.</span>
+            {heading}
+            <span className="text-accent-text">.</span>
           </h1>
           <p className="mt-3 max-w-lg text-body leading-relaxed text-text-secondary sm:text-lg">
-            Свежие истории, любимые продолжения и премьеры, которых стоит ждать.
+            {schedule
+              ? 'Даты выхода ближайших серий сериалов и аниме.'
+              : 'Свежие истории, любимые продолжения и премьеры, которых стоит ждать.'}
           </p>
         </div>
         <div className="mt-4 flex flex-col gap-4 border-b border-context-border sm:mt-6 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
           <div role="group" aria-label="Категория" className="flex gap-5 sm:gap-8">
-            {categories.map(({ value, label, icon: Icon }) => (
+            {visibleCategories.map(({ value, label, icon: Icon }) => (
               <Button
                 key={value}
                 variant="bare"
@@ -92,40 +105,45 @@ export function ReleasesPage() {
               </Button>
             ))}
           </div>
-          <div
-            role="group"
-            aria-label="Период выхода"
-            className="mb-3 flex w-fit rounded-full border border-context-border bg-surface-elevated p-1"
-          >
-            {[
-              { value: 'recent', label: 'Сейчас' },
-              { value: 'upcoming', label: 'Скоро' },
-            ].map((option) => (
-              <Button
-                key={option.value}
-                variant="bare"
-                size="custom"
-                aria-pressed={period === option.value}
-                onClick={() => update(type, option.value)}
-                className={`min-h-9 rounded-full px-5 text-caption ${period === option.value ? 'bg-action text-action-text shadow-sm' : 'text-text-secondary hover:text-text-primary'}`}
-              >
-                {option.label}
-              </Button>
-            ))}
-          </div>
+          {!schedule && (
+            <div
+              role="group"
+              aria-label="Период выхода"
+              className="mb-3 flex w-fit rounded-full border border-context-border bg-surface-elevated p-1"
+            >
+              {[
+                { value: 'recent', label: 'Сейчас' },
+                { value: 'upcoming', label: 'Скоро' },
+              ].map((option) => (
+                <Button
+                  key={option.value}
+                  variant="bare"
+                  size="custom"
+                  aria-pressed={period === option.value}
+                  onClick={() => update(type, option.value)}
+                  className={`min-h-9 rounded-full px-5 text-caption ${period === option.value ? 'bg-action text-action-text shadow-sm' : 'text-text-secondary hover:text-text-primary'}`}
+                >
+                  {option.label}
+                </Button>
+              ))}
+            </div>
+          )}
         </div>
       </header>
       <div className="mt-6 sm:mt-8" aria-busy={query.isFetching}>
         {!query.data ? (
           query.isError ? (
-            <ErrorState title="Не удалось загрузить новинки" onRetry={() => void query.refetch()} />
+            <ErrorState
+              title={`Не удалось загрузить ${listName}`}
+              onRetry={() => void query.refetch()}
+            />
           ) : query.isPaused ? (
             <EmptyState
               title="Нет подключения к сети"
-              description="Загрузим новинки, когда соединение восстановится."
+              description={`Загрузим ${listName}, когда соединение восстановится.`}
             />
           ) : (
-            <LoadingState label="Загружаем новинки" />
+            <LoadingState label={`Загружаем ${listName}`} />
           )
         ) : (
           <>
@@ -133,7 +151,9 @@ export function ReleasesPage() {
               <p role="status" className="mb-5 text-caption text-text-secondary">
                 {query.isRefetchError
                   ? 'Не удалось обновить список. Показана сохранённая версия.'
-                  : 'Часть данных о релизах временно недоступна.'}
+                  : schedule
+                    ? 'Часть дат выхода серий временно недоступна.'
+                    : 'Часть данных о релизах временно недоступна.'}
               </p>
             )}
             {items.length ? (
@@ -148,23 +168,24 @@ export function ReleasesPage() {
                     }
                     onFavoriteChange={() => favorites.toggleFavorite(item.mediaRef)}
                     posterOverlay={
-                      <ReleasePosterOverlay
-                        upcoming={period === 'upcoming'}
-                        releaseDate={item.releaseDate}
-                        nextEpisodeAt={item.nextEpisodeAt}
-                        ongoing={item.ongoing}
-                      />
+                      schedule && item.nextEpisodeAt ? (
+                        <ReleasePosterOverlay date={item.nextEpisodeAt} episode />
+                      ) : period === 'upcoming' ? (
+                        <ReleasePosterOverlay date={item.releaseDate} />
+                      ) : undefined
                     }
                   />
                 ))}
               </MediaGrid>
             ) : (
               <EmptyState
-                title="Пока ничего нового"
+                title={schedule ? 'Пока нет дат выхода серий' : 'Пока ничего нового'}
                 description={
-                  query.hasNextPage
-                    ? 'В этой части подборки нет релизов с русским названием. Посмотрите дальше.'
-                    : 'Загляните чуть позже — новые истории уже на подходе.'
+                  schedule
+                    ? 'Загляните позже, когда расписание обновится.'
+                    : query.hasNextPage
+                      ? 'В этой части подборки нет релизов с русским названием. Посмотрите дальше.'
+                      : 'Загляните чуть позже — новые истории уже на подходе.'
                 }
               />
             )}

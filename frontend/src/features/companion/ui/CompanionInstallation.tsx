@@ -15,7 +15,7 @@ const platforms = [
   {
     value: 'windows',
     label: 'Windows',
-    detail: 'Windows 10 (2004+) или Windows 11',
+    detail: 'Windows 10 или Windows 11',
     extension: '.exe',
     icon: WindowsIcon,
   },

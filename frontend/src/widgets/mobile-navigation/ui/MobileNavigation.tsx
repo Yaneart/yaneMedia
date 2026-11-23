@@ -18,7 +18,7 @@ type MobileNavigationProps = {
 function getLinkClassName({ isActive }: { isActive: boolean }) {
   return [
     'flex min-w-0 flex-1 flex-col items-center justify-center gap-1',
-    'px-1 py-2 text-caption',
+    'px-0.5 py-2 text-[10px] min-[360px]:text-[11px] min-[420px]:text-caption',
     'transition-[color,transform] duration-200 ease-out',
     'active:scale-[0.97] active:duration-75',
     'motion-reduce:transform-none motion-reduce:transition-none',
@@ -35,7 +35,7 @@ export function MobileNavigation({ homePath, items, onItemIntent }: MobileNaviga
       <ul className="flex min-h-16">
         {items.map((item) => {
           return (
-            <li key={item.path} className="flex min-w-0 flex-1">
+            <li key={item.path} className="flex min-w-0 flex-auto">
               <NavLink
                 to={item.path}
                 end={item.path === homePath}
@@ -52,7 +52,7 @@ export function MobileNavigation({ homePath, items, onItemIntent }: MobileNaviga
                   return (
                     <>
                       <Icon className="size-5 shrink-0" />
-                      <span className="truncate">{item.label}</span>
+                      <span className="max-w-full truncate">{item.label}</span>
                     </>
                   );
                 }}

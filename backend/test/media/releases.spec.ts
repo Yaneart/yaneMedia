@@ -15,8 +15,14 @@ describe('releases', () => {
     global.fetch = originalFetch;
   });
 
+  function jsonResponse(payload: unknown) {
+    return new Response(JSON.stringify(payload));
+  }
+
   function setup(payload: unknown) {
-    const fetchMock = jest.fn().mockResolvedValue({ ok: true, json: async () => payload });
+    const fetchMock = jest
+      .fn<ReturnType<typeof fetch>, Parameters<typeof fetch>>()
+      .mockImplementation(() => Promise.resolve(jsonResponse(payload)));
     global.fetch = fetchMock;
     const registry = createMediaRegistryStub();
     const service = new ReleasesService(new ConfigService({ TMDB_API_KEY: 'test-key' }), registry);
@@ -92,15 +98,9 @@ describe('releases', () => {
   });
 
   it('preserves series when episode metadata is unavailable', async () => {
-    const { service, fetchMock } = setup({
-      results: [{ id: 1, name: 'Сериал', first_air_date: '2026-11-20' }],
-      total_pages: 1,
-    });
+    const { service, fetchMock } = setup({});
     fetchMock
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ results: [{ id: 1, name: 'Сериал' }], total_pages: 1 }),
-      })
+      .mockResolvedValueOnce(jsonResponse({ results: [{ id: 1, name: 'Сериал' }], total_pages: 1 }))
       .mockRejectedValueOnce(new Error('timeout'));
     const page = await service.getReleases(plainToInstance(ReleasesQueryDto, { type: 'series' }));
     expect(page.items).toHaveLength(1);
@@ -162,38 +162,70 @@ describe('releases', () => {
     });
     const page = await service.getReleases(plainToInstance(ReleasesQueryDto, { type: 'anime' }));
     expect(page.items).toHaveLength(1);
-    expect(page.items[0].nextEpisodeAt).toBe('2099-01-01T00:00:00Z');
+    expect(page.items[0].nextEpisodeAt).toBeUndefined();
     expect(page.items[0].poster?.url).toBe('https://shikimori.io/main_2x.webp');
-    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    const body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string) as { query: string };
     expect(body.query).toContain('order: popularity');
     expect(body.query).toContain('ongoing: animes');
     expect(body.query).not.toContain('previewUrl');
   });
 
   it('shows the next episode of a returning series even when it premiered years ago', async () => {
-    const { service, fetchMock } = setup({
-      results: [{ id: 1, name: 'Продолжение', first_air_date: '2010-01-01' }],
+    const nextDate = new Date(Date.now() + 86400_000).toISOString().slice(0, 10);
+    const discovery = {
+      results: [
+        { id: 1, name: 'Продолжение', first_air_date: '2010-01-01' },
+        { id: 2, name: 'Без даты' },
+        { id: 3, name: 'Прошедшая серия' },
+      ],
       total_pages: 1,
-    });
+    };
+    const { service, fetchMock } = setup(discovery);
     fetchMock
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          results: [{ id: 1, name: 'Продолжение', first_air_date: '2010-01-01' }],
-          total_pages: 1,
-        }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({
-          status: 'Returning Series',
-          next_episode_to_air: { air_date: '2099-01-01' },
-        }),
-      });
-    const page = await service.getReleases(plainToInstance(ReleasesQueryDto, { type: 'series' }));
-    expect(page.items[0].ongoing).toBe(true);
-    expect(page.items[0].nextEpisodeAt).toBe('2099-01-01');
+      .mockResolvedValueOnce(jsonResponse(discovery))
+      .mockResolvedValueOnce(jsonResponse({ next_episode_to_air: { air_date: nextDate } }))
+      .mockResolvedValueOnce(jsonResponse({}))
+      .mockResolvedValueOnce(jsonResponse({ next_episode_to_air: { air_date: '2020-01-01' } }));
+    const page = await service.getReleases(
+      plainToInstance(ReleasesQueryDto, { type: 'series', period: 'schedule' }),
+    );
+    expect(page.items).toHaveLength(1);
+    expect(page.items[0].nextEpisodeAt).toBe(nextDate);
     expect(page.items[0].year).toBe(2010);
+    const params = new URL(fetchMock.mock.calls[0][0]).searchParams;
+    expect(params.get('air_date.gte')).toBe(params.get('first_air_date.lte'));
+    expect(params.has('first_air_date.gte')).toBe(false);
+  });
+
+  it('lists only ongoing anime with a future episode within the schedule window', async () => {
+    const nextEpisodeAt = new Date(Date.now() + 86400_000).toISOString();
+    const { service, fetchMock } = setup({
+      data: {
+        animes: [
+          { id: '1', russian: 'Новая серия', status: 'ongoing', nextEpisodeAt },
+          { id: '2', russian: 'Анонс', status: 'anons', nextEpisodeAt },
+          { id: '3', russian: 'Без даты', status: 'ongoing' },
+          {
+            id: '4',
+            russian: 'Прошедшая серия',
+            status: 'ongoing',
+            nextEpisodeAt: '2020-01-01T00:00:00Z',
+          },
+          {
+            id: '5',
+            russian: 'Отложенная серия',
+            status: 'ongoing',
+            nextEpisodeAt: '2099-01-01T00:00:00Z',
+          },
+        ],
+      },
+    });
+    const page = await service.getReleases(
+      plainToInstance(ReleasesQueryDto, { type: 'anime', period: 'schedule' }),
+    );
+    expect(page.items.map((item) => item.nextEpisodeAt)).toEqual([nextEpisodeAt]);
+    const body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string) as { query: string };
+    expect(body.query).toContain('status: "ongoing"');
   });
 
   it('puts fresh anime seasons ahead of long-running shows', async () => {
