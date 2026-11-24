@@ -8,10 +8,10 @@ the [current roadmap](../docs/development/roadmap.md). The commands below refer 
 
 Operator procedures: [эксплуатация, диагностика, обновление, rollback и отключение](OPERATIONS.md).
 Browser/codec evidence and limits: [acceptance](ACCEPTANCE.md).
-Playback decision and spike findings: [architecture](ARCHITECTURE.md).
+Home playback and supported formats: [architecture](ARCHITECTURE.md).
 JacRed/Knaben API setup and search troubleshooting: [discovery](DISCOVERY.md).
 
-The image downloads the pinned `MatriX.146.2` GStreamer binary verified by `T-002` and validates
+The image downloads the pinned `MatriX.146.2` GStreamer binary and validates
 its SHA-256 during the build. GStreamer routes are not used by the product playback path.
 
 Create local credentials once before starting Compose:
