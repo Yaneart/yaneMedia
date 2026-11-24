@@ -31,7 +31,7 @@ export function formatProfileJoinedAt(value: string): string {
 }
 
 export function getPublicProfileTabs(profile: PublicProfile): PublicProfileTab[] {
-  return [
+  const tabs: PublicProfileTab[] = [
     { id: 'reviews', label: 'Рецензии', count: profile.counts.reviews, isPrivate: false },
     {
       id: 'ratings',
@@ -45,7 +45,8 @@ export function getPublicProfileTabs(profile: PublicProfile): PublicProfileTab[]
       count: profile.visibility.favorites ? profile.counts.favorites : null,
       isPrivate: !profile.visibility.favorites,
     },
-  ].sort((left, right) => publicProfileTabOrder[left.id] - publicProfileTabOrder[right.id]);
+  ];
+  return tabs.sort((left, right) => publicProfileTabOrder[left.id] - publicProfileTabOrder[right.id]);
 }
 
 export function getPublicProfileDescription(profile: PublicProfile): string {
