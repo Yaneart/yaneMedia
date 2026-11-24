@@ -7,6 +7,7 @@ import TerminalIcon from '@mingcute/react/core-regular/terminal';
 import WindowsIcon from '@mingcute/react/core-regular/windows';
 import {
   companionDownload,
+  companionReleaseHistory,
   detectCompanionPlatform,
   type CompanionPlatform,
 } from '../model/installation';
@@ -43,6 +44,7 @@ export function CompanionInstallation() {
   );
   const selected = platforms.find(({ value }) => value === platform);
   const download = companionDownload(platform);
+  const releaseHistory = download && companionReleaseHistory(download);
   return (
     <section
       aria-labelledby={heading}
@@ -97,6 +99,11 @@ export function CompanionInstallation() {
             >
               <DownloadIcon aria-hidden="true" className="size-4" />
               Скачать {selected.extension}
+            </a>
+          )}
+          {releaseHistory && (
+            <a className="self-start text-xs text-accent-text underline" href={releaseHistory}>
+              Все версии на GitHub
             </a>
           )}
         </div>

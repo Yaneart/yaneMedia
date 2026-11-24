@@ -26,3 +26,10 @@ export function companionDownload(
     return;
   }
 }
+
+export function companionReleaseHistory(download: string): string | undefined {
+  const url = new URL(download);
+  if (url.origin !== 'https://github.com') return;
+  const match = /^\/([\w.-]+\/[\w.-]+)\/releases\/download\/[\w.-]+\/[^/]+$/.exec(url.pathname);
+  if (match) return `${url.origin}/${match[1]}/releases`;
+}

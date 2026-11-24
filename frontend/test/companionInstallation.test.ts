@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import {
   companionDownload,
+  companionReleaseHistory,
   detectCompanionPlatform,
 } from '../src/features/companion/model/installation';
 
@@ -10,6 +11,20 @@ test('platform detection is a suggestion with no mobile or macOS installer', () 
   expect(detectCompanionPlatform('Mozilla X11; Arch Linux x86_64')).toBe('arch');
   for (const ua of ['Android Linux', 'iPhone', 'Macintosh', 'unknown'])
     expect(detectCompanionPlatform(ua)).toBe('');
+});
+
+test('release history is available from versioned GitHub downloads', () => {
+  const base = 'https://github.com/Yaneart/yaneCompanion/releases/download/v0.3.0';
+  for (const platform of ['windows', 'debian', 'arch'] as const) {
+    expect(companionReleaseHistory(companionDownload(platform, base, '0.3.0')!)).toBe(
+      'https://github.com/Yaneart/yaneCompanion/releases',
+    );
+  }
+  expect(
+    companionReleaseHistory(
+      'https://github.com.example/Yaneart/yaneCompanion/releases/download/v0.3.0/file',
+    ),
+  ).toBeUndefined();
 });
 
 test('download links require an explicitly configured HTTPS release and known version', () => {
