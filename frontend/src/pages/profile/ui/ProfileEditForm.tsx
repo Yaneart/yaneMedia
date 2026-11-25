@@ -210,7 +210,7 @@ export function ProfileEditForm({ accountKey, profile, settings }: ProfileEditFo
   return (
     <section
       aria-labelledby="profile-settings-heading"
-      className="min-w-0 rounded-card border border-border bg-surface/40 p-3 sm:p-4 xl:p-5"
+      className="min-w-0 rounded-card border border-border bg-surface/40 p-3 sm:p-4 xl:p-5 wide:p-6"
     >
       <div>
         <h2 id="profile-settings-heading" className="text-heading text-text-primary">
@@ -222,7 +222,7 @@ export function ProfileEditForm({ accountKey, profile, settings }: ProfileEditFo
         </p>
       </div>
 
-      <form className="mt-4 grid gap-3" noValidate onSubmit={handleSubmit}>
+      <form className="mt-4 grid gap-3 wide:mt-5 wide:gap-4" noValidate onSubmit={handleSubmit}>
         <div className="grid gap-4 sm:grid-cols-2">
           <Input
             label="Отображаемое имя"
@@ -234,6 +234,7 @@ export function ProfileEditForm({ accountKey, profile, settings }: ProfileEditFo
             error={formErrors.displayName}
             hint={`${PROFILE_DISPLAY_NAME_MIN_LENGTH}–${PROFILE_DISPLAY_NAME_MAX_LENGTH} символов`}
             reserveMessageSpace
+            className="wide:min-h-13"
             disabled={isSubmitting}
             onChange={(event) => updateTextField('displayName', event.target.value)}
           />
@@ -247,6 +248,7 @@ export function ProfileEditForm({ accountKey, profile, settings }: ProfileEditFo
             error={formErrors.handle}
             hint="Латинские буквы, цифры и _"
             reserveMessageSpace
+            className="wide:min-h-13"
             disabled={isSubmitting}
             onChange={(event) => updateTextField('handle', event.target.value)}
           />
@@ -343,7 +345,7 @@ export function ProfileEditForm({ accountKey, profile, settings }: ProfileEditFo
             type="submit"
             size="small"
             disabled={isSubmitting}
-            className="min-w-36 shadow-sm shadow-action/15 hover:shadow-md hover:shadow-watermark/25 hover:ring-2 hover:ring-watermark/40"
+            className="min-w-36 shadow-sm shadow-action/15 hover:shadow-md hover:shadow-watermark/25 hover:ring-2 hover:ring-watermark/40 wide:min-h-12 wide:min-w-44"
           >
             {!isSubmitting && <CheckIcon aria-hidden="true" className="size-4" />}
             {isSubmitting ? 'Сохраняем…' : 'Сохранить'}

@@ -120,13 +120,13 @@ export function ProfileAvatarEditor({ accountKey, profile }: ProfileAvatarEditor
   };
 
   return (
-    <div className="w-full sm:w-40 sm:shrink-0">
-      <div className="relative mx-auto size-28">
+    <div className="w-full sm:w-40 sm:shrink-0 wide:w-52">
+      <div className="relative mx-auto size-28 wide:size-36">
         {visibleUrl && !hasImageError ? (
           <img
             src={visibleUrl}
             alt={`Аватар ${profile.displayName}`}
-            className="mx-auto size-28 rounded-full bg-control object-cover"
+            className="size-full rounded-full bg-control object-cover"
             onError={() => {
               setHasImageError(true);
               if (previewUrl) {
@@ -141,7 +141,7 @@ export function ProfileAvatarEditor({ accountKey, profile }: ProfileAvatarEditor
           <div
             role="img"
             aria-label={`Аватар ${profile.displayName}`}
-            className="mx-auto grid size-28 place-items-center rounded-full border border-context-border bg-watermark/10 text-3xl font-semibold text-accent-text"
+            className="grid size-full place-items-center rounded-full border border-context-border bg-watermark/10 text-3xl font-semibold text-accent-text wide:text-4xl"
           >
             {getProfileInitial(profile.displayName, profile.handle)}
           </div>
@@ -163,7 +163,7 @@ export function ProfileAvatarEditor({ accountKey, profile }: ProfileAvatarEditor
         onChange={handleFileChange}
       />
 
-      <div className="mt-3 grid gap-1">
+      <div className="mt-3 grid gap-1 wide:[&_button]:min-h-11">
         <Button
           variant="secondary"
           size="small"

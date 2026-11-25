@@ -25,7 +25,7 @@ export function FeaturedMedia({ media }: FeaturedMediaProps) {
   metadata.push(...media.genres.slice(0, 2));
 
   return (
-    <div className="w-full max-w-[38rem]">
+    <div className="w-full max-w-[38rem] wide:max-w-3xl">
       <div className="mb-4 flex items-center gap-3">
         <span className="rounded-pill border border-hero-search-border bg-hero-search px-3 py-1 text-caption font-semibold text-hero-text backdrop-blur-sm">
           {mediaTypeLabels[media.type]}
@@ -52,13 +52,13 @@ export function FeaturedMedia({ media }: FeaturedMediaProps) {
       <h1
         data-page-heading
         tabIndex={-1}
-        className="mt-3 max-w-xl text-[clamp(2.25rem,4vw,4.5rem)] leading-[0.98] font-extrabold tracking-[-0.035em] text-hero-text"
+        className="mt-3 max-w-xl text-[clamp(2.25rem,4vw,4.5rem)] leading-[0.98] font-extrabold tracking-[-0.035em] text-hero-text wide:max-w-none wide:text-[clamp(4.5rem,3.75vw,5.75rem)]"
       >
         {media.title}
       </h1>
 
       {media.shortDescription && (
-        <p className="mt-4 line-clamp-3 max-w-[30rem] text-body text-hero-text-muted md:text-[1.05rem] md:leading-relaxed">
+        <p className="mt-4 line-clamp-3 max-w-[30rem] text-body text-hero-text-muted md:text-[1.05rem] md:leading-relaxed wide:max-w-[38rem] wide:text-lg">
           {media.shortDescription}
         </p>
       )}
@@ -68,7 +68,7 @@ export function FeaturedMedia({ media }: FeaturedMediaProps) {
           mediaRef={media.mediaRef}
           summary={media}
           className={[
-            'inline-flex min-h-12 items-center justify-center gap-2 rounded-pill border border-watermark/45',
+            'inline-flex min-h-12 items-center justify-center gap-2 rounded-pill border border-watermark/45 wide:min-h-14',
             'bg-watermark/20 pr-5 pl-2 text-base font-semibold text-hero-text',
             'shadow-[0_8px_24px_rgb(0_0_0/18%)]',
             'transition-[background-color,border-color,color,opacity,transform] duration-200 ease-out',

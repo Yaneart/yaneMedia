@@ -38,7 +38,7 @@ type ProfileLink = {
 };
 
 const linkClassName = [
-  'group flex min-h-12 items-center gap-2 rounded-control border border-border bg-surface-elevated/70 p-2',
+  'group flex min-h-12 items-center gap-2 rounded-control border border-border bg-surface-elevated/70 p-2 wide:min-h-14 wide:p-3',
   'transition-[background-color,border-color,box-shadow] hover:border-watermark/50 hover:bg-watermark/10',
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/20',
   'motion-reduce:transition-none',
@@ -70,7 +70,7 @@ function CountCard({
   icon: ComponentType<IconProps>;
 }) {
   return (
-    <div className="relative rounded-control border border-border bg-surface-elevated/65 p-2.5">
+    <div className="relative rounded-control border border-border bg-surface-elevated/65 p-2.5 wide:p-3">
       <dt className="truncate pr-5 text-caption text-text-secondary">{label}</dt>
       <Icon aria-hidden="true" className="absolute top-2.5 right-2.5 size-4 text-accent-text" />
       <dd className="mt-1 flex items-baseline gap-1.5">
@@ -133,16 +133,16 @@ function PrivateProfileView({
   useRestoreSocialAction('profile', () => headingRef.current?.focus());
 
   return (
-    <section className="relative isolate mx-auto max-w-[1600px] overflow-hidden rounded-card border border-context-border bg-linear-to-br from-watermark/38 via-watermark/26 to-watermark/32 p-2 shadow-surface sm:p-3">
+    <section className="relative isolate mx-auto max-w-[1600px] overflow-hidden rounded-card border border-context-border bg-linear-to-br from-watermark/38 via-watermark/26 to-watermark/32 p-2 shadow-surface sm:p-3 wide:large-page-text wide:max-w-private-profile wide:p-4">
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
         {profileWatermarks.map((className) => (
           <YaneMark key={className} className={`absolute ${className} text-watermark`} />
         ))}
         <div className="absolute inset-0 bg-linear-to-br from-transparent via-transparent to-watermark/8" />
       </div>
-      <div className="relative z-10 space-y-4">
-        <header className="rounded-card border border-context-border/80 bg-surface/35 p-3 sm:p-4">
-          <div className="grid items-center gap-4 sm:grid-cols-[160px_minmax(0,1fr)] lg:grid-cols-[160px_minmax(0,1fr)_auto]">
+      <div className="relative z-10 space-y-4 wide:space-y-5">
+        <header className="rounded-card border border-context-border/80 bg-surface/35 p-3 sm:p-4 wide:p-5">
+          <div className="grid items-center gap-4 sm:grid-cols-[160px_minmax(0,1fr)] lg:grid-cols-[160px_minmax(0,1fr)_auto] wide:grid-cols-[13rem_minmax(0,1fr)_auto] wide:gap-6">
             <ProfileAvatarEditor accountKey={accountKey} profile={profile} />
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
@@ -159,7 +159,7 @@ function PrivateProfileView({
                 ref={headingRef}
                 data-page-heading
                 tabIndex={-1}
-                className="mt-2 break-words text-2xl font-semibold tracking-tight text-text-primary sm:text-3xl xl:text-4xl"
+                className="mt-2 break-words text-2xl font-semibold tracking-tight text-text-primary sm:text-3xl xl:text-4xl wide:text-5xl"
               >
                 {profile.displayName}
               </h1>
@@ -186,7 +186,7 @@ function PrivateProfileView({
             </div>
             <Link
               to={createPublicProfilePath(profile.handle)}
-              className="group inline-flex min-h-11 items-center justify-center gap-2 rounded-control border border-context-border bg-surface/50 px-4 text-sm font-semibold text-text-primary shadow-sm transition-colors hover:border-watermark/60 hover:bg-watermark/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/30 sm:col-span-2 sm:justify-self-start lg:col-span-1 lg:justify-self-end"
+              className="group inline-flex min-h-11 items-center justify-center gap-2 rounded-control border border-context-border bg-surface/50 px-4 text-sm font-semibold text-text-primary shadow-sm transition-colors hover:border-watermark/60 hover:bg-watermark/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/30 sm:col-span-2 sm:justify-self-start lg:col-span-1 lg:justify-self-end wide:min-h-13"
               onFocus={loadPublicProfilePage}
               onPointerEnter={loadPublicProfilePage}
               onPointerDown={(event) => {
@@ -213,7 +213,7 @@ function PrivateProfileView({
           <ThemeToggle />
         </section>
 
-        <div className="grid gap-3 xl:grid-cols-[minmax(0,1.65fr)_minmax(300px,0.85fr)]">
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,1.65fr)_minmax(300px,0.85fr)] wide:gap-5">
           <ProfileEditForm
             key={accountKey}
             accountKey={accountKey}
@@ -221,10 +221,10 @@ function PrivateProfileView({
             settings={settings}
           />
 
-          <aside className="flex flex-col gap-3">
+          <aside className="flex flex-col gap-3 wide:gap-5">
             <section
               aria-labelledby="profile-account-heading"
-              className="rounded-card border border-border bg-surface/40 p-3"
+              className="rounded-card border border-border bg-surface/40 p-3 wide:p-5"
             >
               <div className="flex items-start justify-between gap-4">
                 <div>
@@ -270,7 +270,7 @@ function PrivateProfileView({
 
             <section
               aria-labelledby="profile-activity-heading"
-              className="rounded-card border border-border bg-surface/40 p-3"
+              className="rounded-card border border-border bg-surface/40 p-3 wide:p-5"
             >
               <div className="flex items-center justify-between gap-3">
                 <h2 id="profile-activity-heading" className="text-heading text-text-primary">
@@ -287,7 +287,7 @@ function PrivateProfileView({
 
             <section
               aria-labelledby="profile-shortcuts-heading"
-              className="flex-1 rounded-card border border-border bg-surface/40 p-3"
+              className="flex-1 rounded-card border border-border bg-surface/40 p-3 wide:p-5"
             >
               <h2 id="profile-shortcuts-heading" className="text-heading text-text-primary">
                 Быстрые переходы

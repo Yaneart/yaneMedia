@@ -21,6 +21,8 @@ import { useHomeFeed } from '../model/useHomeFeed';
 import { HomeCollectionsSkeleton } from './HomeCollectionsSkeleton';
 import { HomeHeroSkeleton } from './HomeHeroSkeleton';
 
+const continuationRowClassName = 'wide:auto-cols-[min(31%,32rem)]';
+
 export function HomePage() {
   const queryClient = useQueryClient();
   const {
@@ -110,9 +112,9 @@ export function HomePage() {
   };
 
   return (
-    <div className="-m-page">
+    <div className="-m-page wide:large-page-text wide:[--radius-card:2rem]">
       {featured ? (
-        <section className="relative isolate min-h-[500px] overflow-hidden bg-elevated md:min-h-[clamp(32rem,62vh,43rem)]">
+        <section className="home-hero-height relative isolate overflow-hidden bg-elevated">
           <div className="absolute inset-0 -z-20">
             <MediaLandscapeArtwork
               key={featured.mediaRef}
@@ -125,7 +127,7 @@ export function HomePage() {
 
           <div className="home-hero-overlay absolute inset-0 -z-10" />
 
-          <div className="relative flex min-h-[500px] items-end px-5 pt-28 pb-14 md:min-h-[clamp(32rem,62vh,43rem)] md:px-page md:pt-32 md:pb-20">
+          <div className="home-hero-height relative flex items-end px-5 pt-28 pb-14 md:px-page md:pt-32 md:pb-20 wide:mx-auto wide:max-w-home-content wide:pb-24">
             <FeaturedMedia media={featured} />
           </div>
         </section>
@@ -134,7 +136,7 @@ export function HomePage() {
           role="status"
           title="Нет подключения к сети"
           description="Загрузим главную, когда соединение восстановится."
-          className="min-h-[500px] bg-elevated md:min-h-[clamp(32rem,62vh,43rem)]"
+          className="home-hero-height bg-elevated"
         />
       ) : isFeaturedError ? (
         <ErrorState
@@ -145,13 +147,13 @@ export function HomePage() {
           visualLabel="Лента недоступна"
           retryLabel="Восстановить сигнал"
           onRetry={retryFeatured}
-          className="min-h-[500px] bg-elevated px-page md:min-h-[clamp(32rem,62vh,43rem)]"
+          className="min-h-[500px] bg-elevated px-page md:min-h-[clamp(32rem,62vh,43rem)] wide:min-h-[clamp(32rem,62vh,52rem)]"
         />
       ) : (
         <HomeHeroSkeleton />
       )}
 
-      <div className="relative z-10 -mt-10 space-y-10 px-page pb-8 md:-mt-8 md:space-y-12 md:pb-10">
+      <div className="relative z-10 -mt-10 space-y-10 px-page pb-8 md:-mt-8 md:space-y-12 md:pb-10 wide:mx-auto wide:max-w-home-content">
         <p role="status" aria-live="polite" aria-atomic="true" className="sr-only">
           {continueWatchingAnnouncement}
         </p>
@@ -187,14 +189,22 @@ export function HomePage() {
               <RestorableContentRow
                 scrollKey="continue-watching"
                 variant="continuation"
+                className={continuationRowClassName}
                 aria-label="Загружаем продолжение просмотра"
               >
                 {Array.from({ length: Math.max(continueWatchingEntries.length, 3) }, (_, index) => (
-                  <Skeleton key={index} className="aspect-[2.35/1] w-full rounded-card" />
+                  <Skeleton
+                    key={index}
+                    className="aspect-[2.35/1] w-full rounded-card wide:aspect-video"
+                  />
                 ))}
               </RestorableContentRow>
             ) : resolvedContinueWatchingEntries.length > 0 ? (
-              <RestorableContentRow scrollKey="continue-watching" variant="continuation">
+              <RestorableContentRow
+                scrollKey="continue-watching"
+                variant="continuation"
+                className={continuationRowClassName}
+              >
                 {resolvedContinueWatchingEntries.map(({ entry, media, storedRefs }) => (
                   <ContinueWatchingCard
                     key={entry.mediaRef}

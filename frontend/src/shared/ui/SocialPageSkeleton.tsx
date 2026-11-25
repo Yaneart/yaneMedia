@@ -14,7 +14,7 @@ export function SocialPageSkeleton({ variant }: SocialPageSkeletonProps) {
       <section
         aria-label="Загружаем страницу"
         aria-busy="true"
-        className="relative isolate mx-auto max-w-[1600px] overflow-hidden rounded-card border border-context-border bg-linear-to-br from-watermark/38 via-watermark/26 to-watermark/32 p-2 shadow-surface sm:p-3"
+        className="relative isolate mx-auto max-w-[1600px] overflow-hidden rounded-card border border-context-border bg-linear-to-br from-watermark/38 via-watermark/26 to-watermark/32 p-2 shadow-surface sm:p-3 wide:max-w-private-profile wide:p-4"
       >
         <div
           aria-hidden="true"
@@ -25,25 +25,25 @@ export function SocialPageSkeleton({ variant }: SocialPageSkeletonProps) {
           <YaneMark className="absolute -right-10 top-[16%] size-52 rotate-[24deg] text-watermark opacity-[0.3]" />
           <YaneMark className="absolute left-[68%] bottom-[6%] size-44 -rotate-[28deg] text-watermark opacity-[0.28]" />
         </div>
-        <div className="relative z-10 space-y-3">
-          <div className="rounded-card border border-context-border/80 bg-surface/35 p-3 sm:p-4">
-            <div className="grid items-center gap-4 sm:grid-cols-[160px_minmax(0,1fr)] lg:grid-cols-[160px_minmax(0,1fr)_auto]">
+        <div className="relative z-10 space-y-3 wide:space-y-5">
+          <div className="rounded-card border border-context-border/80 bg-surface/35 p-3 sm:p-4 wide:p-5">
+            <div className="grid items-center gap-4 sm:grid-cols-[160px_minmax(0,1fr)] lg:grid-cols-[160px_minmax(0,1fr)_auto] wide:grid-cols-[13rem_minmax(0,1fr)_auto] wide:gap-6">
               <div>
-                <Skeleton className="mx-auto size-28 rounded-full" />
-                <Skeleton className="mt-3 h-9 rounded-control" />
-                <Skeleton className="mt-1 h-8 rounded-control" />
+                <Skeleton className="mx-auto size-28 rounded-full wide:size-36" />
+                <Skeleton className="mt-3 h-9 rounded-control wide:h-11" />
+                <Skeleton className="mt-1 h-8 rounded-control wide:h-11" />
               </div>
               <div className="min-w-0 flex-1">
                 <Skeleton className="h-5 w-44 rounded-pill" />
-                <Skeleton className="mt-2 h-9 w-3/5 max-w-lg rounded-control" />
+                <Skeleton className="mt-2 h-9 w-3/5 max-w-lg rounded-control wide:h-12" />
                 <Skeleton className="mt-1 h-5 w-36 rounded-pill" />
               </div>
-              <Skeleton className="h-10 w-48 rounded-control sm:col-span-2 sm:justify-self-start lg:col-span-1 lg:justify-self-end" />
+              <Skeleton className="h-10 w-48 rounded-control sm:col-span-2 sm:justify-self-start lg:col-span-1 lg:justify-self-end wide:h-13 wide:w-64" />
             </div>
           </div>
-          <div className="grid gap-3 xl:grid-cols-[minmax(0,1.65fr)_minmax(300px,0.85fr)]">
-            <div className="rounded-card border border-border bg-surface/40 p-3 sm:p-4 xl:p-5">
-              <Skeleton className="h-7 w-56 rounded-control" />
+          <div className="grid gap-3 xl:grid-cols-[minmax(0,1.65fr)_minmax(300px,0.85fr)] wide:gap-5">
+            <div className="rounded-card border border-border bg-surface/40 p-3 sm:p-4 xl:p-5 wide:p-6">
+              <Skeleton className="h-7 w-56 rounded-control wide:h-9" />
               <Skeleton className="mt-3 h-5 w-4/5 max-w-2xl rounded-pill" />
               <div className="mt-5 grid gap-3 sm:grid-cols-2">
                 <Skeleton className="h-20 rounded-control" />
@@ -53,8 +53,8 @@ export function SocialPageSkeleton({ variant }: SocialPageSkeletonProps) {
               <Skeleton className="mt-5 h-28 rounded-control" />
               <Skeleton className="mt-5 h-16 rounded-control" />
             </div>
-            <div className="flex flex-col gap-3">
-              <div className="rounded-card border border-border bg-surface/40 p-3">
+            <div className="flex flex-col gap-3 wide:gap-5">
+              <div className="rounded-card border border-border bg-surface/40 p-3 wide:p-5">
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <Skeleton className="h-4 w-24 rounded-pill" />
@@ -65,7 +65,7 @@ export function SocialPageSkeleton({ variant }: SocialPageSkeletonProps) {
                 <Skeleton className="mt-3 h-[4.5rem] rounded-control" />
                 <Skeleton className="mt-4 h-10 w-36 rounded-control" />
               </div>
-              <div className="rounded-card border border-border bg-surface/40 p-3">
+              <div className="rounded-card border border-border bg-surface/40 p-3 wide:p-5">
                 <Skeleton className="h-6 w-40 rounded-control" />
                 <div className="mt-3 grid grid-cols-3 gap-2">
                   <Skeleton className="h-[4.5rem] rounded-control" />
@@ -73,7 +73,7 @@ export function SocialPageSkeleton({ variant }: SocialPageSkeletonProps) {
                   <Skeleton className="h-[4.5rem] rounded-control" />
                 </div>
               </div>
-              <div className="flex-1 rounded-card border border-border bg-surface/40 p-3">
+              <div className="flex-1 rounded-card border border-border bg-surface/40 p-3 wide:p-5">
                 <Skeleton className="h-6 w-44 rounded-control" />
                 <div className="mt-3 grid grid-cols-2 gap-2">
                   <Skeleton className="h-12 rounded-control" />

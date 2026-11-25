@@ -8,6 +8,9 @@
 
 @theme {
   --font-sans: 'Manrope Variable', sans-serif;
+  --breakpoint-wide: 128rem;
+  --container-home-content: 132rem;
+  --container-private-profile: 128rem;
 
   --text-display: clamp(2.5rem, 5vw, 5rem);
   --text-display--line-height: 1;
@@ -44,6 +47,28 @@
 
   --border-width-default: 1px;
   --border-width-focus: 2px;
+}
+
+@utility large-page-text {
+  --text-sm: 1rem;
+  --text-base: 1.125rem;
+  --text-lg: 1.25rem;
+  --text-body: 1.125rem;
+  --text-caption: 1rem;
+  --text-heading: 1.875rem;
+  font-size: var(--text-body);
+}
+
+@utility home-hero-height {
+  min-height: 500px;
+
+  @variant md {
+    min-height: clamp(32rem, 62vh, 43rem);
+  }
+
+  @variant wide {
+    min-height: clamp(32rem, 62vh, 52rem);
+  }
 }
 
 @keyframes yane-loader-shimmer {
