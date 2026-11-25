@@ -5,16 +5,19 @@ import { useEffect, useState } from 'react';
 
 type ResendVerificationProps = {
   email: string;
+  startWithCooldown?: boolean;
 };
 
-export function ResendVerification({ email }: ResendVerificationProps) {
+export function ResendVerification({ email, startWithCooldown = false }: ResendVerificationProps) {
   const [isSending, setIsSending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [retryAt, setRetryAt] = useState(() => Date.now() + 60_000);
-  const [remainingSeconds, setRemainingSeconds] = useState(60);
+  const [retryAt, setRetryAt] = useState(() => (startWithCooldown ? Date.now() + 60_000 : 0));
+  const [remainingSeconds, setRemainingSeconds] = useState(startWithCooldown ? 60 : 0);
 
   useEffect(() => {
+    if (!retryAt) return;
+
     const timer = window.setInterval(() => {
       const remaining = Math.max(0, Math.ceil((retryAt - Date.now()) / 1000));
 
@@ -86,7 +89,7 @@ export function ResendVerification({ email }: ResendVerificationProps) {
           ? 'Отправляем…'
           : remainingSeconds > 0
             ? `Повторить через ${remainingSeconds} с`
-            : 'Отправить письмо повторно'}
+            : 'Отправить письмо ещё раз'}
       </Button>
 
       {message && (

@@ -185,6 +185,33 @@ describe('auth HTTP contract', () => {
     });
   });
 
+  it.each([false, true])(
+    'offers verification for an unconfirmed email (concurrent insert: %s)',
+    async (concurrent) => {
+      const pending = { emailVerifiedAt: null } as User;
+      if (concurrent) {
+        findByEmail.mockResolvedValueOnce(undefined);
+        create.mockRejectedValueOnce(
+          Object.assign(new DatabaseError('duplicate', 0, 'error'), {
+            code: '23505',
+            constraint: 'users_email_unique',
+          }),
+        );
+      }
+      findByEmail.mockResolvedValue(pending);
+
+      const response = await register(dto);
+      expect(response.status).toBe(409);
+      expect(await response.json()).toEqual({
+        error: {
+          code: 'EMAIL_VERIFICATION_REQUIRED',
+          message: 'Этот адрес ещё не подтверждён. Отправьте письмо ещё раз.',
+        },
+      });
+      expect(create).toHaveBeenCalledTimes(concurrent ? 1 : 0);
+    },
+  );
+
   it('hides unexpected database error details', async () => {
     create.mockRejectedValue(new Error('private query and hash details'));
     const response = await register(dto);

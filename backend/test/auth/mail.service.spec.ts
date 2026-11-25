@@ -45,7 +45,10 @@ describe('Optional email configuration', () => {
 });
 
 describe('MailService SMTP delivery', () => {
-  const sendMail = jest.fn<Promise<unknown>, [{ text: string }]>();
+  const sendMail = jest.fn<
+    Promise<unknown>,
+    [{ text: string; html?: string; attachments?: { path: string; cid: string }[] }]
+  >();
   const transportFactory = jest.mocked(createTransport);
 
   beforeEach(() => {
@@ -85,6 +88,12 @@ describe('MailService SMTP delivery', () => {
       subject: 'Подтверждение email в yaneMedia',
     });
     expect(payload.text).toContain(verificationUrl);
+    expect(payload.html).toContain(`href="${verificationUrl}"`);
+    expect(payload.html).toContain('Ссылка действует 24 часа.');
+    expect(payload.attachments).toEqual([
+      { filename: 'yane-logo.png', path: expect.any(String), cid: 'yane-logo@yanemedia' },
+    ]);
+    expect(payload.html).toContain('src="cid:yane-logo@yanemedia"');
   });
 
   it('sends the one-hour, one-use recovery link through SMTP', async () => {

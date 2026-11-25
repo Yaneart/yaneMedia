@@ -88,7 +88,7 @@ export function VerifyEmailPage({ homePath, loginPath }: VerifyEmailPageProps) {
     <AuthFormLayout
       homePath={homePath}
       title="Подтверждение почты"
-      description="Подтвердите email, чтобы войти в аккаунт."
+      description={isVerified ? undefined : 'Подтвердите email, чтобы войти в аккаунт.'}
       compactMobile
       footer={
         <Link to={loginPath} className="font-semibold text-text-primary underline">
@@ -99,7 +99,7 @@ export function VerifyEmailPage({ homePath, loginPath }: VerifyEmailPageProps) {
       <div className="flex flex-col gap-3">
         {isVerified ? (
           <p role="status" className="text-text-primary">
-            Почта подтверждена. Теперь можно войти в аккаунт.
+            Почта подтверждена. <span className="inline-block">Теперь можно войти.</span>
           </p>
         ) : (
           <>

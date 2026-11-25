@@ -20,6 +20,7 @@ COPY --from=build-public /backend/dist-public ./dist
 COPY package.json bun.lock drizzle.config.ts ./
 COPY drizzle ./drizzle
 COPY scripts ./scripts
+COPY assets ./assets
 EXPOSE 3000
 CMD ["node", "dist/main.public"]
 

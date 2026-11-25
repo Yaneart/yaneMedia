@@ -17,6 +17,7 @@ import { generateToken, hashToken, isToken } from './token';
 import { LoginDto } from './dto/login.dto';
 import { ConfigService } from '@nestjs/config';
 import { MailService } from '../mail/mail.service';
+import type { User } from '../users/entities/user.entity';
 
 @Injectable()
 export class AuthService {
@@ -34,27 +35,18 @@ export class AuthService {
     const existingUser = await this.usersService.findByEmail(dto.email);
 
     if (existingUser) {
-      throw new ConflictException('Этот email уже занят');
+      throw this.registrationConflict(existingUser);
     }
 
     const passwordHash = await hashPassword(dto.password);
 
+    let user: User;
     try {
-      const user = await this.usersService.create({
+      user = await this.usersService.create({
         displayName: dto.displayName,
         email: dto.email,
         passwordHash,
       });
-
-      await this.sendVerificationEmail(user.id, user.email);
-
-      return {
-        user: {
-          displayName: user.displayName,
-          email: user.email,
-          createdAt: user.createdAt.toISOString(),
-        },
-      };
     } catch (error: unknown) {
       const cause = error instanceof DrizzleQueryError ? error.cause : error;
 
@@ -63,10 +55,31 @@ export class AuthService {
         cause.code === '23505' &&
         cause.constraint === 'users_email_unique'
       ) {
-        throw new ConflictException('Этот email уже занят');
+        throw this.registrationConflict(await this.usersService.findByEmail(dto.email));
       }
       throw error;
     }
+
+    await this.sendVerificationEmail(user.id, user.email);
+
+    return {
+      user: {
+        displayName: user.displayName,
+        email: user.email,
+        createdAt: user.createdAt.toISOString(),
+      },
+    };
+  }
+
+  private registrationConflict(user?: User): ConflictException {
+    if (user?.emailVerifiedAt === null) {
+      return new ConflictException({
+        code: 'EMAIL_VERIFICATION_REQUIRED',
+        message: 'Этот адрес ещё не подтверждён. Отправьте письмо ещё раз.',
+      });
+    }
+
+    return new ConflictException('Этот email уже занят');
   }
 
   async login(dto: LoginDto): Promise<{

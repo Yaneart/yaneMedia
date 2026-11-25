@@ -131,6 +131,10 @@ describe('AuthService', () => {
     await expect(service.register(dto)).rejects.toMatchObject({ status: 503 });
 
     findByEmail.mockResolvedValue({ ...user, emailVerifiedAt: null });
+    await expect(service.register(dto)).rejects.toMatchObject({
+      status: 409,
+      response: { code: 'EMAIL_VERIFICATION_REQUIRED' },
+    });
     await expect(service.resendVerification(dto.email)).resolves.toEqual({ success: true });
 
     expect(create).toHaveBeenCalledTimes(1);

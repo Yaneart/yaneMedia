@@ -1,6 +1,11 @@
 import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createTransport, type Transporter } from 'nodemailer';
+import { join } from 'node:path';
+import { createTransport, type SendMailOptions, type Transporter } from 'nodemailer';
+
+import { verificationEmail } from './verification-email';
+
+const logoContentId = 'yane-logo@yanemedia';
 
 @Injectable()
 export class MailService {
@@ -44,28 +49,40 @@ export class MailService {
   }
 
   async sendVerificationEmail(to: string, verificationUrl: string): Promise<void> {
-    await this.send(to, 'Подтверждение email в yaneMedia', [
-      'Для подтверждения email перейдите по ссылке:',
-      verificationUrl,
-      '',
-      'Если вы не регистрировались в yaneMedia, проигнорируйте письмо.',
-    ]);
+    const content = verificationEmail(verificationUrl, logoContentId);
+    await this.send(to, {
+      subject: 'Подтверждение email в yaneMedia',
+      ...content,
+      attachments: [
+        {
+          filename: 'yane-logo.png',
+          path: join(__dirname, '../../assets/yane-logo.png'),
+          cid: logoContentId,
+        },
+      ],
+    });
   }
 
   async sendPasswordResetEmail(to: string, resetUrl: string): Promise<void> {
-    await this.send(to, 'Сброс пароля в yaneMedia', [
-      'Чтобы задать новый пароль, перейдите по ссылке:',
-      resetUrl,
-      '',
-      'Ссылка действует один час и может быть использована только один раз.',
-      'Если вы не запрашивали сброс пароля, проигнорируйте письмо.',
-    ]);
+    await this.send(to, {
+      subject: 'Сброс пароля в yaneMedia',
+      text: [
+        'Чтобы задать новый пароль, перейдите по ссылке:',
+        resetUrl,
+        '',
+        'Ссылка действует один час и может быть использована только один раз.',
+        'Если вы не запрашивали сброс пароля, проигнорируйте письмо.',
+      ].join('\n'),
+    });
   }
 
-  private async send(to: string, subject: string, lines: string[]): Promise<void> {
+  private async send(
+    to: string,
+    message: Pick<SendMailOptions, 'subject' | 'text' | 'html' | 'attachments'>,
+  ): Promise<void> {
     const transport = this.getTransport();
     try {
-      await transport.sendMail({ from: this.from, to, subject, text: lines.join('\n') });
+      await transport.sendMail({ from: this.from, to, ...message });
     } catch {
       this.logger.error('SMTP delivery failed');
       throw new ServiceUnavailableException('Не удалось отправить письмо. Попробуйте позже.');

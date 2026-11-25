@@ -50,13 +50,16 @@ export function RegisterPage({ homePath, loginPath }: RegisterPageProps) {
   const [formErrors, setFormErrors] = useState<RegisterFormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [verificationEmail, setVerificationEmail] = useState<string | null>(null);
-  const [recoveryEmail, setRecoveryEmail] = useState<string | null>(null);
+  const [verification, setVerification] = useState<{
+    email: string;
+    message: string;
+    sent: boolean;
+  } | null>(null);
 
   const handleSubmit = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (isSubmitting || verificationEmail) {
+    if (isSubmitting || verification) {
       return;
     }
 
@@ -66,7 +69,6 @@ export function RegisterPage({ homePath, loginPath }: RegisterPageProps) {
 
     setFormErrors(nextFormErrors);
     setSubmitError(null);
-    setRecoveryEmail(null);
 
     const invalidFieldNames = Object.keys(nextFormErrors);
 
@@ -75,52 +77,57 @@ export function RegisterPage({ homePath, loginPath }: RegisterPageProps) {
       return;
     }
 
+    const email = fields.email.trim().toLowerCase();
     setIsSubmitting(true);
 
     try {
       const { user } = await register({
         displayName: fields.displayName.trim(),
-        email: fields.email.trim().toLowerCase(),
+        email,
         password: fields.password,
       });
 
       form.reset();
-      setVerificationEmail(user.email);
+      setVerification({
+        email: user.email,
+        message: `Отправили письмо на ${user.email}. Перейдите по ссылке, чтобы подтвердить почту.`,
+        sent: true,
+      });
     } catch (error: unknown) {
-      if (error instanceof ApiClientError && error.code === 'MAIL_NOT_CONFIGURED') {
-        setSubmitError(error.message);
+      if (!(error instanceof ApiClientError) || error.status >= 500) {
+        if (error instanceof ApiClientError && error.code === 'MAIL_NOT_CONFIGURED') {
+          setSubmitError(error.message);
+        } else {
+          setVerification({
+            email,
+            message: `Не удалось подтвердить отправку письма на ${email}. Если письмо не пришло, запросите его ещё раз.`,
+            sent: false,
+          });
+        }
         return;
       }
 
-      if (!(error instanceof ApiClientError) || error.status === 409 || error.status >= 500) {
-        setRecoveryEmail(fields.email.trim().toLowerCase());
+      if (error.code === 'EMAIL_VERIFICATION_REQUIRED') {
+        setVerification({
+          email,
+          message: `Адрес ${email} ещё не подтверждён. Если письмо не пришло, запросите его ещё раз.`,
+          sent: false,
+        });
+        return;
       }
 
-      if (!(error instanceof ApiClientError)) {
-        setSubmitError(
-          'Не удалось получить ответ сервера. Проверьте соединение. ' +
-            'Если письмо уже пришло, воспользуйтесь ссылкой в нём.',
-        );
-      } else {
-        switch (error.status) {
-          case 400:
-            setSubmitError('Проверьте правильность заполнения полей.');
-            break;
-          case 409:
-            setSubmitError('Этот email уже занят. Войдите или запросите подтверждение почты.');
-            break;
-          case 429:
-            setSubmitError('Слишком много попыток. Подождите минуту и попробуйте снова.');
-            break;
-          case 503:
-            setSubmitError(
-              'Не удалось отправить письмо. Аккаунт уже мог быть создан. ' +
-                'Потребуется повторная отправка подтверждения.',
-            );
-            break;
-          default:
-            setSubmitError('Не удалось зарегистрироваться. Попробуйте позже.');
-        }
+      switch (error.status) {
+        case 400:
+          setSubmitError('Проверьте правильность заполнения полей.');
+          break;
+        case 409:
+          setSubmitError('Для этого адреса уже есть аккаунт. Войдите или восстановите пароль.');
+          break;
+        case 429:
+          setSubmitError('Слишком много попыток. Подождите минуту и попробуйте снова.');
+          break;
+        default:
+          setSubmitError('Не удалось зарегистрироваться. Попробуйте позже.');
       }
     } finally {
       setIsSubmitting(false);
@@ -132,7 +139,6 @@ export function RegisterPage({ homePath, loginPath }: RegisterPageProps) {
     event: ChangeEvent<HTMLInputElement>,
   ) => {
     setSubmitError(null);
-    setRecoveryEmail(null);
 
     const form = event.currentTarget.form;
 
@@ -191,30 +197,21 @@ export function RegisterPage({ homePath, loginPath }: RegisterPageProps) {
         </p>
       }
     >
-      {verificationEmail ? (
+      {verification ? (
         <div className="flex flex-col gap-3">
           <p className="text-text-primary">Подтверждение почты</p>
 
-          <p className="text-text-secondary">
-            {submitError
-              ? `Вы можете запросить письмо для ${verificationEmail}.`
-              : `Отправили письмо на ${verificationEmail}. Перейдите по ссылке, чтобы подтвердить email.`}
+          <p role="status" className="wrap-break-word text-text-secondary">
+            {verification.message}
           </p>
 
-          {submitError && (
-            <p role="alert" className="text-caption text-error">
-              {submitError}
-            </p>
-          )}
-
-          <ResendVerification key={verificationEmail} email={verificationEmail} />
+          <ResendVerification email={verification.email} startWithCooldown={verification.sent} />
 
           <Button
             type="button"
             variant="ghost"
             onClick={() => {
-              setVerificationEmail(null);
-              setRecoveryEmail(null);
+              setVerification(null);
               setSubmitError(null);
               setFormErrors({});
             }}
@@ -284,17 +281,6 @@ export function RegisterPage({ homePath, loginPath }: RegisterPageProps) {
             <p role="alert" className="text-caption text-error">
               {submitError}
             </p>
-          )}
-
-          {recoveryEmail && (
-            <Button
-              type="button"
-              variant="secondary"
-              disabled={isSubmitting}
-              onClick={() => setVerificationEmail(recoveryEmail)}
-            >
-              Запросить подтверждение почты
-            </Button>
           )}
         </form>
       )}
