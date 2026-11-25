@@ -23,19 +23,19 @@ export function SearchPageSkeleton() {
             'relative z-10 grid rounded-card border border-context-border/80 bg-surface/35',
             'px-5 py-6 sm:px-7 sm:py-7',
             'lg:grid-cols-[minmax(18rem,0.75fr)_minmax(28rem,1.25fr)]',
-            'lg:items-center lg:gap-10 lg:px-10 lg:py-8',
+            'lg:items-center lg:gap-10 lg:px-10 lg:py-8 wide:media-search-columns',
           ].join(' ')}
         >
           <div>
             <Skeleton className="h-4 w-36 rounded-control" />
-            <Skeleton className="mt-3 h-9 w-72 max-w-full rounded-control" />
+            <Skeleton className="mt-3 h-9 w-72 max-w-full rounded-control wide:h-11" />
             <Skeleton className="mt-3 h-5 w-80 max-w-full rounded-control" />
           </div>
 
           <div className="mt-5 lg:mt-0">
             <div className="flex flex-col gap-2 sm:flex-row">
-              <Skeleton className="h-11 min-w-0 flex-1 rounded-control" />
-              <Skeleton className="h-11 w-full rounded-control sm:w-28" />
+              <Skeleton className="h-11 min-w-0 flex-1 rounded-control wide:h-12" />
+              <Skeleton className="h-11 w-full rounded-control sm:w-28 wide:h-12" />
             </div>
             <div className="mt-3 flex gap-2">
               <Skeleton className="h-7 w-20 rounded-full" />

@@ -10,7 +10,7 @@
   --font-sans: 'Manrope Variable', sans-serif;
   --breakpoint-wide: 128rem;
   --container-home-content: 132rem;
-  --container-private-profile: 128rem;
+  --container-profile: 128rem;
 
   --text-display: clamp(2.5rem, 5vw, 5rem);
   --text-display--line-height: 1;
@@ -57,6 +57,19 @@
   --text-caption: 1rem;
   --text-heading: 1.875rem;
   font-size: var(--text-body);
+}
+
+@utility media-list-layout {
+  @apply large-page-text;
+  --text-3xl: 2.25rem;
+  --text-5xl: 3.5rem;
+  --radius-card: 2rem;
+  max-width: calc(var(--container-home-content) - 2 * var(--spacing-page));
+  margin-inline: auto;
+}
+
+@utility media-search-columns {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 48rem);
 }
 
 @utility home-hero-height {
@@ -450,11 +463,12 @@
 }
 
 .media-view {
+  --media-view-gap: 1.5rem;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   grid-template-areas: 'info' 'playback' 'community';
   align-items: start;
-  gap: 24px;
+  gap: var(--media-view-gap);
 }
 
 .media-view-with-description {
@@ -566,8 +580,19 @@
 
 @container media-page (min-width: 80rem) {
   .media-view {
-    grid-template-columns: clamp(18rem, 20cqi, 20rem) minmax(0, 1fr);
+    --media-info-width: clamp(18rem, 20cqi, 20rem);
+    grid-template-columns: var(--media-info-width) minmax(0, 1fr);
     grid-template-areas: 'info playback' 'community community';
+  }
+
+  .media-view:not(:has(.media-player-theater)) {
+    @variant wide {
+      /* Leave room for the frame padding and player toolbar on short viewports. */
+      max-width: calc(
+        var(--media-info-width) + var(--media-view-gap) + max(18rem, 100dvh - 10rem) * 16 / 9
+      );
+      margin-inline: auto;
+    }
   }
   .media-view-with-description {
     grid-template-areas: 'info playback' 'details details' 'community community';

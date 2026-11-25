@@ -22,7 +22,7 @@ export type ContentRowProps = ComponentPropsWithRef<'div'> & {
 
 const variantClasses: Record<ContentRowVariant, string> = {
   continuation:
-    'grid-flow-col auto-cols-[88%] overflow-x-auto sm:auto-cols-[68%] md:auto-cols-[52%] xl:auto-cols-[38%] 2xl:auto-cols-[31%]',
+    'grid-flow-col auto-cols-[88%] overflow-x-auto sm:auto-cols-[68%] md:auto-cols-[52%] xl:auto-cols-[38%] 2xl:auto-cols-[min(31%,30rem)]',
   collection:
     'grid-cols-2 gap-y-6 md:grid-flow-col md:grid-cols-none md:auto-cols-[calc((100%_-_2rem)/3)] md:gap-y-4 md:overflow-x-auto xl:auto-cols-[calc((100%_-_4rem)/5)] 2xl:auto-cols-[calc((100%_-_5rem)/6)]',
 };

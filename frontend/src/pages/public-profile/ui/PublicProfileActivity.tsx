@@ -35,24 +35,28 @@ type PublicProfileActivityProps = {
 function PanelSkeleton({ kind }: { kind: PublicProfileTabId }) {
   if (kind !== 'reviews') {
     return (
-      <div
+      <MediaGrid
         aria-label="Загружаем раздел профиля"
         aria-busy="true"
-        className="grid grid-cols-2 gap-x-4 gap-y-6 p-4 sm:p-6 lg:grid-cols-3 xl:grid-cols-4"
+        className="p-4 sm:p-6 wide:p-7"
       >
-        {Array.from({ length: 4 }, (_, index) => (
-          <div key={index}>
+        {Array.from({ length: 6 }, (_, index) => (
+          <div key={index} className={index < 4 ? '' : 'hidden 2xl:block'}>
             <Skeleton className="aspect-2/3 rounded-card" />
             <Skeleton className="mt-2 h-5 w-4/5 rounded-control" />
             <Skeleton className="mt-2 h-4 w-2/5 rounded-control" />
           </div>
         ))}
-      </div>
+      </MediaGrid>
     );
   }
 
   return (
-    <div aria-label="Загружаем раздел профиля" aria-busy="true" className="grid gap-3 p-4 sm:p-6">
+    <div
+      aria-label="Загружаем раздел профиля"
+      aria-busy="true"
+      className="grid gap-3 p-4 sm:p-6 wide:p-7"
+    >
       <Skeleton className="h-40 rounded-control" />
       <Skeleton className="h-40 rounded-control" />
       <Skeleton className="h-40 rounded-control" />
@@ -61,7 +65,7 @@ function PanelSkeleton({ kind }: { kind: PublicProfileTabId }) {
 }
 
 function PanelContent({ children }: { children: ReactNode }) {
-  return <div className="p-4 sm:p-6">{children}</div>;
+  return <div className="p-4 sm:p-6 wide:p-7">{children}</div>;
 }
 
 export function PublicProfileActivity({
@@ -177,7 +181,7 @@ export function PublicProfileActivity({
     ) : (
       <>
         <PanelContent>
-          <MediaGrid virtualized className="lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4">
+          <MediaGrid virtualized>
             {items.map((rating) => (
               <div key={rating.media.mediaRef} className="relative min-w-0">
                 <MediaCard
@@ -221,7 +225,7 @@ export function PublicProfileActivity({
     ) : (
       <>
         <PanelContent>
-          <MediaGrid virtualized className="lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4">
+          <MediaGrid virtualized>
             {items.map((media) => (
               <MediaCard
                 key={media.mediaRef}
@@ -265,7 +269,7 @@ export function PublicProfileActivity({
             aria-controls={`${tabIdPrefix}-${tab.id}-panel`}
             tabIndex={activeTab === tab.id ? 0 : -1}
             className={[
-              'min-h-10 shrink-0 rounded-control px-2.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/20 motion-reduce:transition-none sm:px-3',
+              'min-h-10 shrink-0 rounded-control px-2.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/20 motion-reduce:transition-none sm:px-3 wide:min-h-12 wide:px-4',
               activeTab === tab.id
                 ? 'bg-watermark/15 text-accent-text shadow-sm'
                 : 'text-text-secondary hover:bg-watermark/10 hover:text-accent-text',

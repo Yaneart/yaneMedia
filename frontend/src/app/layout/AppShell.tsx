@@ -31,8 +31,19 @@ const catalogPageLoaderByPath: Partial<Record<string, () => Promise<unknown>>> =
   [routePaths.anime]: preloadAnimePage,
 };
 
+const mediaListPaths = new Set<string>([
+  ...Object.keys(catalogTypeByPath),
+  routePaths.search,
+  routePaths.releases,
+  routePaths.schedule,
+  routePaths.editorialPicks,
+  routePaths.favorites,
+  routePaths.history,
+]);
+
 export function AppShell() {
   const { pathname } = useLocation();
+  const isMediaListPage = mediaListPaths.has(pathname.replace(/\/+$/, '').toLowerCase());
   const queryClient = useQueryClient();
   const prefetchedCatalogPathsRef = useRef(new Set<string>());
   const companion = useCompanionConnection();
@@ -108,6 +119,7 @@ export function AppShell() {
               className={[
                 'pb-[calc(env(safe-area-inset-bottom)+4rem)] lg:pb-0',
                 isHomePage ? '' : 'pt-[calc(env(safe-area-inset-top)+4rem)] lg:pt-0',
+                isMediaListPage ? 'wide:media-list-layout' : '',
               ].join(' ')}
             >
               <Outlet />

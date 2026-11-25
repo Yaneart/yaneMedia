@@ -55,7 +55,7 @@ function PublicProfileView({
   ];
 
   return (
-    <section className="relative isolate mx-auto max-w-[1600px] overflow-hidden rounded-card border border-context-border bg-linear-to-br from-watermark/38 via-watermark/26 to-watermark/32 p-2 shadow-surface sm:p-3">
+    <section className="relative isolate mx-auto max-w-[1600px] overflow-hidden rounded-card border border-context-border bg-linear-to-br from-watermark/38 via-watermark/26 to-watermark/32 p-2 shadow-surface sm:p-3 wide:large-page-text wide:max-w-profile wide:p-4">
       <title>{`${profile.displayName} (@${profile.handle}) — yaneMedia`}</title>
       <meta name="description" content={description} />
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
@@ -64,7 +64,7 @@ function PublicProfileView({
         ))}
         <div className="absolute inset-0 bg-linear-to-br from-transparent via-transparent to-watermark/8" />
       </div>
-      <div className="relative z-10 space-y-3">
+      <div className="relative z-10 space-y-3 wide:space-y-5">
         <PublicProfileHeader profile={profile} isOwner={isOwner} />
         <PublicProfileActivity
           profile={profile}

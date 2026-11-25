@@ -118,7 +118,7 @@ export function SearchPage() {
             'relative z-10 grid rounded-card border border-context-border/80 bg-surface/35',
             'px-5 py-6 sm:px-7 sm:py-7',
             'lg:grid lg:grid-cols-[minmax(18rem,0.75fr)_minmax(28rem,1.25fr)]',
-            'lg:items-center lg:gap-10 lg:px-10 lg:py-8',
+            'lg:items-center lg:gap-10 lg:px-10 lg:py-8 wide:media-search-columns',
           ].join(' ')}
         >
           <div className="relative">
@@ -146,13 +146,14 @@ export function SearchPage() {
                 value={query}
                 maxLength={maximumMediaSearchQueryLength}
                 placeholder="Введите название"
+                className="wide:min-h-12"
                 onChange={(event) => setQuery(event.currentTarget.value)}
               />
 
               <Button
                 type="submit"
                 disabled={!query.trim()}
-                className="w-full shrink-0 sm:w-auto sm:min-w-28"
+                className="w-full shrink-0 sm:w-auto sm:min-w-28 wide:min-h-12"
               >
                 Найти
               </Button>

@@ -53,7 +53,7 @@ export function ReviewSpoiler({ reviewId, content, hidden, variant }: ReviewSpoi
         {state.content}
       </p>
     ) : (
-      <div className="whitespace-pre-wrap text-body leading-8 text-text-primary">
+      <div className="max-w-[68ch] wrap-anywhere whitespace-pre-wrap text-body leading-8 text-text-primary wide:text-lg">
         {state.content}
       </div>
     );
@@ -67,9 +67,7 @@ export function ReviewSpoiler({ reviewId, content, hidden, variant }: ReviewSpoi
           : 'rounded-card border border-context-border bg-watermark/10 px-5 py-6 sm:px-8'
       }
     >
-      <p className="font-semibold text-text-primary">
-        Рецензия содержит спойлеры
-      </p>
+      <p className="font-semibold text-text-primary">Рецензия содержит спойлеры</p>
       <p className="mt-1 text-sm leading-relaxed text-text-secondary">
         Текст появится только после подтверждения. Выбор действует в текущем просмотре.
       </p>

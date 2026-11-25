@@ -1,3 +1,4 @@
+import { MediaGrid } from './MediaGrid';
 import { Skeleton } from './Skeleton';
 import { YaneMark, YaneMarkField } from './YaneMark';
 
@@ -14,7 +15,7 @@ export function SocialPageSkeleton({ variant }: SocialPageSkeletonProps) {
       <section
         aria-label="Загружаем страницу"
         aria-busy="true"
-        className="relative isolate mx-auto max-w-[1600px] overflow-hidden rounded-card border border-context-border bg-linear-to-br from-watermark/38 via-watermark/26 to-watermark/32 p-2 shadow-surface sm:p-3 wide:max-w-private-profile wide:p-4"
+        className="relative isolate mx-auto max-w-[1600px] overflow-hidden rounded-card border border-context-border bg-linear-to-br from-watermark/38 via-watermark/26 to-watermark/32 p-2 shadow-surface sm:p-3 wide:max-w-profile wide:p-4"
       >
         <div
           aria-hidden="true"
@@ -136,9 +137,9 @@ export function SocialPageSkeleton({ variant }: SocialPageSkeletonProps) {
   if (variant === 'public-profile') {
     return (
       <section
-        aria-label="Р—Р°РіСЂСѓР¶Р°РµРј СЃС‚СЂР°РЅРёС†Сѓ"
+        aria-label="Загружаем страницу"
         aria-busy="true"
-        className="relative isolate mx-auto max-w-[1600px] overflow-hidden rounded-card border border-context-border bg-linear-to-br from-watermark/38 via-watermark/26 to-watermark/32 p-2 shadow-surface sm:p-3"
+        className="relative isolate mx-auto max-w-[1600px] overflow-hidden rounded-card border border-context-border bg-linear-to-br from-watermark/38 via-watermark/26 to-watermark/32 p-2 shadow-surface sm:p-3 wide:max-w-profile wide:p-4"
       >
         <div
           aria-hidden="true"
@@ -147,20 +148,20 @@ export function SocialPageSkeleton({ variant }: SocialPageSkeletonProps) {
           <YaneMarkField />
           <div className="absolute inset-0 bg-linear-to-br from-transparent via-transparent to-watermark/8" />
         </div>
-        <div className="relative z-10 space-y-3">
-          <header className="rounded-card border border-context-border/80 bg-surface/35 p-3 sm:p-4">
-            <div className="grid items-center gap-4 sm:grid-cols-[112px_minmax(0,1fr)] lg:grid-cols-[128px_minmax(0,1fr)_auto]">
-              <Skeleton className="mx-auto size-24 rounded-full sm:size-28 lg:size-32" />
+        <div className="relative z-10 space-y-3 wide:space-y-5">
+          <header className="rounded-card border border-context-border/80 bg-surface/35 p-3 sm:p-4 wide:p-5">
+            <div className="grid items-center gap-4 sm:grid-cols-[112px_minmax(0,1fr)] lg:grid-cols-[128px_minmax(0,1fr)_auto] wide:grid-cols-[9rem_minmax(0,1fr)_auto] wide:gap-6">
+              <Skeleton className="mx-auto size-24 rounded-full sm:size-28 lg:size-32 wide:size-36" />
               <div className="min-w-0">
                 <Skeleton className="h-7 w-36 rounded-pill" />
-                <Skeleton className="mt-2 h-12 w-3/5 max-w-lg rounded-control" />
+                <Skeleton className="mt-2 h-12 w-3/5 max-w-lg rounded-control wide:h-14" />
                 <Skeleton className="mt-1 h-5 w-36 rounded-pill" />
                 <Skeleton className="mt-2 h-5 w-48 rounded-pill" />
                 <Skeleton className="mt-3 h-4 w-48 rounded-pill" />
               </div>
               <Skeleton className="h-11 w-40 rounded-control sm:col-span-2 sm:justify-self-start lg:col-span-1 lg:justify-self-end" />
             </div>
-            <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
+            <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-4 wide:mt-5 wide:gap-3">
               {Array.from({ length: 4 }, (_, index) => (
                 <div
                   key={index}
@@ -175,11 +176,11 @@ export function SocialPageSkeleton({ variant }: SocialPageSkeletonProps) {
 
           <section className="overflow-hidden rounded-card border border-border bg-surface/40">
             <div className="flex gap-2 overflow-hidden border-b border-border/80 p-2">
-              <Skeleton className="h-10 w-24 rounded-control bg-watermark/20" />
-              <Skeleton className="h-10 w-28 rounded-control" />
-              <Skeleton className="h-10 w-24 rounded-control" />
+              <Skeleton className="h-10 w-24 rounded-control bg-watermark/20 wide:h-12" />
+              <Skeleton className="h-10 w-28 rounded-control wide:h-12" />
+              <Skeleton className="h-10 w-24 rounded-control wide:h-12" />
             </div>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-6 p-4 sm:p-6 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
+            <MediaGrid className="p-4 sm:p-6 wide:p-7">
               {Array.from({ length: 6 }, (_, index) => (
                 <div key={index} className="min-w-0">
                   <Skeleton className="aspect-2/3 rounded-card" />
@@ -187,7 +188,7 @@ export function SocialPageSkeleton({ variant }: SocialPageSkeletonProps) {
                   <Skeleton className="mt-2 h-4 w-2/5 rounded-control" />
                 </div>
               ))}
-            </div>
+            </MediaGrid>
           </section>
         </div>
       </section>

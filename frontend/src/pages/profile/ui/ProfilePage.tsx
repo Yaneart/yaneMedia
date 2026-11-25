@@ -133,7 +133,7 @@ function PrivateProfileView({
   useRestoreSocialAction('profile', () => headingRef.current?.focus());
 
   return (
-    <section className="relative isolate mx-auto max-w-[1600px] overflow-hidden rounded-card border border-context-border bg-linear-to-br from-watermark/38 via-watermark/26 to-watermark/32 p-2 shadow-surface sm:p-3 wide:large-page-text wide:max-w-private-profile wide:p-4">
+    <section className="relative isolate mx-auto max-w-[1600px] overflow-hidden rounded-card border border-context-border bg-linear-to-br from-watermark/38 via-watermark/26 to-watermark/32 p-2 shadow-surface sm:p-3 wide:large-page-text wide:max-w-profile wide:p-4">
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
         {profileWatermarks.map((className) => (
           <YaneMark key={className} className={`absolute ${className} text-watermark`} />

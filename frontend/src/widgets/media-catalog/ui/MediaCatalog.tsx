@@ -196,7 +196,7 @@ export function MediaCatalog({ type, title, filters }: MediaCatalogProps) {
             'relative z-10 grid rounded-card border border-context-border/80 bg-surface/35',
             'px-5 py-6 sm:px-7 sm:py-7',
             'xl:grid xl:grid-cols-[minmax(16rem,0.65fr)_minmax(34rem,1.35fr)]',
-            'xl:items-center xl:gap-10 xl:px-10 xl:py-8',
+            'xl:items-center xl:gap-10 xl:px-10 xl:py-8 wide:media-search-columns',
           ].join(' ')}
         >
           <div className="relative">
@@ -223,6 +223,7 @@ export function MediaCatalog({ type, title, filters }: MediaCatalogProps) {
               value={searchValue}
               maxLength={maximumMediaSearchQueryLength}
               placeholder="Поиск по каталогу"
+              className="wide:min-h-12"
               onChange={(event) => setSearchValue(event.currentTarget.value)}
             />
             <Button
@@ -253,7 +254,7 @@ export function MediaCatalog({ type, title, filters }: MediaCatalogProps) {
               id={filtersPanelId}
               className={[
                 'mt-3 grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-center',
-                'xl:flex-nowrap',
+                'xl:flex-nowrap wide:flex-wrap',
                 areMobileFiltersOpen ? 'grid' : 'hidden sm:flex',
               ].join(' ')}
             >

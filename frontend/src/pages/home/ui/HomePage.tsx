@@ -21,8 +21,6 @@ import { useHomeFeed } from '../model/useHomeFeed';
 import { HomeCollectionsSkeleton } from './HomeCollectionsSkeleton';
 import { HomeHeroSkeleton } from './HomeHeroSkeleton';
 
-const continuationRowClassName = 'wide:auto-cols-[min(31%,32rem)]';
-
 export function HomePage() {
   const queryClient = useQueryClient();
   const {
@@ -189,22 +187,14 @@ export function HomePage() {
               <RestorableContentRow
                 scrollKey="continue-watching"
                 variant="continuation"
-                className={continuationRowClassName}
                 aria-label="Загружаем продолжение просмотра"
               >
                 {Array.from({ length: Math.max(continueWatchingEntries.length, 3) }, (_, index) => (
-                  <Skeleton
-                    key={index}
-                    className="aspect-[2.35/1] w-full rounded-card wide:aspect-video"
-                  />
+                  <Skeleton key={index} className="aspect-[2.35/1] w-full rounded-card" />
                 ))}
               </RestorableContentRow>
             ) : resolvedContinueWatchingEntries.length > 0 ? (
-              <RestorableContentRow
-                scrollKey="continue-watching"
-                variant="continuation"
-                className={continuationRowClassName}
-              >
+              <RestorableContentRow scrollKey="continue-watching" variant="continuation">
                 {resolvedContinueWatchingEntries.map(({ entry, media, storedRefs }) => (
                   <ContinueWatchingCard
                     key={entry.mediaRef}

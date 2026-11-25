@@ -17,14 +17,14 @@ export function MediaCatalogSkeleton({ title }: { title: string }) {
         </div>
         <div
           aria-hidden="true"
-          className="relative z-10 grid rounded-card border border-context-border/80 bg-surface/35 px-5 py-6 sm:px-7 sm:py-7 xl:grid-cols-[minmax(16rem,0.65fr)_minmax(34rem,1.35fr)] xl:items-center xl:gap-10 xl:px-10 xl:py-8"
+          className="relative z-10 grid rounded-card border border-context-border/80 bg-surface/35 px-5 py-6 sm:px-7 sm:py-7 xl:grid-cols-[minmax(16rem,0.65fr)_minmax(34rem,1.35fr)] xl:items-center xl:gap-10 xl:px-10 xl:py-8 wide:media-search-columns"
         >
           <div>
-            <Skeleton className="h-8 w-40" />
+            <Skeleton className="h-8 w-40 wide:h-11" />
             <Skeleton className="mt-4 h-5 w-2/3" />
           </div>
           <div className="mt-5 xl:mt-0">
-            <Skeleton className="h-11 w-full" />
+            <Skeleton className="h-11 w-full wide:h-12" />
             <div className="mt-3 flex gap-2">
               <Skeleton className="h-7 w-20 rounded-full" />
               <Skeleton className="h-7 w-16 rounded-full" />
