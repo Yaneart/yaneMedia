@@ -126,6 +126,21 @@ describe('AuthService', () => {
     expect(saveVerificationToken).not.toHaveBeenCalled();
   });
 
+  it('can resend a confirmation after delivery failed during registration', async () => {
+    sendVerificationEmail.mockRejectedValueOnce(new ServiceUnavailableException());
+    await expect(service.register(dto)).rejects.toMatchObject({ status: 503 });
+
+    findByEmail.mockResolvedValue({ ...user, emailVerifiedAt: null });
+    await expect(service.resendVerification(dto.email)).resolves.toEqual({ success: true });
+
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(saveVerificationToken).toHaveBeenCalledTimes(2);
+    expect(sendVerificationEmail).toHaveBeenLastCalledWith(
+      dto.email,
+      expect.stringMatching(/^https:\/\/yanemedia\.example\/verify-email#token=/),
+    );
+  });
+
   it('does not look up an account or save a verification token without mail', async () => {
     ensureConfigured.mockImplementation(() => {
       throw new ServiceUnavailableException('Mail is not configured');
@@ -302,7 +317,7 @@ describe('AuthService', () => {
       if (failure === 'persistence') {
         savePasswordResetToken.mockRejectedValue(new Error('database unavailable'));
       } else {
-        sendPasswordResetEmail.mockRejectedValue(new Error('resend unavailable'));
+        sendPasswordResetEmail.mockRejectedValue(new Error('SMTP unavailable'));
       }
 
       await expect(service.requestPasswordReset(user.email)).resolves.toEqual({ success: true });

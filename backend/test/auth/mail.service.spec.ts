@@ -1,7 +1,17 @@
 import { Logger, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { createTransport } from 'nodemailer';
 import { MailService } from '../../src/mail/mail.service';
 import { appConfigValidationSchema } from '../../src/config/config.module';
+
+jest.mock('nodemailer', () => ({ createTransport: jest.fn() }));
+
+const settings = {
+  SMTP_HOST: 'smtp.example.com',
+  SMTP_USER: 'login@example.com',
+  SMTP_PASSWORD: 'test-key',
+  MAIL_FROM: 'yaneMedia <mail@example.com>',
+};
 
 describe('Optional email configuration', () => {
   const base = {
@@ -9,21 +19,15 @@ describe('Optional email configuration', () => {
     FRONTEND_ORIGIN: 'http://localhost:5173',
   };
 
-  it.each([
-    {},
-    { RESEND_API_KEY: '', MAIL_FROM: '' },
-    { RESEND_API_KEY: 're_test' },
-    { MAIL_FROM: 'mail@example.com' },
-  ])('allows startup with missing or incomplete mail settings: %j', (settings) => {
-    expect(appConfigValidationSchema.validate({ ...base, ...settings }).error).toBeUndefined();
-    const service = new MailService(
-      new ConfigService({ RESEND_API_KEY: '', MAIL_FROM: '', ...settings }),
-    );
+  it.each(Object.keys(settings))('allows startup without %s', (missingKey) => {
+    const incomplete = { ...settings, [missingKey]: '' };
+    expect(appConfigValidationSchema.validate({ ...base, ...incomplete }).error).toBeUndefined();
+    const service = new MailService(new ConfigService({ ...base, ...incomplete }));
     expect(() => service.ensureConfigured()).toThrow(ServiceUnavailableException);
   });
 
   it('fails explicitly instead of silently dropping verification and password reset emails', async () => {
-    const service = new MailService(new ConfigService({ RESEND_API_KEY: '', MAIL_FROM: '' }));
+    const service = new MailService(new ConfigService(base));
     await expect(
       service.sendVerificationEmail('user@example.com', 'http://localhost:5173/verify-email'),
     ).rejects.toThrow('Отправка писем не настроена.');
@@ -31,45 +35,69 @@ describe('Optional email configuration', () => {
       service.sendPasswordResetEmail('user@example.com', 'http://localhost:5173/reset-password'),
     ).rejects.toMatchObject({ status: 503 });
   });
+
+  it('defaults the SMTP port to 587 and rejects invalid ports', () => {
+    expect(appConfigValidationSchema.validate(base).value).toMatchObject({ SMTP_PORT: 587 });
+    for (const port of [0, 65536, 'smtp']) {
+      expect(appConfigValidationSchema.validate({ ...base, SMTP_PORT: port }).error).toBeDefined();
+    }
+  });
 });
 
-describe('MailService password reset delivery', () => {
-  interface MailPayload {
-    from: string;
-    to: string;
-    subject: string;
-    text: string;
-  }
+describe('MailService SMTP delivery', () => {
+  const sendMail = jest.fn<Promise<unknown>, [{ text: string }]>();
+  const transportFactory = jest.mocked(createTransport);
 
-  const send = jest.fn<
-    Promise<{ data: { id: string } | null; error: { name: string } | null }>,
-    [MailPayload]
-  >();
-  const service = new MailService(
-    new ConfigService({
-      MAIL_FROM: 'yaneMedia <mail@yanemedia.example>',
-      RESEND_API_KEY: 're_test',
-    }),
-  );
-
-  beforeAll(() => {
-    Object.assign(service, { resend: { emails: { send } } });
+  beforeEach(() => {
+    sendMail.mockReset().mockResolvedValue({});
+    transportFactory.mockReset().mockReturnValue({
+      sendMail,
+    } as unknown as ReturnType<typeof createTransport>);
   });
-
-  beforeEach(() => send.mockReset().mockResolvedValue({ data: { id: 'email-id' }, error: null }));
 
   afterEach(() => jest.restoreAllMocks());
 
-  it('sends the one-hour, one-use recovery link through Resend', async () => {
+  it.each([
+    [587, false, true],
+    [465, true, false],
+  ])('requires an encrypted connection on port %i', (port, secure, requireTLS) => {
+    new MailService(new ConfigService({ ...settings, SMTP_PORT: port })).ensureConfigured();
+    expect(transportFactory).toHaveBeenCalledWith(
+      expect.objectContaining({
+        host: settings.SMTP_HOST,
+        port,
+        secure,
+        requireTLS,
+        auth: { user: settings.SMTP_USER, pass: settings.SMTP_PASSWORD },
+      }),
+    );
+  });
+
+  it('sends the confirmation link through SMTP', async () => {
+    const service = new MailService(new ConfigService(settings));
+    const verificationUrl = 'https://89.112.10.57/verify-email#token=secret';
+    await service.sendVerificationEmail('user@example.com', verificationUrl);
+    expect(sendMail).toHaveBeenCalledTimes(1);
+    const payload = sendMail.mock.calls[0][0];
+    expect(payload).toMatchObject({
+      from: settings.MAIL_FROM,
+      to: 'user@example.com',
+      subject: 'Подтверждение email в yaneMedia',
+    });
+    expect(payload.text).toContain(verificationUrl);
+  });
+
+  it('sends the one-hour, one-use recovery link through SMTP', async () => {
+    const service = new MailService(new ConfigService(settings));
     const resetUrl = 'https://yanemedia.example/reset-password#token=secret';
     await expect(service.sendPasswordResetEmail('artem@example.com', resetUrl)).resolves.toBe(
       undefined,
     );
 
-    expect(send).toHaveBeenCalledTimes(1);
-    const payload = send.mock.calls[0][0];
+    expect(sendMail).toHaveBeenCalledTimes(1);
+    const payload = sendMail.mock.calls[0][0];
     expect(payload).toMatchObject({
-      from: 'yaneMedia <mail@yanemedia.example>',
+      from: settings.MAIL_FROM,
       to: 'artem@example.com',
       subject: 'Сброс пароля в yaneMedia',
     });
@@ -78,12 +106,16 @@ describe('MailService password reset delivery', () => {
     expect(payload.text).toContain('только один раз');
   });
 
-  it('maps a Resend rejection to a retryable service error', async () => {
+  it('maps an SMTP rejection to a retryable service error without exposing its details', async () => {
+    const service = new MailService(new ConfigService(settings));
     const logError = jest.spyOn(Logger.prototype, 'error').mockImplementation();
-    send.mockResolvedValue({ data: null, error: { name: 'validation_error' } });
+    sendMail.mockRejectedValue(new Error('SMTP rejection for user@example.com'));
     await expect(
       service.sendPasswordResetEmail('artem@example.com', 'https://yanemedia.example/reset'),
-    ).rejects.toBeInstanceOf(ServiceUnavailableException);
-    expect(logError).toHaveBeenCalledWith('Resend: validation_error');
+    ).rejects.toMatchObject({
+      status: 503,
+      message: 'Не удалось отправить письмо. Попробуйте позже.',
+    });
+    expect(logError.mock.calls).toEqual([['SMTP delivery failed']]);
   });
 });

@@ -154,7 +154,7 @@ describe('auth HTTP contract', () => {
   it('returns a clear 503 without creating an account when mail is not configured', async () => {
     const message = 'Отправка писем не настроена. Можно продолжить без аккаунта.';
     ensureConfigured.mockImplementation(() => {
-      new MailService(new ConfigService({ RESEND_API_KEY: '', MAIL_FROM: '' })).ensureConfigured();
+      new MailService(new ConfigService({ SMTP_HOST: '', MAIL_FROM: '' })).ensureConfigured();
     });
     const response = await register(dto);
     expect(response.status).toBe(503);

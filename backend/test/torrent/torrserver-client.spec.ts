@@ -253,8 +253,6 @@ describe('torrent configuration and readiness', () => {
     const base = {
       DATABASE_URL: 'postgresql://user:pass@localhost:5432/app',
       FRONTEND_ORIGIN: 'http://localhost:5173',
-      RESEND_API_KEY: 'test',
-      MAIL_FROM: 'mail@example.com',
     };
     expect(appConfigValidationSchema.validate(base).error).toBeUndefined();
     expect(

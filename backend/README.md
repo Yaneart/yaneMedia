@@ -16,13 +16,14 @@ cp .env.example .env
 
 Заполните `.env`:
 
-| Настройка                     | Для чего нужна                                                                              |
-| ----------------------------- | ------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`                | Подключение к PostgreSQL.                                                                   |
-| `FRONTEND_ORIGIN`             | Адрес интерфейса, по умолчанию `http://localhost:5173`.                                     |
-| `RESEND_API_KEY`, `MAIL_FROM` | Необязательная отправка писем. Для регистрации и восстановления доступа нужны оба значения. |
-| `TMDB_API_KEY`                | Данные фильмов и сериалов, наполнение каталога.                                             |
-| `KODIK_API_KEY`               | Подключение Kodik, если нужен этот источник.                                                |
+| Настройка                                              | Для чего нужна                                                                           |
+| ------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                                         | Подключение к PostgreSQL.                                                                |
+| `FRONTEND_ORIGIN`                                      | Точный адрес сайта без завершающего `/`. Используется для CORS, CSRF и ссылок в письмах. |
+| `SMTP_HOST`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM` | Настройки отправки писем. Для регистрации и восстановления нужны все четыре значения.    |
+| `SMTP_PORT`                                            | По умолчанию `587` с обязательным STARTTLS. На `465` TLS включается сразу.               |
+| `TMDB_API_KEY`                                         | Данные фильмов и сериалов, наполнение каталога.                                          |
+| `KODIK_API_KEY`                                        | Подключение Kodik, если нужен этот источник.                                             |
 
 Остальные настройки и значения по умолчанию — в [`.env.example`](.env.example).
 
@@ -35,6 +36,21 @@ bun run start:dev
 ```
 
 API: **[localhost:3000/api/v1](http://localhost:3000/api/v1)**. Проверка работы: [health](http://localhost:3000/api/v1/health).
+
+## Почта на публичном сервере
+
+В Brevo добавьте и подтвердите отправителя, активируйте отправку транзакционных писем и создайте SMTP-ключ. SMTP-логин указан на странице SMTP в Brevo. Заполните `backend/.env` на сервере:
+
+```dotenv
+FRONTEND_ORIGIN=https://89.112.10.57
+SMTP_HOST=smtp-relay.brevo.com
+SMTP_PORT=587
+SMTP_USER=your-smtp-login
+SMTP_PASSWORD=your-smtp-key
+MAIL_FROM="yaneMedia <your-verified-sender@example.com>"
+```
+
+Подставьте реальные значения логина, ключа и адреса отправителя. При переходе со старой конфигурации удалите `RESEND_API_KEY` и замените старый `MAIL_FROM`. Если сервер использует дополнительный Compose-файл, проверьте, что он не задаёт другой `FRONTEND_ORIGIN`. Пересоберите backend с теми же Compose-файлами, с которыми запущен сервер. [Настройка Brevo SMTP](https://help.brevo.com/hc/en-us/articles/7924908994450-Send-transactional-emails-using-Brevo-SMTP) · [Активация и диагностика](https://help.brevo.com/hc/en-us/articles/115000188150-Troubleshooting-Issues-with-Brevo-SMTP)
 
 ## Каталог
 
