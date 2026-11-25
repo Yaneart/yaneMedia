@@ -73,6 +73,10 @@ export const primaryNavigationItems = [
   },
 ] satisfies NavigationItem[];
 
+export const mobileNavigationItems = primaryNavigationItems.filter(
+  ({ path }) => path !== routePaths.home && path !== routePaths.search,
+);
+
 export const secondaryNavigationItems = [
   {
     label: 'Избранное',

@@ -12,6 +12,7 @@ import {
   describeSocialAccessError,
   useRestoreSocialAction,
 } from '@/features/social-access';
+import { ThemeToggle } from '@/features/theme';
 import {
   ArrowRightIcon,
   CommentIcon,
@@ -201,6 +202,16 @@ function PrivateProfileView({
             </Link>
           </div>
         </header>
+
+        <section
+          aria-labelledby="profile-appearance-heading"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-border bg-surface/40 p-3 lg:hidden"
+        >
+          <h2 id="profile-appearance-heading" className="text-heading text-text-primary">
+            Внешний вид
+          </h2>
+          <ThemeToggle />
+        </section>
 
         <div className="grid gap-3 xl:grid-cols-[minmax(0,1.65fr)_minmax(300px,0.85fr)]">
           <ProfileEditForm

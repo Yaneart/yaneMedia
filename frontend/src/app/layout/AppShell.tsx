@@ -1,6 +1,10 @@
 import { Outlet, useLocation } from 'react-router';
 import { routePaths } from '../router/routes';
-import { primaryNavigationItems, secondaryNavigationItems } from '../router/navigation';
+import {
+  mobileNavigationItems,
+  primaryNavigationItems,
+  secondaryNavigationItems,
+} from '../router/navigation';
 import { preloadAnimePage, preloadMoviesPage, preloadSeriesPage } from '../router/lazyPages';
 import { DesktopNavigation } from '@/widgets/desktop-navigation';
 import { MobileNavigation } from '@/widgets/mobile-navigation';
@@ -80,6 +84,7 @@ export function AppShell() {
         <div className="absolute inset-x-0 top-0 z-20 lg:hidden">
           <MobileHeader
             homePath={routePaths.home}
+            searchPath={routePaths.search}
             favoritesPath={routePaths.favorites}
             historyPath={routePaths.history}
             profilePath={routePaths.profile}
@@ -110,11 +115,7 @@ export function AppShell() {
           </ScrollRestorationProvider>
         </main>
         <div className="absolute inset-x-0 bottom-0 z-20 bg-transparent px-1 lg:hidden">
-          <MobileNavigation
-            homePath={routePaths.home}
-            items={primaryNavigationItems}
-            onItemIntent={prefetchCatalog}
-          />
+          <MobileNavigation items={mobileNavigationItems} onItemIntent={prefetchCatalog} />
         </div>
       </div>
     </div>

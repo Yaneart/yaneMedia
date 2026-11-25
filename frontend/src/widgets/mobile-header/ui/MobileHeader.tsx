@@ -1,3 +1,4 @@
+import { useAuth } from '@/entities/auth';
 import { AccountControl } from '@/features/account';
 import { ThemeToggle } from '@/features/theme';
 import {
@@ -8,6 +9,8 @@ import {
   Logo,
   MoreIcon,
   Popover,
+  SearchFilledIcon,
+  SearchIcon,
   DeviceIcon,
   IconButton,
 } from '@/shared';
@@ -15,19 +18,35 @@ import { NavLink, useLocation } from 'react-router';
 
 type MobileHeaderProps = {
   homePath: string;
+  searchPath: string;
   favoritesPath: string;
   historyPath: string;
   profilePath: string;
   onCompanionClick?: () => void;
 };
 
+function getHeaderControlClassName(isActive: boolean) {
+  return [
+    'flex size-12 shrink-0 items-center justify-center rounded-control border bg-background',
+    'transition-[background-color,border-color,color,transform] duration-200 ease-out',
+    'hover:bg-interactive-hover active:scale-[0.97] active:duration-75',
+    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/20',
+    'motion-reduce:transform-none motion-reduce:transition-none',
+    isActive
+      ? 'border-watermark/70 bg-navigation-active text-navigation-active-text'
+      : 'border-navigation-border text-text-primary',
+  ].join(' ');
+}
+
 export function MobileHeader({
   homePath,
+  searchPath,
   favoritesPath,
   historyPath,
   profilePath,
   onCompanionClick,
 }: MobileHeaderProps) {
+  const { state } = useAuth();
   const { pathname } = useLocation();
   const isLibraryRoute = pathname === favoritesPath || pathname === historyPath;
 
@@ -47,7 +66,18 @@ export function MobileHeader({
         </NavLink>
 
         <div className="flex items-center gap-2">
-          <ThemeToggle />
+          <NavLink
+            to={searchPath}
+            aria-label="Поиск"
+            title="Поиск"
+            className={({ isActive }) => getHeaderControlClassName(isActive)}
+          >
+            {({ isActive }) => {
+              const Icon = isActive ? SearchFilledIcon : SearchIcon;
+
+              return <Icon aria-hidden="true" className="size-5" />;
+            }}
+          </NavLink>
 
           <Popover
             trigger={<MoreIcon className="size-5" />}
@@ -55,82 +85,80 @@ export function MobileHeader({
             align="center"
             triggerSize="custom"
             triggerVariant="bare"
-            panelClassName="min-w-0 rounded-control bg-background p-1"
-            triggerClassName={[
-              'size-12 shrink-0 rounded-control border bg-background',
-              'transition-[background-color,border-color,color,transform] duration-200 ease-out',
-              'hover:bg-interactive-hover active:scale-[0.97] active:duration-75',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-action/20',
-              'motion-reduce:transform-none motion-reduce:transition-none',
-              isLibraryRoute
-                ? 'border-watermark/70 bg-navigation-active text-navigation-active-text'
-                : 'border-navigation-border text-text-primary',
-            ].join(' ')}
+            panelClassName="min-w-0 rounded-control bg-background p-1 lg:hidden"
+            triggerClassName={getHeaderControlClassName(isLibraryRoute)}
           >
             {(closePopover) => (
-              <nav aria-label="Разделы пользователя" className="flex items-center gap-2">
-                {onCompanionClick && (
-                  <IconButton
-                    variant="bare"
-                    size="custom"
-                    className="size-10 shrink-0 rounded-lg border border-border bg-background text-text-primary hover:bg-interactive-hover focus-visible:ring-watermark/60"
-                    aria-label="Локальный помощник"
-                    title="Локальный помощник"
-                    aria-haspopup="dialog"
-                    onClick={() => {
-                      closePopover();
-                      onCompanionClick();
-                    }}
+              <>
+                <nav aria-label="Разделы пользователя" className="flex items-center gap-2">
+                  {onCompanionClick && (
+                    <IconButton
+                      variant="bare"
+                      size="custom"
+                      className="size-10 shrink-0 rounded-lg border border-border bg-background text-text-primary hover:bg-interactive-hover focus-visible:ring-watermark/60"
+                      aria-label="Локальный помощник"
+                      title="Локальный помощник"
+                      aria-haspopup="dialog"
+                      onClick={() => {
+                        closePopover();
+                        onCompanionClick();
+                      }}
+                    >
+                      <DeviceIcon className="size-5" />
+                    </IconButton>
+                  )}
+                  <NavLink
+                    to={favoritesPath}
+                    aria-label="Открыть избранное"
+                    title="Избранное"
+                    className={({ isActive }) =>
+                      [
+                        'flex size-10 shrink-0 items-center justify-center rounded-lg border',
+                        'transition-[background-color,border-color,color] duration-200 ease-out',
+                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-watermark/60',
+                        isActive
+                          ? 'border-watermark/70 bg-navigation-active text-navigation-active-text'
+                          : 'border-border bg-background text-text-primary hover:bg-interactive-hover',
+                      ].join(' ')
+                    }
+                    onClick={closePopover}
                   >
-                    <DeviceIcon className="size-5" />
-                  </IconButton>
+                    {({ isActive }) => {
+                      const FavoriteStateIcon = isActive ? FavoriteFilledIcon : FavoriteIcon;
+
+                      return <FavoriteStateIcon className="size-5 shrink-0" />;
+                    }}
+                  </NavLink>
+
+                  <NavLink
+                    to={historyPath}
+                    aria-label="Открыть историю"
+                    title="История"
+                    className={({ isActive }) =>
+                      [
+                        'flex size-10 shrink-0 items-center justify-center rounded-lg border',
+                        'transition-[background-color,border-color,color] duration-200 ease-out',
+                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-watermark/60',
+                        isActive
+                          ? 'border-watermark/70 bg-navigation-active text-navigation-active-text'
+                          : 'border-border bg-background text-text-primary hover:bg-interactive-hover',
+                      ].join(' ')
+                    }
+                    onClick={closePopover}
+                  >
+                    {({ isActive }) => {
+                      const HistoryStateIcon = isActive ? HistoryFilledIcon : HistoryIcon;
+
+                      return <HistoryStateIcon className="size-5 shrink-0" />;
+                    }}
+                  </NavLink>
+                </nav>
+                {state.status === 'guest' && (
+                  <div className="mt-1 grid justify-center border-t border-border pt-1">
+                    <ThemeToggle />
+                  </div>
                 )}
-                <NavLink
-                  to={favoritesPath}
-                  aria-label="Открыть избранное"
-                  title="Избранное"
-                  className={({ isActive }) =>
-                    [
-                      'flex size-10 shrink-0 items-center justify-center rounded-lg border',
-                      'transition-[background-color,border-color,color] duration-200 ease-out',
-                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-watermark/60',
-                      isActive
-                        ? 'border-watermark/70 bg-navigation-active text-navigation-active-text'
-                        : 'border-border bg-background text-text-primary hover:bg-interactive-hover',
-                    ].join(' ')
-                  }
-                  onClick={closePopover}
-                >
-                  {({ isActive }) => {
-                    const FavoriteStateIcon = isActive ? FavoriteFilledIcon : FavoriteIcon;
-
-                    return <FavoriteStateIcon className="size-5 shrink-0" />;
-                  }}
-                </NavLink>
-
-                <NavLink
-                  to={historyPath}
-                  aria-label="Открыть историю"
-                  title="История"
-                  className={({ isActive }) =>
-                    [
-                      'flex size-10 shrink-0 items-center justify-center rounded-lg border',
-                      'transition-[background-color,border-color,color] duration-200 ease-out',
-                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-watermark/60',
-                      isActive
-                        ? 'border-watermark/70 bg-navigation-active text-navigation-active-text'
-                        : 'border-border bg-background text-text-primary hover:bg-interactive-hover',
-                    ].join(' ')
-                  }
-                  onClick={closePopover}
-                >
-                  {({ isActive }) => {
-                    const HistoryStateIcon = isActive ? HistoryFilledIcon : HistoryIcon;
-
-                    return <HistoryStateIcon className="size-5 shrink-0" />;
-                  }}
-                </NavLink>
-              </nav>
+              </>
             )}
           </Popover>
 

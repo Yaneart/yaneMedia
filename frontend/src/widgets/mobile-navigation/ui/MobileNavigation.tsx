@@ -10,7 +10,6 @@ type MobileNavigationItem = {
 };
 
 type MobileNavigationProps = {
-  homePath: string;
   items: readonly MobileNavigationItem[];
   onItemIntent?: (path: string) => void;
 };
@@ -26,7 +25,7 @@ function getLinkClassName({ isActive }: { isActive: boolean }) {
   ].join(' ');
 }
 
-export function MobileNavigation({ homePath, items, onItemIntent }: MobileNavigationProps) {
+export function MobileNavigation({ items, onItemIntent }: MobileNavigationProps) {
   return (
     <nav
       aria-label="Основная навигация"
@@ -38,7 +37,6 @@ export function MobileNavigation({ homePath, items, onItemIntent }: MobileNaviga
             <li key={item.path} className="flex min-w-0 flex-auto">
               <NavLink
                 to={item.path}
-                end={item.path === homePath}
                 className={getLinkClassName}
                 onFocus={() => onItemIntent?.(item.path)}
                 onPointerEnter={() => onItemIntent?.(item.path)}
