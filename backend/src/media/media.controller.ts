@@ -7,6 +7,7 @@ import {
   Headers,
   type MessageEvent,
   NotFoundException,
+  Optional,
   Param,
   Post,
   Query,
@@ -31,6 +32,7 @@ import type {
   HomeFeedDto,
 } from './home/dto/home-feed.dto';
 import { HomeFeedService } from './home/home-feed.service';
+import { ExternalArtworkService } from './assets/external-artwork.service';
 import { MediaSummaryResolutionRequestDto } from './summary-resolution/dto/media-summary-resolution-request.dto';
 import type { MediaSummaryResolutionResponseDto } from './summary-resolution/dto/media-summary-resolution-response.dto';
 import { NoStore, PublicMetadataCache } from '../platform/http/cache-policy';
@@ -41,6 +43,7 @@ export class MediaController {
     private readonly mediaService: MediaService,
     private readonly mediaCatalogService: MediaCatalogService,
     private readonly homeFeedService: HomeFeedService,
+    @Optional() private readonly artwork?: ExternalArtworkService,
   ) {}
 
   @Get('search')
@@ -55,7 +58,7 @@ export class MediaController {
       throw new BadRequestException('Search requires a title or catalog filter');
     }
 
-    return this.mediaService.searchMedia({
+    const items = this.mediaService.searchMedia({
       title: query.query,
       type: query.type,
       genre: query.genre,
@@ -64,6 +67,8 @@ export class MediaController {
       offset: query.offset,
       limit: query.limit,
     });
+    const artwork = this.artwork;
+    return artwork ? items.then((results) => results.map((item) => artwork.summary(item))) : items;
   }
 
   @Get('home')
@@ -114,7 +119,7 @@ export class MediaController {
     }
 
     return {
-      details,
+      details: this.artwork?.details(details) ?? details,
       ...(animeSeasonChain ? { animeSeasonChain } : {}),
       degraded:
         meta.providers.failed.length > 0 || (meta.warnings?.length ?? 0) > 0 || meta.stale === true,
@@ -123,10 +128,17 @@ export class MediaController {
 
   @Post('summaries/resolve')
   @NoStore()
-  resolveMediaSummaries(
+  async resolveMediaSummaries(
     @Body() body: MediaSummaryResolutionRequestDto,
   ): Promise<MediaSummaryResolutionResponseDto> {
-    return this.mediaCatalogService.resolveMediaRefs(body.mediaRefs);
+    const result = await this.mediaCatalogService.resolveMediaRefs(body.mediaRefs);
+    const artwork = this.artwork;
+    if (!artwork) return result;
+    return {
+      ...result,
+      items: result.items.map((item) => artwork.summary(item)),
+      matches: result.matches.map((match) => ({ ...match, item: artwork.summary(match.item) })),
+    };
   }
 
   @Get(':mediaRef/availability')

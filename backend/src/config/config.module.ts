@@ -28,6 +28,11 @@ export const appConfigValidationSchema = Joi.object({
   SMTP_PASSWORD: Joi.string().allow('').optional(),
   MAIL_FROM: Joi.string().trim().allow('').optional(),
   MEDIA_ASSETS_ROOT: Joi.string().trim().min(1).default('./storage/media-assets'),
+  MEDIA_EGRESS_SOCKET: Joi.string()
+    .trim()
+    .pattern(/^\/.{1,104}$/)
+    .allow('')
+    .optional(),
   MEDIA_ASSET_CLEANUP_GRACE_DAYS: Joi.number().integer().min(1).max(3650).default(30),
   PROFILE_ASSETS_ROOT: Joi.string().trim().min(1).default('./storage/profile-assets'),
   PROFILE_ASSET_CLEANUP_GRACE_HOURS: Joi.number().integer().min(1).max(8760).default(24),

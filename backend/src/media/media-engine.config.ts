@@ -3,6 +3,7 @@ import { createMediaEngineCache } from './media-engine-cache';
 import { countProviderResults } from './media-provider-diagnostics';
 import { withAnimeStreamingTitles } from './anime-streaming-titles';
 import { withAnimeStreamingReleases } from './anime-streaming-releases';
+import type { MediaEgress } from './media-egress';
 
 export interface MediaEngineEnvironment {
   TMDB_API_KEY?: string;
@@ -31,6 +32,7 @@ const CIRCUIT_RECOVERY_TIMEOUT_MS = 10_000;
 
 export async function createMediaEngine(
   env: MediaEngineEnvironment = {},
+  egress?: MediaEgress,
 ): Promise<MediaEngineInstance> {
   const [
     { IdentityResolver, MediaEngine, MemoryCache },
@@ -75,6 +77,7 @@ export async function createMediaEngine(
   const kodikApiKey = readOptionalValue(env.KODIK_API_KEY);
   const veoVeoApiKey = readOptionalValue(env.VEOVEO_API_KEY);
   const filmixToken = readOptionalValue(env.FILMIX_API_KEY);
+  const metadataRequest = egress?.providerOptions();
   const keyedStreamingProviders: StreamingProvider[] = (
     [
       [env.COLLAPS_API_KEY, collapsStreamingProvider, {}],
@@ -156,11 +159,11 @@ export async function createMediaEngine(
     cache,
     identityResolver: new IdentityResolver(
       [
-        wikidataIdentitySource(),
-        aniListIdentitySource(),
-        shikimoriIdentitySource(),
-        shikimoriCinemaIdentitySource(),
-        aderomIdentitySource(),
+        wikidataIdentitySource(metadataRequest),
+        aniListIdentitySource(metadataRequest),
+        shikimoriIdentitySource(metadataRequest),
+        shikimoriCinemaIdentitySource(metadataRequest),
+        aderomIdentitySource(metadataRequest),
       ],
       {
         cache,
@@ -169,17 +172,18 @@ export async function createMediaEngine(
       },
     ),
     providers: [
-      tmdbOfficialProvider({ apiKey: readOptionalValue(env.TMDB_API_KEY) }),
+      tmdbOfficialProvider({ ...metadataRequest, apiKey: readOptionalValue(env.TMDB_API_KEY) }),
       shikimoriGraphqlProvider({
+        ...metadataRequest,
         userAgent: readOptionalValue(env.MEDIA_ENGINE_SHIKIMORI_USER_AGENT),
       }),
-      tmdbProvider(),
-      kinobdProvider(),
-      cinemetaProvider(),
-      shikimoriProvider(),
-      aniListProvider(),
-      tvMazeProvider(),
-      wikidataProvider(),
+      tmdbProvider(metadataRequest),
+      kinobdProvider(metadataRequest),
+      cinemetaProvider(metadataRequest),
+      shikimoriProvider(metadataRequest),
+      aniListProvider(metadataRequest),
+      tvMazeProvider(metadataRequest),
+      wikidataProvider(metadataRequest),
     ].map(countProviderResults),
     streamingProviders,
   });

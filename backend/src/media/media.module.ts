@@ -12,35 +12,48 @@ import { AppConfigModule } from '../config/config.module';
 import { MediaAssetDownloader } from './assets/media-asset-downloader';
 import { MediaAssetStore } from './assets/media-asset-store';
 import { MediaAssetsController } from './assets/media-assets.controller';
+import { ExternalArtworkController } from './assets/external-artwork.controller';
+import { ExternalArtworkService } from './assets/external-artwork.service';
 import { MediaAssetCleanupService } from './assets/media-asset-cleanup.service';
 import { MediaRegistryService } from './registry/media-registry.service';
 import { createMediaEngine } from './media-engine.config';
+import { MediaEgress } from './media-egress';
 import { ReleasesService } from './releases/releases.service';
 import { ReleasesController } from './releases/releases.controller';
 
 @Module({
   imports: [AppConfigModule, DatabaseModule],
-  controllers: [ReleasesController, MediaController, MediaAssetsController],
+  controllers: [
+    ReleasesController,
+    MediaController,
+    MediaAssetsController,
+    ExternalArtworkController,
+  ],
   providers: [
     {
       provide: MEDIA_ENGINE,
-      inject: [ConfigService],
-      useFactory: (config: ConfigService) =>
-        createMediaEngine({
-          TMDB_API_KEY: config.get<string>('TMDB_API_KEY'),
-          MEDIA_ENGINE_SHIKIMORI_USER_AGENT: config.get<string>(
-            'MEDIA_ENGINE_SHIKIMORI_USER_AGENT',
-          ),
-          KODIK_API_KEY: config.get<string>('KODIK_API_KEY'),
-          VEOVEO_API_KEY: config.get<string>('VEOVEO_API_KEY'),
-          FILMIX_API_KEY: config.get<string>('FILMIX_API_KEY'),
-          FILMIX_API_BASE_URL: config.get<string>('FILMIX_API_BASE_URL'),
-          COLLAPS_API_KEY: config.get<string>('COLLAPS_API_KEY'),
-          ALOHA_API_KEY: config.get<string>('ALOHA_API_KEY'),
-          MIRAGE_API_KEY: config.get<string>('MIRAGE_API_KEY'),
-        }),
+      inject: [ConfigService, MediaEgress],
+      useFactory: (config: ConfigService, egress: MediaEgress) =>
+        createMediaEngine(
+          {
+            TMDB_API_KEY: config.get<string>('TMDB_API_KEY'),
+            MEDIA_ENGINE_SHIKIMORI_USER_AGENT: config.get<string>(
+              'MEDIA_ENGINE_SHIKIMORI_USER_AGENT',
+            ),
+            KODIK_API_KEY: config.get<string>('KODIK_API_KEY'),
+            VEOVEO_API_KEY: config.get<string>('VEOVEO_API_KEY'),
+            FILMIX_API_KEY: config.get<string>('FILMIX_API_KEY'),
+            FILMIX_API_BASE_URL: config.get<string>('FILMIX_API_BASE_URL'),
+            COLLAPS_API_KEY: config.get<string>('COLLAPS_API_KEY'),
+            ALOHA_API_KEY: config.get<string>('ALOHA_API_KEY'),
+            MIRAGE_API_KEY: config.get<string>('MIRAGE_API_KEY'),
+          },
+          egress,
+        ),
     },
     MediaService,
+    MediaEgress,
+    ExternalArtworkService,
     ReleasesService,
     MediaRegistryService,
     MediaCatalogService,

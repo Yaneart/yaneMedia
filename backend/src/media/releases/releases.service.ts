@@ -9,6 +9,8 @@ import type { MediaSummaryDto } from '../dto/media-summary.dto';
 import { MediaRegistryService } from '../registry/media-registry.service';
 import type { ReleasesQueryDto } from './releases-query.dto';
 import { paginateReleases } from './releases-pagination';
+import { ExternalArtworkService } from '../assets/external-artwork.service';
+import { MediaEgress } from '../media-egress';
 
 export interface ReleaseItem extends MediaSummaryDto {
   releaseDate?: string;
@@ -96,6 +98,8 @@ export class ReleasesService {
   constructor(
     private readonly config: ConfigService,
     private readonly registry: MediaRegistryService,
+    private readonly egress?: MediaEgress,
+    private readonly artwork?: ExternalArtworkService,
   ) {}
 
   getReleases(query: ReleasesQueryDto): Promise<ReleasePage> {
@@ -133,12 +137,17 @@ export class ReleasesService {
   }
 
   private async json<T>(url: string, init?: RequestInit): Promise<T> {
-    const response = await fetch(url, {
+    const options = {
       ...init,
       signal: init?.signal ?? AbortSignal.timeout(10_000),
-    });
+    };
+    const response = await (this.egress ? this.egress.fetch(url, options) : fetch(url, options));
     if (!response.ok) throw new Error('Release provider unavailable');
     return response.json() as Promise<T>;
+  }
+
+  private poster(url: string) {
+    return { url: this.artwork?.publicUrl(url) ?? url };
   }
 
   private tmdb<T>(path: string, params = new URLSearchParams(), signal?: AbortSignal): Promise<T> {
@@ -212,7 +221,7 @@ export class ReleasesService {
           year: anime.airedOn?.year,
           releaseDate,
           nextEpisodeAt,
-          poster: poster ? { url: poster } : undefined,
+          poster: poster ? this.poster(poster) : undefined,
           rating: Number(anime.score) > 0 ? { value: Number(anime.score), scale: 10 } : undefined,
         },
       ];
@@ -250,7 +259,7 @@ export class ReleasesService {
         releaseDate: item.release_date || item.first_air_date,
         year: Number((item.release_date || item.first_air_date)?.slice(0, 4)) || undefined,
         poster: item.poster_path
-          ? { url: `https://image.tmdb.org/t/p/w500${item.poster_path}` }
+          ? this.poster(`https://image.tmdb.org/t/p/w500${item.poster_path}`)
           : undefined,
         rating: item.vote_average
           ? { value: Math.round(item.vote_average * 10) / 10, scale: 10 }
