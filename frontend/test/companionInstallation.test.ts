@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import {
   companionDownload,
+  companionInstallCommand,
   companionReleaseHistory,
   detectCompanionPlatform,
 } from '../src/features/companion/model/installation';
@@ -11,6 +12,34 @@ test('platform detection is a suggestion with no mobile or macOS installer', () 
   expect(detectCompanionPlatform('Mozilla X11; Arch Linux x86_64')).toBe('arch');
   for (const ua of ['Android Linux', 'iPhone', 'Macintosh', 'unknown'])
     expect(detectCompanionPlatform(ua)).toBe('');
+});
+
+test('terminal commands download the selected Linux asset before installing it', () => {
+  const base = 'https://downloads.example/companion/0.3.1';
+  const deb = 'yanecompanion_0.3.1_amd64.deb';
+  const arch = 'yanecompanion-bin-0.3.1-1-x86_64.pkg.tar.zst';
+
+  expect(companionInstallCommand('debian', companionDownload('debian', base, '0.3.1'))).toBe(
+    `curl -fgLO ${base}/${deb} &&\nsudo apt install ./${deb}`,
+  );
+  expect(companionInstallCommand('arch', companionDownload('arch', base, '0.3.1'))).toBe(
+    `curl -fgLO ${base}/${arch} &&\nsudo pacman -U ./${arch}`,
+  );
+  expect(
+    companionInstallCommand('windows', companionDownload('windows', base, '0.3.1')),
+  ).toBeUndefined();
+  expect(companionInstallCommand('arch')).toBeUndefined();
+});
+
+test('public installation uses shorter URLs on the site origin', () => {
+  const release = 'https://downloads.example/companion/0.3.1';
+  const origin = 'https://watch.example';
+  expect(
+    companionInstallCommand('debian', companionDownload('debian', release, '0.3.1'), origin),
+  ).toBe(`curl -fgLO ${origin}/install/yane.deb &&\nsudo apt install ./yane.deb`);
+  expect(companionInstallCommand('arch', companionDownload('arch', release, '0.3.1'), origin)).toBe(
+    `curl -fgLO ${origin}/install/yane.pkg.tar.zst &&\nsudo pacman -U ./yane.pkg.tar.zst`,
+  );
 });
 
 test('release history is available from versioned GitHub downloads', () => {

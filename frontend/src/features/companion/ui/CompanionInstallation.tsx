@@ -1,5 +1,5 @@
 import { useId, useState } from 'react';
-import { YaneMark } from '@/shared';
+import { Button, YaneMark } from '@/shared';
 import { CheckIcon } from '@/shared/ui/Icons';
 import DownloadIcon from '@mingcute/react/core-regular/download';
 import LinuxIcon from '@mingcute/react/core-regular/linux';
@@ -7,6 +7,7 @@ import TerminalIcon from '@mingcute/react/core-regular/terminal';
 import WindowsIcon from '@mingcute/react/core-regular/windows';
 import {
   companionDownload,
+  companionInstallCommand,
   companionReleaseHistory,
   detectCompanionPlatform,
   type CompanionPlatform,
@@ -36,6 +37,41 @@ const platforms = [
   },
 ] as const;
 
+function InstallCommand({ label, command }: { label: string; command: string }) {
+  const [feedback, setFeedback] = useState('');
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(command);
+      setFeedback('Команда скопирована.');
+    } catch {
+      setFeedback('Выделите и скопируйте команду вручную.');
+    }
+  }
+
+  return (
+    <div className="grid gap-2 rounded-control border border-border bg-control p-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs font-semibold">{label}</p>
+        <Button
+          variant="secondary"
+          size="small"
+          aria-label={`Копировать команду «${label}»`}
+          onClick={copy}
+        >
+          Копировать
+        </Button>
+      </div>
+      <code className="block rounded-control bg-background/70 px-2.5 py-2 font-mono text-xs leading-relaxed wrap-anywhere whitespace-pre-wrap select-text">
+        {command}
+      </code>
+      <p role="status" className="text-xs text-text-secondary empty:sr-only">
+        {feedback}
+      </p>
+    </div>
+  );
+}
+
 export function CompanionInstallation() {
   const group = useId();
   const heading = useId();
@@ -45,6 +81,11 @@ export function CompanionInstallation() {
   const selected = platforms.find(({ value }) => value === platform);
   const download = companionDownload(platform);
   const releaseHistory = download && companionReleaseHistory(download);
+  const shortOrigin =
+    import.meta.env.VITE_COMPANION_SHORT_INSTALL === 'true' && location.protocol === 'https:'
+      ? location.origin
+      : undefined;
+  const installCommand = companionInstallCommand(platform, download, shortOrigin);
   return (
     <section
       aria-labelledby={heading}
@@ -100,6 +141,9 @@ export function CompanionInstallation() {
               <DownloadIcon aria-hidden="true" className="size-4" />
               Скачать {selected.extension}
             </a>
+          )}
+          {installCommand && (
+            <InstallCommand key={installCommand} label="Через терминал" command={installCommand} />
           )}
           {releaseHistory && (
             <a className="self-start text-xs text-accent-text underline" href={releaseHistory}>

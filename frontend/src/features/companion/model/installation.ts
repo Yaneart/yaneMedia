@@ -1,5 +1,10 @@
 export type CompanionPlatform = 'windows' | 'debian' | 'arch';
 
+export const companionInstallFiles = {
+  debian: 'yane.deb',
+  arch: 'yane.pkg.tar.zst',
+} as const;
+
 export function detectCompanionPlatform(userAgent: string): CompanionPlatform | '' {
   if (/Android|iPhone|iPad|iPod|Macintosh/i.test(userAgent)) return '';
   if (/Windows/i.test(userAgent)) return 'windows';
@@ -32,4 +37,21 @@ export function companionReleaseHistory(download: string): string | undefined {
   if (url.origin !== 'https://github.com') return;
   const match = /^\/([\w.-]+\/[\w.-]+)\/releases\/download\/[\w.-]+\/[^/]+$/.exec(url.pathname);
   if (match) return `${url.origin}/${match[1]}/releases`;
+}
+
+export function companionInstallCommand(
+  platform: CompanionPlatform | '',
+  download?: string,
+  shortOrigin?: string,
+) {
+  if (!download || (platform !== 'debian' && platform !== 'arch')) return;
+  const filename = shortOrigin
+    ? companionInstallFiles[platform]
+    : new URL(download).pathname.split('/').pop();
+  if (!filename) return;
+  const url = shortOrigin ? `${shortOrigin}/install/${filename}` : download;
+  const quote = (value: string) =>
+    /^[\w./:%-]+$/.test(value) ? value : `'${value.replaceAll("'", "'\\''")}'`;
+  const installer = platform === 'arch' ? 'pacman -U' : 'apt install';
+  return `curl -fgLO ${quote(url)} &&\nsudo ${installer} ${quote(`./${filename}`)}`;
 }
