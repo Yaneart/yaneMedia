@@ -29,7 +29,7 @@ export type MediaVideoDirectControls = {
     qualityKey: string | null,
     positionSeconds: number,
     intent: 'playing' | 'paused',
-  ) => void;
+  ) => void | false;
 };
 
 export type TorrentVideoTimeline = {
@@ -558,14 +558,17 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
           if (context.signal.aborted) return abort();
           pendingRef.current = finish;
           try {
-            if (controls && (command.type === 'audio' || command.type === 'quality'))
+            if (
+              !controls ||
+              (command.type !== 'audio' && command.type !== 'quality') ||
               controls.onSelectionChange(
                 audioId,
                 qualityId,
                 initializingRef.current?.position ?? context.positionSeconds ?? 0,
                 context.intent,
-              );
-            else finish();
+              ) === false
+            )
+              finish();
           } catch {
             finish();
           }
@@ -674,12 +677,19 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
         loadedRevisionRef.current === descriptor.revision)
     )
       return;
-    const sameMedia =
-      !timeline &&
-      !local &&
-      loadedMediaRef.current?.sourceRef === source.sourceRef &&
-      loadedMediaRef.current.url === source.url;
+    const sameMedia = !timeline && !local && loadedMediaRef.current?.sourceRef === source.sourceRef;
     const current = sameMedia ? player.runtime?.getSnapshot() : undefined;
+    // Refreshing the available tracks would reset the transport. Defer it while the user watches.
+    if (
+      sameMedia &&
+      loadedMediaRef.current?.url === source.url &&
+      !pendingRef.current &&
+      current?.intent === 'playing' &&
+      current.playback !== 'error' &&
+      current.playback !== 'ended'
+    )
+      return;
+
     const retainedPosition = sameMedia
       ? ((!current?.pending ? current?.positionSeconds : null) ?? initializingRef.current?.position)
       : null;

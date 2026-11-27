@@ -628,8 +628,24 @@ export function MediaView({
     null,
   );
   const [playerStatus, setPlayerStatus] = useState<MediaPlayerStatus>('ready');
+  const [directPlayback, setDirectPlayback] = useState<{
+    session: PlaybackSession;
+    source: MediaSourceOption;
+    providerSources: readonly MediaSourceOption[];
+  } | null>(null);
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
   const playbackMode = isPlaybackModeInitialized ? selectedPlaybackMode : initialMode;
+  const directSession =
+    playbackMode === 'direct' && !localSelected && !activeTorrentId && !torrentSelected
+      ? mediaSession
+      : null;
+  const retainedDirectPlayback =
+    directSession &&
+    directPlayback?.session.sourceRef === directSession.sourceRef &&
+    directPlayback.session.playbackKey === directSession.playbackKey &&
+    hasSameEpisode(directPlayback.session.episode, directSession.episode)
+      ? directPlayback
+      : null;
 
   const selectedDirectEpisode = usesDirectEpisodes
     ? (directEpisodes.find((episode) => episode.key === selectedDirectEpisodeKey) ??
@@ -657,7 +673,7 @@ export function MediaView({
         availabilityEpisode,
       )
     : catalog.directSources;
-  const hasDirectMode = currentDirectSources.length > 0;
+  const hasDirectMode = currentDirectSources.length > 0 || retainedDirectPlayback !== null;
   const hasPlaybackSources = hasEmbedMode || hasDirectMode;
   const usesPlayerEpisodes = playbackMode === 'direct' && usesDirectEpisodes;
   const directModePending = usesDirectEpisodes && episodeAvailabilityPending;
@@ -737,6 +753,7 @@ export function MediaView({
     (source) => source.sourceRef === selectedDirectSourceRef,
   );
   const selectedDirectSource =
+    retainedDirectPlayback?.source ??
     currentDirectSources.find((source) => source.sourceRef === selectedDirectSourceRef) ??
     currentDirectSources.find((source) => source.sourceRef === savedProgress?.sourceRef) ??
     getPreferredSource(
@@ -833,9 +850,18 @@ export function MediaView({
         : selectedDirectSource;
   const selectedSourceRef = selectedSource?.sourceRef ?? null;
 
-  const providerDirectSources = currentDirectSources.filter(
+  const offeredProviderSources = currentDirectSources.filter(
     (source) => source.provider === selectedDirectSource?.provider,
   );
+  const refreshedDirectSource = offeredProviderSources.find(
+    (source) =>
+      source.sourceRef === retainedDirectPlayback?.source.sourceRef &&
+      !getMediaSourcePlaybackIssue(source),
+  );
+  const providerDirectSources =
+    retainedDirectPlayback && !refreshedDirectSource
+      ? retainedDirectPlayback.providerSources
+      : offeredProviderSources;
   const directTracks = getDirectTrackOptions(providerDirectSources);
   const selectedDirectTrack = directTracks.find((track) => track.key === selectedDirectTrackKey);
   const directQualities = getDirectQualityOptions(selectedDirectTrack?.sources ?? []);
@@ -859,18 +885,39 @@ export function MediaView({
     ? !!(local.snapshot || local.pending || local.error)
     : activeTorrentId !== null || torrentStarting
       ? true
-      : sessionSourceMatches &&
-        (!usesPlayerEpisodes || hasSameEpisode(sessionPlaybackEpisode, selectedPlaybackEpisode));
+      : retainedDirectPlayback !== null ||
+        (sessionSourceMatches &&
+          (!usesPlayerEpisodes || hasSameEpisode(sessionPlaybackEpisode, selectedPlaybackEpisode)));
   // Catalog episode URLs may still be redirectors. The episode lookup confirms
   // the playback URL, including progressive results from that lookup.
   const directSourceUnconfirmed =
     usesPlayerEpisodes &&
+    !retainedDirectPlayback &&
     !localSelected &&
     !activeTorrentId &&
     !torrentSelected &&
     !mergeEpisodeSources([], episodeAvailability, availabilityEpisode).some(
       (source) => source.sourceRef === selectedDirectSource?.sourceRef,
     );
+
+  useEffect(() => {
+    if (
+      !directSession ||
+      retainedDirectPlayback ||
+      !isPlayerStarted ||
+      directSourceUnconfirmed ||
+      !selectedDirectSource ||
+      getMediaSourcePlaybackIssue(selectedDirectSource)
+    )
+      return;
+
+    // Source discovery can refresh signed URLs while the original stream is still playing.
+    setDirectPlayback({
+      session: directSession,
+      source: selectedDirectSource,
+      providerSources: offeredProviderSources,
+    });
+  });
 
   useEffect(
     () => () => episodeRequestRef.current?.abort(),
@@ -1316,9 +1363,18 @@ export function MediaView({
     setPlayerStatus('ready');
   }, []);
 
-  const handlePlayerError = useCallback(() => {
+  const restartDirectPlayback = (source: MediaSourceOption) => {
+    if (retainedDirectPlayback) setDirectPlayback({ ...retainedDirectPlayback, source });
+    setPlayerStatus('loading');
+  };
+
+  const handlePlayerError = () => {
+    if (refreshedDirectSource && refreshedDirectSource.url !== retainedDirectPlayback?.source.url) {
+      restartDirectPlayback(refreshedDirectSource);
+      return;
+    }
     setPlayerStatus('error');
-  }, []);
+  };
 
   return (
     <div className="media-view-container">
@@ -1551,9 +1607,11 @@ export function MediaView({
                 mediaTitle={media.title}
                 backdrop={media.backdrop}
                 source={
-                  selectedSource?.url && (!isPlayerStarted || !directSourceUnconfirmed)
-                    ? selectedSource
-                    : undefined
+                  retainedDirectPlayback
+                    ? { ...retainedDirectPlayback.source, expiresAt: undefined }
+                    : selectedSource?.url && (!isPlayerStarted || !directSourceUnconfirmed)
+                      ? selectedSource
+                      : undefined
                 }
                 isStarted={isPlayerStarted}
                 shouldAutoPlay={localSelected ? !localPaused : mediaSession?.state === 'playing'}
@@ -1657,7 +1715,12 @@ export function MediaView({
                       ? requestTorrentPlayback
                       : directSourceUnconfirmed
                         ? () => void retryEpisodeAvailability()
-                        : loadPlayer
+                        : retainedDirectPlayback
+                          ? () =>
+                              restartDirectPlayback(
+                                refreshedDirectSource ?? retainedDirectPlayback.source,
+                              )
+                          : loadPlayer
                 }
                 errorDescription={
                   (localSelected ? local.error : null) ??
@@ -1702,17 +1765,15 @@ export function MediaView({
                         })),
                         selectedQualityKey: selectedDirectQualityKey,
                         onSelectionChange: (trackKey, qualityKey, position, intent) => {
-                          if (trackKey) setPreferredDirectTrackKey(trackKey);
-                          selectDirectSource(
-                            getAvailableDirectSourceForPlaybackPreference(
-                              currentDirectSources,
-                              trackKey,
-                              qualityKey,
-                            ),
-                            true,
-                            position,
-                            intent,
+                          const source = getAvailableDirectSourceForPlaybackPreference(
+                            currentDirectSources,
+                            trackKey,
+                            qualityKey,
                           );
+                          if (!source || source.sourceRef === selectedDirectSource.sourceRef)
+                            return false;
+                          if (trackKey) setPreferredDirectTrackKey(trackKey);
+                          selectDirectSource(source, true, position, intent);
                         },
                       }
                     : undefined

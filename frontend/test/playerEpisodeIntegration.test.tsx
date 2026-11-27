@@ -581,6 +581,105 @@ test('progressive track discovery refreshes native choices without losing positi
   expect(original.setSource.mock.calls.length).toBe(calls + 1);
 });
 
+test('changes in the track list do not reload video while it is playing', async () => {
+  globalThis.fetch = mock(() => new Promise<Response>(() => {}));
+  const { view, tree, catalog, player } = mount();
+  const original = player();
+  original.runtime = {
+    getSnapshot: () => ({ positionSeconds: 81, intent: 'playing', playback: 'playing' }),
+  };
+  catalog.episodes[0]!.sources.push({
+    ...source(1, 1),
+    sourceRef: 'new-dub',
+    translation: { title: 'New dub', type: 'dub' },
+  });
+
+  await act(async () => view.rerender(tree()));
+
+  expect(player()).toBe(original);
+  expect(original.setSource).toHaveBeenCalledTimes(1);
+});
+
+test('a disappeared track is rejected without interrupting playback', async () => {
+  globalThis.fetch = mock(() => new Promise<Response>(() => {}));
+  const { player } = mount();
+  const original = player();
+  const position = 81;
+  original.runtime = {
+    getSnapshot: () => ({ positionSeconds: position, intent: 'playing', playback: 'playing' }),
+  };
+
+  await expect(
+    original.host.execute(
+      { type: 'audio', target: { audioId: 'disappeared-track' } },
+      { signal: new AbortController().signal, positionSeconds: position, intent: 'playing' },
+    ),
+  ).rejects.toMatchObject({ name: 'AbortError' });
+
+  expect(player()).toBe(original);
+  expect(original.setSource).toHaveBeenCalledTimes(1);
+});
+
+test('a refreshed direct URL is only loaded after the active stream fails', async () => {
+  globalThis.fetch = mock(() => new Promise<Response>(() => {}));
+  const { view, tree, client, catalog, player } = mount();
+  const original = player();
+  const episode = catalog.episodes[0]!;
+  const initial = episode.sources[0]!;
+  const renewed = { ...initial, url: 'https://fixture.test/renewed.mp4' };
+  const queryKey = mediaEpisodeAvailabilityQueryKey(mediaRef, {
+    seasonNumber: 1,
+    episodeNumber: 1,
+  });
+  const snapshot = { positionSeconds: 81, intent: 'paused', pending: null };
+  original.runtime = { getSnapshot: () => snapshot };
+
+  await act(async () => {
+    client.setQueryData(queryKey, {
+      availability: {
+        ...catalog,
+        episodes: [{ ...episode, sources: [renewed, episode.sources[1]!] }],
+      },
+      settled: true,
+    });
+    view.rerender(tree());
+  });
+  expect(original.setSource).toHaveBeenCalledTimes(1);
+  expect(original.descriptor.src).toBe(initial.url);
+
+  await act(async () => {
+    original.dispatchEvent(
+      new CustomEvent('yp-error', {
+        detail: { source: original.descriptor, snapshot: { ...snapshot, playback: 'error' } },
+      }),
+    );
+  });
+  expect(player()).toBe(original);
+  expect(original.setSource).toHaveBeenCalledTimes(2);
+  expect(original.descriptor.src).toBe(renewed.url);
+  expect(original.options).toMatchObject({ positionSeconds: 81, intent: 'paused' });
+});
+
+test('direct discovery can temporarily lose all sources without closing the active stream', async () => {
+  globalThis.fetch = mock(() => new Promise<Response>(() => {}));
+  const { view, tree, client, catalog, player } = mount();
+  const original = player();
+  const url = original.descriptor.src;
+
+  await act(async () => {
+    client.setQueryData(
+      mediaEpisodeAvailabilityQueryKey(mediaRef, { seasonNumber: 1, episodeNumber: 1 }),
+      { availability: availability(), settled: true },
+    );
+    catalog.episodes = [];
+    view.rerender(tree());
+  });
+
+  expect(player()).toBe(original);
+  expect(original.setSource).toHaveBeenCalledTimes(1);
+  expect(original.descriptor.src).toBe(url);
+});
+
 test('restored playback waits for the confirmed episode URL instead of loading a catalog redirect', async () => {
   let release!: (value: Response) => void;
   globalThis.fetch = mock(
