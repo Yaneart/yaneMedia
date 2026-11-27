@@ -506,23 +506,30 @@ test('embed picker has one named button per provider and opens its full player',
     label: 'VeoVeo',
     url: 'about:blank#veoveo',
   };
-  catalog.sources.push(mirage, veo, full, { ...dub, sourceRef: 'alloha:dub2' });
+  const collaps = {
+    ...full,
+    sourceRef: 'collaps:main',
+    provider: 'collaps-streaming',
+    label: 'Collaps',
+  };
+  catalog.sources.push(mirage, veo, collaps, full, { ...dub, sourceRef: 'alloha:dub2' });
   view.rerender(tree());
   fireEvent.click(screen.getByRole('button', { name: 'Alloha', exact: true }));
   const panel = within(screen.getByRole('region', { name: 'Плееры' }));
   expect(panel.getAllByRole('button').map((button) => button.textContent)).toEqual([
-    'Alloha',
-    'Mirage',
-    'VeoVeo',
+    'Alloha с VPN',
+    'Mirage с VPN',
+    'Collaps с VPN',
+    'VeoVeo с VPN',
   ]);
-  const alloha = panel.getByRole('button', { name: 'Alloha', exact: true });
+  const alloha = panel.getByRole('button', { name: 'Alloha с VPN', exact: true });
   expect(alloha.getAttribute('aria-pressed')).toBe('true');
   fireEvent.click(alloha);
   fireEvent.click(screen.getByRole('button', { name: 'Запустить Alloha', exact: true }));
   view.rerender(tree());
   await waitFor(() => expect(document.querySelector('iframe')?.src).toBe(full.url));
   fireEvent.click(screen.getByRole('button', { name: 'Alloha', exact: true }));
-  fireEvent.click(screen.getByRole('button', { name: 'VeoVeo', exact: true }));
+  fireEvent.click(panel.getByRole('button', { name: 'VeoVeo с VPN', exact: true }));
   fireEvent.click(screen.getByRole('button', { name: 'Запустить VeoVeo', exact: true }));
   view.rerender(tree());
   await waitFor(() => expect(document.querySelector('iframe')?.src).toBe(veo.url));

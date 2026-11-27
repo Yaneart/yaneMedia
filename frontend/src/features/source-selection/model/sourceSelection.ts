@@ -37,6 +37,20 @@ export type PlaybackSourceCatalog = {
   directEpisodes: readonly DirectEpisodeOption[];
 };
 
+const embedProviderPriority = new Map(
+  [
+    'rutube-streaming',
+    'kodik-streaming',
+    'aderom-streaming',
+    'kinobd-streaming',
+    'initem-streaming',
+    'alloha-streaming',
+    'mirage-streaming',
+    'collaps-streaming',
+    'veoveo-embed',
+  ].map((provider, index) => [provider, index]),
+);
+
 function getDirectEpisodeKey(episode: MediaSourceEpisodeRef) {
   if (episode.seasonNumber !== undefined && episode.episodeNumber !== undefined) {
     return `season:${episode.seasonNumber}:episode:${episode.episodeNumber}`;
@@ -127,6 +141,10 @@ export function getEmbedProviderSources(sources: readonly MediaSourceOption[]) {
       getPreferredSource(usable) ??
       group[0]!
     );
+  }).sort((left, right) => {
+    const leftPriority = embedProviderPriority.get(left.provider) ?? embedProviderPriority.size;
+    const rightPriority = embedProviderPriority.get(right.provider) ?? embedProviderPriority.size;
+    return leftPriority - rightPriority || left.provider.localeCompare(right.provider, 'en');
   });
 }
 

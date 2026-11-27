@@ -43,6 +43,13 @@ const providerStyles: Record<string, string> = {
   'filmix-streaming': 'playback-source-orange',
 };
 
+const vpnEmbedProviders = new Set([
+  'alloha-streaming',
+  'mirage-streaming',
+  'veoveo-embed',
+  'collaps-streaming',
+]);
+
 function getProviderAccent(provider: string) {
   const providerStyle = providerStyles[provider];
 
@@ -227,7 +234,16 @@ export function PlaybackSourcePicker({
                     aria-hidden="true"
                     className={`size-2 shrink-0 rounded-full ${getProviderAccent(source.provider)}`}
                   />
-                  <span className="min-w-0 flex-1 truncate">{source.label}</span>
+                  {vpnEmbedProviders.has(source.provider) ? (
+                    <span className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-x-1.5 gap-y-0.5">
+                      <span className="min-w-0 truncate">{source.label}</span>{' '}
+                      <span className="shrink-0 rounded-pill border border-text-secondary/25 bg-control/70 px-1.5 text-[11px]/4 font-medium whitespace-nowrap text-text-secondary">
+                        с VPN
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="min-w-0 flex-1 truncate">{source.label}</span>
+                  )}
                 </Button>
               ))}
             </section>

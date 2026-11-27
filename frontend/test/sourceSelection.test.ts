@@ -34,6 +34,31 @@ describe('source-less episode catalogs', () => {
     expect(getEmbedProviderSources([])).toEqual([]);
   });
 
+  it('keeps the same player order regardless of provider response order', () => {
+    const expected = [
+      'rutube-streaming',
+      'alloha-streaming',
+      'mirage-streaming',
+      'collaps-streaming',
+      'veoveo-embed',
+      'unknown-a',
+      'unknown-z',
+    ];
+    const sources = expected.map((provider) => ({
+      sourceRef: provider,
+      provider,
+      label: provider,
+      kind: 'embed' as const,
+      url: `https://player.example/${provider}`,
+      availability: 'available' as const,
+      browserSupported: true,
+    }));
+    expect(getEmbedProviderSources(sources).map(({ provider }) => provider)).toEqual(expected);
+    expect(getEmbedProviderSources(sources.toReversed()).map(({ provider }) => provider)).toEqual(
+      expected,
+    );
+  });
+
   it('retains an unknown but browser-supported direct source for an explicit track selection', () => {
     const source = {
       sourceRef: 'unknown',
