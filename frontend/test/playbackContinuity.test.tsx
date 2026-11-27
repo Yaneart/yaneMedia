@@ -50,6 +50,7 @@ customElements.define('yane-player', FakePlayer);
 mock.module('@yaneart/yaneplayer', () => ({}));
 const { MediaVideoRenderer } = await import('../src/widgets/media-player/ui/MediaVideoRenderer');
 import type { AuthState } from '../src/entities/auth/model/authContext';
+import type { MediaSourceOption } from '../src/entities/media-source/model/mediaSource';
 import type { PlaybackSessionContextValue } from '../src/features/playback-session/model/playbackSessionContext';
 const mediaRef = 'work_0b02a880-8fdd-43b6-92f2-7a093d9eab60';
 const guest: AuthState = { status: 'guest', user: null };
@@ -257,4 +258,88 @@ test('ending a session stops its torrent and removing continue-watching stops it
   await act(async () => playback.removeContinueWatchingEntry(mediaRef));
   expect(playback.session).toBeNull();
   expect(calls.filter((call) => call.method === 'DELETE')).toHaveLength(2);
+});
+
+const aniLibertyEpisodeId = '00000000-0000-4000-8000-000000000001';
+const aniLibertySource: MediaSourceOption = {
+  sourceRef: `stream:aniliberty-streaming:aniliberty-streaming:123:${aniLibertyEpisodeId}:1080`,
+  provider: 'aniliberty-streaming',
+  kind: 'hls',
+  label: 'AniLiberty',
+  url: 'https://cache.libria.fun/episode.m3u8?countryIso=LT',
+  availability: 'available',
+  browserSupported: true,
+};
+
+function aniLibertyRenderer(source: MediaSourceOption, onError = noop) {
+  return (
+    <MediaVideoRenderer
+      source={source}
+      mediaTitle="Fixture"
+      shouldAutoPlay
+      initialPositionSeconds={42}
+      onReady={noop}
+      onError={onError}
+      onPlay={noop}
+      onPause={noop}
+      onProgress={noop}
+    />
+  );
+}
+
+test('AniLiberty loads the browser CDN and ignores a superseded quality response', async () => {
+  const requests: { url: URL; signal?: AbortSignal | null; respond: (value: Response) => void }[] =
+    [];
+  globalThis.fetch = mock(
+    (url: URL, init?: RequestInit) =>
+      new Promise<Response>((respond) => requests.push({ url, signal: init?.signal, respond })),
+  ) as unknown as typeof fetch;
+  const view = render(aniLibertyRenderer(aniLibertySource));
+  expect(players[0].setSource).not.toHaveBeenCalled();
+  expect(requests[0].url.pathname).toBe(`/api/v1/anime/releases/episodes/${aniLibertyEpisodeId}`);
+  expect(requests[0].url.searchParams.get('include')).toBe('id,release,hls_1080');
+
+  view.rerender(
+    aniLibertyRenderer({
+      ...aniLibertySource,
+      sourceRef: aniLibertySource.sourceRef.replace(/1080$/, '480'),
+    }),
+  );
+  expect(requests[0].signal?.aborted).toBe(true);
+  const freshUrl = 'https://cache-rfn.libria.fun/episode.m3u8?countryIso=RU&ads=1';
+  await act(async () => {
+    requests[1].respond(
+      Response.json({ id: aniLibertyEpisodeId, release: { id: 123 }, hls_480: freshUrl }),
+    );
+    requests[0].respond(
+      Response.json({
+        id: aniLibertyEpisodeId,
+        release: { id: 123 },
+        hls_1080: 'https://cache-rfn.libria.fun/old.m3u8',
+      }),
+    );
+  });
+  expect(players[0].setSource).toHaveBeenCalledTimes(1);
+  expect(players[0].descriptor.src).toBe(freshUrl);
+  expect(players[0].options.positionSeconds).toBe(42);
+});
+
+test('AniLiberty falls back on API failure and honors an explicit regional block', async () => {
+  const fetch = mock(async () => new Response(null, { status: 503 }));
+  globalThis.fetch = fetch as unknown as typeof globalThis.fetch;
+  const view = render(aniLibertyRenderer(aniLibertySource));
+  await waitFor(() => expect(players[0].descriptor?.src).toBe(aniLibertySource.url));
+  view.unmount();
+
+  fetch.mockImplementation(async () =>
+    Response.json({
+      id: aniLibertyEpisodeId,
+      release: { id: 123, is_blocked_by_geo: true },
+      hls_1080: 'https://cache-rfn.libria.fun/episode.m3u8',
+    }),
+  );
+  const onError = mock(noop);
+  render(aniLibertyRenderer(aniLibertySource, onError));
+  await waitFor(() => expect(onError).toHaveBeenCalledTimes(1));
+  expect(players[1].setSource).not.toHaveBeenCalled();
 });

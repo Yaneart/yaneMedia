@@ -12,6 +12,7 @@ import {
 } from '@yaneart/yaneplayer';
 import '@yaneart/yaneplayer';
 import { createTorrentStream } from '../model/torrentStream';
+import { useAniLibertyPlaybackUrl } from '../model/useAniLibertyPlaybackUrl';
 import {
   createLocalTrackStream,
   localTrackSource,
@@ -129,12 +130,14 @@ type MediaVideoRendererProps = {
 
 // App callbacks select URLs/sessions; yanePlayer owns media, controls and command intent.
 export function MediaVideoRenderer(props: MediaVideoRendererProps) {
+  const playbackUrl = useAniLibertyPlaybackUrl(props.source);
   const containerRef = useRef<HTMLDivElement>(null);
   const elementRef = useRef<YanePlayerElement | null>(null);
   const propsRef = useRef(props);
   const pendingRef = useRef<((result?: HostResult) => void) | null>(null);
   const loadedRevisionRef = useRef<string | null>(null);
   const loadedMediaRef = useRef<{ sourceRef: string; url: string } | null>(null);
+  const resolvingUrlRef = useRef(false);
   const torrentCommandRef = useRef<{ sourceRef: string } | null>(null);
   const torrentAudioRef = useRef<string | null>(null);
   const torrentTextRef = useRef<{
@@ -150,6 +153,7 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
   const settleSourceRef = useRef<() => void>(() => undefined);
 
   useLayoutEffect(() => {
+    resolvingUrlRef.current = playbackUrl === undefined;
     propsRef.current = props;
   });
 
@@ -281,6 +285,7 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
     const onState = ({ detail: event }: CustomEvent<PlayerEvent>) => {
       if (
         disposed ||
+        resolvingUrlRef.current ||
         propsRef.current.navigation?.pending ||
         event.source?.id !== loadedSourceIdRef.current ||
         event.source?.revision !== loadedRevisionRef.current
@@ -362,6 +367,7 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
     const onPosition = ({ detail: event }: CustomEvent<PlayerEvent>) => {
       if (
         disposed ||
+        resolvingUrlRef.current ||
         propsRef.current.navigation?.pending ||
         event.source?.id !== loadedSourceIdRef.current ||
         event.source?.revision !== loadedRevisionRef.current
@@ -388,6 +394,7 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
     const onError = ({ detail: event }: CustomEvent<PlayerEvent>) => {
       if (
         disposed ||
+        resolvingUrlRef.current ||
         event.source?.id !== loadedSourceIdRef.current ||
         event.source?.revision !== loadedRevisionRef.current
       )
@@ -404,6 +411,7 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
     const onEnded = ({ detail: event }: CustomEvent<PlayerEvent>) => {
       if (
         disposed ||
+        resolvingUrlRef.current ||
         event.source?.id !== loadedSourceIdRef.current ||
         event.source?.revision !== loadedRevisionRef.current ||
         initializingRef.current ||
@@ -604,6 +612,11 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
   }, []);
 
   useLayoutEffect(() => {
+    if (playbackUrl === undefined) return;
+    if (playbackUrl === null) {
+      props.onError();
+      return;
+    }
     const player = elementRef.current!;
     const { source, directControls: controls, torrentTimeline: timeline } = props;
     const local = props.localPlayback;
@@ -617,12 +630,12 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
             id: 'media',
             revision: JSON.stringify([
               source.sourceRef,
-              source.url,
+              playbackUrl === source.url ? source.url : [source.url, playbackUrl],
               controls?.tracks,
               controls?.qualities,
             ]),
             kind: source.kind as 'mp4' | 'hls',
-            src: source.url,
+            src: playbackUrl,
             ...(source.kind === 'hls' ? { hlsRedirects: 'follow' as const } : {}),
             // VideoHUB serves native MP4 without CORS response headers.
             ...(source.kind === 'mp4' && source.provider === 'videohub-streaming'
@@ -682,7 +695,7 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
     // Refreshing the available tracks would reset the transport. Defer it while the user watches.
     if (
       sameMedia &&
-      loadedMediaRef.current?.url === source.url &&
+      loadedMediaRef.current?.url === playbackUrl &&
       !pendingRef.current &&
       current?.intent === 'playing' &&
       current.playback !== 'error' &&
@@ -712,7 +725,7 @@ export function MediaVideoRenderer(props: MediaVideoRendererProps) {
     loadedRevisionRef.current = descriptor.revision;
     loadedSourceIdRef.current = descriptor.id;
     appliedLocalRef.current = local ?? null;
-    loadedMediaRef.current = { sourceRef: source.sourceRef, url: source.url };
+    loadedMediaRef.current = { sourceRef: source.sourceRef, url: playbackUrl };
     if (timeline) streamRef.current?.configure(source.url, timeline, descriptor.revision);
     else streamRef.current?.dispose();
     if (local) localStreamRef.current?.configure(local.source);
