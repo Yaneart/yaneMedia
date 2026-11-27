@@ -37,6 +37,7 @@ interface AnimeItem {
   name: string;
   russian?: string;
   score?: number;
+  kind: string;
   status: string;
   airedOn?: { year?: number; month?: number; day?: number };
   poster?: { main2xUrl?: string; mainUrl?: string };
@@ -47,6 +48,48 @@ type Candidate = ReleaseItem & { providerId: string; imdb?: string };
 const SCHEDULE_DAYS = 30;
 const dateAfterDays = (now: Date, days: number) =>
   new Date(now.getTime() + days * 86400_000).toISOString().slice(0, 10);
+const animeDateFormat = new Intl.DateTimeFormat('sv-SE', {
+  timeZone: 'Europe/Moscow',
+  dateStyle: 'short',
+});
+const animeDateAfterDays = (now: Date, days: number) =>
+  animeDateFormat.format(new Date(now.getTime() + days * 86400_000));
+
+function shikimoriSeason(year: number, month: number) {
+  const seasons = ['winter', 'spring', 'summer', 'fall'];
+  // Shikimori counts December as winter of the following year.
+  return `${seasons[Math.floor((month % 12) / 3)]}_${month === 12 ? year + 1 : year}`;
+}
+
+function compareAnimePremieres(first: ReleaseItem, second: ReleaseItem) {
+  const firstDate = first.releaseDate ?? '';
+  const secondDate = second.releaseDate ?? '';
+  if (firstDate.startsWith(secondDate) || secondDate.startsWith(firstDate)) {
+    return secondDate.length - firstDate.length;
+  }
+  return firstDate.localeCompare(secondDate);
+}
+
+function animeScheduleDate(item: Pick<ReleaseItem, 'nextEpisodeAt' | 'releaseDate'>) {
+  if (!item.nextEpisodeAt) return item.releaseDate?.length === 10 ? item.releaseDate : '';
+  const timestamp = Date.parse(item.nextEpisodeAt);
+  return Number.isFinite(timestamp) ? animeDateFormat.format(timestamp) : '';
+}
+
+function compareAnimeSchedule(first: ReleaseItem, second: ReleaseItem) {
+  return (
+    animeScheduleDate(first).localeCompare(animeScheduleDate(second)) ||
+    (Date.parse(first.nextEpisodeAt ?? '') || 0) - (Date.parse(second.nextEpisodeAt ?? '') || 0)
+  );
+}
+
+const animeReleaseOrder = {
+  recent: (first: ReleaseItem, second: ReleaseItem) =>
+    (second.rating?.value ?? 0) - (first.rating?.value ?? 0) ||
+    (second.releaseDate ?? '').localeCompare(first.releaseDate ?? ''),
+  upcoming: compareAnimePremieres,
+  schedule: compareAnimeSchedule,
+};
 
 export function hasRussianTitle(title?: string): title is string {
   return typeof title === 'string' && /[а-яё]/i.test(title);
@@ -106,22 +149,28 @@ export class ReleasesService {
     if (query.type === 'movie' && query.period === 'schedule') {
       throw new BadRequestException('Episode schedules are available for series and anime');
     }
-    const deadline = Date.now() + 30_000;
-    return paginateReleases(query.page, (page) => {
-      if (Date.now() > deadline) {
-        throw new ServiceUnavailableException('Releases are temporarily unavailable');
-      }
-      return this.getProviderPage({ ...query, page });
-    });
+    const now = new Date();
+    const deadline = now.getTime() + 30_000;
+    return paginateReleases(
+      query.page,
+      (page) => {
+        if (Date.now() > deadline) {
+          throw new ServiceUnavailableException('Releases are temporarily unavailable');
+        }
+        return this.getProviderPage({ ...query, page }, now);
+      },
+      query.type === 'anime' ? animeReleaseOrder[query.period] : undefined,
+    );
   }
 
-  private getProviderPage(query: ReleasesQueryDto): Promise<ReleasePage> {
-    const key = `${query.type}:${query.period}:${query.page}`;
+  private getProviderPage(query: ReleasesQueryDto, now: Date): Promise<ReleasePage> {
+    const day = query.type === 'anime' ? animeDateAfterDays(now, 0) : '';
+    const key = `${query.type}:${query.period}:${query.page}:${day}`;
     const cached = this.cache.get(key);
     if (cached && cached.expires > Date.now()) return Promise.resolve(cached.value);
     const existing = this.pending.get(key);
     if (existing) return existing;
-    const request = this.load(query)
+    const request = this.load(query, now)
       .then((value) => {
         const oldest = Array.from(this.cache.keys())[0];
         if (this.cache.size >= 100 && oldest !== undefined) this.cache.delete(oldest);
@@ -160,15 +209,26 @@ export class ReleasesService {
 
   private async anime(query: ReleasesQueryDto, now: Date) {
     const schedule = query.period === 'schedule';
+    const limit = 50;
     const fields =
-      'id name russian score status airedOn { year month day } poster { main2xUrl mainUrl }' +
+      'id name russian score kind status airedOn { year month day } poster { main2xUrl mainUrl }' +
       (schedule ? ' nextEpisodeAt' : '');
-    const args = `page: ${query.page}, limit: 20, order: popularity, kind: "tv,movie,ona,ova", censored: true`;
-    const since = dateAfterDays(now, -90);
-    const today = dateAfterDays(now, 0);
-    const scheduleEnd = dateAfterDays(now, SCHEDULE_DAYS);
+    const paging = `page: ${query.page}, limit: ${limit}, censored: true`;
+    const popularFormats = 'order: popularity, kind: "tv,movie"';
+    const args = `${paging}, ${popularFormats}`;
+    const since = animeDateAfterDays(now, -90);
+    const today = animeDateAfterDays(now, 0);
+    const year = Number(today.slice(0, 4));
+    const scheduleEnd = animeDateAfterDays(now, SCHEDULE_DAYS);
+    const season = shikimoriSeason(year, Number(today.slice(5, 7)));
+    const scheduleArgs = `${paging}, season: "${season}"`;
     const result = await this.json<{
-      data?: { animes: AnimeItem[]; ongoing?: AnimeItem[] };
+      data?: {
+        animes: AnimeItem[];
+        ongoing?: AnimeItem[];
+        premieres?: AnimeItem[];
+        movies?: AnimeItem[];
+      };
       errors?: unknown[];
     }>('https://shikimori.io/api/graphql', {
       method: 'POST',
@@ -178,35 +238,49 @@ export class ReleasesService {
       },
       body: JSON.stringify({
         query: schedule
-          ? `query { animes(${args}, status: "ongoing") { ${fields} } }`
+          ? `query {
+              animes(${scheduleArgs}, ${popularFormats}, status: "ongoing") { ${fields} }
+              premieres: animes(${scheduleArgs}, ${popularFormats}, status: "anons") { ${fields} }
+              movies: animes(${scheduleArgs}, order: aired_on, kind: "movie", status: "released") { ${fields} }
+            }`
           : query.period === 'upcoming'
-            ? `query { animes(${args}, status: "anons", season: "${now.getUTCFullYear()}_${now.getUTCFullYear() + 1}") { ${fields} } }`
-            : `query { animes(${args}, status: "released", score: 6, season: "${new Date(since).getUTCFullYear()}_${now.getUTCFullYear()}") { ${fields} } ongoing: animes(${args}, status: "ongoing", score: 6) { ${fields} } }`,
+            ? `query { animes(${args}, status: "anons", season: "${year}_${year + 1}") { ${fields} } }`
+            : `query {
+                animes(${args}, status: "released", score: 6, season: "${year}") { ${fields} }
+                ongoing: animes(${args}, status: "ongoing", score: 6, season: "${year}") { ${fields} }
+              }`,
       }),
     });
     if (result.errors?.length || !result.data) throw new Error('Invalid anime response');
-    const groups = [result.data.ongoing ?? [], result.data.animes];
+    const { animes: primary, ongoing = [], premieres = [], movies = [] } = result.data;
+    const groups = [ongoing, primary, premieres, movies];
     const animes = [...new Map(groups.flat().map((anime) => [anime.id, anime])).values()];
     const items: Candidate[] = animes.flatMap((anime) => {
+      if (!hasRussianTitle(anime.russian) || (anime.kind !== 'tv' && anime.kind !== 'movie'))
+        return [];
       const releaseDate = animeReleaseDate(anime.airedOn);
       const ongoing = anime.status === 'ongoing';
-      if (!hasRussianTitle(anime.russian)) return [];
-      const nextEpisodeAt = schedule ? anime.nextEpisodeAt : undefined;
-      if (
-        schedule &&
-        (!ongoing ||
-          !nextEpisodeAt ||
-          !(Date.parse(nextEpisodeAt) > now.getTime()) ||
-          nextEpisodeAt.slice(0, 10) > scheduleEnd)
-      )
-        return [];
+      const nextEpisodeAt =
+        schedule && ongoing && anime.kind === 'tv' ? anime.nextEpisodeAt : undefined;
+      if (schedule) {
+        if (ongoing && anime.kind === 'tv' && !nextEpisodeAt) return [];
+        const date = animeScheduleDate({ releaseDate, nextEpisodeAt });
+        if (date < today || date > scheduleEnd) return [];
+      }
       if (
         query.period === 'recent' &&
         ((Number(anime.score) || 0) < 6.5 ||
-          (!ongoing && (!releaseDate || releaseDate < since || releaseDate > today)))
+          anime.airedOn?.year !== year ||
+          !releaseDate ||
+          releaseDate > today ||
+          (!ongoing && releaseDate < since))
       )
         return [];
-      if (query.period === 'upcoming' && releaseDate?.length === 10 && releaseDate < today)
+      if (
+        query.period === 'upcoming' &&
+        releaseDate &&
+        releaseDate < today.slice(0, releaseDate.length)
+      )
         return [];
       const poster = anime.poster?.main2xUrl || anime.poster?.mainUrl;
       return [
@@ -226,15 +300,9 @@ export class ReleasesService {
         },
       ];
     });
-    if (query.period === 'recent') {
-      items.sort(
-        (first, second) =>
-          Number((second.releaseDate ?? '') >= since) - Number((first.releaseDate ?? '') >= since),
-      );
-    }
     return {
       items,
-      hasMore: groups.some((group) => group.length === 20) && query.page < 50,
+      hasMore: groups.some((group) => group.length === limit) && query.page < 50,
       partial: false,
     };
   }
@@ -307,8 +375,7 @@ export class ReleasesService {
     };
   }
 
-  private async load(query: ReleasesQueryDto): Promise<ReleasePage> {
-    const now = new Date();
+  private async load(query: ReleasesQueryDto, now: Date): Promise<ReleasePage> {
     const page = await (query.type === 'anime' ? this.anime(query, now) : this.films(query, now));
     const registered: ReleaseItem[] = [];
     for (const { providerId, imdb, ...item } of page.items) {

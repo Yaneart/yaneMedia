@@ -17,10 +17,20 @@ describe('release cards', () => {
     expect(container.firstElementChild?.className).toContain('absolute inset-0');
   });
   test('displays the next episode with the same poster layout as a premiere', () => {
-    const { container, getByText } = render(<ReleasePosterOverlay date="2027-02-09" episode />);
+    const { container, getByText } = render(
+      <ReleasePosterOverlay date="2027-02-08T21:30:00Z" kind="episode" />,
+    );
     expect(getByText('Новая серия')).toBeTruthy();
-    expect(container.querySelector('time')?.dateTime).toBe('2027-02-09');
+    expect(container.querySelector('time')?.dateTime).toBe('2027-02-08T21:30:00Z');
+    expect(container.querySelector('time')?.textContent).toContain('9 февраля');
     expect(container.firstElementChild?.className).toContain('absolute inset-0');
+  });
+  test('labels a dated calendar premiere', () => {
+    const { container, getByText } = render(
+      <ReleasePosterOverlay date="2027-02-09" kind="premiere" />,
+    );
+    expect(getByText('Премьера')).toBeTruthy();
+    expect(container.querySelector('time')?.textContent).toContain('9 февраля');
   });
   test('does not invent a precise release date', () => {
     expect(formatReleaseDate('2027')).toBe('2027 год');

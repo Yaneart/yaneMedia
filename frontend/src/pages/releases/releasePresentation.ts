@@ -1,12 +1,14 @@
 export function formatReleaseDate(value?: string): string {
   if (!value) return 'Дата уточняется';
   if (/^\d{4}$/.test(value)) return `${value} год`;
-  const date = new Date(`${value.length === 7 ? `${value}-01` : value.slice(0, 10)}T12:00:00Z`);
+  const timeZone = value.includes('T') ? 'Europe/Moscow' : 'UTC';
+  const date = new Date(value.length === 7 ? `${value}-01` : value);
   if (!Number.isFinite(date.getTime())) return 'Дата уточняется';
+  const yearFormat = new Intl.DateTimeFormat('ru-RU', { year: 'numeric', timeZone });
   return date.toLocaleDateString('ru-RU', {
     ...(value.length === 7 ? {} : { day: 'numeric' }),
     month: 'long',
-    ...(value.slice(0, 4) === String(new Date().getFullYear()) ? {} : { year: 'numeric' }),
-    timeZone: 'UTC',
+    ...(yearFormat.format(date) === yearFormat.format(new Date()) ? {} : { year: 'numeric' }),
+    timeZone,
   });
 }

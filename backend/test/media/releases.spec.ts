@@ -13,6 +13,7 @@ describe('releases', () => {
   const originalFetch = global.fetch;
   afterEach(() => {
     global.fetch = originalFetch;
+    jest.useRealTimers();
   });
 
   function jsonResponse(payload: unknown) {
@@ -65,26 +66,74 @@ describe('releases', () => {
     expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 
-  it('keeps anime precision and ignores expired episode schedules', async () => {
-    const { service } = setup({
+  it('lists only upcoming TV anime and movies and preserves partial premiere dates', async () => {
+    jest.useFakeTimers({ now: new Date('2026-11-27T12:00:00Z') });
+    const { service, fetchMock } = setup({
       data: {
         animes: [
           {
             id: '1',
             name: 'Anime',
             russian: 'Аниме',
+            kind: 'movie',
             status: 'anons',
             airedOn: { year: 2027 },
             nextEpisodeAt: '2020-01-01T00:00:00Z',
           },
+          ...['ova', 'ona', 'special'].map((kind, index) => ({
+            id: String(index + 2),
+            russian: 'Дополнительный выпуск',
+            kind,
+            status: 'anons',
+            airedOn: { year: 2027 },
+          })),
         ],
       },
     });
     const page = await service.getReleases(
       plainToInstance(ReleasesQueryDto, { type: 'anime', period: 'upcoming' }),
     );
-    expect(page.items[0].releaseDate).toBe('2027');
+    expect(page.items.map((item) => item.releaseDate)).toEqual(['2027']);
     expect(page.items[0].nextEpisodeAt).toBeUndefined();
+    expect(fetchMock.mock.calls[0][1]?.body).toContain('tv,movie');
+  });
+
+  it('sorts anime premieres across provider pages and puts undated titles last', async () => {
+    jest.useFakeTimers({ now: new Date('2026-11-27T12:00:00Z') });
+    const premiere = (id: number, year?: number, month?: number, day?: number) => ({
+      id: String(id),
+      russian: `Премьера ${id}`,
+      kind: 'movie',
+      status: 'anons',
+      airedOn: { year, month, day },
+    });
+    const later = Array.from({ length: 50 }, (_, index) => premiere(index + 1, 2027, 12, 31));
+    const { service, fetchMock } = setup({
+      data: {
+        animes: [
+          premiere(51, 2027, 2),
+          premiere(52, 2026, 12, 11),
+          premiere(53, 2027),
+          premiere(54),
+          premiere(55, 2027, 2, 28),
+        ],
+      },
+    });
+    fetchMock.mockResolvedValueOnce(jsonResponse({ data: { animes: later } }));
+    const query = plainToInstance(ReleasesQueryDto, { type: 'anime', period: 'upcoming' });
+    const pages = await Promise.all(
+      [1, 2, 3].map((page) => service.getReleases({ ...query, page })),
+    );
+    expect(pages.flatMap(({ items }) => items.map((item) => item.title))).toEqual([
+      'Премьера 52',
+      'Премьера 55',
+      'Премьера 51',
+      ...later.map((item) => item.russian),
+      'Премьера 53',
+      'Премьера 54',
+    ]);
+    expect(pages.map((page) => page.hasMore)).toEqual([true, true, false]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it('rejects GraphQL errors and permits a later retry', async () => {
@@ -138,6 +187,7 @@ describe('releases', () => {
   });
 
   it('keeps popular ongoing anime and crisp posters while excluding weak and untranslated entries', async () => {
+    jest.useFakeTimers({ now: new Date('2026-11-27T12:00:00Z') });
     const { service, fetchMock } = setup({
       data: {
         animes: [],
@@ -146,17 +196,32 @@ describe('releases', () => {
             id: '1',
             name: 'Show',
             russian: 'Продолжение',
+            kind: 'tv',
             status: 'ongoing',
             score: 8,
-            airedOn: { year: 2020, month: 1, day: 1 },
+            airedOn: { year: 2026, month: 1, day: 1 },
             poster: {
               main2xUrl: 'https://shikimori.io/main_2x.webp',
               mainUrl: 'https://shikimori.io/main.webp',
             },
             nextEpisodeAt: '2099-01-01T00:00:00Z',
           },
-          { id: '2', russian: 'Низкий рейтинг', status: 'ongoing', score: 4 },
-          { id: '3', name: 'No translation', status: 'ongoing', score: 9 },
+          {
+            id: '2',
+            russian: 'Низкий рейтинг',
+            kind: 'tv',
+            status: 'ongoing',
+            score: 4,
+            airedOn: { year: 2026, month: 1, day: 1 },
+          },
+          {
+            id: '3',
+            name: 'No translation',
+            kind: 'tv',
+            status: 'ongoing',
+            score: 9,
+            airedOn: { year: 2026, month: 1, day: 1 },
+          },
         ],
       },
     });
@@ -197,67 +262,146 @@ describe('releases', () => {
     expect(params.has('first_air_date.gte')).toBe(false);
   });
 
-  it('lists only ongoing anime with a future episode within the schedule window', async () => {
-    const nextEpisodeAt = new Date(Date.now() + 86400_000).toISOString();
-    const { service, fetchMock } = setup({
+  it('sorts TV episodes and movie premieres globally using the Moscow calendar date', async () => {
+    jest.useFakeTimers({ now: new Date('2026-11-26T22:00:00Z') });
+    const episode = (id: number, nextEpisodeAt: string, kind = 'tv') => ({
+      id: String(id),
+      russian: `Серия ${id}`,
+      status: 'ongoing',
+      kind,
+      nextEpisodeAt,
+    });
+    const firstResponse = {
       data: {
-        animes: [
-          { id: '1', russian: 'Новая серия', status: 'ongoing', nextEpisodeAt },
-          { id: '2', russian: 'Анонс', status: 'anons', nextEpisodeAt },
-          { id: '3', russian: 'Без даты', status: 'ongoing' },
+        animes: Array.from({ length: 50 }, (_, i) => episode(i + 1, '2026-12-15T00:00:00Z')),
+        premieres: [
           {
-            id: '4',
-            russian: 'Прошедшая серия',
-            status: 'ongoing',
-            nextEpisodeAt: '2020-01-01T00:00:00Z',
+            id: '51',
+            russian: 'Премьера фильма',
+            status: 'anons',
+            kind: 'movie',
+            airedOn: { year: 2026, month: 11, day: 28 },
           },
+        ],
+        movies: [
           {
-            id: '5',
-            russian: 'Отложенная серия',
-            status: 'ongoing',
-            nextEpisodeAt: '2099-01-01T00:00:00Z',
+            id: '52',
+            russian: 'Фильм сегодня',
+            status: 'released',
+            kind: 'movie',
+            airedOn: { year: 2026, month: 11, day: 27 },
           },
         ],
       },
+    };
+    const { service, fetchMock } = setup({
+      data: {
+        animes: [
+          episode(53, '2026-11-26T21:30:00Z'),
+          episode(54, '2026-11-26T20:30:00Z'),
+          episode(55, '2026-11-27T12:00:00Z', 'ona'),
+          episode(56, '2026-11-27T15:00:00Z', 'ova'),
+          episode(57, '2026-12-28T12:00:00Z'),
+          episode(58, 'unknown'),
+        ],
+      },
     });
-    const page = await service.getReleases(
-      plainToInstance(ReleasesQueryDto, { type: 'anime', period: 'schedule' }),
-    );
-    expect(page.items.map((item) => item.nextEpisodeAt)).toEqual([nextEpisodeAt]);
+    fetchMock.mockResolvedValueOnce(jsonResponse(firstResponse));
+    const query = plainToInstance(ReleasesQueryDto, { type: 'anime', period: 'schedule' });
+    const first = await service.getReleases(query);
+    const second = await service.getReleases({ ...query, page: 2 });
+    const third = await service.getReleases({ ...query, page: 3 });
+    expect([...first.items, ...second.items, ...third.items].map((item) => item.title)).toEqual([
+      'Фильм сегодня',
+      'Серия 53',
+      'Премьера фильма',
+      ...Array.from({ length: 50 }, (_, i) => `Серия ${i + 1}`),
+    ]);
+    expect(first.items[1].nextEpisodeAt).toBe('2026-11-26T21:30:00Z');
+    expect(first.hasMore).toBe(true);
+    expect(third.hasMore).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     const body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string) as { query: string };
     expect(body.query).toContain('status: "ongoing"');
+    expect(body.query).toContain('kind: "tv,movie"');
+    expect(body.query.match(/season: "fall_2026"/g)).toHaveLength(3);
   });
 
-  it('puts fresh anime seasons ahead of long-running shows', async () => {
-    const now = new Date();
+  it.each([
+    ['2026-11-30T21:00:00Z', 'winter_2027'],
+    ['2027-02-28T21:00:00Z', 'spring_2027'],
+    ['2027-05-31T21:00:00Z', 'summer_2027'],
+    ['2027-08-31T21:00:00Z', 'fall_2027'],
+  ])('switches the schedule season at Moscow midnight on %s', async (now, season) => {
+    jest.useFakeTimers({ now: new Date(now) });
+    const { service, fetchMock } = setup({ data: { animes: [] } });
+    await service.getReleases(
+      plainToInstance(ReleasesQueryDto, { type: 'anime', period: 'schedule' }),
+    );
+    const body = JSON.parse(fetchMock.mock.calls[0][1]?.body as string) as { query: string };
+    expect(body.query.match(new RegExp(`season: "${season}"`, 'g'))).toHaveLength(3);
+  });
+
+  it('keeps only current-year TV anime and movies among recent releases', async () => {
+    jest.useFakeTimers({ now: new Date('2026-01-15T12:00:00Z') });
+    const anime = (id: number, russian: string, kind: string, year: number, status: string) => ({
+      id: String(id),
+      russian,
+      kind,
+      status,
+      score: 8,
+      airedOn: { year, month: 1, day: 1 },
+    });
     const { service } = setup({
       data: {
-        animes: [],
+        animes: [
+          anime(1, 'Новый фильм', 'movie', 2026, 'released'),
+          {
+            ...anime(2, 'Фильм прошлого года', 'movie', 2025, 'released'),
+            airedOn: { year: 2025, month: 12, day: 30 },
+          },
+        ],
         ongoing: [
-          {
-            id: '1',
-            name: 'Old',
-            russian: 'Долгий сериал',
-            status: 'ongoing',
-            score: 9,
-            airedOn: { year: 2000, month: 1, day: 1 },
-          },
-          {
-            id: '2',
-            name: 'New',
-            russian: 'Новый сезон',
-            status: 'ongoing',
-            score: 8,
-            airedOn: {
-              year: now.getUTCFullYear(),
-              month: now.getUTCMonth() + 1,
-              day: now.getUTCDate(),
-            },
-          },
+          anime(3, 'Син-тян', 'tv', 1992, 'ongoing'),
+          anime(4, 'Новый сериал', 'tv', 2026, 'ongoing'),
+          anime(5, 'Веб-сериал', 'ona', 2026, 'ongoing'),
+          anime(6, 'Бонусный выпуск', 'ova', 2026, 'ongoing'),
         ],
       },
     });
     const page = await service.getReleases(plainToInstance(ReleasesQueryDto, { type: 'anime' }));
-    expect(page.items.map((item) => item.title)).toEqual(['Новый сезон', 'Долгий сериал']);
+    expect(page.items.map((item) => item.title)).toEqual(['Новый сериал', 'Новый фильм']);
+  });
+
+  it('ranks recent anime by score across provider pages and breaks ties by latest premiere', async () => {
+    jest.useFakeTimers({ now: new Date('2026-11-27T12:00:00Z') });
+    const anime = (id: number, score: number, month: number) => ({
+      id: String(id),
+      russian: `Релиз ${id}`,
+      kind: 'tv',
+      status: 'ongoing',
+      score,
+      airedOn: { year: 2026, month, day: 1 },
+    });
+    const lower = Array.from({ length: 50 }, (_, index) => anime(index + 1, 7, 11));
+    const { service, fetchMock } = setup({
+      data: {
+        animes: [{ ...anime(51, 9.5, 10), kind: 'movie', status: 'released' }],
+        ongoing: [anime(52, 9.5, 1), anime(53, 6.5, 11), anime(54, 6.4, 11)],
+      },
+    });
+    fetchMock.mockResolvedValueOnce(jsonResponse({ data: { animes: [], ongoing: lower } }));
+    const query = plainToInstance(ReleasesQueryDto, { type: 'anime' });
+    const pages = await Promise.all(
+      [1, 2, 3].map((page) => service.getReleases({ ...query, page })),
+    );
+    expect(pages.flatMap(({ items }) => items.map((item) => item.title))).toEqual([
+      'Релиз 51',
+      'Релиз 52',
+      ...lower.map((item) => item.russian),
+      'Релиз 53',
+    ]);
+    expect(pages.map((page) => page.hasMore)).toEqual([true, true, false]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

@@ -89,7 +89,7 @@ export function ReleasesPage({ schedule = false }: { schedule?: boolean }) {
           </h1>
           <p className="mt-3 max-w-lg text-body leading-relaxed text-text-secondary sm:text-lg">
             {schedule
-              ? 'Даты выхода ближайших серий сериалов и аниме.'
+              ? 'Даты выхода ближайших серий и премьер аниме.'
               : 'Свежие истории, любимые продолжения и премьеры, которых стоит ждать.'}
           </p>
         </div>
@@ -156,7 +156,7 @@ export function ReleasesPage({ schedule = false }: { schedule?: boolean }) {
                 {query.isRefetchError
                   ? 'Не удалось обновить список. Показана сохранённая версия.'
                   : schedule
-                    ? 'Часть дат выхода серий временно недоступна.'
+                    ? 'Часть дат выхода временно недоступна.'
                     : 'Часть данных о релизах временно недоступна.'}
               </p>
             )}
@@ -172,8 +172,11 @@ export function ReleasesPage({ schedule = false }: { schedule?: boolean }) {
                     }
                     onFavoriteChange={() => favorites.toggleFavorite(item.mediaRef)}
                     posterOverlay={
-                      schedule && item.nextEpisodeAt ? (
-                        <ReleasePosterOverlay date={item.nextEpisodeAt} episode />
+                      schedule ? (
+                        <ReleasePosterOverlay
+                          date={item.nextEpisodeAt ?? item.releaseDate}
+                          kind={item.nextEpisodeAt ? 'episode' : 'premiere'}
+                        />
                       ) : period === 'upcoming' ? (
                         <ReleasePosterOverlay date={item.releaseDate} />
                       ) : undefined
@@ -183,7 +186,7 @@ export function ReleasesPage({ schedule = false }: { schedule?: boolean }) {
               </MediaGrid>
             ) : (
               <EmptyState
-                title={schedule ? 'Пока нет дат выхода серий' : 'Пока ничего нового'}
+                title={schedule ? 'Пока нет дат выхода' : 'Пока ничего нового'}
                 description={
                   schedule
                     ? 'Загляните позже, когда расписание обновится.'
