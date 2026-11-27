@@ -37,19 +37,34 @@ export type PlaybackSourceCatalog = {
   directEpisodes: readonly DirectEpisodeOption[];
 };
 
-const embedProviderPriority = new Map(
-  [
-    'rutube-streaming',
-    'kodik-streaming',
-    'aderom-streaming',
-    'kinobd-streaming',
-    'initem-streaming',
-    'alloha-streaming',
-    'mirage-streaming',
-    'collaps-streaming',
-    'veoveo-embed',
-  ].map((provider, index) => [provider, index]),
-);
+function compareByProviderPriority(providers: readonly string[]) {
+  const priorities = new Map(providers.map((provider, index) => [provider, index]));
+
+  return (left: MediaSourceOption, right: MediaSourceOption) => {
+    const leftPriority = priorities.get(left.provider) ?? priorities.size;
+    const rightPriority = priorities.get(right.provider) ?? priorities.size;
+    return leftPriority - rightPriority || left.provider.localeCompare(right.provider, 'en');
+  };
+}
+
+const compareEmbedProviders = compareByProviderPriority([
+  'rutube-streaming',
+  'kodik-streaming',
+  'aderom-streaming',
+  'kinobd-streaming',
+  'initem-streaming',
+  'alloha-streaming',
+  'mirage-streaming',
+  'collaps-streaming',
+  'veoveo-embed',
+]);
+
+const compareDirectProviders = compareByProviderPriority([
+  'videohub-streaming',
+  'filmix-streaming',
+  'veoveo-streaming',
+  'aniliberty-streaming',
+]);
 
 function getDirectEpisodeKey(episode: MediaSourceEpisodeRef) {
   if (episode.seasonNumber !== undefined && episode.episodeNumber !== undefined) {
@@ -141,11 +156,12 @@ export function getEmbedProviderSources(sources: readonly MediaSourceOption[]) {
       getPreferredSource(usable) ??
       group[0]!
     );
-  }).sort((left, right) => {
-    const leftPriority = embedProviderPriority.get(left.provider) ?? embedProviderPriority.size;
-    const rightPriority = embedProviderPriority.get(right.provider) ?? embedProviderPriority.size;
-    return leftPriority - rightPriority || left.provider.localeCompare(right.provider, 'en');
-  });
+  }).sort(compareEmbedProviders);
+}
+
+export function getDirectProviderSources(sources: readonly MediaSourceOption[]) {
+  const providers = new Map(sources.map((source) => [source.provider, source]));
+  return Array.from(providers.values()).sort(compareDirectProviders);
 }
 
 export function getAvailableDirectSourceForTrack(

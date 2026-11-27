@@ -3,10 +3,6 @@ import { ContentRow, Skeleton, YaneMark, YaneMarkField } from '@/shared';
 export function MediaCatalogSkeleton({ title }: { title: string }) {
   return (
     <section aria-busy="true" className="space-y-8">
-      <p role="status" className="sr-only">
-        Загружаем каталог «{title}»
-      </p>
-
       <div className="relative isolate overflow-hidden rounded-card border border-context-border bg-linear-to-br from-watermark/38 via-watermark/26 to-watermark/32 p-2 shadow-surface sm:p-3">
         <div
           aria-hidden="true"
@@ -34,6 +30,18 @@ export function MediaCatalogSkeleton({ title }: { title: string }) {
         </div>
       </div>
 
+      <MediaCatalogRowsSkeleton title={title} />
+    </section>
+  );
+}
+
+export function MediaCatalogRowsSkeleton({ title }: { title: string }) {
+  return (
+    <div aria-busy="true" className="space-y-8">
+      <p role="status" className="sr-only">
+        Загружаем каталог «{title}»
+      </p>
+
       {[0, 1, 2].map((row) => (
         <div key={row} aria-hidden="true">
           <Skeleton className="mb-4 h-7 w-48" />
@@ -49,6 +57,6 @@ export function MediaCatalogSkeleton({ title }: { title: string }) {
           </ContentRow>
         </div>
       ))}
-    </section>
+    </div>
   );
 }

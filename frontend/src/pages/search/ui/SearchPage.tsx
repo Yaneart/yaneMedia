@@ -1,4 +1,4 @@
-import { useEffect, useState, type SubmitEvent } from 'react';
+import { useEffect } from 'react';
 import { useSearchParams } from 'react-router';
 
 import {
@@ -6,6 +6,7 @@ import {
   MediaCard,
   normalizeMediaSearchQuery,
   useMediaSearch,
+  useMediaSearchDraft,
 } from '@/entities/media';
 import { useFavorites } from '@/features/favorite';
 import {
@@ -22,68 +23,61 @@ import {
 
 const searchSuggestions = ['Дюна', 'Игра престолов', 'Фрирен'] as const;
 
+function createSearchParams(query: string) {
+  return new URLSearchParams(query ? { q: query } : undefined);
+}
+
 export function SearchPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { isFavorite, isFavoriteUpdating, toggleFavorite, canUpdateFavorites } = useFavorites();
 
-  const submittedQuery = normalizeMediaSearchQuery(searchParams.get('q'));
-  const [query, setQuery] = useState(submittedQuery);
+  const urlQuery = normalizeMediaSearchQuery(searchParams.get('q'));
+  const { searchValue, setSearchValue, normalizedSearchValue, isSearchDraftPending } =
+    useMediaSearchDraft(urlQuery, (query) =>
+      setSearchParams(createSearchParams(query), { replace: true }),
+    );
   const {
     items: results,
     resultFilters,
-    status,
-    isPreviousResult,
-    isUpdating,
+    status: searchStatus,
+    isPreviousResult: isPreviousQueryResult,
+    isUpdating: isQueryUpdating,
     hasRefreshError,
     pagination,
     retry,
-  } = useMediaSearch({ query: submittedQuery }, 0);
+  } = useMediaSearch({ query: urlQuery }, 0);
 
   useEffect(() => {
-    const canonicalParams = new URLSearchParams();
-
-    if (submittedQuery) canonicalParams.set('q', submittedQuery);
+    const canonicalParams = createSearchParams(urlQuery);
 
     if (canonicalParams.toString() !== searchParams.toString()) {
       setSearchParams(canonicalParams, { replace: true });
     }
-  }, [searchParams, setSearchParams, submittedQuery]);
-
-  useEffect(() => {
-    setQuery(submittedQuery);
-  }, [submittedQuery]);
+  }, [searchParams, setSearchParams, urlQuery]);
 
   const startSearch = (searchQuery: string) => {
-    setQuery(searchQuery);
-    setSearchParams({ q: searchQuery });
+    setSearchValue(searchQuery);
+    setSearchParams(createSearchParams(searchQuery));
   };
 
-  const handleSubmit = (event: SubmitEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    const normalizedQuery = query.trim();
-
-    if (!normalizedQuery) {
-      setSearchParams({});
-      return;
-    }
-
-    if (normalizedQuery === submittedQuery) {
-      retry();
-      return;
-    }
-
-    setSearchParams({ q: normalizedQuery });
-  };
-
-  const displayedQuery = resultFilters?.query ?? submittedQuery;
-  const searchNotice = hasRefreshError
-    ? 'Не удалось обновить результаты. Показана сохранённая выдача.'
-    : isUpdating && resultFilters
-      ? isPreviousResult
-        ? `Ищем «${submittedQuery}». Пока показаны результаты по запросу «${resultFilters.query}».`
-        : 'Обновляем результаты поиска…'
-      : null;
+  const displayedQuery = resultFilters?.query ?? urlQuery;
+  const isPreviousResult = isPreviousQueryResult || isSearchDraftPending;
+  const isUpdating = Boolean(normalizedSearchValue) && (isQueryUpdating || isSearchDraftPending);
+  const status = !normalizedSearchValue
+    ? 'idle'
+    : isSearchDraftPending && searchStatus !== 'success'
+      ? 'loading'
+      : searchStatus;
+  const searchNotice =
+    status === 'idle' || status === 'loading'
+      ? null
+      : isUpdating && resultFilters
+        ? isPreviousResult
+          ? `Ищем «${normalizedSearchValue}». Пока показаны результаты по запросу «${displayedQuery}».`
+          : 'Обновляем результаты поиска…'
+        : hasRefreshError
+          ? 'Не удалось обновить результаты. Показана сохранённая выдача.'
+          : null;
   const searchResultsAnnouncement =
     !isUpdating && !isPreviousResult
       ? status === 'success'
@@ -140,24 +134,15 @@ export function SearchPage() {
           </div>
 
           <div className="relative mt-5 lg:mt-0">
-            <form className="flex flex-col gap-2 sm:flex-row" onSubmit={handleSubmit}>
-              <SearchInput
-                aria-label="Название произведения"
-                value={query}
-                maxLength={maximumMediaSearchQueryLength}
-                placeholder="Введите название"
-                className="wide:min-h-12"
-                onChange={(event) => setQuery(event.currentTarget.value)}
-              />
-
-              <Button
-                type="submit"
-                disabled={!query.trim()}
-                className="w-full shrink-0 sm:w-auto sm:min-w-28 wide:min-h-12"
-              >
-                Найти
-              </Button>
-            </form>
+            <SearchInput
+              data-page-search
+              aria-label="Название произведения"
+              value={searchValue}
+              maxLength={maximumMediaSearchQueryLength}
+              placeholder="Введите название"
+              className="wide:min-h-12"
+              onChange={(event) => setSearchValue(event.currentTarget.value)}
+            />
 
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <span className="text-caption text-text-secondary">Попробуйте:</span>
@@ -178,7 +163,7 @@ export function SearchPage() {
         </div>
       </header>
 
-      {status === 'loading' && <LoadingState label={`Поиск: ${submittedQuery}`} />}
+      {status === 'loading' && <LoadingState label={`Поиск: ${normalizedSearchValue}`} />}
 
       {status === 'paused' && (
         <EmptyState
@@ -201,12 +186,12 @@ export function SearchPage() {
 
       {searchNotice && (
         <div
-          role={hasRefreshError ? 'alert' : 'status'}
+          role={hasRefreshError && !isUpdating ? 'alert' : 'status'}
           className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-context-border bg-surface-elevated px-4 py-3"
         >
           <p className="text-caption text-text-secondary">{searchNotice}</p>
 
-          {hasRefreshError && (
+          {hasRefreshError && !isUpdating && (
             <Button size="small" variant="ghost" onClick={retry}>
               Повторить
             </Button>
@@ -251,7 +236,7 @@ export function SearchPage() {
           </MediaGrid>
 
           <InfiniteScroll
-            key={submittedQuery}
+            key={urlQuery}
             query={pagination}
             disabled={isPreviousResult}
             className="mt-4"

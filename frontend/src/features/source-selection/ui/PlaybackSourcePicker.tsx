@@ -2,7 +2,11 @@ import type { MediaSourceOption } from '@/entities/media-source';
 import { Button, DownIcon, Popover } from '@/shared';
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 
-import { getEmbedProviderSources, getPlaybackSourcePanel } from '../model/sourceSelection';
+import {
+  getDirectProviderSources,
+  getEmbedProviderSources,
+  getPlaybackSourcePanel,
+} from '../model/sourceSelection';
 
 const labels = {
   source: '\u0418\u0441\u0442\u043e\u0447\u043d\u0438\u043a',
@@ -79,9 +83,7 @@ export function PlaybackSourcePicker({
 }: PlaybackSourcePickerProps) {
   const selectedLabel = selectedSource?.label ?? null;
   const embedProviders = getEmbedProviderSources(embedSources);
-  const providers = Array.from(
-    new Map(directSources.map((source) => [source.provider, source])).entries(),
-  );
+  const directProviders = getDirectProviderSources(directSources);
   const directSelected =
     selectedSource?.provider !== 'torrent' &&
     (selectedSource?.kind === 'hls' || selectedSource?.kind === 'mp4');
@@ -140,7 +142,7 @@ export function PlaybackSourcePicker({
     >
       {(close) => (
         <div ref={contentRef}>
-          {(torrentPanel || (embedSources.length > 0 && providers.length > 0)) && (
+          {(torrentPanel || (embedSources.length > 0 && directProviders.length > 0)) && (
             <div className="playback-source-header sticky top-0 z-20 -mx-3 mb-3 px-3 pb-3">
               <div
                 role="tablist"
@@ -249,12 +251,12 @@ export function PlaybackSourcePicker({
             </section>
           ) : visiblePanel === 'direct' ? (
             <section aria-label={labels.direct} className="grid grid-cols-2 items-start gap-2">
-              {providers.length === 0 && (
+              {directProviders.length === 0 && (
                 <p className="col-span-2 p-3 text-sm text-text-secondary">
                   Прямые источники пока не найдены.
                 </p>
               )}
-              {providers.map(([provider, source]) => (
+              {directProviders.map(({ provider, label }) => (
                 <Button
                   key={provider}
                   size="custom"
@@ -268,9 +270,9 @@ export function PlaybackSourcePicker({
                 >
                   <span
                     aria-hidden="true"
-                    className={`size-2 shrink-0 rounded-full ${getProviderAccent(source.provider)}`}
+                    className={`size-2 shrink-0 rounded-full ${getProviderAccent(provider)}`}
                   />
-                  <span className="min-w-0 flex-1 truncate">{source.label}</span>
+                  <span className="min-w-0 flex-1 truncate">{label}</span>
                 </Button>
               ))}
             </section>

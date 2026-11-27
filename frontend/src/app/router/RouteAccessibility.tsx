@@ -2,7 +2,15 @@ import { useEffect, useRef, useState } from 'react';
 import { Outlet, useLocation, useNavigationType } from 'react-router';
 
 import { getDocumentTitle } from './routeTitles';
+import { routePaths } from './routes';
 import { mainContentId } from '@/shared';
+
+const searchFocusPaths = new Set<string>([
+  routePaths.search,
+  routePaths.movies,
+  routePaths.series,
+  routePaths.anime,
+]);
 
 export function RouteAccessibility() {
   const { pathname } = useLocation();
@@ -79,11 +87,12 @@ export function RouteAccessibility() {
   useEffect(() => {
     const previousPathname = previousPathnameRef.current;
     previousPathnameRef.current = pathname;
+    const focusSearch = searchFocusPaths.has(pathname.replace(/\/+$/, '').toLowerCase());
 
     if (
       previousPathname === pathname ||
       navigationType === 'POP' ||
-      !keyboardNavigationRef.current
+      (!focusSearch && !keyboardNavigationRef.current)
     ) {
       return;
     }
@@ -101,18 +110,20 @@ export function RouteAccessibility() {
 
       if (userMovedFocus) return 'cancelled';
 
-      const heading = main?.querySelector<HTMLElement>('[data-page-heading]');
+      const target = main?.querySelector<HTMLElement>(
+        focusSearch ? '[data-page-search]' : '[data-page-heading]',
+      );
 
-      if (heading) {
-        heading.focus({ preventScroll: true });
+      if (target) {
+        target.focus({ preventScroll: true });
         return 'complete';
       }
 
-      main?.focus({ preventScroll: true });
+      if (!focusSearch) main?.focus({ preventScroll: true });
       return 'waiting';
     };
 
-    if (focusPage() === 'complete') return;
+    if (focusPage() !== 'waiting') return;
 
     let timeoutId: number | undefined;
     const observer = new MutationObserver(() => {

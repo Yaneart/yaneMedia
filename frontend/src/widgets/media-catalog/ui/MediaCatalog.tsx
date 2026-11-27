@@ -17,8 +17,8 @@ import {
 import {
   maximumMediaSearchQueryLength,
   MediaCard,
-  normalizeMediaSearchQuery,
   useMediaSearch,
+  useMediaSearchDraft,
   type MediaType,
 } from '@/entities/media';
 import { useFavorites } from '@/features/favorite';
@@ -32,7 +32,7 @@ import {
 import { getGenreOptions } from '../model/genreOptions';
 import { useMediaCatalog } from '../model/useMediaCatalog';
 import { getYearOptions } from '../model/yearOptions';
-import { MediaCatalogSkeleton } from './MediaCatalogSkeleton';
+import { MediaCatalogRowsSkeleton } from './MediaCatalogSkeleton';
 
 export type MediaCatalogProps = {
   type: MediaType;
@@ -58,10 +58,12 @@ export function MediaCatalog({ type, title, filters }: MediaCatalogProps) {
     () => readCatalogSearchParams(searchParams, type),
     [searchParams, type],
   );
-  const [searchValue, setSearchValue] = useState(urlFilters.query);
+  const { searchValue, setSearchValue, normalizedSearchValue, isSearchDraftPending } =
+    useMediaSearchDraft(urlFilters.query, (query) =>
+      setSearchParams(createCatalogSearchParams({ ...urlFilters, query }), { replace: true }),
+    );
   const [areMobileFiltersOpen, setAreMobileFiltersOpen] = useState(false);
   const { genre: selectedGenre, year: selectedYear, minimumRating } = urlFilters;
-  const normalizedSearchValue = normalizeMediaSearchQuery(searchValue);
 
   useEffect(() => {
     const canonicalParams = createCatalogSearchParams(urlFilters);
@@ -71,22 +73,6 @@ export function MediaCatalog({ type, title, filters }: MediaCatalogProps) {
     }
   }, [searchParams, setSearchParams, urlFilters]);
 
-  useEffect(() => {
-    setSearchValue(urlFilters.query);
-  }, [urlFilters.query]);
-
-  useEffect(() => {
-    if (normalizedSearchValue === urlFilters.query) return;
-
-    const timeoutId = window.setTimeout(() => {
-      setSearchParams(createCatalogSearchParams({ ...urlFilters, query: normalizedSearchValue }), {
-        replace: true,
-      });
-    }, 300);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [normalizedSearchValue, setSearchParams, urlFilters]);
-
   const updateUrlFilters = (updates: Partial<CatalogSearchFilters>) => {
     setSearchParams(createCatalogSearchParams({ ...urlFilters, ...updates }));
   };
@@ -94,7 +80,6 @@ export function MediaCatalog({ type, title, filters }: MediaCatalogProps) {
   const hasSelectedFilters =
     selectedGenre !== null || selectedYear !== null || minimumRating !== null;
   const isResultsMode = normalizedSearchValue.length > 0 || hasSelectedFilters;
-  const isSearchDraftPending = normalizedSearchValue !== urlFilters.query;
   const {
     items: searchItems,
     resultFilters,
@@ -117,10 +102,6 @@ export function MediaCatalog({ type, title, filters }: MediaCatalogProps) {
 
   const isPreviousResult = isPreviousQueryResult || isSearchDraftPending;
   const isSearchUpdating = isQueryUpdating || isSearchDraftPending;
-  if (!catalog && !isResultsMode && !isError && !isPaused) {
-    return <MediaCatalogSkeleton title={title} />;
-  }
-
   const catalogNotice = catalog
     ? isPaused
       ? 'Обновление ожидает подключения к сети. Показана сохранённая версия.'
@@ -219,6 +200,7 @@ export function MediaCatalog({ type, title, filters }: MediaCatalogProps) {
 
           <div className="relative mt-5 xl:mt-0">
             <SearchInput
+              data-page-search
               aria-label={`Поиск: ${title}`}
               value={searchValue}
               maxLength={maximumMediaSearchQueryLength}
@@ -398,7 +380,7 @@ export function MediaCatalog({ type, title, filters }: MediaCatalogProps) {
             description="Загрузим каталог, когда соединение восстановится. Поиск по названию уже доступен."
             className="mt-6 min-h-[60vh]"
           />
-        ) : (
+        ) : isError ? (
           <ErrorState
             variant="page"
             eyebrow="Каталог yaneMedia"
@@ -408,6 +390,10 @@ export function MediaCatalog({ type, title, filters }: MediaCatalogProps) {
             retryLabel="Попробовать снова"
             onRetry={retry}
           />
+        ) : (
+          <div className="mt-8">
+            <MediaCatalogRowsSkeleton title={title} />
+          </div>
         )
       ) : catalog.items.length === 0 ? (
         <EmptyState

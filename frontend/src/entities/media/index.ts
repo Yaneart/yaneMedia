@@ -23,6 +23,7 @@ export { getCardBackdrop } from './model/cardBackdrop';
 
 export { useMediaSearch } from './model/useMediaSearch';
 export type { MediaSearchFilters, MediaSearchStatus } from './model/useMediaSearch';
+export { useMediaSearchDraft } from './model/useMediaSearchDraft';
 export { maximumMediaSearchQueryLength, normalizeMediaSearchQuery } from './model/mediaSearchQuery';
 
 export type { MediaSummaryResolutionResult } from './api/resolveMediaSummaries';

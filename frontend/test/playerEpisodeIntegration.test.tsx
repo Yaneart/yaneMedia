@@ -543,6 +543,7 @@ test('direct source picker has one button per provider and native tracks stay wi
   const initial = catalog.episodes[0]!.sources[0]!;
   catalog.episodes[0]!.sources.push(
     { ...initial, sourceRef: 'dub', translation: { title: 'Dub', type: 'dub', language: 'ru' } },
+    { ...initial, sourceRef: 'ani', provider: 'aniliberty-streaming', label: 'AniLiberty' },
     {
       ...initial,
       sourceRef: 'veo',
@@ -552,7 +553,7 @@ test('direct source picker has one button per provider and native tracks stay wi
       quality: { label: 'Auto Auto' },
       url: 'https://fixture.test/veo.m3u8',
     },
-    { ...initial, sourceRef: 'ani', provider: 'aniliberty-streaming', label: 'AniLiberty' },
+    { ...initial, sourceRef: 'filmix', provider: 'filmix-streaming', label: 'Filmix' },
   );
   await act(async () => view.rerender(tree()));
   const original = player();
@@ -561,6 +562,7 @@ test('direct source picker has one button per provider and native tracks stay wi
   const direct = within(screen.getByRole('region', { name: 'Прямое видео' }));
   expect(direct.getAllByRole('button').map((b) => b.textContent?.trim())).toEqual([
     'VideoHUB',
+    'Filmix',
     'VeoVeo',
     'AniLiberty',
   ]);

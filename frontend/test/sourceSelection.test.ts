@@ -3,6 +3,7 @@ import { selectUsableAvailability } from '../src/entities/media-source/model/med
 import {
   createPlaybackSourceCatalog,
   getAvailableDirectSourceForPlaybackPreference,
+  getDirectProviderSources,
   getDirectQualityKey,
   getDirectQualityOptions,
   getDirectTrackKey,
@@ -56,6 +57,37 @@ describe('source-less episode catalogs', () => {
     expect(getEmbedProviderSources(sources).map(({ provider }) => provider)).toEqual(expected);
     expect(getEmbedProviderSources(sources.toReversed()).map(({ provider }) => provider)).toEqual(
       expected,
+    );
+  });
+
+  it('orders available direct providers independently of response order and track count', () => {
+    const expected = [
+      'videohub-streaming',
+      'filmix-streaming',
+      'veoveo-streaming',
+      'aniliberty-streaming',
+      'unknown-a',
+      'unknown-z',
+    ];
+    const sources = expected.map((provider) => ({
+      sourceRef: provider,
+      provider,
+      label: provider,
+      kind: 'hls' as const,
+      url: `https://video.example/${provider}.m3u8`,
+      availability: 'available' as const,
+      browserSupported: true,
+    }));
+    const duplicate = { ...sources[0], sourceRef: 'videohub:alternate-quality' };
+
+    expect(getDirectProviderSources(sources).map(({ provider }) => provider)).toEqual(expected);
+    expect(
+      getDirectProviderSources([duplicate, ...sources.toReversed()]).map(
+        ({ provider }) => provider,
+      ),
+    ).toEqual(expected);
+    expect(getDirectProviderSources(sources.slice(1)).map(({ provider }) => provider)).toEqual(
+      expected.slice(1),
     );
   });
 
