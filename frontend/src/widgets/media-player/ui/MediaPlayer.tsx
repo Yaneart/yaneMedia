@@ -228,6 +228,9 @@ export function MediaPlayer({
 
         {activeEmbedSource && status !== 'error' && (
           <iframe
+            referrerPolicy={
+              activeEmbedSource.provider === 'aderom-streaming' ? 'no-referrer' : undefined
+            }
             src={activeEmbedSource.url}
             title={`Плеер ${activeEmbedSource.label}: ${mediaTitle}`}
             className="absolute inset-0 z-0 size-full border-0"

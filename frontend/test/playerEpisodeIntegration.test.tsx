@@ -434,6 +434,18 @@ test('unknown embed validation permits user-initiated iframe loading', async () 
   await waitFor(() => expect(document.querySelector('iframe')?.src).toBe(catalog.sources[0]!.url));
 });
 
+test('Aderom loads without sending the app address as its referrer', async () => {
+  globalThis.fetch = mock(() => new Promise<Response>(() => {}));
+  const { view, tree, catalog } = mount('embed', false, false);
+  Object.assign(catalog.sources[0]!, { provider: 'aderom-streaming', label: 'Aderom' });
+  view.rerender(tree());
+  fireEvent.click(screen.getByRole('button', { name: 'Запустить Aderom' }));
+  view.rerender(tree());
+  await waitFor(() =>
+    expect(document.querySelector('iframe')?.getAttribute('referrerpolicy')).toBe('no-referrer'),
+  );
+});
+
 test('generic Kodik remains the only embed and keeps navigation inside its own player', async () => {
   globalThis.fetch = mock(() => new Promise<Response>(() => {}));
   const { view, tree, client, catalog } = mount('embed');
@@ -458,6 +470,7 @@ test('generic Kodik remains the only embed and keeps navigation inside its own p
     view.rerender(tree());
   });
   expect(document.querySelector('iframe')?.src).toBe(generic.url);
+  expect(document.querySelector('iframe')?.hasAttribute('referrerpolicy')).toBe(false);
   expect(document.querySelector('.media-player-frame details')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Kodik', exact: true }));
   expect(
