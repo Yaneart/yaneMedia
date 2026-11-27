@@ -12,6 +12,7 @@ export type MediaCardProps = {
   favoriteDisabled?: boolean;
   onFavoriteChange: () => void;
   posterOverlay?: ReactNode;
+  metadataLabel?: string;
 };
 
 export function MediaCard({
@@ -21,6 +22,7 @@ export function MediaCard({
   favoriteDisabled = false,
   onFavoriteChange,
   posterOverlay,
+  metadataLabel,
 }: MediaCardProps) {
   const [failedPosterUrl, setFailedPosterUrl] = useState<string | null>(null);
 
@@ -33,7 +35,9 @@ export function MediaCard({
   const poster = media.poster;
   const canShowPoster = poster !== undefined && poster.url !== failedPosterUrl;
 
-  const metadata = [media.year, media.rating?.value].filter((value) => value !== undefined);
+  const metadata = [metadataLabel, media.year, media.rating?.value].filter(
+    (value) => value !== undefined,
+  );
   const FavoriteStateIcon = isFavorite ? FavoriteFilledIcon : FavoriteIcon;
 
   return (
@@ -41,7 +45,7 @@ export function MediaCard({
       <MediaLink
         mediaRef={media.mediaRef}
         summary={media}
-        aria-label={`Открыть ${media.title}`}
+        aria-label={`Открыть ${media.title}${metadataLabel ? `, ${metadataLabel}` : ''}`}
         className={[
           'group/card block w-full min-w-0 text-left',
           'transition-transform duration-200 ease-out',

@@ -23,6 +23,7 @@ import { ReleasePosterOverlay } from './ReleasePosterOverlay';
 type ReleaseDto = MediaSummaryDto & {
   releaseDate?: string;
   nextEpisodeAt?: string;
+  seasonNumber?: number;
 };
 type ReleasePage = { items: ReleaseDto[]; hasMore: boolean; partial: boolean };
 const categories: { value: MediaType; label: string; icon: ComponentType<IconProps> }[] = [
@@ -166,6 +167,11 @@ export function ReleasesPage({ schedule = false }: { schedule?: boolean }) {
                   <MediaCard
                     key={item.mediaRef}
                     media={mapMediaSummary(item)}
+                    metadataLabel={
+                      item.seasonNumber && item.seasonNumber > 1
+                        ? `${item.seasonNumber} сезон`
+                        : undefined
+                    }
                     isFavorite={favorites.isFavorite(item.mediaRef)}
                     favoriteDisabled={
                       !favorites.canUpdateFavorites || favorites.isFavoriteUpdating(item.mediaRef)

@@ -36,6 +36,21 @@ describe('release pagination', () => {
     expect(result.hasMore).toBe(true);
     expect(result.partial).toBe(true);
   });
+
+  it('exhausts the higher-priority source before filling the page from the next one', async () => {
+    const latest = jest.fn(async (page: number) => ({
+      items: page === 1 ? items(0, 20) : items(20, 6),
+      hasMore: page === 1,
+      partial: false,
+    }));
+    const older = jest.fn(async () => ({ items: items(25, 11), hasMore: false, partial: false }));
+    const first = await paginateReleases(1, [latest, older]);
+    expect(older).not.toHaveBeenCalled();
+    expect(first.hasMore).toBe(true);
+    const second = await paginateReleases(2, [latest, older]);
+    expect(second.hasMore).toBe(false);
+    expect([...first.items, ...second.items]).toEqual(items(0, 36));
+  });
   it('returns a shorter page only at the end and hides load more at an exact boundary', async () => {
     const fetchPage = async () => ({ items: items(0, 30), hasMore: false, partial: false });
     expect((await paginateReleases(2, fetchPage)).items).toHaveLength(6);
