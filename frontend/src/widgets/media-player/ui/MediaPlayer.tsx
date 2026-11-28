@@ -29,6 +29,7 @@ export type MediaPlayerProps = {
   backdrop?: MediaArtwork;
   source?: MediaSourceOption;
   isStarted: boolean;
+  isSelectingSource?: boolean;
   shouldAutoPlay: boolean;
   initialPositionSeconds: number;
   status: MediaPlayerStatus;
@@ -110,6 +111,7 @@ export function MediaPlayer({
   backdrop,
   source,
   isStarted,
+  isSelectingSource = false,
   shouldAutoPlay,
   initialPositionSeconds,
   status,
@@ -289,7 +291,7 @@ export function MediaPlayer({
                 />
               )}
 
-              {source && sourceIssueContent && (
+              {source && sourceIssueContent && !isSelectingSource && (
                 <ErrorState
                   variant="player"
                   title={sourceIssueContent.title}
@@ -307,7 +309,7 @@ export function MediaPlayer({
                   <IconButton
                     size="custom"
                     variant="bare"
-                    aria-label={`Запустить ${source.label}`}
+                    aria-label={isSelectingSource ? 'Смотреть' : `Запустить ${source.label}`}
                     className={[
                       'size-16 rounded-full border border-white/30 bg-black/45 text-white',
                       'backdrop-blur-sm hover:border-watermark/80 hover:bg-watermark/25',
@@ -318,8 +320,12 @@ export function MediaPlayer({
                     <PlayIcon className="size-7" />
                   </IconButton>
 
-                  <p className="mt-3 font-semibold text-white">{source.label}</p>
-                  <p className="mt-1 text-caption text-white/70">{getSourceDescription(source)}</p>
+                  <p className="mt-3 font-semibold text-white">
+                    {isSelectingSource ? 'Смотреть' : source.label}
+                  </p>
+                  <p className="mt-1 min-h-lh text-caption text-white/70">
+                    {!isSelectingSource && getSourceDescription(source)}
+                  </p>
                 </div>
               )}
 

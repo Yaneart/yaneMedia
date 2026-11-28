@@ -60,10 +60,11 @@ export function SearchPage() {
     setSearchParams(createSearchParams(searchQuery));
   };
 
+  const hasSearchQuery = Boolean(normalizedSearchValue);
   const displayedQuery = resultFilters?.query ?? urlQuery;
   const isPreviousResult = isPreviousQueryResult || isSearchDraftPending;
-  const isUpdating = Boolean(normalizedSearchValue) && (isQueryUpdating || isSearchDraftPending);
-  const status = !normalizedSearchValue
+  const isUpdating = hasSearchQuery && (isQueryUpdating || isSearchDraftPending);
+  const status = !hasSearchQuery
     ? 'idle'
     : isSearchDraftPending && searchStatus !== 'success'
       ? 'loading'
@@ -88,7 +89,7 @@ export function SearchPage() {
       : '';
 
   return (
-    <section className="space-y-6" aria-busy={status === 'loading' || isUpdating}>
+    <section className="space-y-4 sm:space-y-6" aria-busy={status === 'loading' || isUpdating}>
       <p role="status" aria-atomic="true" className="sr-only">
         {searchResultsAnnouncement}
       </p>
@@ -96,7 +97,7 @@ export function SearchPage() {
       <header
         className={[
           'relative isolate overflow-hidden rounded-card border border-context-border',
-          'bg-linear-to-br from-watermark/38 via-watermark/26 to-watermark/32 p-2 shadow-surface sm:p-3',
+          'bg-linear-to-br from-watermark/38 via-watermark/26 to-watermark/32 p-1.5 shadow-surface sm:p-3',
         ].join(' ')}
       >
         <div
@@ -110,54 +111,56 @@ export function SearchPage() {
         <div
           className={[
             'relative z-10 grid rounded-card border border-context-border/80 bg-surface/35',
-            'px-5 py-6 sm:px-7 sm:py-7',
+            'px-3 py-3 sm:px-7 sm:py-7',
             'lg:grid lg:grid-cols-[minmax(18rem,0.75fr)_minmax(28rem,1.25fr)]',
             'lg:items-center lg:gap-10 lg:px-10 lg:py-8 wide:media-search-columns',
           ].join(' ')}
         >
           <div className="relative">
-            <p className="text-caption font-semibold tracking-[0.14em] text-accent-text uppercase">
+            <p className="text-xs font-semibold tracking-[0.14em] text-accent-text uppercase sm:text-caption">
               Поиск по каталогу
             </p>
 
             <h1
               data-page-heading
               tabIndex={-1}
-              className="mt-2 text-2xl font-semibold tracking-tight text-text-primary sm:text-3xl"
+              className="mt-1 text-2xl font-semibold tracking-tight text-text-primary sm:mt-2 sm:text-3xl"
             >
               Что будем смотреть?
             </h1>
 
-            <p className="mt-2 max-w-md text-body text-text-secondary">
+            <p className="mt-1 max-w-md text-sm text-text-secondary sm:mt-2 sm:text-body">
               Фильмы, сериалы и аниме — в одном поиске.
             </p>
           </div>
 
-          <div className="relative mt-5 lg:mt-0">
+          <div className="relative mt-2.5 sm:mt-5 lg:mt-0">
             <SearchInput
               data-page-search
               aria-label="Название произведения"
               value={searchValue}
               maxLength={maximumMediaSearchQueryLength}
               placeholder="Введите название"
-              className="wide:min-h-12"
+              className="max-sm:text-base wide:min-h-12"
               onChange={(event) => setSearchValue(event.currentTarget.value)}
             />
 
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <span className="text-caption text-text-secondary">Попробуйте:</span>
+            <div className="mt-2 flex flex-wrap items-center gap-1 sm:mt-3 sm:gap-2">
+              <span className="text-xs text-text-secondary sm:text-caption">Попробуйте:</span>
 
-              {searchSuggestions.map((suggestion) => (
-                <Button
-                  key={suggestion}
-                  variant="ghost"
-                  size="small"
-                  className="rounded-full bg-watermark/10 text-text-primary hover:bg-watermark/20"
-                  onClick={() => startSearch(suggestion)}
-                >
-                  {suggestion}
-                </Button>
-              ))}
+              <div className="flex items-center gap-1 sm:gap-2">
+                {searchSuggestions.map((suggestion) => (
+                  <Button
+                    key={suggestion}
+                    variant="ghost"
+                    size="small"
+                    className="rounded-full bg-watermark/10 whitespace-nowrap text-text-primary hover:bg-watermark/20 max-sm:px-1.5 max-sm:text-xs"
+                    onClick={() => startSearch(suggestion)}
+                  >
+                    {suggestion}
+                  </Button>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -209,16 +212,18 @@ export function SearchPage() {
 
       {status === 'success' && results.length > 0 && (
         <div>
-          <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div className="mb-3 flex items-center justify-between gap-2 sm:mb-5 sm:items-end sm:gap-3">
             <div>
-              <p className="text-caption font-semibold tracking-wide text-accent-text uppercase">
+              <p className="text-xs font-semibold tracking-wide text-accent-text uppercase sm:text-caption">
                 Результаты поиска
               </p>
 
-              <h2 className="mt-1 text-heading text-text-primary">«{displayedQuery}»</h2>
+              <h2 className="sr-only sm:not-sr-only sm:mt-1 sm:text-heading sm:text-text-primary">
+                «{displayedQuery}»
+              </h2>
             </div>
 
-            <p className="w-fit rounded-full bg-watermark/10 px-3 py-1.5 text-caption text-text-secondary">
+            <p className="w-fit rounded-full bg-watermark/10 px-2 py-1 text-xs text-text-secondary sm:px-3 sm:py-1.5 sm:text-caption">
               Найдено: {results.length}
             </p>
           </div>

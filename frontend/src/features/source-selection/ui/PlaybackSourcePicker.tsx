@@ -10,6 +10,7 @@ import {
 } from '../model/sourceSelection';
 
 const labels = {
+  automatic: 'Авто',
   source: '\u0418\u0441\u0442\u043e\u0447\u043d\u0438\u043a',
   chooseSource:
     '\u0412\u044b\u0431\u0440\u0430\u0442\u044c \u0438\u0441\u0442\u043e\u0447\u043d\u0438\u043a',
@@ -31,6 +32,7 @@ type PlaybackSourcePickerProps = {
   torrentPanel?: (close: () => void) => ReactNode;
   align?: 'start' | 'end';
   isLoading?: boolean;
+  isSelectingSource?: boolean;
 };
 
 const providerStyles: Record<string, string> = {
@@ -80,8 +82,9 @@ export function PlaybackSourcePicker({
   torrentPanel,
   align = 'start',
   isLoading = false,
+  isSelectingSource = false,
 }: PlaybackSourcePickerProps) {
-  const selectedLabel = selectedSource?.label ?? null;
+  const selectedLabel = isSelectingSource ? labels.automatic : selectedSource?.label;
   const embedProviders = getEmbedProviderSources(embedSources);
   const directProviders = getDirectProviderSources(directSources);
   const directSelected =
@@ -150,7 +153,7 @@ export function PlaybackSourcePicker({
           <DownIcon aria-hidden="true" className="ml-auto size-4 shrink-0 text-text-secondary" />
         </span>
       }
-      triggerLabel={selectedLabel ?? labels.source}
+      triggerLabel={isSelectingSource ? labels.chooseSource : (selectedLabel ?? labels.source)}
       triggerVariant="secondary"
       triggerSize="custom"
       triggerClassName="min-h-10 w-full justify-between rounded-control border border-border bg-control px-3"

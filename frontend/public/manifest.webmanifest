@@ -1,0 +1,15 @@
+{
+  "id": "/",
+  "name": "yaneMedia",
+  "short_name": "yaneMedia",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

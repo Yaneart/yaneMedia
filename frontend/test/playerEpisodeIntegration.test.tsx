@@ -92,7 +92,13 @@ function response(sources: MediaSourceOption[] = []) {
     { headers: { 'Content-Type': 'text/event-stream' } },
   );
 }
-function mount(kind: 'mp4' | 'embed' = 'mp4', anime = false, started = true, confirmed = true) {
+function mount(
+  kind: 'mp4' | 'embed' = 'mp4',
+  anime = false,
+  started = true,
+  confirmed = true,
+  pending = false,
+) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: Infinity } },
   });
@@ -166,7 +172,7 @@ function mount(kind: 'mp4' | 'embed' = 'mp4', anime = false, started = true, con
         canonicalMappingVerified: true,
       }))
     : [];
-  const tree = () => (
+  const tree = (availabilityPending = pending) => (
     <QueryClientProvider client={client}>
       <MemoryRouter>
         <AuthContext
@@ -182,7 +188,7 @@ function mount(kind: 'mp4' | 'embed' = 'mp4', anime = false, started = true, con
             animeSeasonChain={chain as any}
             onAnimeSeasonChange={noop}
             availability={catalog}
-            availabilityPending={false}
+            availabilityPending={availabilityPending}
             availabilityStatus="ready"
           />
         </AuthContext>
@@ -461,6 +467,24 @@ test('a late direct source becomes the default only for the selected episode', a
     sourceRef: direct.sourceRef,
     episode: { seasonNumber: 1, episodeNumber: 1 },
   });
+});
+
+test('the launch controls keep a neutral label until automatic source discovery settles', () => {
+  globalThis.fetch = mock(() => new Promise<Response>(() => {}));
+  const { view, tree, catalog } = mount('embed', false, false, true, true);
+  const play = screen.getByRole('button', { name: 'Смотреть' });
+  const picker = screen.getByRole('button', { name: 'Выбрать источник' });
+  expect(within(picker).getByText('Авто')).toBeDefined();
+
+  const direct = { ...source(1, 1), provider: 'videohub-streaming', label: 'VideoHUB' };
+  catalog.episodes[0]!.sources.push(direct);
+  view.rerender(tree());
+  expect(screen.getByRole('button', { name: 'Смотреть' })).toBe(play);
+  expect(screen.getByRole('button', { name: 'Выбрать источник' })).toBe(picker);
+
+  view.rerender(tree(false));
+  expect(screen.getByRole('button', { name: 'Запустить VideoHUB' })).toBe(play);
+  expect(screen.getByRole('button', { name: 'VideoHUB' })).toBe(picker);
 });
 
 test.each(['manual', 'playing', 'restored'] as const)(
@@ -803,7 +827,7 @@ test('first Play keeps its provider when resolved IDs replace catalog sources', 
   let release!: (value: Response) => void;
   globalThis.fetch = mock(() => new Promise<Response>((resolve) => (release = resolve)));
   const { player, view, tree, catalog } = mount('mp4', false, false, false);
-  fireEvent.click(screen.getByRole('button', { name: 'Запустить Fixture' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Смотреть' }));
   expect(player()).toBeNull();
   catalog.episodes[0]!.sources.unshift({
     ...source(1, 1),

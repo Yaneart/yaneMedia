@@ -682,6 +682,7 @@ export function MediaView({
   );
   const usesPlayerEpisodes = playbackMode === 'direct' && usesDirectEpisodes;
   const sourcesPending = availabilityPending || directModePending;
+  const isInitialSourceSearch = sourcesPending && sourceSearchSettledMediaRef !== media.mediaRef;
   const hasToolbarControls = hasPlaybackSources && (media.type === 'movie' || usesDirectEpisodes);
   const initialToolbarLoadComplete = hasToolbarControls || !sourcesPending;
   const isToolbarLoading =
@@ -863,6 +864,13 @@ export function MediaView({
       : retainedDirectPlayback !== null ||
         (sessionSourceMatches &&
           (!usesPlayerEpisodes || hasSameEpisode(sessionPlaybackEpisode, selectedPlaybackEpisode)));
+  const isSelectingSource =
+    isInitialSourceSearch &&
+    selectedPlaybackMode === null &&
+    !isPlayerStarted &&
+    !localSelected &&
+    !torrentSelected &&
+    selectedSource?.sourceRef !== savedProgress?.sourceRef;
   // Catalog episode URLs may still be redirectors. The episode lookup confirms
   // the playback URL, including progressive results from that lookup.
   const directSourceUnconfirmed =
@@ -1537,9 +1545,8 @@ export function MediaView({
                           openRequest={sourcePickerRequest}
                           onEmbedSelect={selectEmbedSource}
                           onDirectSelect={selectDirectProvider}
-                          isLoading={
-                            sourcesPending && sourceSearchSettledMediaRef !== media.mediaRef
-                          }
+                          isLoading={isInitialSourceSearch}
+                          isSelectingSource={isSelectingSource}
                           align="end"
                         />
                       </div>
@@ -1608,6 +1615,7 @@ export function MediaView({
                       : undefined
                 }
                 isStarted={isPlayerStarted}
+                isSelectingSource={isSelectingSource}
                 shouldAutoPlay={localSelected ? !localPaused : mediaSession?.state === 'playing'}
                 initialPositionSeconds={
                   localSelected

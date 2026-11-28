@@ -161,7 +161,7 @@ export function MediaCatalog({ type, title, filters }: MediaCatalogProps) {
       <header
         className={[
           'relative isolate z-20 rounded-card border border-context-border',
-          'bg-linear-to-br from-watermark/38 via-watermark/26 to-watermark/32 p-2 shadow-surface sm:p-3',
+          'bg-linear-to-br from-watermark/38 via-watermark/26 to-watermark/32 p-1.5 shadow-surface sm:p-3',
         ].join(' ')}
       >
         <div
@@ -175,42 +175,42 @@ export function MediaCatalog({ type, title, filters }: MediaCatalogProps) {
         <div
           className={[
             'relative z-10 grid rounded-card border border-context-border/80 bg-surface/35',
-            'px-5 py-6 sm:px-7 sm:py-7',
+            'px-3 py-3 sm:px-7 sm:py-7',
             'xl:grid xl:grid-cols-[minmax(16rem,0.65fr)_minmax(34rem,1.35fr)]',
             'xl:items-center xl:gap-10 xl:px-10 xl:py-8 wide:media-search-columns',
           ].join(' ')}
         >
           <div className="relative">
-            <p className="text-caption font-semibold tracking-[0.14em] text-accent-text uppercase">
+            <p className="text-xs font-semibold tracking-[0.14em] text-accent-text uppercase sm:text-caption">
               Каталог yaneMedia
             </p>
 
             <h1
               data-page-heading
               tabIndex={-1}
-              className="mt-2 text-2xl font-semibold tracking-tight text-text-primary sm:text-3xl"
+              className="mt-1 text-2xl font-semibold tracking-tight text-text-primary sm:mt-2 sm:text-3xl"
             >
               {title}
             </h1>
 
-            <p className="mt-2 max-w-md text-body text-text-secondary">
+            <p className="mt-1 max-w-md text-sm text-text-secondary sm:mt-2 sm:text-body">
               Подборки, поиск и фильтры относятся только к разделу «{title}».
             </p>
           </div>
 
-          <div className="relative mt-5 xl:mt-0">
+          <div className="relative mt-2.5 sm:mt-5 xl:mt-0">
             <SearchInput
               data-page-search
               aria-label={`Поиск: ${title}`}
               value={searchValue}
               maxLength={maximumMediaSearchQueryLength}
               placeholder="Поиск по каталогу"
-              className="wide:min-h-12"
+              className="max-sm:text-base wide:min-h-12"
               onChange={(event) => setSearchValue(event.currentTarget.value)}
             />
             <Button
               variant="secondary"
-              className="mt-3 w-full justify-between sm:hidden"
+              className="mt-2 w-full justify-between sm:hidden"
               aria-expanded={areMobileFiltersOpen}
               aria-controls={filtersPanelId}
               onClick={() => setAreMobileFiltersOpen((current) => !current)}
@@ -235,7 +235,7 @@ export function MediaCatalog({ type, title, filters }: MediaCatalogProps) {
             <div
               id={filtersPanelId}
               className={[
-                'mt-3 grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-center',
+                'mt-2 grid-cols-2 gap-2 sm:mt-3 sm:flex-wrap sm:items-center sm:gap-3',
                 'xl:flex-nowrap wide:flex-wrap',
                 areMobileFiltersOpen ? 'grid' : 'hidden sm:flex',
               ].join(' ')}
@@ -286,7 +286,7 @@ export function MediaCatalog({ type, title, filters }: MediaCatalogProps) {
       )}
 
       {isResultsMode && (
-        <div className="mt-6 mb-5 flex min-h-8 flex-wrap items-center justify-between gap-3">
+        <div className="mt-4 mb-3 flex min-h-8 flex-wrap items-center justify-between gap-2 sm:mt-6 sm:mb-5 sm:gap-3">
           <p className="text-caption text-text-secondary">
             Показано: <span className="font-semibold text-text-primary">{searchItems.length}</span>
           </p>
@@ -391,7 +391,7 @@ export function MediaCatalog({ type, title, filters }: MediaCatalogProps) {
             onRetry={retry}
           />
         ) : (
-          <div className="mt-8">
+          <div className="mt-5 sm:mt-8 md:mt-10">
             <MediaCatalogRowsSkeleton title={title} />
           </div>
         )
@@ -407,7 +407,7 @@ export function MediaCatalog({ type, title, filters }: MediaCatalogProps) {
           className="min-h-[60vh]"
         />
       ) : (
-        <div className="mt-8 space-y-10 md:mt-10">
+        <div className="mt-5 space-y-10 sm:mt-8 md:mt-10">
           {catalog.collections.map((collection) => (
             <section key={collection.id} aria-labelledby={`collection-${collection.id}`}>
               <h2
