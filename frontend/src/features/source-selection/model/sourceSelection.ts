@@ -58,9 +58,9 @@ const compareEmbedProviders = compareByProviderPriority([
 
 const compareDirectProviders = compareByProviderPriority([
   'videohub-streaming',
-  'filmix-streaming',
-  'veoveo-streaming',
   'aniliberty-streaming',
+  'veoveo-streaming',
+  'filmix-streaming',
 ]);
 
 function getDirectEpisodeKey(episode: MediaSourceEpisodeRef) {

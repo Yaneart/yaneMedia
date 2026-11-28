@@ -20,20 +20,10 @@ export function LoadingState({ label, variant = 'section', className = '' }: Loa
         className,
       ].join(' ')}
     >
-      <div aria-hidden="true" className="pointer-events-none absolute inset-0">
-        <span
-          className={[
-            'loading-state-glow absolute top-1/2 left-1/2 h-96 w-[32rem] -translate-x-1/2 -translate-y-1/2',
-            'sm:h-[36rem] sm:w-[56rem]',
-          ].join(' ')}
-        />
-        <span
-          className={[
-            'loading-state-glow absolute top-1/2 left-1/2 h-60 w-80 -translate-x-1/2 -translate-y-1/2',
-            'opacity-80 sm:h-80 sm:w-[40rem]',
-          ].join(' ')}
-        />
-      </div>
+      <span
+        aria-hidden="true"
+        className="loading-state-glow pointer-events-none absolute inset-0 m-auto h-full max-h-96 w-full max-w-lg sm:max-h-[36rem] sm:max-w-4xl"
+      />
 
       <Spinner size="large" label={label} className="relative z-10" />
     </div>

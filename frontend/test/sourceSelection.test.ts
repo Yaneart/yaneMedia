@@ -64,9 +64,9 @@ describe('source-less episode catalogs', () => {
   it('orders available direct providers independently of response order and track count', () => {
     const expected = [
       'videohub-streaming',
-      'filmix-streaming',
-      'veoveo-streaming',
       'aniliberty-streaming',
+      'veoveo-streaming',
+      'filmix-streaming',
       'unknown-a',
       'unknown-z',
     ];

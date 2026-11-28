@@ -635,9 +635,9 @@ test('direct source picker has one button per provider and native tracks stay wi
   const direct = within(screen.getByRole('region', { name: 'Прямое видео' }));
   expect(direct.getAllByRole('button').map((b) => b.textContent?.trim())).toEqual([
     'VideoHUB',
-    'Filmix',
-    'VeoVeo',
     'AniLiberty',
+    'VeoVeo',
+    'Filmix',
   ]);
   expect(direct.queryByText('Качество')).toBeNull();
   expect(direct.queryByText('Original')).toBeNull();
