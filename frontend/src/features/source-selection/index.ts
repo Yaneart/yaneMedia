@@ -10,6 +10,7 @@ export {
   getDirectSourceForTrackPreference,
   getDirectEpisodeDisplayNumber,
   getNextDirectEpisode,
+  getDirectProviderSources,
   getDirectQualityKey,
   getDirectQualityOptions,
   getDirectTrackKey,
@@ -23,4 +24,5 @@ export type {
   DirectTrackOption,
   PlaybackMode,
   PlaybackSourceCatalog,
+  PlaybackSourcePanel,
 } from './model/sourceSelection';

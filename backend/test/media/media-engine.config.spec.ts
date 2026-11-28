@@ -8,7 +8,6 @@ describe('Media Engine configuration', () => {
       'tmdb-official',
       'shikimori-graphql',
       'tmdb',
-      'kinobd',
       'cinemeta',
       'shikimori',
       'anilist',
@@ -41,10 +40,7 @@ describe('Media Engine configuration', () => {
     expect(engine.getStreamingProviders().map(({ name }) => name)).toEqual([
       'kodik-streaming',
       'filmix-streaming',
-      'rutube-streaming',
       'aderom-streaming',
-      'initem-streaming',
-      'kinobd-streaming',
       'aniliberty-streaming',
       'veoveo-streaming',
       'veoveo-embed',
@@ -93,14 +89,6 @@ describe('Media Engine configuration', () => {
       });
       expect(engine.getStreamingProviders().map(({ name }) => name)).toContain('filmix-streaming');
     }
-  });
-
-  it('enables token-free Rutube for movies', async () => {
-    const engine = await createMediaEngine();
-    const providers = engine.getStreamingProviders();
-    expect(
-      providers.find(({ name }) => name === 'rutube-streaming')?.capabilities.mediaTypes,
-    ).toEqual(['movie']);
   });
 
   it('registers the three direct balancers without DDBB or serialized credentials', async () => {

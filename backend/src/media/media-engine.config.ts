@@ -21,7 +21,6 @@ const PROVIDER_TIMEOUT_MS = 5_000;
 const PRIMARY_METADATA_TIMEOUT_MS = 2_000;
 const CINEMETA_TIMEOUT_MS = 15_000;
 const STREAMING_PROVIDER_TIMEOUT_MS = 10_000;
-const RUTUBE_STREAMING_PROVIDER_TIMEOUT_MS = 20_000;
 const VIDEOHUB_STREAMING_PROVIDER_TIMEOUT_MS = 20_000;
 const IDENTITY_TIMEOUT_MS = 10_000;
 const IDENTITY_SOURCE_TIMEOUT_MS = 5_000;
@@ -47,11 +46,7 @@ export async function createMediaEngine(
       allohaStreamingProvider,
       mirageStreamingProvider,
       filmixStreamingProvider,
-      initemStreamingProvider,
-      kinobdProvider,
-      kinobdStreamingProvider,
       kodikStreamingProvider,
-      rutubeStreamingProvider,
       shikimoriGraphqlProvider,
       shikimoriProvider,
       shikimoriCinemaIdentitySource,
@@ -106,10 +101,7 @@ export async function createMediaEngine(
         ]
       : []),
     ...keyedStreamingProviders,
-    rutubeStreamingProvider(),
     aderomStreamingProvider(),
-    initemStreamingProvider(),
-    kinobdStreamingProvider({ playerValidationLimit: 0 }),
     withAnimeStreamingTitles(aniLibertyStreamingProvider(), (ids, signal) =>
       engine.getDetails({ ids, type: 'anime', language: 'ru' }, { signal }),
     ),
@@ -128,7 +120,6 @@ export async function createMediaEngine(
     timeoutMs: Math.max(
       CINEMETA_TIMEOUT_MS,
       STREAMING_PROVIDER_TIMEOUT_MS,
-      RUTUBE_STREAMING_PROVIDER_TIMEOUT_MS,
       VIDEOHUB_STREAMING_PROVIDER_TIMEOUT_MS,
     ),
     circuitBreaker: { recoveryTimeoutMs: CIRCUIT_RECOVERY_TIMEOUT_MS },
@@ -136,7 +127,6 @@ export async function createMediaEngine(
       'tmdb-official': PRIMARY_METADATA_TIMEOUT_MS,
       'shikimori-graphql': PRIMARY_METADATA_TIMEOUT_MS,
       tmdb: Math.min(PROVIDER_TIMEOUT_MS, 1_500),
-      kinobd: Math.min(PROVIDER_TIMEOUT_MS, 1_000),
       cinemeta: CINEMETA_TIMEOUT_MS,
       shikimori: PROVIDER_TIMEOUT_MS,
       anilist: PROVIDER_TIMEOUT_MS,
@@ -144,8 +134,6 @@ export async function createMediaEngine(
       wikidata: PROVIDER_TIMEOUT_MS,
       'kodik-streaming': STREAMING_PROVIDER_TIMEOUT_MS,
       'filmix-streaming': STREAMING_PROVIDER_TIMEOUT_MS,
-      'rutube-streaming': RUTUBE_STREAMING_PROVIDER_TIMEOUT_MS,
-      'kinobd-streaming': STREAMING_PROVIDER_TIMEOUT_MS,
       'collaps-streaming': STREAMING_PROVIDER_TIMEOUT_MS,
       'alloha-streaming': STREAMING_PROVIDER_TIMEOUT_MS,
       'mirage-streaming': STREAMING_PROVIDER_TIMEOUT_MS,
@@ -154,7 +142,6 @@ export async function createMediaEngine(
       'veoveo-embed': STREAMING_PROVIDER_TIMEOUT_MS,
       'videohub-streaming': VIDEOHUB_STREAMING_PROVIDER_TIMEOUT_MS,
       'aderom-streaming': STREAMING_PROVIDER_TIMEOUT_MS,
-      'initem-streaming': STREAMING_PROVIDER_TIMEOUT_MS,
     },
     cache,
     identityResolver: new IdentityResolver(
@@ -178,7 +165,6 @@ export async function createMediaEngine(
         userAgent: readOptionalValue(env.MEDIA_ENGINE_SHIKIMORI_USER_AGENT),
       }),
       tmdbProvider(metadataRequest),
-      kinobdProvider(metadataRequest),
       cinemetaProvider(metadataRequest),
       shikimoriProvider(metadataRequest),
       aniListProvider(metadataRequest),

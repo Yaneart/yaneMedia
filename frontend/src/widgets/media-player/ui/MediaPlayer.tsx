@@ -43,6 +43,7 @@ export type MediaPlayerProps = {
     reason?: 'periodic' | 'metadata' | 'seek' | 'pause' | 'ended',
   ) => void;
   onRetry?: () => void;
+  onSelectAnotherSource?: () => void;
   errorDescription?: string;
   emptyState?: MediaPlayerEmptyState;
   embedded?: boolean;
@@ -119,6 +120,7 @@ export function MediaPlayer({
   onPause,
   onProgress,
   onRetry,
+  onSelectAnotherSource,
   errorDescription,
   emptyState,
   embedded = false,
@@ -193,6 +195,9 @@ export function MediaPlayer({
   }, [isStarted, source?.kind, theater]);
   const sourceIssue = source ? getMediaSourcePlaybackIssue(source) : null;
   const sourceIssueContent = sourceIssue ? playbackIssueContent[sourceIssue] : null;
+  const changeSourceAction = onSelectAnotherSource
+    ? { label: 'Выбрать другой источник', onClick: onSelectAnotherSource }
+    : undefined;
 
   const activeSource =
     source &&
@@ -293,6 +298,7 @@ export function MediaPlayer({
                   visualLabel={sourceIssueContent.visualLabel}
                   className={friendlyStateClassName}
                   tone="accent"
+                  secondaryAction={changeSourceAction}
                 />
               )}
 
@@ -343,6 +349,7 @@ export function MediaPlayer({
                   title="Не удалось загрузить плеер"
                   description={errorDescription ?? 'Проверьте подключение и попробуйте ещё раз.'}
                   onRetry={onRetry}
+                  secondaryAction={changeSourceAction}
                   retryLabel="Повторить"
                   visualLabel="Плеер недоступен"
                 />

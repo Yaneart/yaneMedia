@@ -6,6 +6,7 @@ import {
   getDirectProviderSources,
   getEmbedProviderSources,
   getPlaybackSourcePanel,
+  type PlaybackSourcePanel,
 } from '../model/sourceSelection';
 
 const labels = {
@@ -24,6 +25,7 @@ type PlaybackSourcePickerProps = {
   selectedSource?: MediaSourceOption;
   onEmbedSelect: (sourceRef: string) => void;
   onDirectSelect: (provider: string) => void;
+  openRequest?: { panel: PlaybackSourcePanel };
   torrentOpen?: boolean;
   onTorrentOpenChange?: (open: boolean) => void;
   torrentPanel?: (close: () => void) => ReactNode;
@@ -33,13 +35,10 @@ type PlaybackSourcePickerProps = {
 
 const providerStyles: Record<string, string> = {
   'aderom-streaming': 'playback-source-slate',
-  'initem-streaming': 'playback-source-cyan',
-  'kinobd-streaming': 'playback-source-sand',
   'veoveo-streaming': 'playback-source-indigo',
   'veoveo-embed': 'playback-source-blue',
   'videohub-streaming': 'playback-source-teal',
   'aniliberty-streaming': 'playback-source-pink',
-  'rutube-streaming': 'playback-source-coral',
   'collaps-streaming': 'playback-source-rose',
   'alloha-streaming': 'playback-source-emerald',
   'mirage-streaming': 'playback-source-violet',
@@ -75,6 +74,7 @@ export function PlaybackSourcePicker({
   selectedSource,
   onEmbedSelect,
   onDirectSelect,
+  openRequest,
   torrentOpen = false,
   onTorrentOpenChange,
   torrentPanel,
@@ -89,6 +89,7 @@ export function PlaybackSourcePicker({
     (selectedSource?.kind === 'hls' || selectedSource?.kind === 'mp4');
   const [popoverOpen, setPopoverOpen] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
+  const focusedRequest = useRef<PlaybackSourcePickerProps['openRequest']>(undefined);
   const [activePanel, setActivePanel] = useState<'players' | 'direct' | 'torrent'>(() =>
     getPlaybackSourcePanel(selectedSource),
   );
@@ -100,7 +101,18 @@ export function PlaybackSourcePicker({
     if (!popoverOpen) return;
     const panel = contentRef.current?.closest<HTMLElement>('.playback-source-popover');
     if (panel) panel.scrollTop = 0;
-  }, [popoverOpen, activePanel]);
+
+    if (!openRequest || focusedRequest.current === openRequest || openRequest.panel !== activePanel)
+      return;
+    const frame = requestAnimationFrame(() => {
+      focusedRequest.current = openRequest;
+      const content = contentRef.current;
+      const tab = content?.querySelector<HTMLButtonElement>('[role="tab"][aria-selected="true"]');
+      const firstSource = content?.querySelector<HTMLButtonElement>('section button');
+      (tab ?? firstSource)?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [popoverOpen, activePanel, openRequest]);
 
   useEffect(() => {
     if (!popoverOpen) setActivePanel(selectedPanel);
@@ -111,6 +123,12 @@ export function PlaybackSourcePicker({
     setActivePanel('torrent');
     setPopoverOpen(true);
   }, [torrentOpen]);
+
+  useEffect(() => {
+    if (!openRequest) return;
+    setActivePanel(openRequest.panel);
+    setPopoverOpen(true);
+  }, [openRequest]);
 
   return (
     <Popover

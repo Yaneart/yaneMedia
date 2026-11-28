@@ -607,23 +607,10 @@ describe('MediaService', () => {
     ]);
   });
 
-  it('omits known provider artwork placeholders and keeps real artwork', async () => {
+  it('omits the Shikimori artwork placeholder and keeps real artwork', async () => {
     const mediaEngine = {
       search: jest.fn().mockResolvedValue({
         results: [
-          {
-            item: {
-              id: 'kinobd-placeholder',
-              type: 'movie',
-              title: 'Missing KinoBD poster',
-              ids: { imdb: 'tt1000001' },
-              poster: {
-                url: 'https://kbd.so/no_image_poster.png',
-                width: 600,
-                height: 900,
-              },
-            },
-          },
           {
             item: {
               id: 'shikimori-placeholder',
@@ -658,7 +645,6 @@ describe('MediaService', () => {
     const results = await service.searchMedia({ title: 'Poster' });
 
     expect(results.map(({ poster }) => poster)).toEqual([
-      undefined,
       undefined,
       {
         url: 'https://images.example.com/poster.jpg',

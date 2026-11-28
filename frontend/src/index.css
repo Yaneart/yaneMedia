@@ -349,11 +349,6 @@
   --playback-source-light: #4177ba;
 }
 
-.playback-source-cyan {
-  --playback-source-dark: #67d4df;
-  --playback-source-light: #0e8496;
-}
-
 .playback-source-rose {
   --playback-source-dark: #ed93ac;
   --playback-source-light: #bd456e;
@@ -379,11 +374,6 @@
   --playback-source-light: #b85085;
 }
 
-.playback-source-coral {
-  --playback-source-dark: #f2988c;
-  --playback-source-light: #bd594e;
-}
-
 .playback-source-teal {
   --playback-source-dark: #72cbb6;
   --playback-source-light: #248a73;
@@ -397,11 +387,6 @@
 .playback-source-slate {
   --playback-source-dark: #b6becd;
   --playback-source-light: #64748b;
-}
-
-.playback-source-sand {
-  --playback-source-dark: #d9b892;
-  --playback-source-light: #996b42;
 }
 
 .playback-source-yellow {

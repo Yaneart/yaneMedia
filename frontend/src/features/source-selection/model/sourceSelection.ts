@@ -48,11 +48,8 @@ function compareByProviderPriority(providers: readonly string[]) {
 }
 
 const compareEmbedProviders = compareByProviderPriority([
-  'rutube-streaming',
   'kodik-streaming',
   'aderom-streaming',
-  'kinobd-streaming',
-  'initem-streaming',
   'alloha-streaming',
   'mirage-streaming',
   'collaps-streaming',

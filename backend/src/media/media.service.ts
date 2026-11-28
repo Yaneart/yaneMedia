@@ -41,10 +41,6 @@ import {
 
 export const MEDIA_ENGINE = Symbol('MEDIA_ENGINE');
 
-const PLACEHOLDER_ARTWORK_PATHS = [
-  '/no_image_poster.png',
-  '/assets/globals/missing_original.jpg',
-] as const;
 const ANIME_WORK_ID_SOURCES = [
   'aniList',
   'myAnimeList',
@@ -81,7 +77,7 @@ function isPlaceholderArtworkUrl(url: string): boolean {
   try {
     const pathname = new URL(url).pathname.toLowerCase();
 
-    return PLACEHOLDER_ARTWORK_PATHS.some((placeholderPath) => pathname.endsWith(placeholderPath));
+    return pathname.endsWith('/assets/globals/missing_original.jpg');
   } catch {
     return false;
   }

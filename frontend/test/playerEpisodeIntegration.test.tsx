@@ -446,6 +446,55 @@ test('Aderom loads without sending the app address as its referrer', async () =>
   );
 });
 
+test('a late direct source becomes the default only for the selected episode', async () => {
+  globalThis.fetch = mock(() => new Promise<Response>(() => {}));
+  const { view, tree, catalog } = mount('embed', false, false);
+  catalog.episodes.push(...availability([source(1, 2)]).episodes);
+  view.rerender(tree());
+  expect(screen.getByRole('button', { name: 'Запустить Fixture', exact: true })).toBeDefined();
+
+  const direct = { ...source(1, 1), provider: 'videohub-streaming', label: 'VideoHUB' };
+  catalog.episodes[0]!.sources.push(direct);
+  view.rerender(tree());
+  fireEvent.click(screen.getByRole('button', { name: 'Запустить VideoHUB' }));
+  expect(start.mock.calls.at(-1)?.[0]).toMatchObject({
+    sourceRef: direct.sourceRef,
+    episode: { seasonNumber: 1, episodeNumber: 1 },
+  });
+});
+
+test.each(['manual', 'playing', 'restored'] as const)(
+  'late direct discovery leaves the %s embed selected',
+  async (selection) => {
+    globalThis.fetch = mock(() => new Promise<Response>(() => {}));
+    const { view, tree, catalog } = mount('embed', false, selection === 'restored');
+
+    if (selection === 'manual') {
+      fireEvent.click(screen.getByRole('button', { name: 'Fixture', exact: true }));
+      fireEvent.click(within(screen.getByRole('region', { name: 'Плееры' })).getByRole('button'));
+    } else if (selection === 'playing') {
+      fireEvent.click(screen.getByRole('button', { name: 'Запустить Fixture' }));
+      view.rerender(tree());
+    }
+
+    catalog.episodes[0]!.sources.push({
+      ...source(1, 1),
+      provider: 'videohub-streaming',
+      label: 'VideoHUB',
+    });
+    view.rerender(tree());
+
+    if (selection === 'manual') {
+      fireEvent.click(screen.getByRole('button', { name: 'Запустить Fixture' }));
+      view.rerender(tree());
+    }
+    await waitFor(() =>
+      expect(document.querySelector('iframe')?.src).toBe(catalog.sources[0]!.url),
+    );
+    expect(document.querySelector('yane-player')).toBeNull();
+  },
+);
+
 test('generic Kodik remains the only embed and keeps navigation inside its own player', async () => {
   globalThis.fetch = mock(() => new Promise<Response>(() => {}));
   const { view, tree, client, catalog } = mount('embed');
@@ -794,6 +843,42 @@ test('before playback and after a fatal error no separate episode overlay appear
   expect(document.querySelector('.media-player-frame details')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Повторить', exact: true }));
   expect(player()).not.toBeNull();
+});
+
+test('the error action switches direct providers at the saved episode and position', async () => {
+  globalThis.fetch = mock(() => new Promise<Response>(() => {}));
+  const { view, tree, catalog, player } = mount();
+  const alternate = {
+    ...source(1, 1),
+    sourceRef: 'filmix:1:1',
+    provider: 'filmix-streaming',
+    label: 'Filmix',
+    url: 'https://fixture.test/filmix.mp4',
+  };
+  catalog.episodes[0]!.sources.push(alternate);
+  await act(async () => view.rerender(tree()));
+  const original = player();
+  await act(async () =>
+    original.dispatchEvent(
+      new CustomEvent('yp-error', {
+        detail: {
+          source: { id: original.descriptor.id, revision: original.descriptor.revision },
+          snapshot: { playback: 'error' },
+        },
+      }),
+    ),
+  );
+  expect(player()).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Выбрать другой источник' }));
+  const alternatives = within(screen.getByRole('region', { name: 'Прямое видео' }));
+  fireEvent.click(alternatives.getByRole('button', { name: 'Filmix' }));
+  expect(start.mock.calls.at(-1)?.[0]).toMatchObject({
+    sourceRef: alternate.sourceRef,
+    episode: { seasonNumber: 1, episodeNumber: 1 },
+    positionSeconds: 67,
+  });
+  await waitFor(() => expect(player()?.descriptor.src).toBe(alternate.url));
+  expect(player().options).toMatchObject({ positionSeconds: 67, intent: 'paused' });
 });
 
 test('late history cannot replace an explicitly selected native episode', async () => {

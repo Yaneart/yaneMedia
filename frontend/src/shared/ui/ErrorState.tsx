@@ -10,6 +10,7 @@ export type ErrorStateProps = {
   description?: string;
   onRetry?: () => void;
   retryLabel?: string;
+  secondaryAction?: { label: string; onClick: () => void };
   variant?: ErrorStateVariant;
   eyebrow?: string;
   visualCode?: string;
@@ -23,6 +24,7 @@ export function ErrorState({
   description = 'Попробуйте ещё раз немного позже.',
   onRetry,
   retryLabel = 'Повторить',
+  secondaryAction,
   variant = 'section',
   eyebrow = 'Связь прервана',
   visualCode = '!',
@@ -248,19 +250,27 @@ export function ErrorState({
           </p>
         )}
 
-        {onRetry && (
-          <Button
-            size={isPlayer ? 'small' : 'medium'}
-            variant={isPlayer ? 'bare' : 'secondary'}
-            className={
-              isPlayer
-                ? 'mt-3 border border-white/25 bg-white/10 text-white hover:bg-white/15'
-                : 'mt-4'
-            }
-            onClick={onRetry}
-          >
-            {retryLabel}
-          </Button>
+        {(onRetry || secondaryAction) && (
+          <div className={isPlayer ? 'mt-3 flex flex-wrap gap-2' : 'mt-4'}>
+            {[
+              ...(secondaryAction ? [secondaryAction] : []),
+              ...(onRetry ? [{ label: retryLabel, onClick: onRetry }] : []),
+            ].map(({ label, onClick }) => (
+              <Button
+                key={label}
+                size={isPlayer ? 'small' : 'medium'}
+                variant={isPlayer ? 'bare' : 'secondary'}
+                className={
+                  isPlayer
+                    ? 'border border-white/25 bg-white/10 text-white hover:bg-white/15'
+                    : undefined
+                }
+                onClick={onClick}
+              >
+                {label}
+              </Button>
+            ))}
+          </div>
         )}
       </div>
     </div>

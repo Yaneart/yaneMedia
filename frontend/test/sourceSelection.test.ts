@@ -37,7 +37,8 @@ describe('source-less episode catalogs', () => {
 
   it('keeps the same player order regardless of provider response order', () => {
     const expected = [
-      'rutube-streaming',
+      'kodik-streaming',
+      'aderom-streaming',
       'alloha-streaming',
       'mirage-streaming',
       'collaps-streaming',

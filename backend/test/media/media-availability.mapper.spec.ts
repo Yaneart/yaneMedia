@@ -206,7 +206,7 @@ describe('mapMediaAvailability', () => {
       options: [
         createOption({
           id: 'aggregate-kodik',
-          provider: 'kinobd-streaming',
+          provider: 'aggregate-provider',
           discovery: 'aggregate',
           player: { kind: 'embed', label: 'Kodik', provider: 'kodik' },
           translation: { title: 'Aggregate voice', type: 'dub' },

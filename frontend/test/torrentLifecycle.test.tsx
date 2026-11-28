@@ -511,9 +511,9 @@ describe('torrent user lifecycle', () => {
       embedSources: [
         {
           sourceRef: 'embed',
-          provider: 'rutube-streaming',
+          provider: 'kodik-streaming',
           kind: 'embed' as const,
-          label: 'Rutube',
+          label: 'Kodik',
           url: 'https://example.test/embed',
           availability: 'available' as const,
           browserSupported: true,
@@ -547,7 +547,7 @@ describe('torrent user lifecycle', () => {
     expect(
       screen.getByRole('tab', { name: 'Плееры', exact: true }).getAttribute('aria-selected'),
     ).toBe('true');
-    expect(screen.getByRole('button', { name: 'Rutube', exact: true })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Kodik', exact: true })).toBeDefined();
     view.unmount();
   });
 

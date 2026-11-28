@@ -55,6 +55,7 @@ import {
   getAvailableDirectSourceForPlaybackPreference,
   getAvailableDirectSourceForTrack,
   getDirectEpisodeDisplayNumber,
+  getDirectProviderSources,
   getDirectQualityKey,
   getDirectQualityOptions,
   getDirectTrackKey,
@@ -63,6 +64,7 @@ import {
   isDirectMediaSource,
   type DirectEpisodeOption,
   type PlaybackMode,
+  type PlaybackSourcePanel,
 } from '@/features/source-selection';
 import { MediaDescriptionPanel, MediaInfo } from '@/widgets/media-info';
 import {
@@ -327,6 +329,7 @@ export function MediaView({
   const accountKey = authState.status === 'authenticated' ? authState.user.email : authState.status;
   const queryClient = useQueryClient();
   const [torrentOpen, setTorrentOpen] = useState(false);
+  const [sourcePickerRequest, setSourcePickerRequest] = useState<{ panel: PlaybackSourcePanel }>();
   const local = useLocalTorrent(preferences);
   const stopLocal = local.stop;
   const [localSelected, setLocalSelected] = useState(
@@ -561,15 +564,6 @@ export function MediaView({
   );
   const animeSeasonSelector = createAnimeSeasonSelectorState(animeSeasonChain, media.mediaRef);
   const usesDirectEpisodes = usesEpisodePlayback(media) && directEpisodes.length > 0;
-  const hasInitialEmbedMode = catalog.embedSources.length > 0;
-  const hasInitialDirectMode = usesDirectEpisodes
-    ? catalog.directEpisodes.length > 0
-    : catalog.directSources.length > 0;
-  const hasInitialPlaybackSources = hasInitialEmbedMode || hasInitialDirectMode;
-
-  const sessionEmbedSource = catalog.embedSources.find(
-    (source) => source.sourceRef === savedProgress?.sourceRef,
-  );
   const sessionDirectEpisode = usesDirectEpisodes
     ? (findDirectEpisodeBySourceRef(directEpisodes, savedProgress?.sourceRef) ??
       findDirectEpisodeByRef(directEpisodes, savedProgress?.episode))
@@ -578,13 +572,6 @@ export function MediaView({
     ? sessionDirectEpisode?.sources.find((source) => source.sourceRef === savedProgress?.sourceRef)
     : catalog.directSources.find((source) => source.sourceRef === savedProgress?.sourceRef);
 
-  const initialMode: PlaybackMode = sessionEmbedSource
-    ? 'embed'
-    : sessionDirectSource || (sessionDirectEpisode && savedProgress)
-      ? 'direct'
-      : hasInitialEmbedMode
-        ? 'embed'
-        : 'direct';
   const requestedAnimeEpisode =
     media.type === 'anime' && initialAnimeEpisodeNumber !== undefined
       ? directEpisodes.find(({ episodeNumber }) => episodeNumber === initialAnimeEpisodeNumber)
@@ -594,28 +581,12 @@ export function MediaView({
     requestedAnimeEpisode ??
     directEpisodes.find((episode) => (episode.seasonNumber ?? 1) > 0) ??
     directEpisodes[0];
-  const initialDirectSources = usesDirectEpisodes
-    ? (initialDirectEpisode?.sources ?? [])
-    : catalog.directSources;
-
-  const [selectedPlaybackMode, setSelectedPlaybackMode] = useState<PlaybackMode>(initialMode);
-  const [isPlaybackModeInitialized, setIsPlaybackModeInitialized] = useState(
-    hasInitialPlaybackSources && progressStatus === 'ready',
-  );
-  const [selectedEmbedSourceRef, setSelectedEmbedSourceRef] = useState<string | null>(
-    sessionEmbedSource?.sourceRef ?? getPreferredSource(catalog.embedSources)?.sourceRef ?? null,
-  );
+  const [selectedPlaybackMode, setSelectedPlaybackMode] = useState<PlaybackMode | null>(null);
+  const [chosenEmbedSource, setChosenEmbedSource] = useState<MediaSourceOption>();
   const [selectedDirectEpisodeKey, setSelectedDirectEpisodeKey] = useState<string | null>(
     progressStatus === 'ready' ? (initialDirectEpisode?.key ?? null) : null,
   );
-  const [selectedDirectSourceRef, setSelectedDirectSourceRef] = useState<string | null>(
-    progressStatus !== 'ready'
-      ? null
-      : (sessionDirectSource?.sourceRef ??
-          (sessionDirectEpisode && mediaSession ? mediaSession.sourceRef : undefined) ??
-          getPreferredSource(initialDirectSources)?.sourceRef ??
-          null),
-  );
+  const [chosenDirectSource, setChosenDirectSource] = useState<MediaSourceOption>();
   const [preferredDirectTrackKey, setPreferredDirectTrackKey] = useState<string | null>(
     sessionDirectSource && progressStatus === 'ready'
       ? getDirectTrackKey(sessionDirectSource)
@@ -634,16 +605,14 @@ export function MediaView({
     providerSources: readonly MediaSourceOption[];
   } | null>(null);
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
-  const playbackMode = isPlaybackModeInitialized ? selectedPlaybackMode : initialMode;
-  const directSession =
-    playbackMode === 'direct' && !localSelected && !activeTorrentId && !torrentSelected
-      ? mediaSession
-      : null;
   const retainedDirectPlayback =
-    directSession &&
-    directPlayback?.session.sourceRef === directSession.sourceRef &&
-    directPlayback.session.playbackKey === directSession.playbackKey &&
-    hasSameEpisode(directPlayback.session.episode, directSession.episode)
+    mediaSession &&
+    !localSelected &&
+    !activeTorrentId &&
+    !torrentSelected &&
+    directPlayback?.session.sourceRef === mediaSession.sourceRef &&
+    directPlayback.session.playbackKey === mediaSession.playbackKey &&
+    hasSameEpisode(directPlayback.session.episode, mediaSession.episode)
       ? directPlayback
       : null;
 
@@ -663,8 +632,21 @@ export function MediaView({
     availabilityEpisode,
   );
   const hasEmbedMode = currentEmbedSources.length > 0;
+  const sessionEmbedSource = currentEmbedSources.find(
+    (source) =>
+      source.sourceRef === savedProgress?.sourceRef && !getMediaSourcePlaybackIssue(source),
+  );
+  const playableChosenEmbedSource =
+    chosenEmbedSource && !getMediaSourcePlaybackIssue(chosenEmbedSource)
+      ? chosenEmbedSource
+      : undefined;
   const selectedEmbedSource =
-    currentEmbedSources.find((source) => source.sourceRef === selectedEmbedSourceRef) ??
+    (mediaSession?.sourceRef === playableChosenEmbedSource?.sourceRef
+      ? playableChosenEmbedSource
+      : undefined) ??
+    currentEmbedSources.find((source) => source.sourceRef === chosenEmbedSource?.sourceRef) ??
+    playableChosenEmbedSource ??
+    sessionEmbedSource ??
     getPreferredSource(currentEmbedSources);
   const currentDirectSources = usesDirectEpisodes
     ? mergeEpisodeSources(
@@ -673,10 +655,32 @@ export function MediaView({
         availabilityEpisode,
       )
     : catalog.directSources;
-  const hasDirectMode = currentDirectSources.length > 0 || retainedDirectPlayback !== null;
-  const hasPlaybackSources = hasEmbedMode || hasDirectMode;
-  const usesPlayerEpisodes = playbackMode === 'direct' && usesDirectEpisodes;
   const directModePending = usesDirectEpisodes && episodeAvailabilityPending;
+  const usableDirectSources = currentDirectSources.filter(
+    (source) => !getMediaSourcePlaybackIssue(source),
+  );
+  const firstDirectProvider = getDirectProviderSources(usableDirectSources)[0]?.provider;
+  const playbackMode =
+    selectedPlaybackMode ??
+    (sessionEmbedSource
+      ? 'embed'
+      : resolveAvailablePlaybackMode(
+          'direct',
+          hasEmbedMode,
+          usableDirectSources.length > 0 || retainedDirectPlayback !== null,
+          directModePending && Boolean(sessionDirectEpisode),
+        ));
+  const directSession =
+    playbackMode === 'direct' && !localSelected && !activeTorrentId && !torrentSelected
+      ? mediaSession
+      : null;
+  const hasPlaybackSources = Boolean(
+    selectedEmbedSource ||
+    currentDirectSources.length > 0 ||
+    retainedDirectPlayback ||
+    chosenDirectSource,
+  );
+  const usesPlayerEpisodes = playbackMode === 'direct' && usesDirectEpisodes;
   const sourcesPending = availabilityPending || directModePending;
   const hasToolbarControls = hasPlaybackSources && (media.type === 'movie' || usesDirectEpisodes);
   const initialToolbarLoadComplete = hasToolbarControls || !sourcesPending;
@@ -701,34 +705,6 @@ export function MediaView({
     }
   }, [media.mediaRef, sourceSearchSettledMediaRef, sourcesPending]);
 
-  useEffect(() => {
-    if (progressStatus !== 'ready') return;
-    if (!hasPlaybackSources && !directModePending) return;
-
-    if (!isPlaybackModeInitialized) {
-      setSelectedPlaybackMode(initialMode);
-      setIsPlaybackModeInitialized(true);
-      return;
-    }
-
-    const availableMode = resolveAvailablePlaybackMode(
-      playbackMode,
-      hasEmbedMode,
-      hasDirectMode,
-      directModePending,
-    );
-
-    if (availableMode !== playbackMode) setSelectedPlaybackMode(availableMode);
-  }, [
-    directModePending,
-    hasDirectMode,
-    hasEmbedMode,
-    hasPlaybackSources,
-    initialMode,
-    isPlaybackModeInitialized,
-    playbackMode,
-    progressStatus,
-  ]);
   const adjacentAvailabilityEpisodes = getAdjacentDirectEpisodes(
     directEpisodes,
     selectedDirectEpisode,
@@ -749,17 +725,19 @@ export function MediaView({
     canPrefetchEpisodes,
   );
 
-  const catalogDirectSource = selectedDirectEpisode?.sources.find(
-    (source) => source.sourceRef === selectedDirectSourceRef,
-  );
+  const preferredDirectProvider = chosenDirectSource?.provider ?? sessionDirectSource?.provider;
   const selectedDirectSource =
     retainedDirectPlayback?.source ??
-    currentDirectSources.find((source) => source.sourceRef === selectedDirectSourceRef) ??
-    currentDirectSources.find((source) => source.sourceRef === savedProgress?.sourceRef) ??
+    currentDirectSources.find((source) => source.sourceRef === chosenDirectSource?.sourceRef) ??
+    (chosenDirectSource
+      ? undefined
+      : usableDirectSources.find((source) => source.sourceRef === savedProgress?.sourceRef)) ??
     getPreferredSource(
-      currentDirectSources.filter(
-        (source) => source.provider === (catalogDirectSource ?? sessionDirectSource)?.provider,
-      ),
+      usableDirectSources.filter((source) => source.provider === preferredDirectProvider),
+    ) ??
+    chosenDirectSource ??
+    getPreferredSource(
+      usableDirectSources.filter((source) => source.provider === firstDirectProvider),
     ) ??
     getPreferredSource(currentDirectSources);
 
@@ -772,35 +750,32 @@ export function MediaView({
   );
 
   useEffect(() => {
-    if (selectedEmbedSourceRef === null && selectedEmbedSource) {
-      setSelectedEmbedSourceRef(selectedEmbedSource.sourceRef);
+    if (!chosenEmbedSource && sessionEmbedSource && mediaSession) {
+      setChosenEmbedSource(sessionEmbedSource);
+      setSelectedPlaybackMode('embed');
     }
 
     if (selectedDirectEpisodeKey === null && selectedDirectEpisode && progressStatus === 'ready') {
       setSelectedDirectEpisodeKey(selectedDirectEpisode.key);
     }
 
-    if (selectedDirectSourceRef === null && selectedDirectSource && progressStatus === 'ready') {
-      setSelectedDirectSourceRef(selectedDirectSource.sourceRef);
-    }
-
     if (
       preferredDirectTrackKey === null &&
       selectedDirectTrackKey !== null &&
+      mediaSession &&
       progressStatus === 'ready'
     ) {
       setPreferredDirectTrackKey(selectedDirectTrackKey);
     }
   }, [
+    chosenEmbedSource,
+    mediaSession,
     preferredDirectTrackKey,
     progressStatus,
     selectedDirectEpisode,
     selectedDirectEpisodeKey,
-    selectedDirectSource,
-    selectedDirectSourceRef,
     selectedDirectTrackKey,
-    selectedEmbedSource,
-    selectedEmbedSourceRef,
+    sessionEmbedSource,
   ]);
 
   useEffect(() => {
@@ -809,7 +784,7 @@ export function MediaView({
       availablePreferredDirectSource &&
       selectedDirectTrackKey !== preferredDirectTrackKey
     ) {
-      setSelectedDirectSourceRef(availablePreferredDirectSource.sourceRef);
+      setChosenDirectSource(availablePreferredDirectSource);
     }
   }, [
     availablePreferredDirectSource,
@@ -899,6 +874,19 @@ export function MediaView({
     !mergeEpisodeSources([], episodeAvailability, availabilityEpisode).some(
       (source) => source.sourceRef === selectedDirectSource?.sourceRef,
     );
+  const playbackFailed =
+    playerStatus === 'error' ||
+    (directSourceUnconfirmed && isPlayerStarted && !episodeAvailabilityPending);
+  const alternativePanel = usableDirectSources.some(
+    (source) => source.provider !== selectedSource?.provider,
+  )
+    ? 'direct'
+    : currentEmbedSources.some(
+          (source) =>
+            source.provider !== selectedSource?.provider && !getMediaSourcePlaybackIssue(source),
+        )
+      ? 'players'
+      : undefined;
 
   useEffect(() => {
     if (
@@ -917,7 +905,14 @@ export function MediaView({
       source: selectedDirectSource,
       providerSources: offeredProviderSources,
     });
-  });
+  }, [
+    directSession,
+    directSourceUnconfirmed,
+    isPlayerStarted,
+    offeredProviderSources,
+    retainedDirectPlayback,
+    selectedDirectSource,
+  ]);
 
   useEffect(
     () => () => episodeRequestRef.current?.abort(),
@@ -1108,19 +1103,17 @@ export function MediaView({
     }
   };
 
-  const selectPlaybackMode = (mode: PlaybackMode) => {
-    if (mode === playbackMode) return;
+  const selectEmbedSource = (sourceRef: string) => {
+    const source = currentEmbedSources.find((candidate) => candidate.sourceRef === sourceRef);
+    if (!source) return;
+    setSelectedPlaybackMode('embed');
+    setChosenEmbedSource(source);
+    if (sourceRef === selectedSourceRef) return;
 
-    setSelectedPlaybackMode(mode);
-    setIsPlaybackModeInitialized(true);
     resetPlayer();
-  };
-
-  const selectEmbedSource = (sourceRef: string | null) => {
-    if (sourceRef === selectedEmbedSource?.sourceRef) return;
-
-    setSelectedEmbedSourceRef(sourceRef);
-    resetPlayer();
+    if (isPlayerStarted && playbackFailed && !getMediaSourcePlaybackIssue(source)) {
+      startBrowserPlayback(source);
+    }
   };
 
   const startDirectPlayback = useCallback(
@@ -1157,13 +1150,19 @@ export function MediaView({
   const selectDirectSource = (
     source: MediaSourceOption | undefined,
     continuePlayback = true,
-    positionSeconds = mediaSession?.positionSeconds ?? 0,
+    positionSeconds = mediaSession &&
+    hasSameEpisode(mediaSession.episode, getPlaybackEpisode(selectedDirectEpisode))
+      ? mediaSession.positionSeconds
+      : 0,
     intent = mediaSession?.state,
   ) => {
-    if (!source || source.sourceRef === selectedDirectSource?.sourceRef) return;
+    if (!source) return;
+
+    setSelectedPlaybackMode('direct');
+    setChosenDirectSource(source);
+    if (source.sourceRef === selectedSourceRef) return;
 
     episodeRequestRef.current?.abort();
-    setSelectedDirectSourceRef(source.sourceRef);
     if (continuePlayback && isPlayerStarted) {
       startDirectPlayback(source, selectedDirectEpisode, positionSeconds);
       if (intent === 'paused') pauseSession();
@@ -1216,10 +1215,9 @@ export function MediaView({
       signal.throwIfAborted();
       if (!source) throw new Error('Для этой серии пока нет доступного источника');
       userEpisodeSelectionRef.current = true;
-      setIsPlaybackModeInitialized(true);
       setSelectedPlaybackMode(playbackMode);
       setSelectedDirectEpisodeKey(episode.key);
-      setSelectedDirectSourceRef(source.sourceRef);
+      setChosenDirectSource(source);
       episodeRequestRef.current = null;
       if (isPlayerStarted) {
         startDirectPlayback(source, episode, 0);
@@ -1241,7 +1239,7 @@ export function MediaView({
       ) ?? getPreferredSource(sources);
     if (!source) return;
     setPreferredDirectTrackKey(getDirectTrackKey(source));
-    selectDirectSource(source);
+    selectDirectSource(source, !localSelected && !activeTorrentId && !torrentSelected);
   };
 
   const selectLocalFile = async (fileRef: string, signal?: AbortSignal) => {
@@ -1317,14 +1315,29 @@ export function MediaView({
             )
           : undefined;
 
-  const loadPlayer = () => {
+  const startBrowserPlayback = (source: MediaSourceOption) => {
     localChoiceMade.current = true;
-    if (!selectedSource || getMediaSourcePlaybackIssue(selectedSource)) {
+    const episode =
+      isDirectMediaSource(source) && usesDirectEpisodes
+        ? getPlaybackEpisode(selectedDirectEpisode)
+        : null;
+    const positionSeconds =
+      savedProgress &&
+      !userEpisodeSelectionRef.current &&
+      hasSameEpisode(savedProgress.episode, episode)
+        ? savedProgress.positionSeconds
+        : 0;
+
+    if (isDirectMediaSource(source)) {
+      setSelectedPlaybackMode('direct');
+      setChosenDirectSource(source);
+      setPreferredDirectTrackKey(getDirectTrackKey(source));
+      startDirectPlayback(source, selectedDirectEpisode, positionSeconds);
       return;
     }
 
-    const selectedEpisodeMetadata = findEpisodeMetadata(media, selectedDirectEpisode);
-
+    setSelectedPlaybackMode('embed');
+    setChosenEmbedSource(source);
     startSession({
       mediaRef: media.mediaRef,
       mediaSnapshot: {
@@ -1332,31 +1345,19 @@ export function MediaView({
         slug: media.slug,
         artwork: media.poster,
       },
-      sourceRef: selectedSource.sourceRef,
-      episode: selectedPlaybackEpisode,
-      positionSeconds:
-        savedProgress &&
-        !userEpisodeSelectionRef.current &&
-        hasSameEpisode(savedProgress.episode, selectedPlaybackEpisode)
-          ? savedProgress.positionSeconds
-          : 0,
-      durationSeconds:
-        selectedSource.kind === 'hls' || selectedSource.kind === 'mp4'
-          ? selectedEpisodeMetadata?.runtimeMinutes !== undefined
-            ? selectedEpisodeMetadata.runtimeMinutes * 60
-            : media.runtimeMinutes !== undefined
-              ? media.runtimeMinutes * 60
-              : null
-          : null,
+      sourceRef: source.sourceRef,
+      episode,
+      positionSeconds,
+      durationSeconds: null,
     });
     userEpisodeSelectionRef.current = false;
-    const canLoadSource =
-      (selectedSource.kind === 'embed' ||
-        selectedSource.kind === 'hls' ||
-        selectedSource.kind === 'mp4') &&
-      !getMediaSourcePlaybackIssue(selectedSource);
+    setPlayerStatus('loading');
+  };
 
-    setPlayerStatus(canLoadSource ? 'loading' : 'ready');
+  const loadPlayer = () => {
+    if (selectedSource && !getMediaSourcePlaybackIssue(selectedSource)) {
+      startBrowserPlayback(selectedSource);
+    }
   };
 
   const handlePlayerReady = useCallback(() => {
@@ -1533,16 +1534,9 @@ export function MediaView({
                                 )
                           }
                           torrentOpen={torrentOpen}
-                          onEmbedSelect={(sourceRef) => {
-                            if (localSelected || activeTorrentId || torrentSelected) resetPlayer();
-                            if (playbackMode !== 'embed') selectPlaybackMode('embed');
-                            selectEmbedSource(sourceRef);
-                          }}
-                          onDirectSelect={(provider) => {
-                            if (localSelected || activeTorrentId || torrentSelected) resetPlayer();
-                            if (playbackMode !== 'direct') selectPlaybackMode('direct');
-                            selectDirectProvider(provider);
-                          }}
+                          openRequest={sourcePickerRequest}
+                          onEmbedSelect={selectEmbedSource}
+                          onDirectSelect={selectDirectProvider}
                           isLoading={
                             sourcesPending && sourceSearchSettledMediaRef !== media.mediaRef
                           }
@@ -1721,6 +1715,11 @@ export function MediaView({
                                 refreshedDirectSource ?? retainedDirectPlayback.source,
                               )
                           : loadPlayer
+                }
+                onSelectAnotherSource={
+                  alternativePanel
+                    ? () => setSourcePickerRequest({ panel: alternativePanel })
+                    : undefined
                 }
                 errorDescription={
                   (localSelected ? local.error : null) ??

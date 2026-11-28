@@ -11,11 +11,11 @@ import { createMediaRegistryStub } from './media-registry.stub';
 
 const meta: ResponseMeta = {
   providers: {
-    requested: ['cinemeta', 'kinobd', 'anilist', 'tmdb', 'wikidata', 'untrusted-provider'],
+    requested: ['cinemeta', 'tvmaze', 'anilist', 'tmdb', 'wikidata', 'untrusted-provider'],
     successful: ['cinemeta', 'anilist', 'tmdb', 'wikidata', 'untrusted-provider'],
     failed: [
       {
-        provider: 'kinobd',
+        provider: 'tvmaze',
         code: 'PROVIDER_TIMEOUT',
         retryable: true,
         message: 'https://secret.example/token',
@@ -26,10 +26,10 @@ const meta: ResponseMeta = {
   tookMs: 10,
   warnings: [{ code: 'PARTIAL', message: 'secret payload' }],
   debug: {
-    providers: ['cinemeta', 'kinobd', 'anilist'],
+    providers: ['cinemeta', 'tvmaze', 'anilist'],
     timings: [
       { provider: 'cinemeta', status: 'success', tookMs: 12 },
-      { provider: 'kinobd', status: 'failed', tookMs: 5001 },
+      { provider: 'tvmaze', status: 'failed', tookMs: 5001 },
       { provider: 'anilist', status: 'success', tookMs: 8 },
       { provider: 'tmdb', status: 'success', tookMs: 7 },
       { provider: 'wikidata', status: 'success', tookMs: 6 },
@@ -86,7 +86,7 @@ describe('provider diagnostics', () => {
         degraded: true,
       },
       {
-        provider: 'kinobd',
+        provider: 'tvmaze',
         operation: 'details',
         code: 'PROVIDER_TIMEOUT',
         durationMs: 5001,
@@ -231,7 +231,7 @@ describe('provider diagnostics', () => {
             name: 'MediaEngineError',
             code: 'PROVIDER_ERROR',
             cause: {
-              failed: [{ provider: 'kinobd', code: 'PROVIDER_TIMEOUT', message: 'secret URL' }],
+              failed: [{ provider: 'tvmaze', code: 'PROVIDER_TIMEOUT', message: 'secret URL' }],
             },
           }),
         ),
@@ -244,7 +244,7 @@ describe('provider diagnostics', () => {
     expect(logProviderDiagnostic).toHaveBeenCalledWith(
       expect.objectContaining({
         event: 'media.provider_diagnostic',
-        provider: 'kinobd',
+        provider: 'tvmaze',
         code: 'PROVIDER_TIMEOUT',
         degraded: true,
       }),
