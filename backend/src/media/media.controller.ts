@@ -72,25 +72,25 @@ export class MediaController {
   }
 
   @Get('home')
-  @PublicMetadataCache()
+  @PublicMetadataCache({ server: true })
   getHome(): Promise<HomeFeedDto> {
     return this.homeFeedService.getHomeFeed();
   }
 
   @Get('home/featured')
-  @PublicMetadataCache()
+  @PublicMetadataCache({ server: true })
   getHomeFeatured(): Promise<HomeFeaturedDto> {
     return this.homeFeedService.getFeatured();
   }
 
   @Get('home/collections')
-  @PublicMetadataCache()
+  @PublicMetadataCache({ server: true })
   getHomeCollections(@Query() query: MediaCollectionQueryDto): Promise<HomeCollectionsPageDto> {
     return this.homeFeedService.getCollections(query.offset, query.limit);
   }
 
   @Get('catalog')
-  @PublicMetadataCache()
+  @PublicMetadataCache({ server: true })
   getCatalog(@Query() query: MediaCatalogQueryDto): Promise<MediaCatalogResponseDto> {
     return query.offset === undefined || query.limit === undefined
       ? this.mediaCatalogService.getCatalog(query.type)
@@ -98,13 +98,13 @@ export class MediaController {
   }
 
   @Get('catalog/:mediaRef')
-  @PublicMetadataCache()
+  @PublicMetadataCache({ server: true })
   getCatalogSummary(@Param('mediaRef') mediaRef: string): Promise<MediaSummaryDto> {
     return this.mediaCatalogService.getPublishedSummary(mediaRef);
   }
 
   @Get('collections/editorial-picks')
-  @PublicMetadataCache()
+  @PublicMetadataCache({ server: true })
   getEditorialPicks(@Query() query: MediaCollectionQueryDto): Promise<MediaCollectionResponseDto> {
     return this.mediaCatalogService.getCollection('editorial-picks', query.offset, query.limit);
   }

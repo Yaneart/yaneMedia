@@ -171,6 +171,68 @@ describe('editorial catalog HTTP', () => {
     expect(await cached.text()).toBe('');
   });
 
+  it('shares concurrent catalog reads and refreshes the response after 60 seconds', async () => {
+    const repository = app.get(EditorialCatalogRepository);
+    const reads = jest.mocked(repository.findPublishedCollectionItems);
+    const url = `${origin}/api/v1/media/catalog?type=series&offset=0&limit=3`;
+    const time = jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
+    try {
+      const responses = await Promise.all(Array.from({ length: 8 }, () => fetch(url)));
+      const bodies = await Promise.all(responses.map((response) => response.text()));
+      expect(responses.every((response) => response.status === 200)).toBe(true);
+      expect(new Set(bodies).size).toBe(1);
+      expect(reads).toHaveBeenCalledTimes(1);
+
+      time.mockReturnValue(1_059_999);
+      expect(await (await fetch(url)).text()).toBe(bodies[0]);
+      expect(reads).toHaveBeenCalledTimes(1);
+
+      time.mockReturnValue(1_060_000);
+      expect((await fetch(url)).status).toBe(200);
+      expect(reads).toHaveBeenCalledTimes(2);
+    } finally {
+      time.mockRestore();
+    }
+  });
+
+  it('retries an unsuccessful catalog response and keeps pagination keys separate', async () => {
+    const reads = jest.mocked(app.get(EditorialCatalogRepository).findPublishedCollectionItems);
+    reads.mockRejectedValueOnce(new ServiceUnavailableException('Database unavailable'));
+    const url = `${origin}/api/v1/media/catalog?type=anime&limit=3&offset=`;
+
+    expect((await fetch(url + '0')).status).toBe(503);
+    expect((await fetch(url + '0')).status).toBe(200);
+    const otherPage = await fetch(url + '2');
+    expect(otherPage.status).toBe(200);
+    expect(await otherPage.json()).toMatchObject({ data: { items: [], offset: 2 } });
+    expect(reads).toHaveBeenCalledTimes(3);
+  });
+
+  it('refreshes the featured title at its rotation time', async () => {
+    const featured = jest.mocked(app.get(HomeFeedService).getFeatured);
+    const start = Date.now();
+    const time = jest.spyOn(Date, 'now').mockReturnValue(start);
+    const featuredExpiresAt = new Date(start + 5_000).toISOString();
+    featured.mockImplementationOnce(async () => ({
+      ...(await featured.getMockImplementation()!()),
+      featuredExpiresAt,
+    }));
+
+    try {
+      const url = `${origin}/api/v1/media/home/featured?rotation-test`;
+      expect(await (await fetch(url)).json()).toMatchObject({ data: { featuredExpiresAt } });
+      time.mockReturnValue(start + 4_999);
+      expect(await (await fetch(url)).json()).toMatchObject({ data: { featuredExpiresAt } });
+      expect(featured).toHaveBeenCalledTimes(1);
+
+      time.mockReturnValue(start + 5_000);
+      expect((await fetch(url)).status).toBe(200);
+      expect(featured).toHaveBeenCalledTimes(2);
+    } finally {
+      time.mockRestore();
+    }
+  });
+
   it.each([
     '/api/v1/media/search?query=Dune',
     `/api/v1/media/${encodeURIComponent('imdb:tt15239678')}`,
